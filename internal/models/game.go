@@ -30,8 +30,8 @@ func ListGames(db *sql.DB) ([]Game, error) {
 
 	var games []Game
 	for rows.Next() {
-		var g Game
-		if err := rows.Scan(&g.ID, &g.Name, &g.Image, &g.DefaultPorts, &g.DefaultEnv, &g.MinMemoryMB, &g.MinCPU, &g.GSQGameSlug, &g.DisabledCapabilities, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		g, err := scanGame(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("scanning game row: %w", err)
 		}
 		games = append(games, g)
@@ -40,9 +40,8 @@ func ListGames(db *sql.DB) ([]Game, error) {
 }
 
 func GetGame(db *sql.DB, id string) (*Game, error) {
-	var g Game
-	err := db.QueryRow("SELECT id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games WHERE id = ?", id).
-		Scan(&g.ID, &g.Name, &g.Image, &g.DefaultPorts, &g.DefaultEnv, &g.MinMemoryMB, &g.MinCPU, &g.GSQGameSlug, &g.DisabledCapabilities, &g.CreatedAt, &g.UpdatedAt)
+	row := db.QueryRow("SELECT id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games WHERE id = ?", id)
+	g, err := scanGame(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -50,6 +49,21 @@ func GetGame(db *sql.DB, id string) (*Game, error) {
 		return nil, fmt.Errorf("getting game %s: %w", id, err)
 	}
 	return &g, nil
+}
+
+// scanGame handles scanning JSON columns via string intermediaries
+// since go-sqlite3 returns JSON columns as strings, not []byte.
+func scanGame(scan func(dest ...any) error) (Game, error) {
+	var g Game
+	var defaultPortsStr, defaultEnvStr, disabledCapsStr string
+	err := scan(&g.ID, &g.Name, &g.Image, &defaultPortsStr, &defaultEnvStr, &g.MinMemoryMB, &g.MinCPU, &g.GSQGameSlug, &disabledCapsStr, &g.CreatedAt, &g.UpdatedAt)
+	if err != nil {
+		return g, err
+	}
+	g.DefaultPorts = json.RawMessage(defaultPortsStr)
+	g.DefaultEnv = json.RawMessage(defaultEnvStr)
+	g.DisabledCapabilities = json.RawMessage(disabledCapsStr)
+	return g, nil
 }
 
 func CreateGame(db *sql.DB, g *Game) error {

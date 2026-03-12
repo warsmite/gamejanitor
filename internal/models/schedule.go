@@ -29,8 +29,8 @@ func ListSchedules(db *sql.DB, gameserverID string) ([]Schedule, error) {
 
 	var schedules []Schedule
 	for rows.Next() {
-		var s Schedule
-		if err := rows.Scan(&s.ID, &s.GameserverID, &s.Name, &s.Type, &s.CronExpr, &s.Payload, &s.Enabled, &s.LastRun, &s.NextRun, &s.CreatedAt); err != nil {
+		s, err := scanSchedule(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("scanning schedule row: %w", err)
 		}
 		schedules = append(schedules, s)
@@ -39,9 +39,8 @@ func ListSchedules(db *sql.DB, gameserverID string) ([]Schedule, error) {
 }
 
 func GetSchedule(db *sql.DB, id string) (*Schedule, error) {
-	var s Schedule
-	err := db.QueryRow("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, last_run, next_run, created_at FROM schedules WHERE id = ?", id).
-		Scan(&s.ID, &s.GameserverID, &s.Name, &s.Type, &s.CronExpr, &s.Payload, &s.Enabled, &s.LastRun, &s.NextRun, &s.CreatedAt)
+	row := db.QueryRow("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, last_run, next_run, created_at FROM schedules WHERE id = ?", id)
+	s, err := scanSchedule(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -49,6 +48,17 @@ func GetSchedule(db *sql.DB, id string) (*Schedule, error) {
 		return nil, fmt.Errorf("getting schedule %s: %w", id, err)
 	}
 	return &s, nil
+}
+
+func scanSchedule(scan func(dest ...any) error) (Schedule, error) {
+	var s Schedule
+	var payloadStr string
+	err := scan(&s.ID, &s.GameserverID, &s.Name, &s.Type, &s.CronExpr, &payloadStr, &s.Enabled, &s.LastRun, &s.NextRun, &s.CreatedAt)
+	if err != nil {
+		return s, err
+	}
+	s.Payload = json.RawMessage(payloadStr)
+	return s, nil
 }
 
 func CreateSchedule(db *sql.DB, s *Schedule) error {

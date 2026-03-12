@@ -50,8 +50,8 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 
 	var gameservers []Gameserver
 	for rows.Next() {
-		var gs Gameserver
-		if err := rows.Scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.AutoStart, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.CreatedAt, &gs.UpdatedAt); err != nil {
+		gs, err := scanGameserver(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("scanning gameserver row: %w", err)
 		}
 		gameservers = append(gameservers, gs)
@@ -60,9 +60,8 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 }
 
 func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
-	var gs Gameserver
-	err := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, auto_start, container_id, volume_name, status, created_at, updated_at FROM gameservers WHERE id = ?", id).
-		Scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.AutoStart, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.CreatedAt, &gs.UpdatedAt)
+	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, auto_start, container_id, volume_name, status, created_at, updated_at FROM gameservers WHERE id = ?", id)
+	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -70,6 +69,20 @@ func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
 		return nil, fmt.Errorf("getting gameserver %s: %w", id, err)
 	}
 	return &gs, nil
+}
+
+// scanGameserver handles scanning JSON columns via string intermediaries
+// since go-sqlite3 returns JSON columns as strings, not []byte.
+func scanGameserver(scan func(dest ...any) error) (Gameserver, error) {
+	var gs Gameserver
+	var portsStr, envStr string
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.AutoStart, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.CreatedAt, &gs.UpdatedAt)
+	if err != nil {
+		return gs, err
+	}
+	gs.Ports = json.RawMessage(portsStr)
+	gs.Env = json.RawMessage(envStr)
+	return gs, nil
 }
 
 func CreateGameserver(db *sql.DB, gs *Gameserver) error {

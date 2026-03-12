@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
 	"github.com/0xkowalskidev/gamejanitor/internal/db/seed"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -68,7 +70,31 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to connect to docker: %w", err)
 	}
 	defer dockerClient.Close()
-	_ = dockerClient // used in later phases
+
+	// Initialize services
+	gameSvc := service.NewGameService(database, logger)
+	gameserverSvc := service.NewGameserverService(database, dockerClient, logger)
+	statusMgr := service.NewStatusManager(database, dockerClient, logger)
+	_ = gameSvc // used in Phase 5
+
+	// Crash recovery
+	ctx := context.Background()
+	autoStartIDs, err := statusMgr.RecoverOnStartup(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to recover gameserver status: %w", err)
+	}
+
+	// Start status manager (Docker events watcher)
+	statusMgr.Start(ctx)
+	defer statusMgr.Stop()
+
+	// Auto-start gameservers
+	for _, id := range autoStartIDs {
+		logger.Info("auto-starting gameserver", "id", id)
+		if err := gameserverSvc.Start(ctx, id); err != nil {
+			logger.Error("failed to auto-start gameserver", "id", id, "error", err)
+		}
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
