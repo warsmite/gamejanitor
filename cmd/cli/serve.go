@@ -10,6 +10,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/config"
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
 	"github.com/0xkowalskidev/gamejanitor/internal/db/seed"
+	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/spf13/cobra"
 )
 
@@ -61,6 +62,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err := seed.SeedGames(database); err != nil {
 		return fmt.Errorf("failed to seed games: %w", err)
 	}
+
+	dockerClient, err := docker.New(logger)
+	if err != nil {
+		return fmt.Errorf("failed to connect to docker: %w", err)
+	}
+	defer dockerClient.Close()
+	_ = dockerClient // used in later phases
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
