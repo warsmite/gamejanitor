@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <!-- Broom handle -->
+  <line x1="5" y1="3" x2="14" y2="12" stroke-linecap="round" stroke-width="2.5"/>
+  <!-- Bristle base -->
+  <path d="M12 10.5 L21 16 Q19 21 13 19 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round" stroke-width="1"/>
+  <!-- Bristle lines -->
+  <line x1="14.5" y1="12.5" x2="17" y2="19" stroke-linecap="round" stroke-width="1"/>
+  <line x1="16" y1="13" x2="19" y2="18.5" stroke-linecap="round" stroke-width="1"/>
+  <line x1="13" y1="12" x2="14.5" y2="19.5" stroke-linecap="round" stroke-width="1"/>
+</svg>
