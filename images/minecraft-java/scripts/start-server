@@ -1,0 +1,40 @@
+#!/bin/bash
+set -e
+
+# Write eula.txt from env var
+echo "eula=${EULA:-false}" > /data/eula.txt
+
+# Update only env-managed keys in server.properties, preserve everything else
+update_property() {
+    local key="$1" value="$2" file="$3"
+    if grep -q "^${key}=" "$file" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+        echo "${key}=${value}" >> "$file"
+    fi
+}
+
+PROPS=/data/server.properties
+update_property "server-port"  "${SERVER_PORT:-25565}"           "$PROPS"
+update_property "gamemode"     "${GAMEMODE:-survival}"            "$PROPS"
+update_property "max-players"  "${MAX_PLAYERS:-20}"               "$PROPS"
+update_property "difficulty"   "${DIFFICULTY:-normal}"             "$PROPS"
+update_property "motd"         "${MOTD:-A Gamejanitor Server}"    "$PROPS"
+update_property "pvp"          "${PVP:-true}"                     "$PROPS"
+
+echo "[start-server] updated server.properties and eula.txt"
+
+# Calculate JVM heap from MEMORY_LIMIT_MB (leave ~15% for GC overhead)
+MEMORY_LIMIT_MB="${MEMORY_LIMIT_MB:-1024}"
+HEAP=$(( MEMORY_LIMIT_MB * 85 / 100 ))
+if [ "$HEAP" -lt 256 ]; then
+    HEAP=256
+fi
+echo "[start-server] JVM heap: ${HEAP}m (from ${MEMORY_LIMIT_MB}m limit)"
+
+# FIFO pipe for command input
+FIFO=/tmp/cmd-input
+mkfifo "$FIFO" 2>/dev/null || true
+
+echo "[start-server] starting Minecraft server"
+tail -f "$FIFO" | exec java -Xmx${HEAP}m -Xms${HEAP}m -jar /data/server.jar nogui

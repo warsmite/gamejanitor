@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+echo "[update-server] fetching latest Minecraft version manifest"
+MANIFEST=$(curl -fsSL "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
+
+LATEST_VERSION=$(echo "$MANIFEST" | jq -r '.latest.release')
+echo "[update-server] latest release: $LATEST_VERSION"
+
+VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$LATEST_VERSION" '.versions[] | select(.id == $v) | .url')
+VERSION_META=$(curl -fsSL "$VERSION_URL")
+SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')
+SERVER_SHA1=$(echo "$VERSION_META" | jq -r '.downloads.server.sha1')
+
+echo "[update-server] downloading server.jar from $SERVER_URL"
+curl -fsSL -o /data/server.jar.new "$SERVER_URL"
+
+ACTUAL_SHA1=$(sha1sum /data/server.jar.new | awk '{print $1}')
+if [ "$ACTUAL_SHA1" != "$SERVER_SHA1" ]; then
+    echo "[update-server] ERROR: sha1 mismatch — expected $SERVER_SHA1, got $ACTUAL_SHA1"
+    rm -f /data/server.jar.new
+    exit 1
+fi
+
+mv /data/server.jar.new /data/server.jar
+echo "[update-server] server.jar updated and verified (sha1: $SERVER_SHA1)"

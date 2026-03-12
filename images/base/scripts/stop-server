@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "[stop-server] no stop script provided"
+exit 0
