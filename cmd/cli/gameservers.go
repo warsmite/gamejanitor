@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -20,15 +21,15 @@ var gameserversListCmd = &cobra.Command{
 	Short: "List gameservers",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := "/api/gameservers"
-		var params []string
+		params := url.Values{}
 		if v, _ := cmd.Flags().GetString("game"); v != "" {
-			params = append(params, "game="+v)
+			params.Set("game", v)
 		}
 		if v, _ := cmd.Flags().GetString("status"); v != "" {
-			params = append(params, "status="+v)
+			params.Set("status", v)
 		}
 		if len(params) > 0 {
-			path += "?" + strings.Join(params, "&")
+			path += "?" + params.Encode()
 		}
 
 		resp, err := apiGet(path)

@@ -85,7 +85,9 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	}
 
 	if gs.ContainerID != nil {
-		s.docker.RemoveContainer(ctx, *gs.ContainerID)
+		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+			s.log.Warn("failed to remove container during delete", "id", id, "error", err)
+		}
 	}
 
 	if err := s.docker.RemoveVolume(ctx, gs.VolumeName); err != nil {
@@ -141,9 +143,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
-	// Remove old container if exists
+	// Remove old container if exists (stale from prior run/crash)
 	if gs.ContainerID != nil {
-		s.docker.RemoveContainer(ctx, *gs.ContainerID)
+		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+			s.log.Warn("failed to remove old container", "id", id, "error", err)
+		}
 	}
 
 	// Create container

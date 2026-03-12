@@ -81,8 +81,11 @@ func printJSONResponse(resp *apiResponse) {
 	out := map[string]any{"status": resp.Status}
 	if resp.Data != nil {
 		var data any
-		json.Unmarshal(resp.Data, &data)
-		out["data"] = data
+		if err := json.Unmarshal(resp.Data, &data); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to parse response data: %v\n", err)
+		} else {
+			out["data"] = data
+		}
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
