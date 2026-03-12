@@ -17,6 +17,7 @@ import (
 func NewRouter(
 	gameSvc *service.GameService,
 	gameserverSvc *service.GameserverService,
+	consoleSvc *service.ConsoleService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	log *slog.Logger,
@@ -82,6 +83,7 @@ func NewRouter(
 	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
 
 	r.Get("/", pageDashboard.Dashboard)
 
@@ -111,6 +113,9 @@ func NewRouter(
 			r.Post("/restart", pageActions.Restart)
 			r.Post("/update-game", pageActions.UpdateGame)
 			r.Post("/reinstall", pageActions.Reinstall)
+			r.Get("/console", pageConsole.Console)
+			r.Get("/console/stream", pageConsole.LogStream)
+			r.Post("/console/command", pageConsole.SendCommand)
 		})
 	})
 

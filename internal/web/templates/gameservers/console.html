@@ -1,0 +1,182 @@
+{{define "title"}}Console - {{.Gameserver.Name}} - Gamejanitor{{end}}
+
+{{define "content"}}
+<div x-data="consoleApp()">
+  <!-- Hero Banner -->
+  <div class="relative w-full overflow-hidden" style="height: min(20vw, 200px)">
+    {{if and .Game .Game.HeroPath}}
+    <img src="{{.Game.HeroPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover">
+    {{else if and .Game .Game.GridPath}}
+    <img src="{{.Game.GridPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover blur-sm scale-110">
+    {{else}}
+    <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-900"></div>
+    {{end}}
+    <div class="absolute inset-0 bg-gradient-to-t from-surface-950 via-surface-950/60 to-surface-950/20"></div>
+
+    <div class="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto px-4 sm:px-6 pb-4">
+      <a href="/gameservers/{{.Gameserver.ID}}" class="inline-flex items-center gap-1 text-xs text-surface-400 hover:text-white mb-2 transition-colors">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        {{.Gameserver.Name}}
+      </a>
+      <div class="flex items-center gap-3">
+        {{if and .Game .Game.IconPath}}
+        <img src="{{.Game.IconPath}}" alt="" class="w-8 h-8 rounded-lg shadow-lg">
+        {{end}}
+        <div>
+          <h1 class="font-display font-bold text-xl sm:text-2xl text-white">Console</h1>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="text-xs text-surface-400">{{.Gameserver.Name}}</span>
+            <span id="gs-status-badge">{{template "status_badge" .Gameserver.Status}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+    {{if not .CanRead}}
+    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
+      <p class="text-surface-400">Console is not available for this game.</p>
+    </div>
+    {{else if not .IsRunning}}
+    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
+      <p class="text-surface-400">Gameserver is not running. Start the gameserver to view the console.</p>
+      <a href="/gameservers/{{.Gameserver.ID}}" class="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-surface-300 hover:text-white text-sm font-medium transition-colors">
+        Back to Gameserver
+      </a>
+    </div>
+    {{else}}
+    <!-- Console Output -->
+    <div class="rounded-xl bg-surface-950 border border-surface-800/60 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-surface-800/60 bg-surface-900/50">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full" :class="connected ? 'bg-emerald-500' : 'bg-red-500'"></div>
+          <span class="text-xs text-surface-400" x-text="connected ? 'Connected' : 'Disconnected'"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-surface-500" x-text="lineCount + ' lines'"></span>
+          <button @click="clearConsole()" class="text-xs text-surface-500 hover:text-surface-300 transition-colors">Clear</button>
+        </div>
+      </div>
+      <div x-ref="output"
+           @scroll="checkAutoScroll()"
+           class="h-[60vh] overflow-y-auto p-4 font-mono text-sm text-surface-300 leading-relaxed">
+      </div>
+
+      {{if .CanSend}}
+      <form @submit.prevent="sendCommand()" hx-boost="false" class="flex items-center border-t border-surface-800/60 bg-surface-900/30">
+        <span class="pl-4 text-surface-500 font-mono text-sm select-none">&gt;</span>
+        <input type="text" x-model="command" x-ref="commandInput"
+               placeholder="Type a command..."
+               autocomplete="off"
+               class="flex-1 bg-transparent border-none outline-none px-2 py-3 font-mono text-sm text-white placeholder-surface-600 focus:ring-0">
+        <button type="submit" :disabled="!command.trim()"
+                class="px-4 py-3 text-sm font-medium text-accent-400 hover:text-accent-300 disabled:text-surface-600 disabled:cursor-not-allowed transition-colors">
+          Send
+        </button>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+
+{{if and .CanRead .IsRunning}}
+<script>
+function consoleApp() {
+  return {
+    lineCount: 0,
+    command: '',
+    connected: false,
+    autoScroll: true,
+    eventSource: null,
+    maxLines: 1000,
+
+    init() {
+      this.connectStream();
+    },
+
+    appendLine(text, isError) {
+      const el = this.$refs.output;
+      if (!el) return;
+
+      const div = document.createElement('div');
+      div.textContent = text;
+      if (isError) div.className = 'text-red-400';
+      el.appendChild(div);
+      this.lineCount++;
+
+      while (el.children.length > this.maxLines) {
+        el.removeChild(el.firstChild);
+      }
+
+      if (this.autoScroll) {
+        el.scrollTop = el.scrollHeight;
+      }
+    },
+
+    connectStream() {
+      this.eventSource = new EventSource('/gameservers/{{.Gameserver.ID}}/console/stream');
+
+      this.eventSource.onopen = () => {
+        this.connected = true;
+      };
+
+      this.eventSource.onmessage = (e) => {
+        this.appendLine(e.data, e.data.startsWith('[ERR]'));
+      };
+
+      this.eventSource.addEventListener('eof', () => {
+        this.connected = false;
+        this.appendLine('[Stream ended]', false);
+      });
+
+      this.eventSource.onerror = () => {
+        this.connected = false;
+      };
+    },
+
+    checkAutoScroll() {
+      const el = this.$refs.output;
+      if (el) {
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+        this.autoScroll = atBottom;
+      }
+    },
+
+    clearConsole() {
+      const el = this.$refs.output;
+      if (el) el.innerHTML = '';
+      this.lineCount = 0;
+    },
+
+    async sendCommand() {
+      const cmd = this.command.trim();
+      if (!cmd) return;
+
+      this.command = '';
+
+      const resp = await fetch('/gameservers/{{.Gameserver.ID}}/console/command', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'command=' + encodeURIComponent(cmd)
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        this.appendLine('[ERR] Command failed: ' + text, true);
+      }
+
+      this.$refs.commandInput.focus();
+    },
+
+    destroy() {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+    }
+  };
+}
+</script>
+{{end}}
+{{end}}
