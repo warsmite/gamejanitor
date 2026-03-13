@@ -48,7 +48,9 @@ var gameserversListCmd = &cobra.Command{
 			GameID string `json:"game_id"`
 			Status string `json:"status"`
 		}
-		json.Unmarshal(resp.Data, &gameservers)
+		if err := json.Unmarshal(resp.Data, &gameservers); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
@@ -91,7 +93,9 @@ var gameserversGetCmd = &cobra.Command{
 			Ports         json.RawMessage `json:"ports"`
 			Env           json.RawMessage `json:"env"`
 		}
-		json.Unmarshal(resp.Data, &gs)
+		if err := json.Unmarshal(resp.Data, &gs); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		fmt.Printf("ID:         %s\n", gs.ID)
 		fmt.Printf("Name:       %s\n", gs.Name)
@@ -154,7 +158,9 @@ var gameserversCreateCmd = &cobra.Command{
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		}
-		json.Unmarshal(resp.Data, &gs)
+		if err := json.Unmarshal(resp.Data, &gs); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 		fmt.Printf("Gameserver %s created (id: %s).\n", gs.Name, gs.ID)
 		return nil
 	},

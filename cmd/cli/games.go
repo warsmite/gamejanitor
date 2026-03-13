@@ -31,7 +31,9 @@ var gamesListCmd = &cobra.Command{
 			Name  string `json:"name"`
 			Image string `json:"image"`
 		}
-		json.Unmarshal(resp.Data, &games)
+		if err := json.Unmarshal(resp.Data, &games); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tIMAGE")
@@ -65,7 +67,9 @@ var gamesGetCmd = &cobra.Command{
 			MinMemoryMB int     `json:"min_memory_mb"`
 			MinCPU      float64 `json:"min_cpu"`
 		}
-		json.Unmarshal(resp.Data, &game)
+		if err := json.Unmarshal(resp.Data, &game); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		fmt.Printf("ID:         %s\n", game.ID)
 		fmt.Printf("Name:       %s\n", game.Name)

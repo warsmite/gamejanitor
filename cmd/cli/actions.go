@@ -62,7 +62,9 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		var gs struct {
 			Status string `json:"status"`
 		}
-		json.Unmarshal(resp.Data, &gs)
+		if err := json.Unmarshal(resp.Data, &gs); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 		fmt.Printf("Gameserver %s is now %s.\n", id, gs.Status)
 		return nil
 	}
@@ -93,7 +95,9 @@ var statusCmd = &cobra.Command{
 				CPUPercent    float64 `json:"cpu_percent"`
 			} `json:"container"`
 		}
-		json.Unmarshal(resp.Data, &status)
+		if err := json.Unmarshal(resp.Data, &status); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		fmt.Printf("Status: %s\n", status.Status)
 		if status.Container != nil {

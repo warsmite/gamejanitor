@@ -40,7 +40,9 @@ var schedulesListCmd = &cobra.Command{
 			LastRun  string `json:"last_run"`
 			NextRun  string `json:"next_run"`
 		}
-		json.Unmarshal(resp.Data, &schedules)
+		if err := json.Unmarshal(resp.Data, &schedules); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		if len(schedules) == 0 {
 			fmt.Println("No schedules found.")
@@ -106,7 +108,9 @@ var schedulesCreateCmd = &cobra.Command{
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		}
-		json.Unmarshal(resp.Data, &schedule)
+		if err := json.Unmarshal(resp.Data, &schedule); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 		fmt.Printf("Schedule created: %s (%s)\n", schedule.Name, schedule.ID)
 		return nil
 	},

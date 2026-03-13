@@ -37,7 +37,9 @@ var backupsListCmd = &cobra.Command{
 			SizeBytes int64  `json:"size_bytes"`
 			CreatedAt string `json:"created_at"`
 		}
-		json.Unmarshal(resp.Data, &backups)
+		if err := json.Unmarshal(resp.Data, &backups); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 
 		if len(backups) == 0 {
 			fmt.Println("No backups found.")
@@ -88,7 +90,9 @@ var backupsCreateCmd = &cobra.Command{
 			Name      string `json:"name"`
 			SizeBytes int64  `json:"size_bytes"`
 		}
-		json.Unmarshal(resp.Data, &backup)
+		if err := json.Unmarshal(resp.Data, &backup); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
 		fmt.Printf("Backup created: %s (%s, %s)\n", backup.Name, backup.ID, formatBytesStr(backup.SizeBytes))
 		return nil
 	},
