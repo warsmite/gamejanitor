@@ -67,11 +67,16 @@ var gameserversListCmd = &cobra.Command{
 }
 
 var gameserversGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a gameserver by ID",
+	Use:   "get <gameserver>",
+	Short: "Get a gameserver by name or ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/gameservers/" + args[0])
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		resp, err := apiGet("/api/gameservers/" + gsID)
 		if err != nil {
 			return exitError(err)
 		}
@@ -167,11 +172,16 @@ var gameserversCreateCmd = &cobra.Command{
 }
 
 var gameserversUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
+	Use:   "update <gameserver>",
 	Short: "Update a gameserver (must be stopped)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{"id": args[0]}
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		body := map[string]any{"id": gsID}
 
 		if cmd.Flags().Changed("name") {
 			v, _ := cmd.Flags().GetString("name")
@@ -202,7 +212,7 @@ var gameserversUpdateCmd = &cobra.Command{
 			body["auto_start"] = v
 		}
 
-		resp, err := apiPut("/api/gameservers/"+args[0], body)
+		resp, err := apiPut("/api/gameservers/"+gsID, body)
 		if err != nil {
 			return exitError(err)
 		}
@@ -212,17 +222,27 @@ var gameserversUpdateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s updated.\n", args[0])
+		fmt.Printf("Gameserver %s updated.\n", gsID[:8])
 		return nil
 	},
 }
 
 var gameserversDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
+	Use:   "delete <gameserver>",
 	Short: "Delete a gameserver",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := apiDelete("/api/gameservers/" + args[0])
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		if !confirmAction(fmt.Sprintf("Delete gameserver %s?", gsID[:8])) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		_, err = apiDelete("/api/gameservers/" + gsID)
 		if err != nil {
 			return exitError(err)
 		}
@@ -232,7 +252,7 @@ var gameserversDeleteCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s deleted.\n", args[0])
+		fmt.Printf("Gameserver %s deleted.\n", gsID[:8])
 		return nil
 	},
 }

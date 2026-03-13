@@ -8,45 +8,82 @@ import (
 )
 
 var startCmd = &cobra.Command{
-	Use:   "start <id>",
+	Use:   "start <gameserver>",
 	Short: "Start a gameserver",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAction("start", "Starting"),
 }
 
 var stopCmd = &cobra.Command{
-	Use:   "stop <id>",
+	Use:   "stop <gameserver>",
 	Short: "Stop a gameserver",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAction("stop", "Stopping"),
 }
 
 var restartCmd = &cobra.Command{
-	Use:   "restart <id>",
+	Use:   "restart <gameserver>",
 	Short: "Restart a gameserver",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAction("restart", "Restarting"),
 }
 
 var updateGameCmd = &cobra.Command{
-	Use:   "update-game <id>",
+	Use:   "update-game <gameserver>",
 	Short: "Update a gameserver's game to the latest version",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAction("update-game", "Updating game for"),
 }
 
 var reinstallCmd = &cobra.Command{
-	Use:   "reinstall <id>",
+	Use:   "reinstall <gameserver>",
 	Short: "Reinstall a gameserver (preserves data)",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runAction("reinstall", "Reinstalling"),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		if !confirmAction(fmt.Sprintf("Reinstall gameserver %s?", id[:8])) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		if !jsonOutput {
+			fmt.Printf("Reinstalling gameserver %s...\n", id[:8])
+		}
+
+		resp, err := apiPost("/api/gameservers/"+id+"/reinstall", nil)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		var gs struct {
+			Status string `json:"status"`
+		}
+		if err := json.Unmarshal(resp.Data, &gs); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
+		return nil
+	},
 }
 
 func runAction(action, verb string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		id := args[0]
+		id, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
 		if !jsonOutput {
-			fmt.Printf("%s gameserver %s...\n", verb, id)
+			fmt.Printf("%s gameserver %s...\n", verb, id[:8])
 		}
 
 		resp, err := apiPost("/api/gameservers/"+id+"/"+action, nil)
@@ -65,17 +102,22 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Gameserver %s is now %s.\n", id, gs.Status)
+		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
 		return nil
 	}
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status <id>",
+	Use:   "status <gameserver>",
 	Short: "Get gameserver status with container info",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/gameservers/" + args[0] + "/status")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		resp, err := apiGet("/api/gameservers/" + gsID + "/status")
 		if err != nil {
 			return exitError(err)
 		}

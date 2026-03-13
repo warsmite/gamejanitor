@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	jsonOutput bool
-	apiURL     string
+	jsonOutput       bool
+	apiURL           string
+	skipConfirmation bool
 )
 
 var rootCmd = &cobra.Command{
@@ -17,6 +18,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "http://localhost:8080", "API base URL")
+	rootCmd.PersistentFlags().BoolVarP(&skipConfirmation, "yes", "y", false, "Skip confirmation prompts")
 
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(gamesCmd)

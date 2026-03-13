@@ -13,12 +13,13 @@ var schedulesCmd = &cobra.Command{
 }
 
 var schedulesListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "list <gameserver>",
 	Short: "List schedules for a gameserver",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
 		}
 
 		resp, err := apiGet("/api/gameservers/" + gsID + "/schedules")
@@ -68,17 +69,21 @@ var schedulesListCmd = &cobra.Command{
 }
 
 var schedulesCreateCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create <gameserver>",
 	Short: "Create a schedule",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gsID, _ := cmd.Flags().GetString("gameserver")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
 		name, _ := cmd.Flags().GetString("name")
 		schedType, _ := cmd.Flags().GetString("type")
 		cronExpr, _ := cmd.Flags().GetString("cron")
 		payload, _ := cmd.Flags().GetString("payload")
 
-		if gsID == "" || name == "" || schedType == "" || cronExpr == "" {
-			return fmt.Errorf("--gameserver, --name, --type, and --cron are required")
+		if name == "" || schedType == "" || cronExpr == "" {
+			return fmt.Errorf("--name, --type, and --cron are required")
 		}
 
 		body := map[string]any{
@@ -117,11 +122,15 @@ var schedulesCreateCmd = &cobra.Command{
 }
 
 var schedulesUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
+	Use:   "update <gameserver> <schedule-id>",
 	Short: "Update a schedule",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		id := args[0]
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		id := args[1]
 		body := map[string]any{}
 
 		if cmd.Flags().Changed("enabled") {
@@ -141,13 +150,6 @@ var schedulesUpdateCmd = &cobra.Command{
 			return fmt.Errorf("no update flags specified")
 		}
 
-		// Need to find the gameserver ID for this schedule — use a workaround via the API
-		// For simplicity, require --gameserver
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
-		}
-
 		resp, err := apiPut("/api/gameservers/"+gsID+"/schedules/"+id, body)
 		if err != nil {
 			return exitError(err)
@@ -164,43 +166,44 @@ var schedulesUpdateCmd = &cobra.Command{
 }
 
 var schedulesDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
+	Use:   "delete <gameserver> <schedule-id>",
 	Short: "Delete a schedule",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		id := args[0]
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		id := args[1]
+
+		if !confirmAction(fmt.Sprintf("Delete schedule %s?", id[:8])) {
+			fmt.Println("Aborted.")
+			return nil
 		}
 
-		_, err := apiDelete("/api/gameservers/" + gsID + "/schedules/" + id)
+		_, err = apiDelete("/api/gameservers/" + gsID + "/schedules/" + id)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			fmt.Println(`{"status":"ok"}`)
+			printJSONResponse(&apiResponse{Status: "ok"})
 			return nil
 		}
 
-		fmt.Printf("Schedule %s deleted.\n", id)
+		fmt.Printf("Schedule %s deleted.\n", id[:8])
 		return nil
 	},
 }
 
 func init() {
-	schedulesListCmd.Flags().String("gameserver", "", "Gameserver ID")
-	schedulesCreateCmd.Flags().String("gameserver", "", "Gameserver ID")
 	schedulesCreateCmd.Flags().String("name", "", "Schedule name")
 	schedulesCreateCmd.Flags().String("type", "", "Schedule type (restart, backup, command, update)")
 	schedulesCreateCmd.Flags().String("cron", "", "Cron expression")
 	schedulesCreateCmd.Flags().String("payload", "", "JSON payload (for command type)")
-	schedulesUpdateCmd.Flags().String("gameserver", "", "Gameserver ID")
 	schedulesUpdateCmd.Flags().Bool("enabled", false, "Enable/disable schedule")
 	schedulesUpdateCmd.Flags().String("cron", "", "Cron expression")
 	schedulesUpdateCmd.Flags().String("name", "", "Schedule name")
-	schedulesDeleteCmd.Flags().String("gameserver", "", "Gameserver ID")
 
 	schedulesCmd.AddCommand(schedulesListCmd, schedulesCreateCmd, schedulesUpdateCmd, schedulesDeleteCmd)
 }

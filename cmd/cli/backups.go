@@ -13,12 +13,13 @@ var backupsCmd = &cobra.Command{
 }
 
 var backupsListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "list <gameserver>",
 	Short: "List backups for a gameserver",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
 		}
 
 		resp, err := apiGet("/api/gameservers/" + gsID + "/backups")
@@ -57,14 +58,15 @@ var backupsListCmd = &cobra.Command{
 }
 
 var backupsCreateCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create <gameserver>",
 	Short: "Create a backup",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		name, _ := cmd.Flags().GetString("name")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
 		}
+		name, _ := cmd.Flags().GetString("name")
 
 		if !jsonOutput {
 			fmt.Println("Creating backup...")
@@ -99,14 +101,19 @@ var backupsCreateCmd = &cobra.Command{
 }
 
 var backupsRestoreCmd = &cobra.Command{
-	Use:   "restore <backup-id>",
+	Use:   "restore <gameserver> <backup-id>",
 	Short: "Restore a backup",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		backupID := args[0]
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		backupID := args[1]
+
+		if !confirmAction(fmt.Sprintf("Restore backup %s? This will overwrite current gameserver data.", backupID[:8])) {
+			fmt.Println("Aborted.")
+			return nil
 		}
 
 		if !jsonOutput {
@@ -129,27 +136,32 @@ var backupsRestoreCmd = &cobra.Command{
 }
 
 var backupsDeleteCmd = &cobra.Command{
-	Use:   "delete <backup-id>",
+	Use:   "delete <gameserver> <backup-id>",
 	Short: "Delete a backup",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		backupID := args[0]
-		gsID, _ := cmd.Flags().GetString("gameserver")
-		if gsID == "" {
-			return fmt.Errorf("--gameserver flag is required")
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		backupID := args[1]
+
+		if !confirmAction(fmt.Sprintf("Delete backup %s?", backupID[:8])) {
+			fmt.Println("Aborted.")
+			return nil
 		}
 
-		_, err := apiDelete("/api/gameservers/" + gsID + "/backups/" + backupID)
+		_, err = apiDelete("/api/gameservers/" + gsID + "/backups/" + backupID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			fmt.Println(`{"status":"ok"}`)
+			printJSONResponse(&apiResponse{Status: "ok"})
 			return nil
 		}
 
-		fmt.Printf("Backup %s deleted.\n", backupID)
+		fmt.Printf("Backup %s deleted.\n", backupID[:8])
 		return nil
 	},
 }
@@ -168,11 +180,7 @@ func formatBytesStr(b int64) string {
 }
 
 func init() {
-	backupsListCmd.Flags().String("gameserver", "", "Gameserver ID")
-	backupsCreateCmd.Flags().String("gameserver", "", "Gameserver ID")
 	backupsCreateCmd.Flags().String("name", "", "Backup name")
-	backupsRestoreCmd.Flags().String("gameserver", "", "Gameserver ID")
-	backupsDeleteCmd.Flags().String("gameserver", "", "Gameserver ID")
 
 	backupsCmd.AddCommand(backupsListCmd, backupsCreateCmd, backupsRestoreCmd, backupsDeleteCmd)
 }
