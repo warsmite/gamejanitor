@@ -1,0 +1,10 @@
+#!/bin/bash
+if [ -z "$1" ]; then
+    echo "[send-command] usage: send-command <command>"
+    exit 1
+fi
+
+RCON_PORT="${RCON_PORT:-25575}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme}"
+
+rcon -a "localhost:${RCON_PORT}" -p "$ADMIN_PASSWORD" "$1"

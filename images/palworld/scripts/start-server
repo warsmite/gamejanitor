@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+
+SERVER_NAME="${SERVER_NAME:-Gamejanitor Palworld Server}"
+MAX_PLAYERS="${MAX_PLAYERS:-32}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme}"
+SERVER_PASSWORD="${SERVER_PASSWORD:-}"
+DIFFICULTY="${DIFFICULTY:-Normal}"
+GAME_PORT="${GAME_PORT:-8211}"
+RCON_PORT="${RCON_PORT:-25575}"
+
+echo "[start-server] config: name=${SERVER_NAME} max_players=${MAX_PLAYERS} difficulty=${DIFFICULTY}"
+echo "[start-server] config: game_port=${GAME_PORT} rcon_port=${RCON_PORT}"
+
+# Palworld stores saves under Pal/Saved/SaveGames
+# Symlink to /data/worlds so saves persist on the Docker volume
+SAVE_DIR="/data/server/Pal/Saved/SaveGames"
+mkdir -p /data/worlds
+mkdir -p "$(dirname "$SAVE_DIR")"
+ln -sfn /data/worlds "$SAVE_DIR"
+
+# Generate PalWorldSettings.ini from env vars
+CONFIG_DIR="/data/server/Pal/Saved/Config/LinuxServer"
+mkdir -p "$CONFIG_DIR"
+
+cat > "$CONFIG_DIR/PalWorldSettings.ini" <<EOF
+[/Script/Pal.PalGameWorldSettings]
+OptionSettings=(ServerName="${SERVER_NAME}",ServerPassword="${SERVER_PASSWORD}",AdminPassword="${ADMIN_PASSWORD}",ServerPlayerMaxNum=${MAX_PLAYERS},Difficulty=${DIFFICULTY},PublicPort=${GAME_PORT},RCONEnabled=True,RCONPort=${RCON_PORT})
+EOF
+
+echo "[start-server] wrote PalWorldSettings.ini"
+
+echo "[start-server] starting Palworld dedicated server"
+cd /data/server
+exec ./PalServer.sh \
+    -port="$GAME_PORT" \
+    -useperfthreads \
+    -NoAsyncLoadingThread \
+    -UseMultithreadForDS

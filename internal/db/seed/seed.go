@@ -157,8 +157,8 @@ func SeedGames(db *sql.DB) error {
 			]`,
 			minMemoryMB:          4096,
 			minCPU:               2.0,
-			gsqGameSlug:          "palworld",
-			disabledCapabilities: `[]`,
+			gsqGameSlug:          "",
+			disabledCapabilities: `["query"]`,
 		},
 		{
 			id:       "terraria",

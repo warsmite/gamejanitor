@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "[install-server] downloading Palworld dedicated server via SteamCMD (app 2394010)"
+steamcmd.sh \
+    +force_install_dir /data/server \
+    +login anonymous \
+    +app_update 2394010 validate \
+    +quit
+
+echo "[install-server] Palworld dedicated server installed"
