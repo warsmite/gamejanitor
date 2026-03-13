@@ -211,7 +211,14 @@ var commandCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Println("Command sent.")
+		var output struct {
+			Output string `json:"output"`
+		}
+		if err := json.Unmarshal(resp.Data, &output); err == nil && output.Output != "" {
+			fmt.Print(output.Output)
+		} else {
+			fmt.Println("Command sent.")
+		}
 		return nil
 	},
 }

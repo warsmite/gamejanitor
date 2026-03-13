@@ -36,7 +36,7 @@
           reflex -s -r '\.html$' -- tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify &
 
           # Watch Go/template files and restart server
-          reflex -s -r '\.(go|html)$' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
+          DEBUG=1 reflex -s -r '\.(go|html)$' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
         '';
 
         cli = pkgs.writeShellScriptBin "cli" ''
@@ -62,6 +62,8 @@
             echo "Usage: push-image <game>"
             exit 1
           fi
+          echo "Building and pushing $game..."
+          docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
           docker push "registry.0xkowalski.dev/gamejanitor/$game"
         '';
 

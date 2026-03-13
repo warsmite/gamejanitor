@@ -129,11 +129,12 @@ func SeedGames(db *sql.DB) error {
 				{"key":"GAMEMODE","default":"sandbox","label":"Game Mode","type":"select","options":["sandbox","terrortown","prop_hunt","murder","deathrun"]},
 				{"key":"MAP","default":"gm_flatgrass","label":"Starting Map"},
 				{"key":"GAME_PORT","default":"27015","system":true},
+				{"key":"RCON_PORT","default":"27015","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			minMemoryMB:          2048,
 			minCPU:               1.0,
-			gsqGameSlug:          "garrysmod",
+			gsqGameSlug:          "garrys-mod",
 			disabledCapabilities: `[]`,
 		},
 		{

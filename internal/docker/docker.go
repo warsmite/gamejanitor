@@ -391,10 +391,15 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	// Files must be owned by gameserver (1001:1001) — Docker's CopyToContainer
+	// extracts as root, so without explicit UID/GID files end up root-owned
+	// and game scripts running as gameserver can't modify them.
 	if err := tw.WriteHeader(&tar.Header{
 		Name: filename,
 		Mode: 0644,
 		Size: int64(len(content)),
+		Uid:  1001,
+		Gid:  1001,
 	}); err != nil {
 		return fmt.Errorf("writing tar header for %s: %w", path, err)
 	}

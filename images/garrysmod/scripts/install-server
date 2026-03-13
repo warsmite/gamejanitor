@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "[install-server] downloading Garry's Mod dedicated server via SteamCMD (app 4020)"
+steamcmd.sh \
+    +force_install_dir /data/server \
+    +login anonymous \
+    +app_update 4020 validate \
+    +quit
+
+echo "[install-server] Garry's Mod dedicated server installed"

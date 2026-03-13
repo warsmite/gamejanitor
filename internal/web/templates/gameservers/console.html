@@ -164,6 +164,13 @@ function consoleApp() {
       if (!resp.ok) {
         const text = await resp.text();
         this.appendLine('[ERR] Command failed: ' + text, true);
+      } else {
+        const text = await resp.text();
+        if (text.trim()) {
+          for (const line of text.trim().split('\n')) {
+            this.appendLine(line, false);
+          }
+        }
       }
 
       this.$refs.commandInput.focus();

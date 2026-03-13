@@ -54,43 +54,45 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 }
 
 // SendCommand executes a command inside a running gameserver's container via /scripts/send-command.
-func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, command string) error {
+// Returns the command output (stdout), which is relevant for RCON-based games where
+// the response comes back on stdout rather than appearing in the container log stream.
+func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, command string) (string, error) {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {
-		return fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
+		return "", fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", gameserverID)
+		return "", fmt.Errorf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
-		return fmt.Errorf("gameserver %s has no container", gameserverID)
+		return "", fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
 	if !isRunningStatus(gs.Status) {
-		return fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+		return "", fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
 	game, err := models.GetGame(s.db, gs.GameID)
 	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
+		return "", fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
 	}
 	if game == nil {
-		return fmt.Errorf("game %s not found for gameserver %s", gs.GameID, gameserverID)
+		return "", fmt.Errorf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
-	if !HasCapability(game,"console_send") {
-		return fmt.Errorf("console_send capability is disabled for game %s", game.Name)
+	if !HasCapability(game, "console_send") {
+		return "", fmt.Errorf("console_send capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
 
-	exitCode, _, stderr, err := s.docker.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
+	exitCode, stdout, stderr, err := s.docker.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
 	if err != nil {
-		return fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
+		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}
 	if exitCode != 0 {
-		return fmt.Errorf("command failed (exit %d): %s", exitCode, stderr)
+		return "", fmt.Errorf("command failed (exit %d): %s", exitCode, stderr)
 	}
 
-	return nil
+	return stdout, nil
 }
 
 func isRunningStatus(status string) bool {

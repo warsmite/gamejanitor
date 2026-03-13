@@ -24,13 +24,13 @@ RUN curl -fsSL https://github.com/gorcon/rcon-cli/releases/download/v0.10.3/rcon
 
 USER gameserver
 
-# Pre-install Rust server so first start only needs a delta update
+# Pre-install GMod server so first start only needs a delta update
 # First run may self-update and exit non-zero, so run twice
 RUN steamcmd.sh +quit || true && \
     steamcmd.sh \
     +force_install_dir /data/server \
     +login anonymous \
-    +app_update 258550 validate \
+    +app_update 4020 validate \
     +quit
 
 COPY scripts/ /scripts/
@@ -39,4 +39,4 @@ USER root
 RUN chmod +x /scripts/*
 USER gameserver
 
-EXPOSE 28015/udp 28017/udp 28016/tcp
+EXPOSE 27015/udp 27015/tcp

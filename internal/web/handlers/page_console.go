@@ -175,11 +175,14 @@ func (h *PageConsoleHandlers) SendCommand(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.consoleSvc.SendCommand(r.Context(), id, command); err != nil {
+	output, err := h.consoleSvc.SendCommand(r.Context(), id, command)
+	if err != nil {
 		h.log.Error("sending command", "gameserver_id", id, "command", command, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(output))
 }

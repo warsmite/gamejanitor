@@ -321,11 +321,12 @@ func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.consoleSvc.SendCommand(r.Context(), id, strings.TrimSpace(body.Command)); err != nil {
+	output, err := h.consoleSvc.SendCommand(r.Context(), id, strings.TrimSpace(body.Command))
+	if err != nil {
 		h.log.Error("sending command", "gameserver_id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
 
-	respondNoContent(w)
+	respondOK(w, map[string]string{"output": output})
 }

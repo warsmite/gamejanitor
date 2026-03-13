@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+
+GAME_PORT="${GAME_PORT:-27015}"
+RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+HOSTNAME="${HOSTNAME:-Gamejanitor GMod Server}"
+MAXPLAYERS="${MAXPLAYERS:-16}"
+GAMEMODE="${GAMEMODE:-sandbox}"
+MAP="${MAP:-gm_flatgrass}"
+
+echo "[start-server] config: hostname=${HOSTNAME} maxplayers=${MAXPLAYERS}"
+echo "[start-server] config: gamemode=${GAMEMODE} map=${MAP} port=${GAME_PORT}"
+
+export LD_LIBRARY_PATH="/data/server/bin:${LD_LIBRARY_PATH}"
+
+# Ensure rcon_password is set in server.cfg (CLI arg doesn't always take effect)
+CFG_DIR="/data/server/garrysmod/cfg"
+mkdir -p "$CFG_DIR"
+CFG_FILE="${CFG_DIR}/server.cfg"
+touch "$CFG_FILE"
+if grep -q '^rcon_password' "$CFG_FILE" 2>/dev/null; then
+    sed -i "s|^rcon_password.*|rcon_password \"${RCON_PASSWORD}\"|" "$CFG_FILE"
+else
+    echo "rcon_password \"${RCON_PASSWORD}\"" >> "$CFG_FILE"
+fi
+
+CONSOLE_LOG="/data/server/garrysmod/console.log"
+rm -f "$CONSOLE_LOG"
+
+echo "[start-server] starting Garry's Mod dedicated server"
+cd /data/server
+
+# srcds_linux doesn't write to stdout on Linux, -condebug writes to console.log
+./srcds_linux -game garrysmod \
+    -ip 0.0.0.0 \
+    -port "$GAME_PORT" \
+    -norestart \
+    -condebug \
+    +maxplayers "$MAXPLAYERS" \
+    +hostname "$HOSTNAME" \
+    +gamemode "$GAMEMODE" \
+    +map "$MAP" \
+    +rcon_password "$RCON_PASSWORD" &
+
+SERVER_PID=$!
+
+# Tail console.log to stdout so Docker captures it
+while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done
+tail -f "$CONSOLE_LOG" &
+
+wait "$SERVER_PID"

@@ -152,7 +152,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 			s.log.Error("failed to parse command payload", "schedule_id", scheduleID, "error", err)
 			return
 		}
-		taskErr = s.consoleSvc.SendCommand(ctx, schedule.GameserverID, payload.Command)
+		_, taskErr = s.consoleSvc.SendCommand(ctx, schedule.GameserverID, payload.Command)
 	case "update":
 		taskErr = s.gameserverSvc.UpdateServerGame(ctx, schedule.GameserverID)
 	default:
