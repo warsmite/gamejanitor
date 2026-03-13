@@ -214,12 +214,12 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	if gs.ContainerID != nil {
 		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-			s.log.Warn("failed to remove container during delete", "id", id, "error", err)
+			return fmt.Errorf("removing container during delete: %w", err)
 		}
 	}
 
 	if err := s.docker.RemoveVolume(ctx, gs.VolumeName); err != nil {
-		s.log.Warn("failed to remove volume during delete", "id", id, "volume", gs.VolumeName, "error", err)
+		return fmt.Errorf("removing volume during delete: %w", err)
 	}
 
 	// Cascade delete schedules and backups
