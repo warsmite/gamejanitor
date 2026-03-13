@@ -27,7 +27,53 @@
 
       nixosModules.default = ./nixos/module.nix;
 
-      devShells.${system}.default = pkgs.mkShell {
+      devShells.${system}.default = let
+        dev = pkgs.writeShellScriptBin "dev" ''
+          # Build CSS initially
+          tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
+
+          # Watch templates for CSS rebuild in background
+          reflex -s -r '\.html$' -- tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify &
+
+          # Watch Go/template files and restart server
+          reflex -s -r '\.(go|html)$' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
+        '';
+
+        cli = pkgs.writeShellScriptBin "cli" ''
+          exec go run ./cmd/gamejanitor "$@"
+        '';
+
+        build-css = pkgs.writeShellScriptBin "build-css" ''
+          tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
+        '';
+
+        build-image = pkgs.writeShellScriptBin "build-image" ''
+          game="$1"
+          if [ -z "$game" ]; then
+            echo "Usage: build-image <game>"
+            exit 1
+          fi
+          docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
+        '';
+
+        push-image = pkgs.writeShellScriptBin "push-image" ''
+          game="$1"
+          if [ -z "$game" ]; then
+            echo "Usage: push-image <game>"
+            exit 1
+          fi
+          docker push "registry.0xkowalski.dev/gamejanitor/$game"
+        '';
+
+        push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
+          for dir in images/*/; do
+            game=$(basename "$dir")
+            echo "Building and pushing $game..."
+            docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
+            docker push "registry.0xkowalski.dev/gamejanitor/$game"
+          done
+        '';
+      in pkgs.mkShell {
         buildInputs = [
           pkgs.go
           pkgs.sqlite
@@ -35,6 +81,13 @@
           pkgs.pkg-config
           pkgs.gcc
           pkgs.tailwindcss
+          pkgs.reflex
+          dev
+          cli
+          build-css
+          build-image
+          push-image
+          push-all-images
         ];
 
         shellHook = ''
@@ -42,49 +95,5 @@
         '';
       };
 
-      apps.${system} = {
-        build-image = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "build-image" ''
-            game="$1"
-            if [ -z "$game" ]; then
-              echo "Usage: nix run .#build-image -- <game>"
-              exit 1
-            fi
-            docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
-          '');
-        };
-
-        push-image = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "push-image" ''
-            game="$1"
-            if [ -z "$game" ]; then
-              echo "Usage: nix run .#push-image -- <game>"
-              exit 1
-            fi
-            docker push "registry.0xkowalski.dev/gamejanitor/$game"
-          '');
-        };
-
-        build-css = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "build-css" ''
-            ${pkgs.tailwindcss}/bin/tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
-          '');
-        };
-
-        push-all-images = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "push-all-images" ''
-            for dir in images/*/; do
-              game=$(basename "$dir")
-              echo "Building and pushing $game..."
-              docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
-              docker push "registry.0xkowalski.dev/gamejanitor/$game"
-            done
-          '');
-        };
-      };
     };
 }
