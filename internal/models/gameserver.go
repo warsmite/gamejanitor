@@ -72,7 +72,7 @@ func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
 }
 
 // scanGameserver handles scanning JSON columns via string intermediaries
-// since go-sqlite3 returns JSON columns as strings, not []byte.
+// since SQLite drivers return JSON columns as strings, not []byte.
 func scanGameserver(scan func(dest ...any) error) (Gameserver, error) {
 	var gs Gameserver
 	var portsStr, envStr string
