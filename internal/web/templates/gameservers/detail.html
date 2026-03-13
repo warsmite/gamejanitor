@@ -58,17 +58,17 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
     <!-- Action Buttons -->
     <div class="flex flex-wrap items-center gap-3 mb-6">
-      <button x-show="status === 'stopped'" hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-target="#content" hx-swap="innerHTML"
+      <button x-show="status === 'stopped'" hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-swap="none"
               class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-display font-semibold transition-colors shadow-lg shadow-emerald-600/20">
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         Start
       </button>
-      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-target="#content" hx-swap="innerHTML"
+      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-swap="none"
               class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-semibold transition-colors shadow-lg shadow-red-600/20" x-cloak>
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
         Stop
       </button>
-      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/restart" hx-target="#content" hx-swap="innerHTML"
+      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/restart" hx-swap="none"
               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors" x-cloak>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Restart
@@ -200,11 +200,11 @@
                       class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
                 Delete
               </button>
-              <button x-show="confirmAction === 'reinstall'" hx-post="/gameservers/{{.Gameserver.ID}}/reinstall" hx-target="#content" hx-swap="innerHTML" @click="confirmAction = ''"
+              <button x-show="confirmAction === 'reinstall'" hx-post="/gameservers/{{.Gameserver.ID}}/reinstall" hx-swap="none" @click="confirmAction = ''"
                       class="px-4 py-2 text-sm font-medium rounded-lg bg-accent-600 text-white hover:bg-accent-500 transition-colors">
                 Reinstall
               </button>
-              <button x-show="confirmAction === 'update-game'" hx-post="/gameservers/{{.Gameserver.ID}}/update-game" hx-target="#content" hx-swap="innerHTML" @click="confirmAction = ''"
+              <button x-show="confirmAction === 'update-game'" hx-post="/gameservers/{{.Gameserver.ID}}/update-game" hx-swap="none" @click="confirmAction = ''"
                       class="px-4 py-2 text-sm font-medium rounded-lg bg-accent-600 text-white hover:bg-accent-500 transition-colors">
                 Update
               </button>
