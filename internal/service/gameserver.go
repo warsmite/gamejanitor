@@ -19,6 +19,7 @@ type GameserverService struct {
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
+	fileSvc     *FileService
 }
 
 func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *GameserverService {
@@ -29,6 +30,11 @@ func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *
 // Called after both services are created to break the circular dependency.
 func (s *GameserverService) SetQueryService(qs *QueryService) {
 	s.querySvc = qs
+}
+
+// SetFileService sets the file service so temp file containers can be cleaned up before start.
+func (s *GameserverService) SetFileService(fs *FileService) {
+	s.fileSvc = fs
 }
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
@@ -156,6 +162,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
+	}
+
+	// Remove temp file container if one exists (releases the volume)
+	if s.fileSvc != nil {
+		s.fileSvc.CleanupTempContainer(id)
 	}
 
 	// Remove old container if exists (stale from prior run/crash)

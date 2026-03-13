@@ -86,6 +86,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	gameserverSvc.SetQueryService(querySvc)
 	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
 	fileSvc := service.NewFileService(database, dockerClient, logger)
+	gameserverSvc.SetFileService(fileSvc)
 	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, cfg.DataDir, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
@@ -108,6 +109,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer scheduler.Stop()
 	defer querySvc.StopAll()
+	defer fileSvc.CleanupAll()
 
 	// Auto-start gameservers
 	for _, id := range autoStartIDs {

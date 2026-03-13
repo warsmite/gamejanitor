@@ -147,8 +147,8 @@ func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
 	if gsID == event.ContainerName {
 		return
 	}
-	// Skip temp containers (update/reinstall/backup)
-	if strings.Contains(gsID, "-update-") || strings.Contains(gsID, "-reinstall-") || strings.Contains(gsID, "-backup-") {
+	// Skip temp containers (update/reinstall/backup/files)
+	if strings.Contains(gsID, "-update-") || strings.Contains(gsID, "-reinstall-") || strings.Contains(gsID, "-backup-") || strings.Contains(gsID, "-files-") {
 		return
 	}
 

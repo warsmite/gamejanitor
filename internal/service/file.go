@@ -9,15 +9,26 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
+const tempContainerIdleTimeout = 5 * time.Minute
+
+type tempFileContainer struct {
+	containerID string
+	timer       *time.Timer
+}
+
 type FileService struct {
-	db     *sql.DB
-	docker *docker.Client
-	log    *slog.Logger
+	db             *sql.DB
+	docker         *docker.Client
+	log            *slog.Logger
+	mu             sync.Mutex
+	tempContainers map[string]*tempFileContainer
 }
 
 type FileEntry struct {
@@ -29,7 +40,12 @@ type FileEntry struct {
 }
 
 func NewFileService(db *sql.DB, dockerClient *docker.Client, log *slog.Logger) *FileService {
-	return &FileService{db: db, docker: dockerClient, log: log}
+	return &FileService{
+		db:             db,
+		docker:         dockerClient,
+		log:            log,
+		tempContainers: make(map[string]*tempFileContainer),
+	}
 }
 
 func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, dirPath string) ([]FileEntry, error) {
@@ -127,12 +143,115 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 		return fmt.Errorf("gameserver %s not found", gameserverID)
 	}
 
-	if !isRunningStatus(gs.Status) || gs.ContainerID == nil {
-		return fmt.Errorf("gameserver must be running to access files (current status: %s)", gs.Status)
+	if isRunningStatus(gs.Status) && gs.ContainerID != nil {
+		s.log.Debug("file operation on running container", "gameserver_id", gameserverID)
+		return fn(*gs.ContainerID)
 	}
 
-	s.log.Debug("file operation on running container", "gameserver_id", gameserverID)
-	return fn(*gs.ContainerID)
+	if gs.Status == StatusStopped || gs.Status == StatusError {
+		containerID, err := s.getTempContainer(ctx, gs)
+		if err != nil {
+			return fmt.Errorf("getting temp container for file access: %w", err)
+		}
+		s.log.Debug("file operation on temp container", "gameserver_id", gameserverID)
+		return fn(containerID)
+	}
+
+	return fmt.Errorf("cannot access files while gameserver is %s", gs.Status)
+}
+
+func (s *FileService) getTempContainer(ctx context.Context, gs *models.Gameserver) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if tc, ok := s.tempContainers[gs.ID]; ok {
+		tc.timer.Reset(tempContainerIdleTimeout)
+		s.log.Debug("reusing temp file container", "gameserver_id", gs.ID)
+		return tc.containerID, nil
+	}
+
+	game, err := models.GetGame(s.db, gs.GameID)
+	if err != nil {
+		return "", fmt.Errorf("getting game %s: %w", gs.GameID, err)
+	}
+	if game == nil {
+		return "", fmt.Errorf("game %s not found", gs.GameID)
+	}
+
+	containerName := "gamejanitor-files-" + gs.ID
+	containerID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+		Name:       containerName,
+		Image:      game.Image,
+		Env:        []string{},
+		VolumeName: gs.VolumeName,
+		Entrypoint: []string{"sleep", "infinity"},
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating temp file container: %w", err)
+	}
+
+	if err := s.docker.StartContainer(ctx, containerID); err != nil {
+		s.docker.RemoveContainer(ctx, containerID)
+		return "", fmt.Errorf("starting temp file container: %w", err)
+	}
+
+	timer := time.AfterFunc(tempContainerIdleTimeout, func() {
+		s.cleanupTempContainer(gs.ID)
+	})
+
+	s.tempContainers[gs.ID] = &tempFileContainer{
+		containerID: containerID,
+		timer:       timer,
+	}
+
+	s.log.Info("created temp file container", "gameserver_id", gs.ID, "container_id", containerID[:12])
+	return containerID, nil
+}
+
+// CleanupTempContainer removes a temp file container for the given gameserver.
+// Called before starting a gameserver to release the volume.
+func (s *FileService) CleanupTempContainer(gameserverID string) {
+	s.cleanupTempContainer(gameserverID)
+}
+
+func (s *FileService) cleanupTempContainer(gameserverID string) {
+	s.mu.Lock()
+	tc, ok := s.tempContainers[gameserverID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.tempContainers, gameserverID)
+	s.mu.Unlock()
+
+	tc.timer.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := s.docker.StopContainer(ctx, tc.containerID, 5); err != nil {
+		s.log.Warn("failed to stop temp file container", "gameserver_id", gameserverID, "error", err)
+	}
+	if err := s.docker.RemoveContainer(ctx, tc.containerID); err != nil {
+		s.log.Warn("failed to remove temp file container", "gameserver_id", gameserverID, "error", err)
+	}
+
+	s.log.Info("cleaned up temp file container", "gameserver_id", gameserverID)
+}
+
+// CleanupAll removes all temp file containers. Called on shutdown.
+func (s *FileService) CleanupAll() {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.tempContainers))
+	for id := range s.tempContainers {
+		ids = append(ids, id)
+	}
+	s.mu.Unlock()
+
+	for _, id := range ids {
+		s.cleanupTempContainer(id)
+	}
+	s.log.Info("cleaned up all temp file containers", "count", len(ids))
 }
 
 // validatePath ensures the path is within /data and contains no traversal.

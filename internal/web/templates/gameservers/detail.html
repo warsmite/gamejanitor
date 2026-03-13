@@ -78,7 +78,7 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/></svg>
         Console
       </a>
-      <a x-show="status === 'running' || status === 'started'" href="/gameservers/{{.Gameserver.ID}}/files"
+      <a x-show="status !== 'pulling' && status !== 'starting' && status !== 'stopping'" href="/gameservers/{{.Gameserver.ID}}/files"
          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors" x-cloak>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
         Files
