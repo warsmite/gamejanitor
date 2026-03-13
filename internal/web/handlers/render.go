@@ -29,6 +29,7 @@ func NewRenderer() (*Renderer, error) {
 		"derefTime":   func(t *time.Time) time.Time { if t != nil { return *t }; return time.Time{} },
 		"formatBytes": formatBytes,
 		"queryJSON":   queryJSON,
+		"multiply":    func(a, b int) int { return a * b },
 	}
 
 	// Parse partials and layout as the base template set

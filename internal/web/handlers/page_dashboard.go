@@ -53,8 +53,8 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		gameLookup[g.ID] = g
 	}
 
-	views := make([]gameserverView, len(gameservers))
-	for i, gs := range gameservers {
+	var activeViews, stoppedViews []gameserverView
+	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
 		v := gameserverView{
 			ID:       gs.ID,
@@ -70,11 +70,17 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 			v.MaxPlayers = qd.MaxPlayers
 			v.HasQueryData = true
 		}
-		views[i] = v
+		if gs.Status == "stopped" {
+			stoppedViews = append(stoppedViews, v)
+		} else {
+			activeViews = append(activeViews, v)
+		}
 	}
 
 	h.renderer.Render(w, r, "dashboard", map[string]any{
-		"Gameservers": views,
-		"Games":       games,
+		"ActiveGameservers":  activeViews,
+		"StoppedGameservers": stoppedViews,
+		"HasGameservers":     len(gameservers) > 0,
+		"Games":              games,
 	})
 }

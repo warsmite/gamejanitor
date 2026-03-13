@@ -1,28 +1,71 @@
 {{define "title"}}Gamejanitor{{end}}
 
 {{define "content"}}
-<div x-data="dashboard()" x-init="connectSSE()" class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+<div x-data="dashboard()" x-init="connectSSE()" class="py-6">
 
-  {{if .Gameservers}}
-  <!-- Header -->
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="font-display font-bold text-2xl text-white">Your Gameservers</h1>
-    <a href="/gameservers/new" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-600 hover:bg-accent-500 text-white text-sm font-semibold transition-colors shadow-lg shadow-accent-600/20">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-      New Gameserver
-    </a>
-  </div>
+  {{if .HasGameservers}}
 
-  <!-- Gameserver Grid -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-    {{range .Gameservers}}
-    {{template "gameserver_card" .}}
-    {{end}}
+  {{if .ActiveGameservers}}
+  <!-- Active Gameservers -->
+  <div class="mb-8">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mb-4">
+      <h2 class="font-display font-bold text-2xl text-white">Your Gameservers</h2>
+    </div>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="flex gap-4 overflow-x-auto pb-4 scroll-row">
+        {{range $i, $gs := .ActiveGameservers}}
+        <div style="animation-delay: {{printf "%d" (multiply $i 75)}}ms" class="animate-slide-up opacity-0 [animation-fill-mode:forwards] shrink-0 w-52">
+          {{template "gameserver_card" $gs}}
+        </div>
+        {{end}}
+        <!-- New Gameserver Card -->
+        <a href="/gameservers/new" class="shrink-0 w-52 aspect-[2/3] rounded-xl border-2 border-dashed border-surface-700 hover:border-accent-500/50 flex flex-col items-center justify-center gap-3 transition-all duration-300 hover:bg-surface-800/30 group animate-slide-up opacity-0 [animation-fill-mode:forwards]" style="animation-delay: {{printf "%d" (multiply (len .ActiveGameservers) 75)}}ms" hx-boost="true">
+          <div class="w-12 h-12 rounded-full bg-surface-800 group-hover:bg-accent-600/20 border border-surface-700 group-hover:border-accent-500/40 flex items-center justify-center transition-all duration-300">
+            <svg class="w-6 h-6 text-surface-500 group-hover:text-accent-400 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          </div>
+          <span class="text-sm font-medium text-surface-500 group-hover:text-surface-300 transition-colors">New Gameserver</span>
+        </a>
+      </div>
+    </div>
   </div>
+  {{else}}
+  <!-- No active servers, just show add prompt -->
+  <div class="mb-8">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mb-4">
+      <h2 class="font-display font-bold text-2xl text-white">Your Gameservers</h2>
+    </div>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <a href="/gameservers/new" class="shrink-0 w-52 aspect-[2/3] rounded-xl border-2 border-dashed border-surface-700 hover:border-accent-500/50 flex flex-col items-center justify-center gap-3 transition-all duration-300 hover:bg-surface-800/30 group animate-slide-up opacity-0 [animation-fill-mode:forwards]" hx-boost="true">
+        <div class="w-12 h-12 rounded-full bg-surface-800 group-hover:bg-accent-600/20 border border-surface-700 group-hover:border-accent-500/40 flex items-center justify-center transition-all duration-300">
+          <svg class="w-6 h-6 text-surface-500 group-hover:text-accent-400 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        </div>
+        <span class="text-sm font-medium text-surface-500 group-hover:text-surface-300 transition-colors">New Gameserver</span>
+      </a>
+    </div>
+  </div>
+  {{end}}
+
+  {{if .StoppedGameservers}}
+  <!-- Stopped Gameservers -->
+  <div>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 mb-4">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wider text-surface-500">Stopped</h2>
+    </div>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="flex gap-4 overflow-x-auto pb-4 scroll-row">
+        {{range $i, $gs := .StoppedGameservers}}
+        <div style="animation-delay: {{printf "%d" (multiply $i 75)}}ms" class="animate-slide-up opacity-0 [animation-fill-mode:forwards] shrink-0 w-52 stopped-card">
+          {{template "gameserver_card" $gs}}
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+  {{end}}
 
   {{else}}
   <!-- Empty State -->
-  <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+  <div class="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
     <div class="mb-8">
       <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-500/20 to-accent-700/20 border border-accent-500/20 flex items-center justify-center">
         <svg class="w-8 h-8 text-accent-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
@@ -50,7 +93,7 @@
       </div>
     </div>
     {{else}}
-    <a href="/gameservers/new" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-semibold transition-colors shadow-lg shadow-accent-600/25">
+    <a href="/gameservers/new" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-semibold transition-colors shadow-lg shadow-accent-600/25" hx-boost="true">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
       Create your first gameserver
     </a>
