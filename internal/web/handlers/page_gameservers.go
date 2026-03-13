@@ -27,7 +27,6 @@ func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *serv
 type gameserverFormData struct {
 	MemoryLimitMB int
 	CPULimit      float64
-	AutoStart     bool
 	Ports         json.RawMessage
 	Env           json.RawMessage
 }
@@ -44,7 +43,6 @@ func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
 	return &gameserverFormData{
 		MemoryLimitMB: memoryLimitMB,
 		CPULimit:      cpuLimit,
-		AutoStart:     r.FormValue("auto_start") == "true",
 		Ports:         validateJSONOrDefault(r.FormValue("ports_json"), "[]"),
 		Env:           validateJSONOrDefault(r.FormValue("env_json"), "{}"),
 	}, nil
@@ -122,7 +120,6 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		Env:           form.Env,
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
-		AutoStart:     form.AutoStart,
 	}
 
 	if err := h.gameserverSvc.CreateGameserver(r.Context(), gs); err != nil {
@@ -251,7 +248,6 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		Env:           form.Env,
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
-		AutoStart:     form.AutoStart,
 		ContainerID:   existing.ContainerID,
 		VolumeName:    existing.VolumeName,
 		Status:        existing.Status,

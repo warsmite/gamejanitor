@@ -61,34 +61,24 @@ func (m *StatusManager) Stop() {
 }
 
 // RecoverOnStartup reconciles DB status with Docker reality.
-// Returns a list of gameserver IDs that should be auto-started.
-func (m *StatusManager) RecoverOnStartup(ctx context.Context) ([]string, error) {
+// Any gameserver not in a terminal state (stopped/error) is checked against
+// the actual Docker container and corrected. This handles gamejanitor crashes
+// mid-lifecycle and also resumes GSQ polling for running servers.
+func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	m.log.Info("recovering gameserver status from docker state")
 
 	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	var autoStartIDs []string
 
 	for _, gs := range gameservers {
-		if isNonTerminalStatus(gs.Status) {
+		if needsRecovery(gs.Status) {
 			m.recoverGameserver(ctx, &gs)
-		}
-
-		// Re-read after potential status change
-		updated, err := models.GetGameserver(m.db, gs.ID)
-		if err != nil {
-			m.log.Error("failed to re-read gameserver after recovery", "id", gs.ID, "error", err)
-			continue
-		}
-		if updated != nil && updated.AutoStart && updated.Status == StatusStopped {
-			autoStartIDs = append(autoStartIDs, updated.ID)
 		}
 	}
 
-	return autoStartIDs, nil
+	return nil
 }
 
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver) {

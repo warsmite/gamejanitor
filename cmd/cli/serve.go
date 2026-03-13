@@ -104,8 +104,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Crash recovery
 	ctx := context.Background()
-	autoStartIDs, err := statusMgr.RecoverOnStartup(ctx)
-	if err != nil {
+	if err := statusMgr.RecoverOnStartup(ctx); err != nil {
 		return fmt.Errorf("failed to recover gameserver status: %w", err)
 	}
 
@@ -120,14 +119,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer scheduler.Stop()
 	defer querySvc.StopAll()
 	defer fileSvc.CleanupAll()
-
-	// Auto-start gameservers
-	for _, id := range autoStartIDs {
-		logger.Info("auto-starting gameserver", "id", id)
-		if err := gameserverSvc.Start(ctx, id); err != nil {
-			logger.Error("failed to auto-start gameserver", "id", id, "error", err)
-		}
-	}
 
 	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, dockerClient, broadcaster, logPath, cfg.DataDir, logger)
 	if err != nil {

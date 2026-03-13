@@ -50,13 +50,6 @@
         </div>
       </div>
 
-      <!-- Auto Start -->
-      <label class="flex items-center gap-3 cursor-pointer group">
-        <input type="checkbox" name="auto_start" value="true" {{if .Gameserver.AutoStart}}checked{{end}}
-               class="w-4 h-4 rounded bg-surface-900 border-surface-600 text-accent-500 focus:ring-accent-500 focus:ring-offset-0">
-        <span class="text-sm text-surface-300 group-hover:text-white transition-colors">Auto-start when Gamejanitor launches</span>
-      </label>
-
       <!-- Advanced Settings -->
       <div x-data="{ showAdvanced: false }">
         <button type="button" @click="showAdvanced = !showAdvanced"

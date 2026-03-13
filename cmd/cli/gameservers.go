@@ -93,7 +93,6 @@ var gameserversGetCmd = &cobra.Command{
 			Status        string          `json:"status"`
 			MemoryLimitMB int             `json:"memory_limit_mb"`
 			CPULimit      float64         `json:"cpu_limit"`
-			AutoStart     bool            `json:"auto_start"`
 			VolumeName    string          `json:"volume_name"`
 			Ports         json.RawMessage `json:"ports"`
 			Env           json.RawMessage `json:"env"`
@@ -108,7 +107,6 @@ var gameserversGetCmd = &cobra.Command{
 		fmt.Printf("Status:     %s\n", gs.Status)
 		fmt.Printf("Memory:     %d MB\n", gs.MemoryLimitMB)
 		fmt.Printf("CPU:        %.1f\n", gs.CPULimit)
-		fmt.Printf("Auto Start: %v\n", gs.AutoStart)
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
 		fmt.Printf("Ports:      %s\n", string(gs.Ports))
 		fmt.Printf("Env:        %s\n", string(gs.Env))
@@ -126,8 +124,6 @@ var gameserversCreateCmd = &cobra.Command{
 		envFlags, _ := cmd.Flags().GetStringSlice("env")
 		memory, _ := cmd.Flags().GetInt("memory")
 		cpu, _ := cmd.Flags().GetFloat64("cpu")
-		autoStart, _ := cmd.Flags().GetBool("auto-start")
-
 		if name == "" || gameID == "" {
 			return exitError(fmt.Errorf("--name and --game are required"))
 		}
@@ -146,7 +142,6 @@ var gameserversCreateCmd = &cobra.Command{
 			"env":             env,
 			"memory_limit_mb": memory,
 			"cpu_limit":       cpu,
-			"auto_start":      autoStart,
 		}
 
 		resp, err := apiPost("/api/gameservers", body)
@@ -207,11 +202,6 @@ var gameserversUpdateCmd = &cobra.Command{
 			v, _ := cmd.Flags().GetFloat64("cpu")
 			body["cpu_limit"] = v
 		}
-		if cmd.Flags().Changed("auto-start") {
-			v, _ := cmd.Flags().GetBool("auto-start")
-			body["auto_start"] = v
-		}
-
 		resp, err := apiPut("/api/gameservers/"+gsID, body)
 		if err != nil {
 			return exitError(err)
@@ -313,14 +303,12 @@ func init() {
 	gameserversCreateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	gameserversCreateCmd.Flags().Int("memory", 0, "Memory limit (MB)")
 	gameserversCreateCmd.Flags().Float64("cpu", 0, "CPU limit")
-	gameserversCreateCmd.Flags().Bool("auto-start", false, "Auto-start on Gamejanitor startup")
 
 	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
 	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
 	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	gameserversUpdateCmd.Flags().Int("memory", 0, "Memory limit (MB)")
 	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit")
-	gameserversUpdateCmd.Flags().Bool("auto-start", false, "Auto-start on Gamejanitor startup")
 
 	gameserversCmd.AddCommand(
 		gameserversListCmd, gameserversGetCmd, gameserversCreateCmd,

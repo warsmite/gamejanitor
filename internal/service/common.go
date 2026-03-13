@@ -53,12 +53,8 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadca
 	return nil
 }
 
-func isNonTerminalStatus(status string) bool {
-	switch status {
-	case StatusPulling, StatusStarting, StatusStarted, StatusRunning, StatusStopping:
-		return true
-	}
-	return false
+func needsRecovery(status string) bool {
+	return status != StatusStopped && status != StatusError
 }
 
 func isRunningStatus(status string) bool {
