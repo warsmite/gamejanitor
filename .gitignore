@@ -2,3 +2,4 @@
 vendor/
 .direnv
 .envrc
+result
