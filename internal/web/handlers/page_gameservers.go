@@ -297,5 +297,6 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 		view.HasQueryData = true
 	}
 
+	w.Header().Set("HX-Push-Url", "false")
 	h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)
 }

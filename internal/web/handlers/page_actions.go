@@ -80,6 +80,7 @@ func (h *PageActionHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 			view.HeroPath = game.HeroPath
 			view.IconPath = game.IconPath
 		}
+		w.Header().Set("HX-Push-Url", "false")
 		h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)
 		return
 	}
