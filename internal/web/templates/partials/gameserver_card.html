@@ -1,8 +1,13 @@
 {{define "gameserver_card"}}
 <div id="gs-{{.ID}}" class="group relative rounded-xl border border-surface-700/60 card-glow transition-all duration-200 bg-surface-850/80"
-  {{if .ShowLogTail}}
-  x-data="logTail('{{.ID}}', '{{.Status}}')" x-init="start()"
-  {{end}}>
+  x-data="{ confirmDelete: false, deleting: false, {{if .ShowLogTail}}...logTail('{{.ID}}', '{{.Status}}'){{end}} }"
+  {{if .ShowLogTail}}x-init="start()"{{end}}>
+  <!-- Deleting overlay -->
+  <div x-show="deleting" x-cloak class="absolute inset-0 z-10 rounded-xl bg-surface-900/80 flex items-center justify-center gap-2">
+    <svg class="w-4 h-4 text-red-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+    <span class="text-sm text-red-400 font-medium">Deleting...</span>
+  </div>
+
   <div class="flex items-center gap-4 p-4">
     <!-- Game icon + status indicator -->
     <div class="relative shrink-0">
@@ -48,25 +53,41 @@
 
     <!-- Actions -->
     <div class="flex items-center gap-1.5 shrink-0">
-      {{if eq .Status "stopped"}}
-      <button hx-post="/gameservers/{{.ID}}/start" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-9 h-9 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all hover:scale-110" title="Start">
-        <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-      </button>
-      {{else if or (eq .Status "running") (eq .Status "started")}}
-      <button hx-post="/gameservers/{{.ID}}/restart" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-amber-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-amber-500/30 hover:shadow-lg hover:shadow-amber-500/20" title="Restart">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-      </button>
-      <button hx-post="/gameservers/{{.ID}}/stop" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-red-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-red-500/30 hover:shadow-lg hover:shadow-red-500/20" title="Stop">
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-      </button>
-      {{else}}
-      <div class="w-9 h-9 rounded-lg bg-surface-800/60 border border-surface-700/40 flex items-center justify-center">
-        <svg class="w-4 h-4 text-surface-500 animate-glow-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <!-- Delete confirm -->
+      <div x-show="confirmDelete" x-cloak class="flex items-center gap-1.5">
+        <span class="text-xs text-red-400">Delete?</span>
+        <button hx-delete="/gameservers/{{.ID}}" hx-target="#gs-{{.ID}}" hx-swap="delete" @click="deleting = true; $root.dataset.deleting = 'true'" class="w-9 h-9 rounded-lg bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all" title="Confirm delete">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+        </button>
+        <button @click="confirmDelete = false" class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-surface-700 text-surface-400 border border-surface-700/60 flex items-center justify-center transition-all" title="Cancel">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
       </div>
-      {{end}}
+
+      <div x-show="!confirmDelete" class="flex items-center gap-1.5">
+        {{if eq .Status "stopped"}}
+        <button hx-post="/gameservers/{{.ID}}/start" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
+                class="w-9 h-9 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all hover:scale-110" title="Start">
+          <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        {{else if or (eq .Status "running") (eq .Status "started")}}
+        <button hx-post="/gameservers/{{.ID}}/restart" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
+                class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-amber-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-amber-500/30 hover:shadow-lg hover:shadow-amber-500/20" title="Restart">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+        <button hx-post="/gameservers/{{.ID}}/stop" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
+                class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-red-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-red-500/30 hover:shadow-lg hover:shadow-red-500/20" title="Stop">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+        </button>
+        {{else}}
+        <div class="w-9 h-9 rounded-lg bg-surface-800/60 border border-surface-700/40 flex items-center justify-center">
+          <svg class="w-4 h-4 text-surface-500 animate-glow-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        {{end}}
+        <button @click="confirmDelete = true" class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-red-500/20 text-surface-500 hover:text-red-400 border border-surface-700/60 flex items-center justify-center transition-all hover:border-red-500/30" title="Delete">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 

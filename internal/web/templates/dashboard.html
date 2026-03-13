@@ -97,7 +97,7 @@ function dashboard() {
       this.eventSource.addEventListener('status', (e) => {
         const data = JSON.parse(e.data);
         const card = document.getElementById('gs-' + data.gameserver_id);
-        if (card) {
+        if (card && !card.dataset.deleting) {
           htmx.ajax('GET', '/gameservers/' + data.gameserver_id + '/card', {target: card, swap: 'outerHTML'});
         }
       });

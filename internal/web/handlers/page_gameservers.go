@@ -150,7 +150,11 @@ func (h *PageGameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/")
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
