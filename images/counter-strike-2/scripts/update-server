@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "[update-server] updating CS2 dedicated server via SteamCMD"
+steamcmd.sh \
+    +force_install_dir /data/server \
+    +login anonymous \
+    +app_update 730 validate \
+    +quit
+
+echo "[update-server] update complete"

@@ -1,0 +1,41 @@
+#!/bin/bash
+set -e
+
+HOSTNAME="${HOSTNAME:-Gamejanitor CS2 Server}"
+MAXPLAYERS="${MAXPLAYERS:-16}"
+RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+GAME_TYPE="${GAME_TYPE:-0}"
+GAME_MODE="${GAME_MODE:-1}"
+MAP="${MAP:-de_dust2}"
+GAME_PORT="${GAME_PORT:-27015}"
+GSLT="${GSLT:-}"
+
+echo "[start-server] config: hostname=${HOSTNAME} maxplayers=${MAXPLAYERS}"
+echo "[start-server] config: game_type=${GAME_TYPE} game_mode=${GAME_MODE} map=${MAP} port=${GAME_PORT}"
+echo "[start-server] config: gslt=${GSLT:+set}${GSLT:-not set}"
+
+# CS2 needs engine libs on LD_LIBRARY_PATH (libv8.so etc.)
+export LD_LIBRARY_PATH="/data/server/game/bin/linuxsteamrt64:${LD_LIBRARY_PATH}"
+
+# steamclient.so expected at ~/.steam/sdk64/
+mkdir -p /home/gameserver/.steam/sdk64
+ln -sfn /opt/steamcmd/linux64/steamclient.so /home/gameserver/.steam/sdk64/steamclient.so
+
+cd /data/server
+
+GSLT_ARG=""
+if [ -n "$GSLT" ]; then
+    GSLT_ARG="+sv_setsteamaccount $GSLT"
+fi
+
+echo "[start-server] starting CS2 dedicated server"
+exec ./game/bin/linuxsteamrt64/cs2 -dedicated \
+    -port "$GAME_PORT" \
+    +hostname "$HOSTNAME" \
+    +game_type "$GAME_TYPE" \
+    +game_mode "$GAME_MODE" \
+    +mapgroup mg_active \
+    +map "$MAP" \
+    +rcon_password "$RCON_PASSWORD" \
+    -maxplayers "$MAXPLAYERS" \
+    $GSLT_ARG

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "[save-server] no persistent world saves for Counter-Strike 2"
+exit 0
