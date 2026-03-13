@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -50,6 +52,18 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	gs.VolumeName = "gamejanitor-" + gs.ID
 	gs.Status = StatusStopped
 
+	game, err := models.GetGame(s.db, gs.GameID)
+	if err != nil {
+		return fmt.Errorf("looking up game %s: %w", gs.GameID, err)
+	}
+	if game == nil {
+		return ErrNotFoundf("game %s not found", gs.GameID)
+	}
+
+	if err := applyGameDefaults(gs, game); err != nil {
+		return fmt.Errorf("applying game defaults: %w", err)
+	}
+
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID)
 
 	if err := s.docker.CreateVolume(ctx, gs.VolumeName); err != nil {
@@ -64,6 +78,93 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	return nil
+}
+
+// applyGameDefaults fills in zero/empty gameserver fields from the game definition.
+func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
+	if gs.MemoryLimitMB == 0 {
+		gs.MemoryLimitMB = game.MinMemoryMB
+	}
+	if gs.CPULimit == 0 {
+		gs.CPULimit = game.MinCPU
+	}
+
+	// Apply default ports if none provided
+	if len(gs.Ports) == 0 || string(gs.Ports) == "null" || string(gs.Ports) == "[]" {
+		type defaultPort struct {
+			Name     string `json:"name"`
+			Port     int    `json:"port"`
+			Protocol string `json:"protocol"`
+		}
+		var gamePorts []defaultPort
+		if err := json.Unmarshal(game.DefaultPorts, &gamePorts); err != nil {
+			return fmt.Errorf("parsing game default_ports: %w", err)
+		}
+
+		gsPorts := make([]portMapping, len(gamePorts))
+		for i, p := range gamePorts {
+			gsPorts[i] = portMapping{
+				Name:          p.Name,
+				HostPort:      p.Port,
+				ContainerPort: p.Port,
+				Protocol:      p.Protocol,
+			}
+		}
+		portsJSON, err := json.Marshal(gsPorts)
+		if err != nil {
+			return fmt.Errorf("marshaling default ports: %w", err)
+		}
+		gs.Ports = portsJSON
+	}
+
+	// Merge env: start with game defaults, then overlay user-provided values
+	var defs []envVarDef
+	if err := json.Unmarshal(game.DefaultEnv, &defs); err != nil {
+		return fmt.Errorf("parsing game default_env: %w", err)
+	}
+
+	env := make(map[string]string)
+	for _, d := range defs {
+		if d.System {
+			continue
+		}
+		val := d.Default
+		if val == "changeme" {
+			generated, err := generatePassword(16)
+			if err != nil {
+				return fmt.Errorf("generating password for %s: %w", d.Key, err)
+			}
+			val = generated
+		}
+		env[d.Key] = val
+	}
+
+	// User-provided env overrides defaults
+	var userEnv map[string]string
+	if len(gs.Env) > 0 && string(gs.Env) != "null" && string(gs.Env) != "{}" {
+		if err := json.Unmarshal(gs.Env, &userEnv); err != nil {
+			return fmt.Errorf("parsing user env: %w", err)
+		}
+		for k, v := range userEnv {
+			env[k] = v
+		}
+	}
+
+	envJSON, err := json.Marshal(env)
+	if err != nil {
+		return fmt.Errorf("marshaling merged env: %w", err)
+	}
+	gs.Env = envJSON
+
+	return nil
+}
+
+func generatePassword(length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b)[:length], nil
 }
 
 func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {

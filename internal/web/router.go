@@ -128,6 +128,17 @@ func NewRouter(
 		csrf.Secure(false), // Allow HTTP for local dev; reverse proxy handles HTTPS in prod
 		csrf.RequestHeader("X-CSRF-Token"),
 	)
+	// gorilla/csrf defaults to HTTPS when checking Origin headers.
+	// Mark plaintext requests so the origin check uses http:// scheme,
+	// otherwise Origin: http://localhost mismatches https://localhost → 403.
+	plaintextMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.TLS == nil {
+				r = csrf.PlaintextHTTPRequest(r)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 
 	// Page handlers (HTML)
 	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
@@ -140,6 +151,7 @@ func NewRouter(
 	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameSvc, gameserverSvc, renderer, log)
 
 	r.Group(func(r chi.Router) {
+		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
 
 		r.Get("/", pageDashboard.Dashboard)
