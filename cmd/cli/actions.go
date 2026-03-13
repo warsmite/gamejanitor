@@ -190,8 +190,34 @@ var logsCmd = &cobra.Command{
 	},
 }
 
+var commandCmd = &cobra.Command{
+	Use:   "command <gameserver> <command>",
+	Short: "Send a command to a running gameserver",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		body := map[string]string{"command": args[1]}
+		resp, err := apiPost("/api/gameservers/"+gsID+"/command", body)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		fmt.Println("Command sent.")
+		return nil
+	},
+}
+
 func init() {
 	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
 
-	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd)
+	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd, commandCmd)
 }

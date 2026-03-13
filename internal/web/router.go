@@ -47,7 +47,7 @@ func NewRouter(
 
 	// API handlers (JSON)
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
-	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, querySvc, dockerClient, log)
+	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
@@ -79,6 +79,7 @@ func NewRouter(
 				r.Post("/reinstall", gameserverHandlers.Reinstall)
 				r.Get("/status", gameserverHandlers.Status)
 				r.Get("/logs", gameserverHandlers.Logs)
+				r.Post("/command", gameserverHandlers.SendCommand)
 
 				r.Route("/schedules", func(r chi.Router) {
 					r.Get("/", scheduleHandlers.List)

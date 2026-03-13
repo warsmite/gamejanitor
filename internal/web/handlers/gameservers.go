@@ -19,14 +19,15 @@ import (
 )
 
 type GameserverHandlers struct {
-	svc      *service.GameserverService
-	querySvc *service.QueryService
-	docker   *docker.Client
-	log      *slog.Logger
+	svc        *service.GameserverService
+	consoleSvc *service.ConsoleService
+	querySvc   *service.QueryService
+	docker     *docker.Client
+	log        *slog.Logger
 }
 
-func NewGameserverHandlers(svc *service.GameserverService, querySvc *service.QueryService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, querySvc: querySvc, docker: dockerClient, log: log}
+func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.ConsoleService, querySvc *service.QueryService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, docker: dockerClient, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -303,4 +304,28 @@ func readDockerLogs(r io.Reader) []string {
 	}
 
 	return lines
+}
+
+func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var body struct {
+		Command string `json:"command"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(body.Command) == "" {
+		respondError(w, http.StatusBadRequest, "command is required")
+		return
+	}
+
+	if err := h.consoleSvc.SendCommand(r.Context(), id, strings.TrimSpace(body.Command)); err != nil {
+		h.log.Error("sending command", "gameserver_id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+
+	respondNoContent(w)
 }
