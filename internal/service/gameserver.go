@@ -169,15 +169,20 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		s.fileSvc.CleanupTempContainer(id)
 	}
 
-	// Remove old container if exists (stale from prior run/crash)
+	// Remove old container if exists (stale from prior run/crash).
+	// Always try by name in case the DB lost track of the container ID
+	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
+	containerName := "gamejanitor-" + id
 	if gs.ContainerID != nil {
 		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-			s.log.Warn("failed to remove old container", "id", id, "error", err)
+			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
 		}
+	}
+	if err := s.docker.RemoveContainer(ctx, containerName); err != nil {
+		s.log.Debug("no stale container to remove by name", "name", containerName)
 	}
 
 	// Create container
-	containerName := "gamejanitor-" + id
 	containerID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:          containerName,
 		Image:         game.Image,
