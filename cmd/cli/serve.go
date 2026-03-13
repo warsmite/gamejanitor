@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -48,12 +49,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if os.Getenv("DEBUG") != "" {
 		level = slog.LevelDebug
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-	slog.SetDefault(logger)
 
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
+
+	logPath := filepath.Join(cfg.DataDir, "gamejanitor.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer logFile.Close()
+
+	writer := io.MultiWriter(os.Stderr, logFile)
+	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level}))
+	slog.SetDefault(logger)
 
 	logger.Info("opening database", "path", cfg.DBPath)
 	database, err := db.Open(cfg.DBPath)
@@ -119,7 +129,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, dockerClient, broadcaster, logger)
+	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, dockerClient, broadcaster, logPath, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

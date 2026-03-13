@@ -24,6 +24,7 @@ func NewRouter(
 	querySvc *service.QueryService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
+	logPath string,
 	log *slog.Logger,
 ) (http.Handler, error) {
 	renderer, err := handlers.NewRenderer()
@@ -51,6 +52,7 @@ func NewRouter(
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
+	logHandlers := handlers.NewLogHandlers(logPath, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -102,6 +104,7 @@ func NewRouter(
 			})
 		})
 
+		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
 	})
 

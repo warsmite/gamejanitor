@@ -20,6 +20,15 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "http://localhost:8080", "API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&skipConfirmation, "yes", "y", false, "Skip confirmation prompts")
 
+	rootCmd.AddGroup(&cobra.Group{ID: "server", Title: "Server Commands:"})
+	rootCmd.AddGroup(&cobra.Group{ID: "resources", Title: "Resource Commands:"})
+
+	serveCmd.GroupID = "server"
+	gamesCmd.GroupID = "resources"
+	gameserversCmd.GroupID = "resources"
+	schedulesCmd.GroupID = "resources"
+	backupsCmd.GroupID = "resources"
+
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(gamesCmd)
 	rootCmd.AddCommand(gameserversCmd)
