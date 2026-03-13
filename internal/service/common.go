@@ -42,7 +42,7 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadca
 	log.Info("gameserver status changed", "id", id, "from", oldStatus, "to", newStatus)
 
 	if broadcaster != nil {
-		broadcaster.Publish(StatusEvent{
+		broadcaster.PublishStatus(StatusEvent{
 			GameserverID: id,
 			OldStatus:    oldStatus,
 			NewStatus:    newStatus,

@@ -17,12 +17,19 @@
         status: initialStatus,
         path: window.location.pathname,
         query: null,
+        container: null,
         connectSSE() {
           this.eventSource = new EventSource('/api/events');
           this.eventSource.addEventListener('status', (e) => {
             const data = JSON.parse(e.data);
             if (data.gameserver_id === id) {
               this.refreshStatus();
+            }
+          });
+          this.eventSource.addEventListener('stats', (e) => {
+            const data = JSON.parse(e.data);
+            if (data.gameserver_id === id) {
+              this.container = data;
             }
           });
           this.refreshStatus();
@@ -34,6 +41,7 @@
             if (json.data) {
               this.status = json.data.status;
               this.query = json.data.query || null;
+              this.container = json.data.container || null;
             }
           } catch (_) {}
         },

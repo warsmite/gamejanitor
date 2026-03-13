@@ -381,7 +381,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return err
 	}
 
-	s.broadcaster.Publish(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped})
+	s.broadcaster.PublishStatus(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped})
 	s.log.Info("gameserver stopped", "id", id)
 	return nil
 }

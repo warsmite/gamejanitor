@@ -132,7 +132,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 	m.log.Info("gameserver status changed", "id", gs.ID, "from", oldStatus, "to", newStatus)
 
 	if m.broadcaster != nil {
-		m.broadcaster.Publish(StatusEvent{
+		m.broadcaster.PublishStatus(StatusEvent{
 			GameserverID: gs.ID,
 			OldStatus:    oldStatus,
 			NewStatus:    newStatus,

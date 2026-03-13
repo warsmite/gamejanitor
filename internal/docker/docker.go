@@ -327,7 +327,8 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail int
 
 // ContainerStats returns current resource usage for a container.
 func (c *Client) ContainerStats(ctx context.Context, containerID string) (*ContainerStats, error) {
-	resp, err := c.cli.ContainerStatsOneShot(ctx, containerID)
+	// stream=false (not one-shot) waits to collect two samples for accurate CPU delta
+	resp, err := c.cli.ContainerStats(ctx, containerID, false)
 	if err != nil {
 		return nil, fmt.Errorf("getting stats for %s: %w", containerID[:12], err)
 	}

@@ -42,6 +42,12 @@
                         'text-surface-400': status === 'stopped'
                       }" x-text="status"></span>
               </span>
+              <template x-if="container">
+                <span class="flex items-center gap-3 ml-2 pl-2 border-l border-surface-600/50">
+                  <span class="text-xs text-surface-400">CPU <span class="text-surface-200" x-text="container.cpu_percent.toFixed(1) + '%'"></span></span>
+                  <span class="text-xs text-surface-400">MEM <span class="text-surface-200" x-text="container.memory_usage_mb + '/' + container.memory_limit_mb + ' MB'"></span></span>
+                </span>
+              </template>
             </div>
           </div>
         </div>
