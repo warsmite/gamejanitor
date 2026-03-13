@@ -101,7 +101,7 @@ var backupsCreateCmd = &cobra.Command{
 }
 
 var backupsRestoreCmd = &cobra.Command{
-	Use:   "restore <gameserver> <backup-id>",
+	Use:   "restore <gameserver> <backup>",
 	Short: "Restore a backup",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -109,7 +109,10 @@ var backupsRestoreCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
-		backupID := args[1]
+		backupID, err := resolveBackupID(gsID, args[1])
+		if err != nil {
+			return exitError(err)
+		}
 
 		if !confirmAction(fmt.Sprintf("Restore backup %s? This will overwrite current gameserver data.", backupID[:8])) {
 			fmt.Println("Aborted.")
@@ -136,7 +139,7 @@ var backupsRestoreCmd = &cobra.Command{
 }
 
 var backupsDeleteCmd = &cobra.Command{
-	Use:   "delete <gameserver> <backup-id>",
+	Use:   "delete <gameserver> <backup>",
 	Short: "Delete a backup",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -144,7 +147,10 @@ var backupsDeleteCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
-		backupID := args[1]
+		backupID, err := resolveBackupID(gsID, args[1])
+		if err != nil {
+			return exitError(err)
+		}
 
 		if !confirmAction(fmt.Sprintf("Delete backup %s?", backupID[:8])) {
 			fmt.Println("Aborted.")

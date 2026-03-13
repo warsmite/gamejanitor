@@ -188,6 +188,92 @@ func resolveGameserverID(identifier string) (string, error) {
 	return "", fmt.Errorf("no gameserver found matching %q", identifier)
 }
 
+// Backup resolution: resolve a name or UUID prefix to a full backup ID.
+
+type namedEntry struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+var cachedBackups = map[string][]namedEntry{}
+var cachedSchedules = map[string][]namedEntry{}
+
+func resolveNamedID(identifier, resourceType string, entries []namedEntry) (string, error) {
+	// Exact ID match
+	for _, e := range entries {
+		if e.ID == identifier {
+			return e.ID, nil
+		}
+	}
+
+	// UUID prefix match (min 4 chars)
+	if len(identifier) >= 4 {
+		var matches []namedEntry
+		lower := strings.ToLower(identifier)
+		for _, e := range entries {
+			if strings.HasPrefix(strings.ToLower(e.ID), lower) {
+				matches = append(matches, e)
+			}
+		}
+		if len(matches) == 1 {
+			return matches[0].ID, nil
+		}
+		if len(matches) > 1 {
+			names := make([]string, len(matches))
+			for i, e := range matches {
+				names[i] = fmt.Sprintf("%s (%s)", e.Name, e.ID[:8])
+			}
+			return "", fmt.Errorf("ambiguous ID prefix %q matches %d %ss: %s", identifier, len(matches), resourceType, strings.Join(names, ", "))
+		}
+	}
+
+	// Case-insensitive name match
+	var matches []namedEntry
+	for _, e := range entries {
+		if strings.EqualFold(e.Name, identifier) {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0].ID, nil
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous name %q matches %d %ss", identifier, len(matches), resourceType)
+	}
+
+	return "", fmt.Errorf("no %s found matching %q", resourceType, identifier)
+}
+
+func resolveBackupID(gsID, identifier string) (string, error) {
+	entries, ok := cachedBackups[gsID]
+	if !ok {
+		resp, err := apiGet("/api/gameservers/" + gsID + "/backups")
+		if err != nil {
+			return "", err
+		}
+		if err := json.Unmarshal(resp.Data, &entries); err != nil {
+			return "", fmt.Errorf("parsing backup list: %w", err)
+		}
+		cachedBackups[gsID] = entries
+	}
+	return resolveNamedID(identifier, "backup", entries)
+}
+
+func resolveScheduleID(gsID, identifier string) (string, error) {
+	entries, ok := cachedSchedules[gsID]
+	if !ok {
+		resp, err := apiGet("/api/gameservers/" + gsID + "/schedules")
+		if err != nil {
+			return "", err
+		}
+		if err := json.Unmarshal(resp.Data, &entries); err != nil {
+			return "", fmt.Errorf("parsing schedule list: %w", err)
+		}
+		cachedSchedules[gsID] = entries
+	}
+	return resolveNamedID(identifier, "schedule", entries)
+}
+
 // Confirmation prompt for destructive actions.
 
 func confirmAction(prompt string) bool {

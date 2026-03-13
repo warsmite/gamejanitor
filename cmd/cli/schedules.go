@@ -122,7 +122,7 @@ var schedulesCreateCmd = &cobra.Command{
 }
 
 var schedulesUpdateCmd = &cobra.Command{
-	Use:   "update <gameserver> <schedule-id>",
+	Use:   "update <gameserver> <schedule>",
 	Short: "Update a schedule",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -130,7 +130,10 @@ var schedulesUpdateCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
-		id := args[1]
+		id, err := resolveScheduleID(gsID, args[1])
+		if err != nil {
+			return exitError(err)
+		}
 		body := map[string]any{}
 
 		if cmd.Flags().Changed("enabled") {
@@ -166,7 +169,7 @@ var schedulesUpdateCmd = &cobra.Command{
 }
 
 var schedulesDeleteCmd = &cobra.Command{
-	Use:   "delete <gameserver> <schedule-id>",
+	Use:   "delete <gameserver> <schedule>",
 	Short: "Delete a schedule",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -174,7 +177,10 @@ var schedulesDeleteCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
-		id := args[1]
+		id, err := resolveScheduleID(gsID, args[1])
+		if err != nil {
+			return exitError(err)
+		}
 
 		if !confirmAction(fmt.Sprintf("Delete schedule %s?", id[:8])) {
 			fmt.Println("Aborted.")

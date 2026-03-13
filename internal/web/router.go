@@ -53,9 +53,12 @@ func NewRouter(
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
 	logHandlers := handlers.NewLogHandlers(logPath, log)
+	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, dockerClient, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
+
+		r.Get("/status", statusHandlers.Get)
 
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", gameHandlers.List)
