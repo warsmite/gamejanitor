@@ -1,0 +1,53 @@
+{{define "title"}}{{.StatusCode}} — Gamejanitor{{end}}
+
+{{define "content"}}
+<div class="flex flex-col items-center justify-center min-h-[75vh] text-center px-4 py-12 select-none">
+
+  <!-- Error code with glitch/scanline effect -->
+  <div class="relative mb-6">
+    <div class="error-code font-display font-extrabold text-[10rem] sm:text-[14rem] leading-none tracking-tighter text-transparent"
+         style="background: linear-gradient(180deg, rgba(255,122,17,0.15) 0%, rgba(255,122,17,0.03) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-stroke: 2px rgba(255,122,17,0.25);">
+      {{.StatusCode}}
+    </div>
+    <!-- Scanline overlay -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden rounded-lg" aria-hidden="true">
+      <div class="scanlines w-full h-full"></div>
+    </div>
+  </div>
+
+  <!-- Message -->
+  <h1 class="font-display font-bold text-2xl sm:text-3xl text-white mb-3">{{.Heading}}</h1>
+  <p class="text-surface-400 text-base sm:text-lg max-w-md mb-10 leading-relaxed">{{.Message}}</p>
+
+  <!-- Action -->
+  <a href="/"
+     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800/80 hover:bg-surface-800 border border-surface-700/60 hover:border-accent-500/30 text-white text-sm font-semibold transition-all shadow-lg hover:shadow-accent-500/10"
+     hx-boost="true">
+    <svg class="w-4 h-4 text-surface-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+    Back to Dashboard
+  </a>
+</div>
+
+<style>
+  .scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 122, 17, 0.015) 2px,
+      rgba(255, 122, 17, 0.015) 4px
+    );
+  }
+  .error-code {
+    animation: error-flicker 4s ease-in-out infinite;
+  }
+  @keyframes error-flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.6; }
+    94% { opacity: 1; }
+    96% { opacity: 0.8; }
+    97% { opacity: 1; }
+  }
+</style>
+{{end}}

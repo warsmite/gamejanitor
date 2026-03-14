@@ -28,11 +28,11 @@ func (h *PageScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for schedules", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *PageScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 	schedules, err := h.scheduleSvc.ListSchedules(id)
 	if err != nil {
 		h.log.Error("listing schedules", "gameserver_id", id, "error", err)
-		http.Error(w, "Failed to load schedules", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if schedules == nil {

@@ -28,11 +28,11 @@ func (h *PageBackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for backups", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *PageBackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 	backups, err := h.backupSvc.ListBackups(id)
 	if err != nil {
 		h.log.Error("listing backups", "gameserver_id", id, "error", err)
-		http.Error(w, "Failed to load backups", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if backups == nil {

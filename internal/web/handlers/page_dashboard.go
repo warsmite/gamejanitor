@@ -86,7 +86,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	gameservers, err := h.gameserverSvc.ListGameservers(models.GameserverFilter{})
 	if err != nil {
 		h.log.Error("listing gameservers for dashboard", "error", err)
-		http.Error(w, "Failed to load dashboard", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	games, err := h.gameSvc.ListGames()
 	if err != nil {
 		h.log.Error("listing games for dashboard", "error", err)
-		http.Error(w, "Failed to load dashboard", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	gameLookup := make(map[string]models.Game, len(games))

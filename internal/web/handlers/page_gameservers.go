@@ -96,7 +96,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 	games, err := h.gameSvc.ListGames()
 	if err != nil {
 		h.log.Error("listing games for new gameserver form", "error", err)
-		http.Error(w, "Failed to load form", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if games == nil {
@@ -128,7 +128,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 	gamesJSONBytes, err := json.Marshal(gamesForJS)
 	if err != nil {
 		h.log.Error("marshaling games JSON", "error", err)
-		http.Error(w, "Failed to prepare form data", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 
@@ -285,11 +285,11 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
@@ -328,11 +328,11 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for edit", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 

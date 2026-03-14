@@ -50,6 +50,10 @@ func NewRouter(
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+		renderer.RenderError(w, req, http.StatusNotFound)
+	})
+
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")

@@ -47,6 +47,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*
 
 	// Find all page templates (top-level and subdirectories, excluding partials and layout)
 	pages := []string{
+		"error.html",
 		"dashboard.html",
 		"games/list.html",
 		"games/detail.html",
@@ -132,6 +133,56 @@ func (r *Renderer) RenderPartial(w http.ResponseWriter, name string, block strin
 
 	if err := t.ExecuteTemplate(w, block, data); err != nil {
 		http.Error(w, "rendering partial: "+err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// RenderError renders a styled error page with the given HTTP status code.
+func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusCode int) {
+	heading, message := errorContent(statusCode)
+	data := map[string]any{
+		"StatusCode": statusCode,
+		"Heading":    heading,
+		"Message":    message,
+	}
+
+	t, ok := r.templates["error"]
+	if !ok {
+		http.Error(w, fmt.Sprintf("%d %s", statusCode, heading), statusCode)
+		return
+	}
+
+	data["CSRFToken"] = csrf.Token(req)
+	data["NetInfo"] = r.netInfo
+	data["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
+	data["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
+	data["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(statusCode)
+
+	templateName := "layout.html"
+	if req.Header.Get("HX-Request") == "true" {
+		templateName = "content"
+	}
+
+	if err := t.ExecuteTemplate(w, templateName, data); err != nil {
+		http.Error(w, fmt.Sprintf("%d %s", statusCode, heading), statusCode)
+	}
+}
+
+func errorContent(statusCode int) (heading string, message string) {
+	switch statusCode {
+	case http.StatusNotFound:
+		return "Page Not Found", "Whatever you were looking for isn't here. It may have been moved or never existed."
+	case http.StatusForbidden:
+		return "Access Denied", "You don't have permission to access this page."
+	case http.StatusInternalServerError:
+		return "Something Broke", "An internal error occurred. Check the logs for details."
+	case http.StatusBadRequest:
+		return "Bad Request", "The request couldn't be understood. Try again or head back to the dashboard."
+	default:
+		return http.StatusText(statusCode), "Something unexpected happened."
 	}
 }
 

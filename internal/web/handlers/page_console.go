@@ -30,18 +30,18 @@ func (h *PageConsoleHandlers) Console(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for console", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
 	game, err := h.gameSvc.GetGame(gs.GameID)
 	if err != nil {
 		h.log.Error("getting game for console", "game_id", gs.GameID, "error", err)
-		http.Error(w, "Failed to load game", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 

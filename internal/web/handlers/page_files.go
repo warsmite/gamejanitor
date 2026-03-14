@@ -34,32 +34,32 @@ func (h *PageFileHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.gameserverSvc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for files", "id", id, "error", err)
-		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if gs == nil {
-		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
 	game, err := h.gameSvc.GetGame(gs.GameID)
 	if err != nil {
 		h.log.Error("getting game for files", "game_id", gs.GameID, "error", err)
-		http.Error(w, "Failed to load game", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 
 	entries, err := h.fileSvc.ListDirectory(r.Context(), id, dirPath)
 	if err != nil {
 		h.log.Error("listing directory", "gameserver_id", id, "path", dirPath, "error", err)
-		http.Error(w, "Failed to list directory", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 
 	entriesJSON, err := json.Marshal(entries)
 	if err != nil {
 		h.log.Error("marshaling entries", "error", err)
-		http.Error(w, "Failed to encode entries", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 

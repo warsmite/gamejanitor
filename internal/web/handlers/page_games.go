@@ -31,7 +31,7 @@ func (h *PageGameHandlers) List(w http.ResponseWriter, r *http.Request) {
 	games, err := h.gameSvc.ListGames()
 	if err != nil {
 		h.log.Error("listing games", "error", err)
-		http.Error(w, "Failed to load games", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if games == nil {
@@ -48,11 +48,11 @@ func (h *PageGameHandlers) Detail(w http.ResponseWriter, r *http.Request) {
 	game, err := h.gameSvc.GetGame(id)
 	if err != nil {
 		h.log.Error("getting game", "id", id, "error", err)
-		http.Error(w, "Failed to load game", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if game == nil {
-		http.Error(w, "Game not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
@@ -112,11 +112,11 @@ func (h *PageGameHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	game, err := h.gameSvc.GetGame(id)
 	if err != nil {
 		h.log.Error("getting game for edit", "id", id, "error", err)
-		http.Error(w, "Failed to load game", http.StatusInternalServerError)
+		h.renderer.RenderError(w, r, http.StatusInternalServerError)
 		return
 	}
 	if game == nil {
-		http.Error(w, "Game not found", http.StatusNotFound)
+		h.renderer.RenderError(w, r, http.StatusNotFound)
 		return
 	}
 
