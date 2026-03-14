@@ -89,6 +89,11 @@
         Send
       </button>
     </form>
+    {{else}}
+    <div class="flex items-center gap-2 border-t border-surface-800/60 bg-surface-900/30 px-4 py-3">
+      <svg class="w-4 h-4 text-surface-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+      <span class="text-xs text-surface-500">Commands are not supported for {{.Game.Name}}</span>
+    </div>
     {{end}}
   </div>
 </div>

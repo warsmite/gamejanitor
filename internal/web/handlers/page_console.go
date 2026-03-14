@@ -46,7 +46,7 @@ func (h *PageConsoleHandlers) Console(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canRead := game != nil && service.HasCapability(game, "console_read")
-	canSend := game != nil && service.HasCapability(game, "console_send")
+	canSend := game != nil && service.HasCapability(game, "command")
 
 	h.renderer.Render(w, r, "gameservers/console", map[string]any{
 		"Gameserver": gs,

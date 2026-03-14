@@ -54,7 +54,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}
 
 	// Run save-server if game supports it
-	if game != nil && HasCapability(game, "save_command") {
+	if game != nil && HasCapability(game, "save") {
 		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
 		exitCode, _, stderr, execErr := s.docker.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {

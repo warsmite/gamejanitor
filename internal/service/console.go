@@ -45,7 +45,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	if game == nil {
 		return nil, ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
-	if !HasCapability(game,"console_read") {
+	if !HasCapability(game, "console_read") {
 		return nil, fmt.Errorf("console_read capability is disabled for game %s", game.Name)
 	}
 
@@ -78,8 +78,8 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 	if game == nil {
 		return "", ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
-	if !HasCapability(game, "console_send") {
-		return "", fmt.Errorf("console_send capability is disabled for game %s", game.Name)
+	if !HasCapability(game, "command") {
+		return "", fmt.Errorf("command capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
