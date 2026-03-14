@@ -299,7 +299,7 @@
         <span x-show="confirmAction === 'update-game'">This will stop the gameserver and update to the latest game version.</span>
       </p>
       <div class="flex gap-2">
-        <button x-show="confirmAction === 'delete'" hx-delete="/gameservers/{{.Gameserver.ID}}" @click="confirmAction = ''"
+        <button x-show="confirmAction === 'delete'" hx-delete="/gameservers/{{.Gameserver.ID}}" hx-push-url="false" @click="confirmAction = ''"
                 class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
           Delete
         </button>

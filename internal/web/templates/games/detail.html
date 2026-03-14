@@ -103,7 +103,7 @@
           <h3 class="font-display font-semibold text-white mb-2">Delete Game</h3>
           <p class="text-sm text-surface-400 mb-5">Are you sure you want to delete <strong>{{.Game.Name}}</strong>? This will fail if any gameservers still use this game.</p>
           <div class="flex gap-2">
-            <button x-show="confirmDelete" hx-delete="/games/{{.Game.ID}}" @click="confirmDelete = false"
+            <button x-show="confirmDelete" hx-delete="/games/{{.Game.ID}}" hx-push-url="false" @click="confirmDelete = false"
                     class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
               Delete
             </button>
