@@ -199,6 +199,14 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
 		}
+		// Re-read after stop — Stop() clears ContainerID in DB
+		gs, err = models.GetGameserver(s.db, id)
+		if err != nil {
+			return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
+		}
+		if gs == nil {
+			return ErrNotFoundf("gameserver %s not found after stop", id)
+		}
 	}
 
 	if gs.ContainerID != nil {

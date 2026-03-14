@@ -316,6 +316,11 @@ func (h *PageGameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
+		// Dashboard card delete uses hx-swap="delete" with a card target — just return 200
+		// Detail page delete needs a redirect to dashboard
+		if r.Header.Get("HX-Target") != "gs-"+id {
+			w.Header().Set("HX-Redirect", "/")
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}

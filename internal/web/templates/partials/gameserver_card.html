@@ -67,7 +67,7 @@
       <!-- Delete confirm -->
       <div x-show="confirmDelete" x-cloak class="flex items-center gap-1.5">
         <span class="text-xs text-red-400">Delete?</span>
-        <button hx-delete="/gameservers/{{.ID}}" hx-target="#gs-{{.ID}}" hx-swap="delete" @click="deleting = true; $root.dataset.deleting = 'true'" class="w-9 h-9 rounded-lg bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all" title="Confirm delete">
+        <button hx-delete="/gameservers/{{.ID}}" hx-target="#gs-{{.ID}}" hx-swap="delete" hx-push-url="false" @click="deleting = true; $root.dataset.deleting = 'true'" class="w-9 h-9 rounded-lg bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all" title="Confirm delete">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
         </button>
         <button @click="confirmDelete = false" class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-surface-700 text-surface-400 border border-surface-700/60 flex items-center justify-center transition-all" title="Cancel">
