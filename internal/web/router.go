@@ -61,6 +61,7 @@ func NewRouter(
 
 	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
+	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
@@ -76,6 +77,7 @@ func NewRouter(
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", gameHandlers.List)
 			r.Post("/", gameHandlers.Create)
+			r.Get("/minecraft-java/versions", minecraftVersions.List)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", gameHandlers.Get)
 				r.Put("/", gameHandlers.Update)

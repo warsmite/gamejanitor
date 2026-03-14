@@ -192,6 +192,56 @@
                     <p class="text-xs text-surface-500 mt-1" x-show="env.notice" x-html="env.notice"></p>
                   </div>
                 </template>
+                <template x-if="env.type === 'version-select'">
+                  <div x-data="versionSelect(env)" x-init="fetchVersions()">
+                    <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
+                    <div class="relative">
+                      <div class="flex gap-2 mb-2">
+                        <div class="relative flex-1">
+                          <input type="text" x-model="search" @focus="open = true" @click="open = true"
+                                 @keydown.escape="open = false"
+                                 :placeholder="loading ? 'Loading versions...' : 'Search versions...'"
+                                 class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors text-sm">
+                          <div x-show="env.value && !open" @click="open = true"
+                               class="absolute inset-0 flex items-center px-3 bg-surface-900/80 rounded-lg border border-surface-700 cursor-pointer">
+                            <span class="text-sm text-white" x-text="env.value === 'latest' ? 'latest (' + latestRelease + ')' : env.value === 'latest-snapshot' ? 'latest snapshot (' + latestSnapshot + ')' : env.value"></span>
+                            <span x-show="env.value === 'latest-snapshot' || (env.value !== 'latest' && env.value !== 'latest-snapshot' && getVersionType(env.value) === 'snapshot')" class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-800/40">snapshot</span>
+                          </div>
+                        </div>
+                        <label class="flex items-center gap-1.5 text-xs text-surface-400 cursor-pointer select-none shrink-0">
+                          <input type="checkbox" x-model="showSnapshots" @change="fetchVersions()"
+                                 class="rounded bg-surface-800 border-surface-600 text-accent-600 focus:ring-accent-500 focus:ring-offset-0">
+                          Snapshots
+                        </label>
+                      </div>
+                      <div x-show="open" x-cloak @click.outside="open = false" x-transition
+                           class="absolute z-20 w-full max-h-60 overflow-y-auto rounded-lg bg-surface-900 border border-surface-700 shadow-xl">
+                        <button type="button" @click="env.value = 'latest'; open = false; search = ''"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-surface-800 transition-colors"
+                                :class="env.value === 'latest' ? 'text-accent-400' : 'text-white'">
+                          latest <span class="text-surface-500" x-text="'(' + latestRelease + ')'"></span>
+                        </button>
+                        <button type="button" @click="env.value = 'latest-snapshot'; open = false; search = ''"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-surface-800 transition-colors flex items-center gap-2"
+                                :class="env.value === 'latest-snapshot' ? 'text-accent-400' : 'text-white'">
+                          latest snapshot <span class="text-surface-500" x-text="'(' + latestSnapshot + ')'"></span>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-800/40">snapshot</span>
+                        </button>
+                        <template x-for="v in filteredVersions" :key="v.id">
+                          <button type="button" @click="env.value = v.id; open = false; search = ''"
+                                  class="w-full text-left px-3 py-2 text-sm hover:bg-surface-800 transition-colors flex items-center gap-2"
+                                  :class="env.value === v.id ? 'text-accent-400' : 'text-white'">
+                            <span x-text="v.id"></span>
+                            <span x-show="v.type === 'snapshot'" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-800/40">snapshot</span>
+                          </button>
+                        </template>
+                        <div x-show="!loading && filteredVersions.length === 0" class="px-3 py-2 text-sm text-surface-500">No versions match</div>
+                        <div x-show="loading" class="px-3 py-2 text-sm text-surface-500">Loading...</div>
+                      </div>
+                    </div>
+                    <p x-show="fetchError" class="text-xs text-red-400 mt-1" x-text="fetchError"></p>
+                  </div>
+                </template>
                 <template x-if="!env.type && env.autogenerate !== 'password'">
                   <div>
                     <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
@@ -505,6 +555,48 @@ function gameserverForm() {
       } else {
         this.showValidation = false;
       }
+    }
+  };
+}
+
+function versionSelect(env) {
+  return {
+    env: env,
+    versions: [],
+    search: '',
+    open: false,
+    loading: false,
+    showSnapshots: false,
+    latestRelease: '',
+    latestSnapshot: '',
+    fetchError: '',
+
+    async fetchVersions() {
+      this.loading = true;
+      this.fetchError = '';
+      try {
+        const params = this.showSnapshots ? '?include_snapshots=true' : '';
+        const res = await fetch('/api/games/minecraft-java/versions' + params);
+        if (!res.ok) throw new Error('Failed to fetch versions');
+        const data = await res.json();
+        this.versions = data.data.versions || [];
+        this.latestRelease = data.data.latest_release || '';
+        this.latestSnapshot = data.data.latest_snapshot || '';
+      } catch (e) {
+        this.fetchError = 'Could not load versions. You can type a version manually.';
+      }
+      this.loading = false;
+    },
+
+    get filteredVersions() {
+      if (!this.search) return this.versions;
+      const q = this.search.toLowerCase();
+      return this.versions.filter(v => v.id.toLowerCase().includes(q));
+    },
+
+    getVersionType(id) {
+      const v = this.versions.find(v => v.id === id);
+      return v ? v.type : '';
     }
   };
 }

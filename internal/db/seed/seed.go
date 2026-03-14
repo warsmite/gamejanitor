@@ -30,6 +30,7 @@ func SeedGames(db *sql.DB) error {
 			defaultPorts: `[{"name":"game","port":25565,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean","required":true,"notice":"You must agree to the <a href=\"https://aka.ms/MinecraftEULA\" target=\"_blank\" class=\"underline text-accent-400 hover:text-accent-300\">Minecraft EULA</a> to run this server."},
+				{"key":"MINECRAFT_VERSION","default":"latest","label":"Version","type":"version-select"},
 				{"key":"GAMEMODE","default":"survival","label":"Game Mode","type":"select","options":["survival","creative","adventure","spectator"]},
 				{"key":"MAX_PLAYERS","default":"20","label":"Max Players","type":"number"},
 				{"key":"DIFFICULTY","default":"normal","label":"Difficulty","type":"select","options":["peaceful","easy","normal","hard"]},

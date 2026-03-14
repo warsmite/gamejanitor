@@ -2,23 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark scrollbar for console and other dark containers */
-@layer utilities {
-  .scrollbar-dark::-webkit-scrollbar {
-    width: 8px;
+/* Dark scrollbar globally — matches the dark UI theme */
+@layer base {
+  * {
+    scrollbar-color: rgb(255 255 255 / 0.1) transparent;
+    scrollbar-width: thin;
   }
-  .scrollbar-dark::-webkit-scrollbar-track {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  .scrollbar-dark::-webkit-scrollbar-thumb {
+  ::-webkit-scrollbar-thumb {
     background: rgb(255 255 255 / 0.1);
     border-radius: 4px;
   }
-  .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  ::-webkit-scrollbar-thumb:hover {
     background: rgb(255 255 255 / 0.2);
-  }
-  .scrollbar-dark {
-    scrollbar-color: rgb(255 255 255 / 0.1) transparent;
-    scrollbar-width: thin;
   }
 }

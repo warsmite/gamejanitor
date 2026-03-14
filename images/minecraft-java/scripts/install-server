@@ -1,20 +1,38 @@
 #!/bin/bash
 set -e
 
-echo "[install-server] fetching latest Minecraft version manifest"
+MINECRAFT_VERSION="${MINECRAFT_VERSION:-latest}"
+
+echo "[install-server] fetching Minecraft version manifest"
 MANIFEST=$(curl -fsSL "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
 
-LATEST_VERSION=$(echo "$MANIFEST" | jq -r '.latest.release')
-echo "[install-server] latest release: $LATEST_VERSION"
+if [ "$MINECRAFT_VERSION" = "latest" ]; then
+    MINECRAFT_VERSION=$(echo "$MANIFEST" | jq -r '.latest.release')
+    echo "[install-server] resolved 'latest' to $MINECRAFT_VERSION"
+elif [ "$MINECRAFT_VERSION" = "latest-snapshot" ]; then
+    MINECRAFT_VERSION=$(echo "$MANIFEST" | jq -r '.latest.snapshot')
+    echo "[install-server] resolved 'latest-snapshot' to $MINECRAFT_VERSION"
+fi
 
-VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$LATEST_VERSION" '.versions[] | select(.id == $v) | .url')
+echo "[install-server] looking up version $MINECRAFT_VERSION"
+VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$MINECRAFT_VERSION" '.versions[] | select(.id == $v) | .url')
+
+if [ -z "$VERSION_URL" ] || [ "$VERSION_URL" = "null" ]; then
+    echo "[install-server] ERROR: version $MINECRAFT_VERSION not found in manifest"
+    exit 1
+fi
+
 echo "[install-server] fetching version metadata from $VERSION_URL"
-
 VERSION_META=$(curl -fsSL "$VERSION_URL")
 SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')
 SERVER_SHA1=$(echo "$VERSION_META" | jq -r '.downloads.server.sha1')
 
-echo "[install-server] downloading server.jar from $SERVER_URL"
+if [ -z "$SERVER_URL" ] || [ "$SERVER_URL" = "null" ]; then
+    echo "[install-server] ERROR: version $MINECRAFT_VERSION has no server download"
+    exit 1
+fi
+
+echo "[install-server] downloading server.jar for $MINECRAFT_VERSION from $SERVER_URL"
 curl -fsSL -o /data/server.jar "$SERVER_URL"
 
 ACTUAL_SHA1=$(sha1sum /data/server.jar | awk '{print $1}')
@@ -24,4 +42,4 @@ if [ "$ACTUAL_SHA1" != "$SERVER_SHA1" ]; then
     exit 1
 fi
 
-echo "[install-server] server.jar downloaded and verified (sha1: $SERVER_SHA1)"
+echo "[install-server] Minecraft $MINECRAFT_VERSION server.jar downloaded and verified (sha1: $SERVER_SHA1)"
