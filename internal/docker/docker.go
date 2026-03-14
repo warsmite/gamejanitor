@@ -37,7 +37,15 @@ type ContainerOptions struct {
 	VolumeName    string
 	MemoryLimitMB int
 	CPULimit      float64
-	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"] for temp containers)
+	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"] for fileops containers)
+	User          string   // Run as specific user (e.g., "1001:1001")
+}
+
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 type PortBinding struct {
@@ -171,6 +179,7 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 		Image:        opts.Image,
 		Env:          opts.Env,
 		ExposedPorts: exposedPorts,
+		User:         opts.User,
 	}
 	if len(opts.Entrypoint) > 0 {
 		cfg.Entrypoint = opts.Entrypoint
@@ -201,29 +210,29 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 }
 
 func (c *Client) StartContainer(ctx context.Context, containerID string) error {
-	c.log.Debug("starting container", "container_id", containerID[:12])
+	c.log.Debug("starting container", "container_id", shortID(containerID))
 
 	if err := c.cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("starting container %s: %w", containerID[:12], err)
+		return fmt.Errorf("starting container %s: %w", shortID(containerID), err)
 	}
 	return nil
 }
 
 func (c *Client) StopContainer(ctx context.Context, containerID string, timeoutSeconds int) error {
-	c.log.Debug("stopping container", "container_id", containerID[:12], "timeout", timeoutSeconds)
+	c.log.Debug("stopping container", "container_id", shortID(containerID), "timeout", timeoutSeconds)
 
 	timeout := timeoutSeconds
 	if err := c.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
-		return fmt.Errorf("stopping container %s: %w", containerID[:12], err)
+		return fmt.Errorf("stopping container %s: %w", shortID(containerID), err)
 	}
 	return nil
 }
 
 func (c *Client) RemoveContainer(ctx context.Context, containerID string) error {
-	c.log.Debug("removing container", "container_id", containerID[:12])
+	c.log.Debug("removing container", "container_id", shortID(containerID))
 
 	if err := c.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
-		return fmt.Errorf("removing container %s: %w", containerID[:12], err)
+		return fmt.Errorf("removing container %s: %w", shortID(containerID), err)
 	}
 	return nil
 }
@@ -231,12 +240,12 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string) error 
 func (c *Client) InspectContainer(ctx context.Context, containerID string) (*ContainerInfo, error) {
 	resp, err := c.cli.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return nil, fmt.Errorf("inspecting container %s: %w", containerID[:12], err)
+		return nil, fmt.Errorf("inspecting container %s: %w", shortID(containerID), err)
 	}
 
 	startedAt, err := time.Parse(time.RFC3339Nano, resp.State.StartedAt)
 	if err != nil {
-		c.log.Warn("failed to parse container started_at", "container_id", containerID[:12], "raw", resp.State.StartedAt, "error", err)
+		c.log.Warn("failed to parse container started_at", "container_id", shortID(containerID), "raw", resp.State.StartedAt, "error", err)
 	}
 
 	return &ContainerInfo{
@@ -249,7 +258,7 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (*Con
 
 // Exec runs a command inside a container and returns the output.
 func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
-	c.log.Debug("exec in container", "container_id", containerID[:12], "cmd", cmd)
+	c.log.Debug("exec in container", "container_id", shortID(containerID), "cmd", cmd)
 
 	execConfig := container.ExecOptions{
 		Cmd:          cmd,
@@ -259,12 +268,12 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (in
 
 	execResp, err := c.cli.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return -1, "", "", fmt.Errorf("creating exec in %s: %w", containerID[:12], err)
+		return -1, "", "", fmt.Errorf("creating exec in %s: %w", shortID(containerID), err)
 	}
 
 	attachResp, err := c.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 	if err != nil {
-		return -1, "", "", fmt.Errorf("attaching exec in %s: %w", containerID[:12], err)
+		return -1, "", "", fmt.Errorf("attaching exec in %s: %w", shortID(containerID), err)
 	}
 	defer attachResp.Close()
 
@@ -298,7 +307,7 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (in
 
 	inspectResp, err := c.cli.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
-		return -1, stdout.String(), stderr.String(), fmt.Errorf("inspecting exec in %s: %w", containerID[:12], err)
+		return -1, stdout.String(), stderr.String(), fmt.Errorf("inspecting exec in %s: %w", shortID(containerID), err)
 	}
 
 	return inspectResp.ExitCode, stdout.String(), stderr.String(), nil
@@ -306,7 +315,7 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (in
 
 // ContainerLogs returns a log stream from the container.
 func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	c.log.Debug("reading container logs", "container_id", containerID[:12], "tail", tail, "follow", follow)
+	c.log.Debug("reading container logs", "container_id", shortID(containerID), "tail", tail, "follow", follow)
 
 	tailStr := "all"
 	if tail > 0 {
@@ -320,7 +329,7 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail int
 		Tail:       tailStr,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("reading logs for %s: %w", containerID[:12], err)
+		return nil, fmt.Errorf("reading logs for %s: %w", shortID(containerID), err)
 	}
 
 	return reader, nil
@@ -406,13 +415,13 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 	// stream=false (not one-shot) waits to collect two samples for accurate CPU delta
 	resp, err := c.cli.ContainerStats(ctx, containerID, false)
 	if err != nil {
-		return nil, fmt.Errorf("getting stats for %s: %w", containerID[:12], err)
+		return nil, fmt.Errorf("getting stats for %s: %w", shortID(containerID), err)
 	}
 	defer resp.Body.Close()
 
 	var stats container.StatsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
-		return nil, fmt.Errorf("decoding stats for %s: %w", containerID[:12], err)
+		return nil, fmt.Errorf("decoding stats for %s: %w", shortID(containerID), err)
 	}
 
 	memUsageMB := int(stats.MemoryStats.Usage / (1024 * 1024))
@@ -435,18 +444,18 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 
 // CopyFromContainer reads a single file from the container and returns its contents.
 func (c *Client) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	c.log.Debug("copying from container", "container_id", containerID[:12], "path", path)
+	c.log.Debug("copying from container", "container_id", shortID(containerID), "path", path)
 
 	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
-		return nil, fmt.Errorf("copying from %s:%s: %w", containerID[:12], path, err)
+		return nil, fmt.Errorf("copying from %s:%s: %w", shortID(containerID), path, err)
 	}
 	defer reader.Close()
 
 	tr := tar.NewReader(reader)
 	hdr, err := tr.Next()
 	if err != nil {
-		return nil, fmt.Errorf("reading tar header from %s:%s: %w", containerID[:12], path, err)
+		return nil, fmt.Errorf("reading tar header from %s:%s: %w", shortID(containerID), path, err)
 	}
 	if hdr.Typeflag == tar.TypeDir {
 		return nil, fmt.Errorf("%s is a directory", path)
@@ -454,14 +463,14 @@ func (c *Client) CopyFromContainer(ctx context.Context, containerID string, path
 
 	content, err := io.ReadAll(tr)
 	if err != nil {
-		return nil, fmt.Errorf("reading file content from %s:%s: %w", containerID[:12], path, err)
+		return nil, fmt.Errorf("reading file content from %s:%s: %w", shortID(containerID), path, err)
 	}
 	return content, nil
 }
 
 // CopyToContainer writes a single file into the container at the given path.
 func (c *Client) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	c.log.Debug("copying to container", "container_id", containerID[:12], "path", path)
+	c.log.Debug("copying to container", "container_id", shortID(containerID), "path", path)
 
 	dir := filepath.Dir(path)
 	filename := filepath.Base(path)
@@ -488,7 +497,7 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 	}
 
 	if err := c.cli.CopyToContainer(ctx, containerID, dir, &buf, container.CopyToContainerOptions{}); err != nil {
-		return fmt.Errorf("copying to %s:%s: %w", containerID[:12], path, err)
+		return fmt.Errorf("copying to %s:%s: %w", shortID(containerID), path, err)
 	}
 	return nil
 }
@@ -496,21 +505,21 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 // CopyDirFromContainer returns a tar stream of a directory from the container.
 // The caller is responsible for closing the returned ReadCloser.
 func (c *Client) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	c.log.Debug("copying directory from container", "container_id", containerID[:12], "path", path)
+	c.log.Debug("copying directory from container", "container_id", shortID(containerID), "path", path)
 
 	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
-		return nil, fmt.Errorf("copying dir from %s:%s: %w", containerID[:12], path, err)
+		return nil, fmt.Errorf("copying dir from %s:%s: %w", shortID(containerID), path, err)
 	}
 	return reader, nil
 }
 
 // CopyTarToContainer extracts a tar stream into a directory in the container.
 func (c *Client) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	c.log.Debug("copying tar to container", "container_id", containerID[:12], "path", destPath)
+	c.log.Debug("copying tar to container", "container_id", shortID(containerID), "path", destPath)
 
 	if err := c.cli.CopyToContainer(ctx, containerID, destPath, content, container.CopyToContainerOptions{}); err != nil {
-		return fmt.Errorf("copying tar to %s:%s: %w", containerID[:12], destPath, err)
+		return fmt.Errorf("copying tar to %s:%s: %w", shortID(containerID), destPath, err)
 	}
 	return nil
 }

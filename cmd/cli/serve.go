@@ -96,7 +96,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	gameserverSvc.SetQueryService(querySvc)
 	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
 	fileSvc := service.NewFileService(database, dockerClient, logger)
-	gameserverSvc.SetFileService(fileSvc)
 	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, cfg.DataDir, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
@@ -106,6 +105,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	if err := statusMgr.RecoverOnStartup(ctx); err != nil {
 		return fmt.Errorf("failed to recover gameserver status: %w", err)
+	}
+
+	if err := fileSvc.RecoverOnStartup(ctx); err != nil {
+		return fmt.Errorf("failed to recover fileops containers: %w", err)
 	}
 
 	// Start status manager (Docker events watcher)
@@ -118,7 +121,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer scheduler.Stop()
 	defer querySvc.StopAll()
-	defer fileSvc.CleanupAll()
 
 	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, dockerClient, broadcaster, logPath, cfg.DataDir, logger)
 	if err != nil {

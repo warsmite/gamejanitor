@@ -21,7 +21,6 @@ type GameserverService struct {
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
-	fileSvc     *FileService
 }
 
 func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *GameserverService {
@@ -34,10 +33,6 @@ func (s *GameserverService) SetQueryService(qs *QueryService) {
 	s.querySvc = qs
 }
 
-// SetFileService sets the file service so temp file containers can be cleaned up before start.
-func (s *GameserverService) SetFileService(fs *FileService) {
-	s.fileSvc = fs
-}
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
 	return models.ListGameservers(s.db, filter)
@@ -218,6 +213,12 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 
+	// Remove fileops container before volume (it has the volume mounted)
+	fileopsName := "gamejanitor-fileops-" + id
+	if err := s.docker.RemoveContainer(ctx, fileopsName); err != nil {
+		s.log.Debug("no fileops container to remove during delete", "id", id)
+	}
+
 	if err := s.docker.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("removing volume during delete: %w", err)
 	}
@@ -277,11 +278,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
-	}
-
-	// Remove temp file container if one exists (releases the volume)
-	if s.fileSvc != nil {
-		s.fileSvc.CleanupTempContainer(id)
 	}
 
 	// Remove old container if exists (stale from prior run/crash).
