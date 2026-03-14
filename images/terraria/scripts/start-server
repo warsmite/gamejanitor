@@ -12,6 +12,19 @@ WORLD_DIR="/data/worlds"
 mkdir -p "$WORLD_DIR"
 WORLD_FILE="${WORLD_DIR}/${WORLD_NAME}.wld"
 
+# TShock config/db stored in persistent volume
+mkdir -p /data/tshock
+
+# Enable REST API for query support (TShock disables it by default)
+TSHOCK_CONFIG="/data/tshock/config.json"
+if [ -f "$TSHOCK_CONFIG" ]; then
+    jq '.Settings.RestApiEnabled = true' "$TSHOCK_CONFIG" > "${TSHOCK_CONFIG}.tmp" && mv "${TSHOCK_CONFIG}.tmp" "$TSHOCK_CONFIG"
+else
+    # Pre-seed config so REST API is enabled on first run
+    echo '{"Settings":{"RestApiEnabled":true}}' > "$TSHOCK_CONFIG"
+fi
+echo "[start-server] REST API enabled"
+
 echo "[start-server] config: world=${WORLD_NAME} size=${WORLD_SIZE} difficulty=${DIFFICULTY}"
 echo "[start-server] config: maxplayers=${MAX_PLAYERS} port=${GAME_PORT}"
 
@@ -19,13 +32,13 @@ echo "[start-server] config: maxplayers=${MAX_PLAYERS} port=${GAME_PORT}"
 FIFO=/tmp/cmd-input
 mkfifo "$FIFO" 2>/dev/null || true
 
-# -config flag is broken in v1.4.4.9, use CLI args instead
 ARGS=(
     -world "$WORLD_FILE"
     -autocreate "$WORLD_SIZE"
     -difficulty "$DIFFICULTY"
     -maxplayers "$MAX_PLAYERS"
     -port "$GAME_PORT"
+    -configpath /data/tshock
     -secure
     -lang "en-US"
 )
@@ -34,5 +47,5 @@ if [ -n "$PASSWORD" ]; then
     ARGS+=(-password "$PASSWORD")
 fi
 
-echo "[start-server] starting Terraria server"
-tail -f "$FIFO" | exec /data/TerrariaServer.bin.x86_64 "${ARGS[@]}"
+echo "[start-server] starting TShock server"
+tail -f "$FIFO" | exec /data/TShock.Server "${ARGS[@]}"

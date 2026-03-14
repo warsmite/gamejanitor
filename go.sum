@@ -1,7 +1,5 @@
-github.com/0xkowalskidev/gsq v0.0.0-20260312200009-1fa4730dc17e h1:O+MkZOLpY+oObWZqSk5sbjH2idXCuAsWBMaYkIPaG9k=
-github.com/0xkowalskidev/gsq v0.0.0-20260312200009-1fa4730dc17e/go.mod h1:cdyac3BIUNaScm+YAPMiPL9dlIbhaHsX7wGbgHAOckk=
-github.com/0xkowalskidev/gsq v0.0.0-20260314035156-af93b6be8252 h1:rbCZ5pPu9TyE0+1qpW0RyPSeGFE3W/TEHdOgf6FB5Tk=
-github.com/0xkowalskidev/gsq v0.0.0-20260314035156-af93b6be8252/go.mod h1:cdyac3BIUNaScm+YAPMiPL9dlIbhaHsX7wGbgHAOckk=
+github.com/0xkowalskidev/gsq v0.0.0-20260314074011-47d48412d517 h1:QOycPnlYwf2qP6uYP7xmvnWCW7NdaYJbHrmwueXb6GA=
+github.com/0xkowalskidev/gsq v0.0.0-20260314074011-47d48412d517/go.mod h1:cdyac3BIUNaScm+YAPMiPL9dlIbhaHsX7wGbgHAOckk=
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEKWjV8V+WSxDXJ4NFATAsZjh8iIbsQIg=
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/Microsoft/go-winio v0.4.21 h1:+6mVbXh4wPzUrl1COX9A+ZCvEpYsOBZ6/+kwDnvLyro=

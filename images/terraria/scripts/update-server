@@ -1,3 +1,5 @@
 #!/bin/bash
-echo "[update-server] not implemented for Terraria"
-exit 0
+set -e
+
+echo "[update-server] re-running install to fetch latest TShock release"
+exec /scripts/install-server

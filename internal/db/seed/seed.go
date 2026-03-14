@@ -162,7 +162,7 @@ func SeedGames(db *sql.DB) error {
 			iconPath: "/static/games/terraria/terraria-icon.ico",
 			gridPath: "/static/games/terraria/terraria-grid.png",
 			heroPath: "/static/games/terraria/terraria-hero.png",
-			defaultPorts: `[{"name":"game","port":7777,"protocol":"tcp"}]`,
+			defaultPorts: `[{"name":"game","port":7777,"protocol":"tcp"},{"name":"query","port":7878,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"WORLD_NAME","default":"Gamejanitor","label":"World Name"},
 				{"key":"MAX_PLAYERS","default":"8","label":"Max Players","type":"number"},
@@ -170,11 +170,12 @@ func SeedGames(db *sql.DB) error {
 				{"key":"DIFFICULTY","default":"1","label":"Difficulty","type":"select","options":["0","1","2","3"]},
 				{"key":"WORLD_SIZE","default":"2","label":"World Size","type":"select","options":["1","2","3"]},
 				{"key":"GAME_PORT","default":"7777","system":true},
+				{"key":"QUERY_PORT","default":"7878","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			recommendedMemoryMB:          1024,
 			gsqGameSlug:          "terraria",
-			disabledCapabilities: `["query"]`,
+			disabledCapabilities: `[]`,
 		},
 		{
 			id:       "valheim",

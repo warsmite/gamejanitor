@@ -1,19 +1,34 @@
 #!/bin/bash
 set -e
 
-TERRARIA_VERSION="1456"
-DOWNLOAD_URL="https://terraria.org/api/download/pc-dedicated-server/terraria-server-${TERRARIA_VERSION}.zip"
+echo "[install-server] fetching latest TShock release from GitHub"
+RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/Pryaxis/TShock/releases/latest")
 
-echo "[install-server] downloading Terraria dedicated server v${TERRARIA_VERSION}"
-curl -fsSL -o /tmp/terraria-server.zip "$DOWNLOAD_URL"
+ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("linux-x64-Release\\.zip$")) | .browser_download_url')
+ASSET_NAME=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("linux-x64-Release\\.zip$")) | .name')
+TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+
+if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+    echo "[install-server] ERROR: could not find linux-x64-Release.zip asset in latest release"
+    exit 1
+fi
+
+echo "[install-server] downloading $ASSET_NAME ($TAG)"
+curl -fsSL -o /tmp/tshock.zip -L "$ASSET_URL"
 
 echo "[install-server] extracting server files"
-unzip -qo /tmp/terraria-server.zip -d /tmp/terraria-server
+unzip -qo /tmp/tshock.zip -d /tmp/tshock-extract
 
-# The zip contains a version-numbered directory with Linux/Windows/Mac subdirs
-cp -r /tmp/terraria-server/${TERRARIA_VERSION}/Linux/* /data/
-chmod +x /data/TerrariaServer.bin.x86_64 /data/TerrariaServer
+# The zip contains a single tar archive
+TAR_FILE=$(find /tmp/tshock-extract -name "*.tar" | head -1)
+if [ -z "$TAR_FILE" ]; then
+    echo "[install-server] ERROR: no tar archive found inside zip"
+    exit 1
+fi
 
-rm -rf /tmp/terraria-server.zip /tmp/terraria-server
+tar xf "$TAR_FILE" -C /data/
+chmod +x /data/TShock.Server
 
-echo "[install-server] Terraria server v${TERRARIA_VERSION} installed"
+rm -rf /tmp/tshock.zip /tmp/tshock-extract
+
+echo "[install-server] TShock $TAG installed ($ASSET_NAME)"

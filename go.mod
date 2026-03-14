@@ -3,7 +3,7 @@ module github.com/0xkowalskidev/gamejanitor
 go 1.25.5
 
 require (
-	github.com/0xkowalskidev/gsq v0.0.0-20260314035156-af93b6be8252
+	github.com/0xkowalskidev/gsq v0.0.0-20260314074011-47d48412d517
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/go-chi/chi/v5 v5.2.5
