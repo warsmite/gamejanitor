@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"html"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -109,7 +108,7 @@ func (h *PageConsoleHandlers) LogStream(w http.ResponseWriter, r *http.Request) 
 			}
 			// SSE data lines cannot contain newlines — split if needed
 			for _, part := range strings.Split(line, "\n") {
-				fmt.Fprintf(w, "data: %s\n", html.EscapeString(part))
+				fmt.Fprintf(w, "data: %s\n", part)
 			}
 			fmt.Fprint(w, "\n")
 			flusher.Flush()
