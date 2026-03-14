@@ -36,5 +36,35 @@ echo "[start-server] JVM heap: ${HEAP}m (from ${MEMORY_LIMIT_MB}m limit)"
 FIFO=/tmp/cmd-input
 mkfifo "$FIFO" 2>/dev/null || true
 
-echo "[start-server] starting Minecraft server"
-tail -f "$FIFO" | exec java -Xmx${HEAP}m -Xms${HEAP}m -jar /data/server.jar nogui
+MODLOADER="${MODLOADER:-vanilla}"
+
+# Determine which jar to launch
+case "$MODLOADER" in
+    fabric)
+        SERVER_JAR="/data/fabric-server-launcher.jar"
+        ;;
+    forge)
+        # Modern Forge uses @unix_args.txt with classpath-based launch (no -jar)
+        FORGE_ARGS=$(find /data/libraries -name "unix_args.txt" 2>/dev/null | head -1)
+        if [ -n "$FORGE_ARGS" ]; then
+            # Write our heap settings into user_jvm_args.txt (Forge reads this via @user_jvm_args.txt)
+            echo "-Xmx${HEAP}m" > /data/user_jvm_args.txt
+            echo "-Xms${HEAP}m" >> /data/user_jvm_args.txt
+            echo "[start-server] starting Forge server (modloader=forge, args=$FORGE_ARGS)"
+            cd /data
+            tail -f "$FIFO" | exec java @user_jvm_args.txt @"$FORGE_ARGS" nogui
+            exit 0
+        fi
+        # Fallback for older Forge versions
+        SERVER_JAR=$(find /data -maxdepth 1 -name "forge-*.jar" ! -name "*-installer.jar" ! -name "*-shim.jar" | head -1)
+        if [ -z "$SERVER_JAR" ]; then
+            SERVER_JAR="/data/server.jar"
+        fi
+        ;;
+    *)
+        SERVER_JAR="/data/server.jar"
+        ;;
+esac
+
+echo "[start-server] starting Minecraft server (modloader=$MODLOADER, jar=$SERVER_JAR)"
+tail -f "$FIFO" | exec java -Xmx${HEAP}m -Xms${HEAP}m -jar "$SERVER_JAR" nogui

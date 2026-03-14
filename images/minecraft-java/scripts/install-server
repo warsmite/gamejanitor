@@ -2,6 +2,7 @@
 set -e
 
 MINECRAFT_VERSION="${MINECRAFT_VERSION:-latest}"
+MODLOADER="${MODLOADER:-vanilla}"
 
 echo "[install-server] fetching Minecraft version manifest"
 MANIFEST=$(curl -fsSL "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
@@ -14,32 +15,127 @@ elif [ "$MINECRAFT_VERSION" = "latest-snapshot" ]; then
     echo "[install-server] resolved 'latest-snapshot' to $MINECRAFT_VERSION"
 fi
 
-echo "[install-server] looking up version $MINECRAFT_VERSION"
-VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$MINECRAFT_VERSION" '.versions[] | select(.id == $v) | .url')
+echo "[install-server] version=$MINECRAFT_VERSION modloader=$MODLOADER"
 
+# Validate version exists in Mojang manifest
+VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$MINECRAFT_VERSION" '.versions[] | select(.id == $v) | .url')
 if [ -z "$VERSION_URL" ] || [ "$VERSION_URL" = "null" ]; then
     echo "[install-server] ERROR: version $MINECRAFT_VERSION not found in manifest"
     exit 1
 fi
 
-echo "[install-server] fetching version metadata from $VERSION_URL"
-VERSION_META=$(curl -fsSL "$VERSION_URL")
-SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')
-SERVER_SHA1=$(echo "$VERSION_META" | jq -r '.downloads.server.sha1')
+install_vanilla() {
+    echo "[install-server] fetching version metadata from $VERSION_URL"
+    VERSION_META=$(curl -fsSL "$VERSION_URL")
+    SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')
+    SERVER_SHA1=$(echo "$VERSION_META" | jq -r '.downloads.server.sha1')
 
-if [ -z "$SERVER_URL" ] || [ "$SERVER_URL" = "null" ]; then
-    echo "[install-server] ERROR: version $MINECRAFT_VERSION has no server download"
-    exit 1
-fi
+    if [ -z "$SERVER_URL" ] || [ "$SERVER_URL" = "null" ]; then
+        echo "[install-server] ERROR: version $MINECRAFT_VERSION has no server download"
+        exit 1
+    fi
 
-echo "[install-server] downloading server.jar for $MINECRAFT_VERSION from $SERVER_URL"
-curl -fsSL -o /data/server.jar "$SERVER_URL"
+    echo "[install-server] downloading vanilla server.jar from $SERVER_URL"
+    curl -fsSL -o /data/server.jar "$SERVER_URL"
 
-ACTUAL_SHA1=$(sha1sum /data/server.jar | awk '{print $1}')
-if [ "$ACTUAL_SHA1" != "$SERVER_SHA1" ]; then
-    echo "[install-server] ERROR: sha1 mismatch — expected $SERVER_SHA1, got $ACTUAL_SHA1"
-    rm -f /data/server.jar
-    exit 1
-fi
+    ACTUAL_SHA1=$(sha1sum /data/server.jar | awk '{print $1}')
+    if [ "$ACTUAL_SHA1" != "$SERVER_SHA1" ]; then
+        echo "[install-server] ERROR: sha1 mismatch — expected $SERVER_SHA1, got $ACTUAL_SHA1"
+        rm -f /data/server.jar
+        exit 1
+    fi
 
-echo "[install-server] Minecraft $MINECRAFT_VERSION server.jar downloaded and verified (sha1: $SERVER_SHA1)"
+    echo "[install-server] vanilla $MINECRAFT_VERSION installed (sha1: $SERVER_SHA1)"
+}
+
+install_paper() {
+    echo "[install-server] fetching Paper builds for $MINECRAFT_VERSION"
+    BUILDS_JSON=$(curl -fsSL "https://api.papermc.io/v2/projects/paper/versions/${MINECRAFT_VERSION}/builds" 2>/dev/null) || {
+        echo "[install-server] ERROR: Paper does not support Minecraft $MINECRAFT_VERSION"
+        exit 1
+    }
+
+    # Get the latest build
+    BUILD=$(echo "$BUILDS_JSON" | jq -r '.builds[-1].build')
+    FILENAME=$(echo "$BUILDS_JSON" | jq -r '.builds[-1].downloads.application.name')
+    SHA256=$(echo "$BUILDS_JSON" | jq -r '.builds[-1].downloads.application.sha256')
+
+    if [ -z "$BUILD" ] || [ "$BUILD" = "null" ]; then
+        echo "[install-server] ERROR: no Paper builds found for Minecraft $MINECRAFT_VERSION"
+        exit 1
+    fi
+
+    DOWNLOAD_URL="https://api.papermc.io/v2/projects/paper/versions/${MINECRAFT_VERSION}/builds/${BUILD}/downloads/${FILENAME}"
+    echo "[install-server] downloading Paper build $BUILD from $DOWNLOAD_URL"
+    curl -fsSL -o /data/server.jar "$DOWNLOAD_URL"
+
+    ACTUAL_SHA256=$(sha256sum /data/server.jar | awk '{print $1}')
+    if [ "$ACTUAL_SHA256" != "$SHA256" ]; then
+        echo "[install-server] ERROR: sha256 mismatch — expected $SHA256, got $ACTUAL_SHA256"
+        rm -f /data/server.jar
+        exit 1
+    fi
+
+    echo "[install-server] Paper build $BUILD for $MINECRAFT_VERSION installed (sha256: $SHA256)"
+}
+
+install_fabric() {
+    echo "[install-server] fetching Fabric loader and installer versions"
+    LOADER_VERSION=$(curl -fsSL "https://meta.fabricmc.net/v2/versions/loader" | jq -r '[.[] | select(.stable == true)][0].version')
+    INSTALLER_VERSION=$(curl -fsSL "https://meta.fabricmc.net/v2/versions/installer" | jq -r '[.[] | select(.stable == true)][0].version')
+
+    if [ -z "$LOADER_VERSION" ] || [ "$LOADER_VERSION" = "null" ]; then
+        echo "[install-server] ERROR: could not find stable Fabric loader version"
+        exit 1
+    fi
+
+    DOWNLOAD_URL="https://meta.fabricmc.net/v2/versions/loader/${MINECRAFT_VERSION}/${LOADER_VERSION}/${INSTALLER_VERSION}/server/jar"
+    echo "[install-server] downloading Fabric server jar (loader=$LOADER_VERSION, installer=$INSTALLER_VERSION)"
+
+    HTTP_CODE=$(curl -fsSL -o /data/fabric-server-launcher.jar -w '%{http_code}' "$DOWNLOAD_URL" 2>/dev/null) || {
+        echo "[install-server] ERROR: Fabric does not support Minecraft $MINECRAFT_VERSION"
+        exit 1
+    }
+
+    echo "[install-server] Fabric server for $MINECRAFT_VERSION installed (loader=$LOADER_VERSION)"
+}
+
+install_forge() {
+    echo "[install-server] fetching Forge version for $MINECRAFT_VERSION"
+    PROMOS=$(curl -fsSL "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json")
+
+    # Prefer recommended, fall back to latest
+    FORGE_VERSION=$(echo "$PROMOS" | jq -r --arg v "${MINECRAFT_VERSION}-recommended" '.promos[$v] // empty')
+    if [ -z "$FORGE_VERSION" ]; then
+        FORGE_VERSION=$(echo "$PROMOS" | jq -r --arg v "${MINECRAFT_VERSION}-latest" '.promos[$v] // empty')
+    fi
+
+    if [ -z "$FORGE_VERSION" ]; then
+        echo "[install-server] ERROR: Forge does not support Minecraft $MINECRAFT_VERSION"
+        exit 1
+    fi
+
+    FORGE_FULL="${MINECRAFT_VERSION}-${FORGE_VERSION}"
+    INSTALLER_URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${FORGE_FULL}/forge-${FORGE_FULL}-installer.jar"
+
+    echo "[install-server] downloading Forge installer $FORGE_FULL from $INSTALLER_URL"
+    curl -fsSL -o /tmp/forge-installer.jar "$INSTALLER_URL"
+
+    echo "[install-server] running Forge installer"
+    cd /data
+    java -jar /tmp/forge-installer.jar --installServer
+    rm -f /tmp/forge-installer.jar
+
+    echo "[install-server] Forge $FORGE_FULL installed"
+}
+
+case "$MODLOADER" in
+    vanilla) install_vanilla ;;
+    paper)   install_paper ;;
+    fabric)  install_fabric ;;
+    forge)   install_forge ;;
+    *)
+        echo "[install-server] ERROR: unknown mod loader '$MODLOADER' (expected: vanilla, paper, forge, fabric)"
+        exit 1
+        ;;
+esac

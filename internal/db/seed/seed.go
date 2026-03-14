@@ -31,6 +31,7 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean","required":true,"notice":"You must agree to the <a href=\"https://aka.ms/MinecraftEULA\" target=\"_blank\" class=\"underline text-accent-400 hover:text-accent-300\">Minecraft EULA</a> to run this server."},
 				{"key":"MINECRAFT_VERSION","default":"latest","label":"Version","type":"version-select"},
+				{"key":"MODLOADER","default":"vanilla","label":"Mod Loader","type":"select","options":["vanilla","paper","forge","fabric"]},
 				{"key":"GAMEMODE","default":"survival","label":"Game Mode","type":"select","options":["survival","creative","adventure","spectator"]},
 				{"key":"MAX_PLAYERS","default":"20","label":"Max Players","type":"number"},
 				{"key":"DIFFICULTY","default":"normal","label":"Difficulty","type":"select","options":["peaceful","easy","normal","hard"]},
@@ -56,6 +57,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"SERVER_HOSTNAME","default":"Gamejanitor Rust Server","label":"Server Name"},
 				{"key":"SERVER_WORLDSIZE","default":"3000","label":"World Size","type":"number"},
 				{"key":"RCON_PASSWORD","default":"","label":"RCON Password","autogenerate":"password"},
+				{"key":"OXIDE_ENABLED","default":"false","label":"Enable Oxide (uMod)","type":"boolean"},
 				{"key":"SERVER_PORT","default":"28015","system":true},
 				{"key":"QUERY_PORT","default":"28017","system":true},
 				{"key":"RCON_PORT","default":"28016","system":true},
