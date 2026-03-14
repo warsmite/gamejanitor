@@ -164,12 +164,10 @@
       <h3 class="font-display font-semibold text-white mb-2">Delete Schedule</h3>
       <p class="text-sm text-surface-400 mb-5">Delete <span class="text-white" x-text="deleteName"></span>? This cannot be undone.</p>
       <div class="flex gap-2">
-        <form :hx-delete="'/gameservers/{{.Gameserver.ID}}/schedules/' + confirmDelete" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false">
-          <button type="submit" @click="confirmDelete = ''"
-                  class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
-            Delete
-          </button>
-        </form>
+        <button @click="htmx.ajax('DELETE', '/gameservers/{{.Gameserver.ID}}/schedules/' + confirmDelete, {target: '#gs-content', swap: 'innerHTML show:none'}); confirmDelete = ''"
+                class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
+          Delete
+        </button>
         <button @click="confirmDelete = ''"
                 class="px-4 py-2 text-sm font-medium rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors">
           Cancel

@@ -167,6 +167,7 @@ func (h *PageScheduleHandlers) Toggle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PageScheduleHandlers) renderList(w http.ResponseWriter, r *http.Request, gsID string) {
+	w.Header().Set("HX-Push-Url", "false")
 	gs, err := h.gameserverSvc.GetGameserver(gsID)
 	if err != nil {
 		h.log.Error("getting gameserver for schedules", "id", gsID, "error", err)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -44,7 +45,7 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	backup, err := h.svc.CreateBackup(r.Context(), gsID, req.Name)
+	backup, err := h.svc.CreateBackup(context.WithoutCancel(r.Context()), gsID, req.Name)
 	if err != nil {
 		h.log.Error("creating backup", "gameserver_id", gsID, "error", err)
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -56,7 +57,7 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 	backupID := chi.URLParam(r, "backupId")
-	if err := h.svc.RestoreBackup(r.Context(), backupID); err != nil {
+	if err := h.svc.RestoreBackup(context.WithoutCancel(r.Context()), backupID); err != nil {
 		h.log.Error("restoring backup", "backup_id", backupID, "error", err)
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

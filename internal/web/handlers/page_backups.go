@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -65,28 +66,27 @@ func (h *PageBackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		name = r.FormValue("name")
 	}
 
-	if _, err := h.backupSvc.CreateBackup(r.Context(), id, name); err != nil {
+	// Detach from request context so the backup isn't killed when the HTTP response completes
+	if _, err := h.backupSvc.CreateBackup(context.WithoutCancel(r.Context()), id, name); err != nil {
 		h.log.Error("creating backup from web", "gameserver_id", id, "error", err)
 		http.Error(w, "Failed to create backup: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+id+"/backups")
-	http.Redirect(w, r, "/gameservers/"+id+"/backups", http.StatusSeeOther)
+	h.renderList(w, r, id)
 }
 
 func (h *PageBackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
 
-	if err := h.backupSvc.RestoreBackup(r.Context(), backupID); err != nil {
+	if err := h.backupSvc.RestoreBackup(context.WithoutCancel(r.Context()), backupID); err != nil {
 		h.log.Error("restoring backup from web", "backup_id", backupID, "error", err)
 		http.Error(w, "Failed to restore backup: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+gsID+"/backups")
-	http.Redirect(w, r, "/gameservers/"+gsID+"/backups", http.StatusSeeOther)
+	h.renderList(w, r, gsID)
 }
 
 func (h *PageBackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +99,36 @@ func (h *PageBackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+gsID+"/backups")
-	http.Redirect(w, r, "/gameservers/"+gsID+"/backups", http.StatusSeeOther)
+	h.renderList(w, r, gsID)
+}
+
+func (h *PageBackupHandlers) renderList(w http.ResponseWriter, r *http.Request, gsID string) {
+	w.Header().Set("HX-Push-Url", "false")
+	gs, err := h.gameserverSvc.GetGameserver(gsID)
+	if err != nil {
+		h.log.Error("getting gameserver for backups", "id", gsID, "error", err)
+		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		return
+	}
+
+	game, err := h.gameSvc.GetGame(gs.GameID)
+	if err != nil {
+		h.log.Error("getting game for backups", "game_id", gs.GameID, "error", err)
+	}
+
+	backups, err := h.backupSvc.ListBackups(gsID)
+	if err != nil {
+		h.log.Error("listing backups", "gameserver_id", gsID, "error", err)
+		http.Error(w, "Failed to load backups", http.StatusInternalServerError)
+		return
+	}
+	if backups == nil {
+		backups = []models.Backup{}
+	}
+
+	h.renderer.Render(w, r, "gameservers/backups", map[string]any{
+		"Gameserver": gs,
+		"Game":       game,
+		"Backups":    backups,
+	})
 }
