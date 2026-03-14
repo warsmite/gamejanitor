@@ -90,7 +90,7 @@ func CreateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {

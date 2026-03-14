@@ -30,7 +30,7 @@ func SeedGames(db *sql.DB) error {
 			heroPath: "/static/games/minecraft/minecraft-hero.png",
 			defaultPorts: `[{"name":"game","port":25565,"protocol":"tcp"}]`,
 			defaultEnv: `[
-				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean"},
+				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean","required":true,"notice":"You must agree to the <a href=\"https://aka.ms/MinecraftEULA\" target=\"_blank\" class=\"underline text-accent-400 hover:text-accent-300\">Minecraft EULA</a> to run this server."},
 				{"key":"GAMEMODE","default":"survival","label":"Game Mode","type":"select","options":["survival","creative","adventure","spectator"]},
 				{"key":"MAX_PLAYERS","default":"20","label":"Max Players","type":"number"},
 				{"key":"DIFFICULTY","default":"normal","label":"Difficulty","type":"select","options":["peaceful","easy","normal","hard"]},
@@ -106,7 +106,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"GAME_TYPE","default":"0","label":"Game Type","type":"select","options":["0","1","2","3"]},
 				{"key":"GAME_MODE","default":"1","label":"Game Mode","type":"select","options":["0","1","2"]},
 				{"key":"MAP","default":"de_dust2","label":"Starting Map"},
-				{"key":"GSLT","default":"","label":"Game Server Login Token (GSLT)"},
+				{"key":"GSLT","default":"","label":"Game Server Login Token (GSLT)","notice":"Required for public servers. Get one at <a href=\"https://steamcommunity.com/dev/managegameservers\" target=\"_blank\" class=\"underline text-accent-400 hover:text-accent-300\">Steam</a>."},
 				{"key":"GAME_PORT","default":"27015","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,

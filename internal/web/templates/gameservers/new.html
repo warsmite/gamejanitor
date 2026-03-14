@@ -10,7 +10,7 @@
     <h1 class="font-display font-bold text-2xl text-white mt-2">New Gameserver</h1>
   </div>
 
-  <form hx-post="/gameservers" hx-target="#content">
+  <form x-ref="form" @submit="validateForm($event)" hx-post="/gameservers" hx-target="#content">
     <!-- Step 1: Pick a Game -->
     <div class="mb-8" x-show="!selectedGame">
       <h2 class="font-display font-semibold text-lg text-white mb-4">Choose a Game</h2>
@@ -56,19 +56,87 @@
                  placeholder="my-minecraft-gameserver">
         </div>
 
-        <!-- Resources -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label for="memory_limit_mb" class="block text-sm font-medium text-surface-300 mb-1.5">Memory (MB)</label>
-            <input type="number" name="memory_limit_mb" id="memory_limit_mb" min="0"
-                   :placeholder="selectedGameData ? selectedGameData.min_memory_mb : '2048'"
-                   class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
-          </div>
-          <div>
-            <label for="cpu_limit" class="block text-sm font-medium text-surface-300 mb-1.5">CPU Limit</label>
-            <input type="number" name="cpu_limit" id="cpu_limit" min="0" step="0.1"
-                   :placeholder="selectedGameData ? selectedGameData.min_cpu : '1.0'"
-                   class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+        <!-- Required notices (EULA etc) -->
+        <template x-for="(env, idx) in gameSettings" :key="'req-' + env.key">
+          <template x-if="env.required && env.type === 'boolean'">
+            <div class="rounded-xl border-2 p-4 transition-colors"
+                 :class="env.value === 'true' ? 'border-accent-500/40 bg-accent-500/5' : 'border-surface-700/60 bg-surface-900/40'">
+              <div class="flex items-start gap-3 cursor-pointer" @click="env.value = env.value === 'true' ? 'false' : 'true'">
+                <div class="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all"
+                     :class="env.value === 'true' ? 'border-accent-500 bg-accent-600' : 'border-surface-600 bg-surface-900/80'">
+                  <svg class="w-4 h-4 text-white transition-opacity" :class="env.value === 'true' ? 'opacity-100' : 'opacity-0'" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <span class="font-display font-semibold text-white text-sm" x-text="env.label"></span>
+                  <p class="text-xs text-surface-400 mt-1" x-show="env.notice" x-html="env.notice"></p>
+                </div>
+              </div>
+              <p class="text-xs text-red-400 mt-2" x-show="showValidation && env.required && env.value !== 'true'">
+                You must accept this agreement to continue.
+              </p>
+            </div>
+          </template>
+        </template>
+
+        <!-- Game Settings -->
+        <div x-show="nonRequiredBooleanSettings.length > 0">
+          <h3 class="font-display font-semibold text-sm text-white mb-3">Game Settings</h3>
+          <div class="space-y-4 p-4 rounded-xl bg-surface-900/40 border border-surface-800/60">
+            <template x-for="(env, idx) in nonRequiredBooleanSettings" :key="'gs-' + env.key">
+              <div>
+                <template x-if="env.type === 'boolean'">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="text-sm font-medium text-surface-300" x-text="env.label"></label>
+                      <p class="text-xs text-surface-500 mt-0.5" x-show="env.notice" x-html="env.notice"></p>
+                    </div>
+                    <button type="button" @click="env.value = env.value === 'true' ? 'false' : 'true'"
+                            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200"
+                            :class="env.value === 'true' ? 'bg-accent-600' : 'bg-surface-700'"
+                            role="switch" :aria-checked="env.value === 'true'">
+                      <span class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200"
+                            :class="env.value === 'true' ? 'translate-x-5' : 'translate-x-0'"></span>
+                    </button>
+                  </div>
+                </template>
+                <template x-if="env.type === 'select'">
+                  <div>
+                    <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
+                    <select x-model="env.value"
+                            class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                      <template x-for="opt in env.options" :key="opt">
+                        <option :value="opt" x-text="opt" :selected="opt === env.value"></option>
+                      </template>
+                    </select>
+                    <p class="text-xs text-surface-500 mt-1" x-show="env.notice" x-html="env.notice"></p>
+                  </div>
+                </template>
+                <template x-if="env.type === 'number'">
+                  <div>
+                    <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
+                    <input type="number" x-model="env.value"
+                           class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                    <p class="text-xs text-surface-500 mt-1" x-show="env.notice" x-html="env.notice"></p>
+                  </div>
+                </template>
+                <template x-if="env.type === 'password' || env.autogenerate === 'password'">
+                  <div>
+                    <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
+                    <input type="text" x-model="env.value" placeholder="Auto-generated if left empty"
+                           class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                    <p class="text-xs text-surface-500 mt-1" x-show="env.notice" x-html="env.notice"></p>
+                  </div>
+                </template>
+                <template x-if="!env.type && env.autogenerate !== 'password'">
+                  <div>
+                    <label class="block text-sm font-medium text-surface-300 mb-1.5" x-text="env.label"></label>
+                    <input type="text" x-model="env.value"
+                           class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                    <p class="text-xs text-surface-500 mt-1" x-show="env.notice" x-html="env.notice"></p>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -81,6 +149,32 @@
           </button>
 
           <div x-show="showAdvanced" x-cloak x-transition class="mt-4 space-y-5 p-4 rounded-xl bg-surface-900/40 border border-surface-800/60">
+            <!-- Resources -->
+            <div>
+              <label class="block text-sm font-medium text-surface-300 mb-2">Resources</label>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="memory_limit_mb" class="block text-xs text-surface-500 mb-1">Memory (MB)</label>
+                  <input type="number" name="memory_limit_mb" id="memory_limit_mb" min="0"
+                         :placeholder="selectedGameData ? selectedGameData.min_memory_mb : '2048'"
+                         class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                  <p class="text-xs text-surface-600 mt-1" x-show="selectedGameData">
+                    Minimum: <span x-text="selectedGameData ? selectedGameData.min_memory_mb : ''"></span> MB
+                  </p>
+                </div>
+                <div>
+                  <label for="cpu_limit" class="block text-xs text-surface-500 mb-1">CPU Limit</label>
+                  <input type="number" name="cpu_limit" id="cpu_limit" min="0" step="0.1"
+                         :placeholder="selectedGameData ? selectedGameData.min_cpu : '1.0'"
+                         class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+                  <p class="text-xs text-surface-600 mt-1" x-show="selectedGameData">
+                    Minimum: <span x-text="selectedGameData ? selectedGameData.min_cpu : ''"></span> cores
+                  </p>
+                </div>
+              </div>
+              <p class="text-xs text-surface-600 mt-2">Leave empty to use the recommended defaults.</p>
+            </div>
+
             <!-- Ports -->
             <div>
               <label class="block text-sm font-medium text-surface-300 mb-2">Ports</label>
@@ -104,23 +198,19 @@
                       class="text-xs text-accent-400 hover:text-accent-300">+ Add port</button>
             </div>
 
-            <!-- Environment Variables -->
+            <!-- Custom Environment Variables -->
             <div>
-              <label class="block text-sm font-medium text-surface-300 mb-2">Environment Variables</label>
-              <template x-for="(env, idx) in envVars" :key="idx">
+              <label class="block text-sm font-medium text-surface-300 mb-2">Custom Environment Variables</label>
+              <template x-for="(env, idx) in customEnvVars" :key="'custom-' + idx">
                 <div class="flex gap-2 mb-2">
                   <input type="text" x-model="env.key" placeholder="Key"
-                         class="w-2/5 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500"
-                         :readonly="env.system" :class="env.system && 'opacity-50'">
-                  <input type="text" x-model="env.value"
-                         :placeholder="env.autogenerate === 'password' ? 'Auto-generated if left empty' : 'Value'"
-                         class="flex-1 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500"
-                         :readonly="env.system" :class="env.system && 'opacity-50'">
-                  <button type="button" @click="envVars.splice(idx, 1)" class="px-2 text-red-400 hover:text-red-300"
-                          x-show="!env.system">&times;</button>
+                         class="w-2/5 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500">
+                  <input type="text" x-model="env.value" placeholder="Value"
+                         class="flex-1 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500">
+                  <button type="button" @click="customEnvVars.splice(idx, 1)" class="px-2 text-red-400 hover:text-red-300">&times;</button>
                 </div>
               </template>
-              <button type="button" @click="envVars.push({key:'', value:'', system:false})"
+              <button type="button" @click="customEnvVars.push({key:'', value:''})"
                       class="text-xs text-accent-400 hover:text-accent-300">+ Add variable</button>
             </div>
           </div>
@@ -128,7 +218,7 @@
 
         <!-- Hidden JSON fields for form submission -->
         <input type="hidden" name="ports_json" :value="JSON.stringify(ports)">
-        <input type="hidden" name="env_json" :value="JSON.stringify(envVars.reduce((m, e) => { if(e.key) m[e.key]=e.value; return m; }, {}))">
+        <input type="hidden" name="env_json" :value="buildEnvJSON()">
 
         <!-- Submit -->
         <div class="pt-2">
@@ -151,7 +241,9 @@ function newGameserver() {
     selectedGame: '',
     selectedGameData: null,
     ports: [],
-    envVars: [],
+    gameSettings: [],
+    customEnvVars: [],
+    showValidation: false,
     games: games,
     init() {
       if (preselect) {
@@ -162,6 +254,9 @@ function newGameserver() {
       this.selectedGame = id;
       this.selectedGameData = this.games.find(g => g.id === id);
       this.onGameChange();
+    },
+    get nonRequiredBooleanSettings() {
+      return this.gameSettings.filter(e => !(e.required && e.type === 'boolean'));
     },
     onGameChange() {
       const game = this.selectedGameData;
@@ -177,13 +272,41 @@ function newGameserver() {
       } catch(e) { this.ports = []; }
       try {
         const defaultEnv = game.default_env || [];
-        this.envVars = defaultEnv.map(e => ({
-          key: e.key || '',
-          value: e.default || '',
-          system: e.system || false,
-          autogenerate: e.autogenerate || ''
-        }));
-      } catch(e) { this.envVars = []; }
+        this.gameSettings = defaultEnv
+          .filter(e => !e.system && e.label)
+          .map(e => ({
+            key: e.key || '',
+            value: e.default || '',
+            label: e.label || e.key,
+            type: e.type || '',
+            options: e.options || [],
+            system: false,
+            autogenerate: e.autogenerate || '',
+            required: e.required || false,
+            notice: e.notice || ''
+          }));
+      } catch(e) { this.gameSettings = []; }
+      this.customEnvVars = [];
+    },
+    buildEnvJSON() {
+      const env = {};
+      for (const s of this.gameSettings) {
+        if (s.key) env[s.key] = s.value;
+      }
+      for (const c of this.customEnvVars) {
+        if (c.key) env[c.key] = c.value;
+      }
+      return JSON.stringify(env);
+    },
+    validateForm(event) {
+      const requiredBooleans = this.gameSettings.filter(e => e.required && e.type === 'boolean');
+      const unaccepted = requiredBooleans.filter(e => e.value !== 'true');
+      if (unaccepted.length > 0) {
+        event.preventDefault();
+        this.showValidation = true;
+      } else {
+        this.showValidation = false;
+      }
     }
   };
 }
