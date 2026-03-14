@@ -179,6 +179,51 @@
           </div>
         </div>
 
+        <!-- Port Mapping — shown prominently when conflicts exist -->
+        <div x-show="hasPortConflicts && ports.length > 0" x-cloak x-transition>
+          <div class="p-4 rounded-xl bg-amber-900/15 border border-amber-700/30">
+            <div class="flex items-start gap-3 mb-3">
+              <svg class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <div>
+                <h3 class="font-display font-semibold text-amber-300 text-sm">Port Conflict</h3>
+                <p class="text-xs text-amber-400/70 mt-0.5">One or more ports overlap with another gameserver. Only one can be running at a time unless you change the ports.</p>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <template x-for="(port, idx) in ports" :key="'conflict-' + idx">
+                <div class="flex items-center gap-3 p-3 rounded-lg transition-colors"
+                     :class="portConflict(port) ? 'bg-amber-900/20 border border-amber-700/40' : 'bg-surface-900/60 border border-surface-800/50'">
+                  <!-- Tag badge -->
+                  <span class="shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase"
+                        :class="port.name === 'game' ? 'bg-accent-900/40 text-accent-400 border border-accent-800/40' :
+                                port.name === 'query' ? 'bg-blue-900/40 text-blue-400 border border-blue-800/40' :
+                                port.name === 'rcon' ? 'bg-amber-900/40 text-amber-400 border border-amber-800/40' :
+                                'bg-surface-800/60 text-surface-400 border border-surface-700/40'"
+                        x-text="port.name || 'port'"></span>
+                  <!-- Host port (editable) -->
+                  <input type="number" x-model="port.host_port" placeholder="Host port"
+                         class="w-24 rounded-lg px-3 py-1.5 text-sm text-white placeholder-surface-500 transition-colors"
+                         :class="portConflict(port) ? 'bg-amber-900/30 border border-amber-600/50 focus:border-amber-500 focus:ring-1 focus:ring-amber-500' : 'bg-surface-900/80 border border-surface-700 focus:border-accent-500 focus:ring-1 focus:ring-accent-500'">
+                  <!-- Arrow -->
+                  <svg class="w-4 h-4 text-surface-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+                  <!-- Container port + protocol (read-only) -->
+                  <span class="text-sm text-surface-400">
+                    <span class="font-mono text-surface-300" x-text="port.container_port"></span>/<span class="uppercase text-xs" x-text="port.protocol"></span>
+                  </span>
+                  <!-- Conflict info -->
+                  <template x-if="portConflict(port)">
+                    <span class="ml-auto text-xs text-amber-400" x-text="'Used by ' + portConflict(port).gameserver_name"></span>
+                  </template>
+                </div>
+              </template>
+            </div>
+            <p class="text-xs text-amber-400/60 mt-3" x-show="ports.length > 1">
+              <svg class="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.44 2.278a11.95 11.95 0 01-2.38 0M9.308 16.742a12.06 12.06 0 01-1.065-.229m7.514 0a12.06 12.06 0 001.065-.229"/></svg>
+              If you change a port, consider keeping the same offset between ports (e.g. if game is +1000, shift query and rcon by +1000 too).
+            </p>
+          </div>
+        </div>
+
         <!-- Advanced Settings -->
         <div x-data="{ showAdvanced: false }">
           <button type="button" @click="showAdvanced = !showAdvanced"
@@ -216,11 +261,11 @@
               <p class="text-xs text-surface-600 mt-2">Leave empty to use the recommended defaults.</p>
             </div>
 
-            <!-- Ports -->
-            <div>
+            <!-- Ports (inside advanced when no conflicts) -->
+            <div x-show="!hasPortConflicts && ports.length > 0">
               <label class="block text-sm font-medium text-surface-300 mb-2">Port Mapping</label>
               <div class="space-y-2">
-                <template x-for="(port, idx) in ports" :key="idx">
+                <template x-for="(port, idx) in ports" :key="'adv-' + idx">
                   <div class="flex items-center gap-3 p-3 rounded-lg bg-surface-900/60 border border-surface-800/50">
                     <!-- Tag badge -->
                     <span class="shrink-0 px-2 py-0.5 rounded text-xs font-medium uppercase"
@@ -230,10 +275,8 @@
                                   'bg-surface-800/60 text-surface-400 border border-surface-700/40'"
                           x-text="port.name || 'port'"></span>
                     <!-- Host port (editable) -->
-                    <div class="flex items-center gap-2">
-                      <input type="number" x-model="port.host_port" placeholder="Host port"
-                             class="w-24 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-1.5 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
-                    </div>
+                    <input type="number" x-model="port.host_port" placeholder="Host port"
+                           class="w-24 rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-1.5 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
                     <!-- Arrow -->
                     <svg class="w-4 h-4 text-surface-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
                     <!-- Container port + protocol (read-only) -->
@@ -243,7 +286,7 @@
                   </div>
                 </template>
               </div>
-              <p class="text-xs text-surface-600 mt-2" x-show="ports.length > 0">Host port is the port exposed on your machine. Container port and protocol are set by the game.</p>
+              <p class="text-xs text-surface-600 mt-2">Host port is the port exposed on your machine. Container port and protocol are set by the game.</p>
             </div>
 
             <!-- Custom Environment Variables -->
@@ -302,6 +345,7 @@ function gameserverForm() {
   const existingMemory = '{{if eq .Mode "edit"}}{{.Gameserver.MemoryLimitMB}}{{end}}';
   const existingCPU = '{{if eq .Mode "edit"}}{{.Gameserver.CPULimit}}{{end}}';
   const existingGameID = '{{if eq .Mode "edit"}}{{.Gameserver.GameID}}{{end}}';
+  const usedPorts = {{rawJS (or .UsedPortsJSON "[]")}};
 
   // Parse ports
   let ports = [];
@@ -385,6 +429,16 @@ function gameserverForm() {
 
     get nonRequiredBooleanSettings() {
       return this.gameSettings.filter(e => !(e.required && e.type === 'boolean'));
+    },
+
+    portConflict(port) {
+      const hp = parseInt(port.host_port);
+      if (!hp) return null;
+      return usedPorts.find(u => u.port === hp) || null;
+    },
+
+    get hasPortConflicts() {
+      return this.ports.some(p => this.portConflict(p));
     },
 
     onGameChange() {

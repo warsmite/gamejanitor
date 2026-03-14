@@ -48,6 +48,46 @@ func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
 	}, nil
 }
 
+// usedPortEntry tracks a host port claimed by another gameserver.
+type usedPortEntry struct {
+	Port           int    `json:"port"`
+	GameserverName string `json:"gameserver_name"`
+	GameserverID   string `json:"gameserver_id"`
+}
+
+// buildUsedPorts returns all host ports used by other gameservers (excludeID is omitted, e.g. the current gameserver in edit mode).
+func (h *PageGameserverHandlers) buildUsedPorts(excludeID string) []usedPortEntry {
+	allGS, err := h.gameserverSvc.ListGameservers(models.GameserverFilter{})
+	if err != nil {
+		h.log.Error("listing gameservers for port conflict check", "error", err)
+		return nil
+	}
+
+	var used []usedPortEntry
+	for _, gs := range allGS {
+		if gs.ID == excludeID {
+			continue
+		}
+		var ports []struct {
+			HostPort int `json:"host_port"`
+			Port     int `json:"port"`
+		}
+		if err := json.Unmarshal(gs.Ports, &ports); err != nil {
+			continue
+		}
+		for _, p := range ports {
+			hp := p.HostPort
+			if hp == 0 {
+				hp = p.Port
+			}
+			if hp != 0 {
+				used = append(used, usedPortEntry{Port: hp, GameserverName: gs.Name, GameserverID: gs.ID})
+			}
+		}
+	}
+	return used
+}
+
 func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 	games, err := h.gameSvc.ListGames()
 	if err != nil {
@@ -88,12 +128,15 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(""))
+
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
-		"Mode":      "new",
-		"Games":     games,
-		"GamesJSON": string(gamesJSONBytes),
-		"PortsJSON": "[]",
-		"EnvJSON":   "{}",
+		"Mode":          "new",
+		"Games":         games,
+		"GamesJSON":     string(gamesJSONBytes),
+		"PortsJSON":     "[]",
+		"EnvJSON":       "{}",
+		"UsedPortsJSON": string(usedPortsJSON),
 	})
 }
 
@@ -324,14 +367,17 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	}
 	gamesJSONBytes, _ := json.Marshal([]any{gameForJS})
 
+	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(gs.ID))
+
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
-		"Mode":       "edit",
-		"Gameserver": gs,
-		"Game":       game,
-		"Games":      []models.Game{*game},
-		"GamesJSON":  string(gamesJSONBytes),
-		"PortsJSON":  portsJSON,
-		"EnvJSON":    envJSON,
+		"Mode":          "edit",
+		"Gameserver":    gs,
+		"Game":          game,
+		"Games":         []models.Game{*game},
+		"GamesJSON":     string(gamesJSONBytes),
+		"PortsJSON":     portsJSON,
+		"EnvJSON":       envJSON,
+		"UsedPortsJSON": string(usedPortsJSON),
 	})
 }
 
