@@ -78,7 +78,7 @@
         </template>
         <div class="flex-1 min-w-0">
           <p class="font-display font-semibold text-white text-sm" x-text="selectedGameData ? selectedGameData.name : ''"></p>
-          <button type="button" @click="selectedGame = ''; selectedGameData = null" class="text-xs text-accent-400 hover:text-accent-300">Change game</button>
+          <button type="button" @click="selectedGame = ''; selectedGameData = null; updateGameURL('')" class="text-xs text-accent-400 hover:text-accent-300">Change game</button>
         </div>
       </div>
       {{end}}
@@ -436,6 +436,7 @@ function gameserverForm() {
     selectGame(id) {
       this.selectedGame = id;
       this.selectedGameData = this.games.find(g => g.id === id);
+      this.updateGameURL(id);
       this.onGameChange();
     },
 
@@ -455,6 +456,16 @@ function gameserverForm() {
       const has = this.ports.some(p => this.portConflict(p));
       if (has) this.portsElevated = true;
       return has;
+    },
+
+    updateGameURL(id) {
+      const url = new URL(window.location);
+      if (id) {
+        url.searchParams.set('game', id);
+      } else {
+        url.searchParams.delete('game');
+      }
+      history.replaceState(null, '', url);
     },
 
     onGameChange() {
