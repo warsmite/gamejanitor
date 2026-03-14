@@ -8,37 +8,62 @@
 <div x-data="schedulesPage()" class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
   <!-- New Schedule Form -->
   <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-5 mb-6">
-    <h2 class="font-display font-semibold text-white text-sm mb-4">New Schedule</h2>
-    <form hx-post="/gameservers/{{.Gameserver.ID}}/schedules" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <div>
-        <label class="block text-xs text-surface-400 mb-1">Name</label>
-        <input type="text" name="name" required placeholder="Nightly Restart"
-               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
+    <h2 class="font-display font-semibold text-white text-sm mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      New Schedule
+    </h2>
+    <form hx-post="/gameservers/{{.Gameserver.ID}}/schedules" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false">
+      <!-- Row 1: Name + Type -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-xs text-surface-400 mb-1">Name</label>
+          <input type="text" name="name" required placeholder="Nightly Restart"
+                 class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500 transition-colors">
+        </div>
+        <div>
+          <label class="block text-xs text-surface-400 mb-1">Type</label>
+          <select name="type" x-model="newType"
+                  class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500 transition-colors">
+            <option value="restart">Restart</option>
+            <option value="backup">Backup</option>
+            <option value="command">Command</option>
+            <option value="update">Update</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs text-surface-400 mb-1">Type</label>
-        <select name="type" x-model="newType"
-                class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
-          <option value="restart">Restart</option>
-          <option value="backup">Backup</option>
-          <option value="command">Command</option>
-          <option value="update">Update</option>
-        </select>
+
+      <!-- Row 2: Schedule presets + cron input -->
+      <div class="mb-3">
+        <label class="block text-xs text-surface-400 mb-2">Schedule</label>
+        <div class="flex flex-wrap gap-1.5 mb-2">
+          <template x-for="p in presets" :key="p.expr">
+            <button type="button" @click="selectPreset(p.expr)"
+                    class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                    :class="cronExpr === p.expr
+                      ? 'bg-accent-600 text-white shadow-lg shadow-accent-600/20'
+                      : 'bg-surface-800/60 text-surface-400 border border-surface-700/60 hover:text-white hover:border-surface-600'">
+              <span x-text="p.label"></span>
+            </button>
+          </template>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="text" name="cron_expr" x-model="cronExpr" required placeholder="0 4 * * *"
+                 class="w-full sm:w-64 rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500 transition-colors">
+          <span class="text-xs text-surface-400 hidden sm:block" x-show="cronExpr" x-text="describeCron(cronExpr)"></span>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs text-surface-400 mb-1">Cron Expression</label>
-        <input type="text" name="cron_expr" required placeholder="0 4 * * *"
-               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
-      </div>
-      <div x-show="newType === 'command'">
+
+      <!-- Row 3: Command (conditional) -->
+      <div x-show="newType === 'command'" x-transition class="mb-3">
         <label class="block text-xs text-surface-400 mb-1">Command</label>
         <input type="text" name="command" placeholder="save-all"
-               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
+               class="w-full sm:w-96 rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500 transition-colors">
       </div>
-      <div class="sm:col-span-2 lg:col-span-4 flex justify-end">
+
+      <!-- Submit -->
+      <div class="flex justify-end">
         <button type="submit"
-                class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-display font-semibold text-sm transition-colors">
+                class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-display font-semibold text-sm transition-colors shadow-lg shadow-accent-600/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
           Create Schedule
         </button>
@@ -46,69 +71,157 @@
     </form>
   </div>
 
-  <!-- Schedule List -->
+  <!-- Schedule Cards -->
   {{if .Schedules}}
-  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 overflow-hidden">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-surface-800/60">
-          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Name</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Type</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Cron</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Last Run</th>
-          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Next Run</th>
-          <th class="text-center px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Enabled</th>
-          <th class="text-right px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-surface-800/40">
-        {{range .Schedules}}
-        <tr class="hover:bg-surface-800/30 transition-colors">
-          <td class="px-4 py-3 text-white font-medium">{{.Name}}</td>
-          <td class="px-4 py-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
-              {{if eq .Type "restart"}}bg-yellow-900/30 text-yellow-400 border border-yellow-800/40
-              {{else if eq .Type "backup"}}bg-blue-900/30 text-blue-400 border border-blue-800/40
-              {{else if eq .Type "command"}}bg-purple-900/30 text-purple-400 border border-purple-800/40
-              {{else if eq .Type "update"}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40
-              {{end}}">
-              {{.Type}}
-            </span>
-          </td>
-          <td class="px-4 py-3 font-mono text-surface-300 text-xs">{{.CronExpr}}</td>
-          <td class="px-4 py-3 text-surface-400 text-xs">{{if .LastRun}}{{formatTime (derefTime .LastRun)}}{{else}}-{{end}}</td>
-          <td class="px-4 py-3 text-surface-400 text-xs">{{if .NextRun}}{{formatTime (derefTime .NextRun)}}{{else}}-{{end}}</td>
-          <td class="px-4 py-3 text-center">
-            <button hx-post="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}/toggle" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-                    class="text-xs px-2 py-1 rounded-md transition-colors
-                      {{if .Enabled}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/50
-                      {{else}}bg-surface-800 text-surface-500 border border-surface-700 hover:bg-surface-700{{end}}">
-              {{if .Enabled}}On{{else}}Off{{end}}
-            </button>
-          </td>
-          <td class="px-4 py-3 text-right">
-            <button hx-delete="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-                    hx-confirm="Delete schedule '{{.Name}}'?"
-                    class="text-xs text-red-400 hover:text-red-300 transition-colors">
-              Delete
-            </button>
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {{range $i, $s := .Schedules}}
+    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-4 card-glow
+                {{if not $s.Enabled}}opacity-60{{end}}">
+      <!-- Header: icon + name + type badge -->
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <!-- Type icon -->
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0
+            {{if eq $s.Type "restart"}}bg-yellow-900/30 border border-yellow-800/40
+            {{else if eq $s.Type "backup"}}bg-blue-900/30 border border-blue-800/40
+            {{else if eq $s.Type "command"}}bg-purple-900/30 border border-purple-800/40
+            {{else if eq $s.Type "update"}}bg-emerald-900/30 border border-emerald-800/40
+            {{end}}">
+            {{if eq $s.Type "restart"}}
+            <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            {{else if eq $s.Type "backup"}}
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+            {{else if eq $s.Type "command"}}
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25z"/></svg>
+            {{else if eq $s.Type "update"}}
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+            {{end}}
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-sm">{{$s.Name}}</h3>
+            <span class="inline-flex items-center text-[10px] font-medium uppercase tracking-wider mt-0.5
+              {{if eq $s.Type "restart"}}text-yellow-400
+              {{else if eq $s.Type "backup"}}text-blue-400
+              {{else if eq $s.Type "command"}}text-purple-400
+              {{else if eq $s.Type "update"}}text-emerald-400
+              {{end}}">{{$s.Type}}</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Toggle switch -->
+          <button hx-post="/gameservers/{{$.Gameserver.ID}}/schedules/{{$s.ID}}/toggle" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false"
+                  class="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none
+                    {{if $s.Enabled}}bg-emerald-600{{else}}bg-surface-700{{end}}"
+                  title="{{if $s.Enabled}}Disable{{else}}Enable{{end}} schedule">
+            <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200
+              {{if $s.Enabled}}translate-x-4{{else}}translate-x-0{{end}}"></span>
+          </button>
+          <!-- Delete -->
+          <button @click="confirmDelete = '{{$s.ID}}'; deleteName = '{{$s.Name}}'"
+                  class="p-1.5 rounded-lg text-surface-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                  title="Delete schedule">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cron info -->
+      <div class="flex items-center gap-2 mb-3 px-1">
+        <svg class="w-3.5 h-3.5 text-surface-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <code class="font-mono text-xs text-surface-300 bg-surface-900/40 px-1.5 py-0.5 rounded">{{$s.CronExpr}}</code>
+        <span class="text-xs text-surface-400" x-text="describeCron('{{$s.CronExpr}}')"></span>
+      </div>
+
+      <!-- Last / Next run -->
+      <div class="flex gap-4 px-1">
+        <div class="text-xs">
+          <span class="text-surface-500">Last run</span>
+          <span class="text-surface-300 ml-1">{{if $s.LastRun}}{{formatTime (derefTime $s.LastRun)}}{{else}}Never{{end}}</span>
+        </div>
+        <div class="text-xs">
+          <span class="text-surface-500">Next run</span>
+          <span class="text-surface-300 ml-1">{{if $s.NextRun}}{{formatTime (derefTime $s.NextRun)}}{{else}}—{{end}}</span>
+        </div>
+      </div>
+    </div>
+    {{end}}
   </div>
   {{else}}
-  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
-    <p class="text-surface-400">No schedules configured. Create one above to automate tasks.</p>
+  <!-- Empty state -->
+  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-12 text-center">
+    <div class="w-12 h-12 rounded-2xl bg-surface-800/80 border border-surface-700/60 flex items-center justify-center mx-auto mb-4">
+      <svg class="w-6 h-6 text-surface-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <h3 class="font-display font-semibold text-white text-sm mb-1">No schedules yet</h3>
+    <p class="text-surface-400 text-sm">Automate restarts, backups, commands, and updates on a cron schedule.</p>
   </div>
   {{end}}
+
+  <!-- Delete Confirmation Modal -->
+  <div x-show="confirmDelete !== ''" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70" @click.self="confirmDelete = ''">
+    <div class="glass rounded-2xl border border-surface-700 p-6 max-w-sm w-full mx-4 shadow-2xl animate-fade-in">
+      <h3 class="font-display font-semibold text-white mb-2">Delete Schedule</h3>
+      <p class="text-sm text-surface-400 mb-5">Delete <span class="text-white" x-text="deleteName"></span>? This cannot be undone.</p>
+      <div class="flex gap-2">
+        <form :hx-delete="'/gameservers/{{.Gameserver.ID}}/schedules/' + confirmDelete" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false">
+          <button type="submit" @click="confirmDelete = ''"
+                  class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
+            Delete
+          </button>
+        </form>
+        <button @click="confirmDelete = ''"
+                class="px-4 py-2 text-sm font-medium rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 function schedulesPage() {
   return {
-    newType: 'restart'
+    newType: 'restart',
+    cronExpr: '',
+    confirmDelete: '',
+    deleteName: '',
+    presets: [
+      { label: 'Every hour',     expr: '0 * * * *' },
+      { label: 'Every 6 hours',  expr: '0 */6 * * *' },
+      { label: 'Daily midnight', expr: '0 0 * * *' },
+      { label: 'Daily 4 AM',    expr: '0 4 * * *' },
+      { label: 'Every 12 hours', expr: '0 */12 * * *' },
+      { label: 'Weekly Sunday',  expr: '0 0 * * 0' },
+    ],
+    selectPreset(expr) {
+      this.cronExpr = expr;
+    },
+    describeCron(expr) {
+      if (!expr) return '';
+      const parts = expr.trim().split(/\s+/);
+      if (parts.length !== 5) return '';
+      const [min, hour, dom, month, dow] = parts;
+      const pad = (n) => String(n).padStart(2, '0');
+      const fmtHour = (h) => {
+        const n = parseInt(h);
+        const m = min === '*' ? 0 : parseInt(min);
+        if (n === 0) return '12:' + pad(m) + ' AM';
+        if (n < 12) return n + ':' + pad(m) + ' AM';
+        if (n === 12) return '12:' + pad(m) + ' PM';
+        return (n - 12) + ':' + pad(m) + ' PM';
+      };
+      const dowNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      if (min === '*' && hour === '*' && dom === '*' && month === '*' && dow === '*') return 'Every minute';
+      if (min.startsWith('*/') && hour === '*' && dom === '*' && dow === '*') return 'Every ' + min.slice(2) + ' minutes';
+      if (min === '0' && hour === '*' && dom === '*' && dow === '*') return 'Every hour';
+      if (min === '0' && hour.startsWith('*/') && dom === '*' && dow === '*') return 'Every ' + hour.slice(2) + ' hours';
+      if (/^\d+$/.test(min) && hour === '*' && dom === '*' && dow === '*') return 'Every hour at :' + pad(parseInt(min));
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') return 'Daily at ' + fmtHour(hour);
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && /^\d+$/.test(dow)) return 'Weekly on ' + (dowNames[parseInt(dow)] || dow) + ' at ' + fmtHour(hour);
+      if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && month === '*' && dow === '*') return 'Monthly on day ' + dom + ' at ' + fmtHour(hour);
+      return '';
+    }
   };
 }
 </script>

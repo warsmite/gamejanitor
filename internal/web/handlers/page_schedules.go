@@ -96,8 +96,7 @@ func (h *PageScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+id+"/schedules")
-	http.Redirect(w, r, "/gameservers/"+id+"/schedules", http.StatusSeeOther)
+	h.renderList(w, r, id)
 }
 
 func (h *PageScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +150,7 @@ func (h *PageScheduleHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+gsID+"/schedules")
-	http.Redirect(w, r, "/gameservers/"+gsID+"/schedules", http.StatusSeeOther)
+	h.renderList(w, r, gsID)
 }
 
 func (h *PageScheduleHandlers) Toggle(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +163,35 @@ func (h *PageScheduleHandlers) Toggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/gameservers/"+gsID+"/schedules")
-	http.Redirect(w, r, "/gameservers/"+gsID+"/schedules", http.StatusSeeOther)
+	h.renderList(w, r, gsID)
+}
+
+func (h *PageScheduleHandlers) renderList(w http.ResponseWriter, r *http.Request, gsID string) {
+	gs, err := h.gameserverSvc.GetGameserver(gsID)
+	if err != nil {
+		h.log.Error("getting gameserver for schedules", "id", gsID, "error", err)
+		http.Error(w, "Failed to load gameserver", http.StatusInternalServerError)
+		return
+	}
+
+	game, err := h.gameSvc.GetGame(gs.GameID)
+	if err != nil {
+		h.log.Error("getting game for schedules", "game_id", gs.GameID, "error", err)
+	}
+
+	schedules, err := h.scheduleSvc.ListSchedules(gsID)
+	if err != nil {
+		h.log.Error("listing schedules", "gameserver_id", gsID, "error", err)
+		http.Error(w, "Failed to load schedules", http.StatusInternalServerError)
+		return
+	}
+	if schedules == nil {
+		schedules = []models.Schedule{}
+	}
+
+	h.renderer.Render(w, r, "gameservers/schedules", map[string]any{
+		"Gameserver": gs,
+		"Game":       game,
+		"Schedules":  schedules,
+	})
 }
