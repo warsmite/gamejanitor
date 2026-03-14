@@ -31,6 +31,7 @@ type gameserverFormData struct {
 	CPULimit      float64
 	Ports         json.RawMessage
 	Env           json.RawMessage
+	PortMode      string
 }
 
 func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
@@ -42,11 +43,17 @@ func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
 	if err != nil && r.FormValue("cpu_limit") != "" {
 		return nil, fmt.Errorf("invalid CPU value")
 	}
+	portMode := r.FormValue("port_mode")
+	if portMode != "manual" {
+		portMode = "auto"
+	}
+
 	return &gameserverFormData{
 		MemoryLimitMB: memoryLimitMB,
 		CPULimit:      cpuLimit,
 		Ports:         validateJSONOrDefault(r.FormValue("ports_json"), "[]"),
 		Env:           validateJSONOrDefault(r.FormValue("env_json"), "{}"),
+		PortMode:      portMode,
 	}, nil
 }
 
@@ -135,12 +142,14 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(""))
 
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
-		"Mode":          "new",
-		"Games":         games,
-		"GamesJSON":     string(gamesJSONBytes),
-		"PortsJSON":     "[]",
-		"EnvJSON":       "{}",
-		"UsedPortsJSON": string(usedPortsJSON),
+		"Mode":              "new",
+		"Games":             games,
+		"GamesJSON":         string(gamesJSONBytes),
+		"PortsJSON":         "[]",
+		"EnvJSON":           "{}",
+		"UsedPortsJSON":     string(usedPortsJSON),
+		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
+		"CurrentPortMode":   "",
 	})
 }
 
@@ -170,6 +179,7 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		Env:           form.Env,
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
+		PortMode:      form.PortMode,
 	}
 
 	if err := h.gameserverSvc.CreateGameserver(r.Context(), gs); err != nil {
@@ -377,14 +387,16 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(gs.ID))
 
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
-		"Mode":          "edit",
-		"Gameserver":    gs,
-		"Game":          game,
-		"Games":         []models.Game{*game},
-		"GamesJSON":     string(gamesJSONBytes),
-		"PortsJSON":     portsJSON,
-		"EnvJSON":       envJSON,
-		"UsedPortsJSON": string(usedPortsJSON),
+		"Mode":              "edit",
+		"Gameserver":        gs,
+		"Game":              game,
+		"Games":             []models.Game{*game},
+		"GamesJSON":         string(gamesJSONBytes),
+		"PortsJSON":         portsJSON,
+		"EnvJSON":           envJSON,
+		"UsedPortsJSON":     string(usedPortsJSON),
+		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
+		"CurrentPortMode":   gs.PortMode,
 	})
 }
 
@@ -419,18 +431,37 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// If switching to auto, re-allocate ports
+	ports := form.Ports
+	if form.PortMode == "auto" {
+		game, err := h.gameSvc.GetGame(existing.GameID)
+		if err != nil || game == nil {
+			h.log.Error("getting game for port allocation", "game_id", existing.GameID, "error", err)
+			http.Error(w, "Failed to load game for port allocation", http.StatusInternalServerError)
+			return
+		}
+		allocatedPorts, err := h.gameserverSvc.AllocatePorts(game, existing.ID)
+		if err != nil {
+			h.log.Error("auto-allocating ports during update", "id", id, "error", err)
+			http.Error(w, "Failed to allocate ports: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ports = allocatedPorts
+	}
+
 	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
 		ID:            existing.ID,
 		Name:          name,
 		GameID:        existing.GameID,
-		Ports:         form.Ports,
+		Ports:         ports,
 		Env:           form.Env,
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
 		ContainerID:   existing.ContainerID,
 		VolumeName:    existing.VolumeName,
 		Status:        existing.Status,
+		PortMode:      form.PortMode,
 		CreatedAt:     existing.CreatedAt,
 	}
 

@@ -92,7 +92,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Initialize services
 	broadcaster := service.NewEventBroadcaster()
 	gameSvc := service.NewGameService(database, logger)
-	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, logger)
+	settingsSvc := service.NewSettingsService(database, logger)
+	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, settingsSvc, logger)
 	querySvc := service.NewQueryService(database, broadcaster, logger)
 	gameserverSvc.SetQueryService(querySvc)
 	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
@@ -123,7 +124,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer scheduler.Stop()
 	defer querySvc.StopAll()
 
-	settingsSvc := service.NewSettingsService(database, logger)
 	netInfo := netinfo.Detect(logger)
 
 	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, dockerClient, broadcaster, netInfo, logPath, cfg.DataDir, logger)

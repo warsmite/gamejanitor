@@ -4,12 +4,20 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
 const (
 	SettingConnectionAddress = "connection_address"
+	SettingPortRangeStart    = "port_range_start"
+	SettingPortRangeEnd      = "port_range_end"
+	SettingPreferredPortMode = "preferred_port_mode"
+
+	DefaultPortRangeStart    = 27000
+	DefaultPortRangeEnd      = 28999
+	DefaultPreferredPortMode = "auto"
 )
 
 type SettingsService struct {
@@ -56,4 +64,54 @@ func (s *SettingsService) SetConnectionAddress(address string) error {
 func (s *SettingsService) ClearConnectionAddress() error {
 	s.log.Info("clearing connection address")
 	return models.DeleteSetting(s.db, SettingConnectionAddress)
+}
+
+func (s *SettingsService) GetPortRangeStart() int {
+	v, err := models.GetSetting(s.db, SettingPortRangeStart)
+	if err != nil || v == "" {
+		return DefaultPortRangeStart
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultPortRangeStart
+	}
+	return n
+}
+
+func (s *SettingsService) GetPortRangeEnd() int {
+	v, err := models.GetSetting(s.db, SettingPortRangeEnd)
+	if err != nil || v == "" {
+		return DefaultPortRangeEnd
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultPortRangeEnd
+	}
+	return n
+}
+
+func (s *SettingsService) GetPreferredPortMode() string {
+	v, err := models.GetSetting(s.db, SettingPreferredPortMode)
+	if err != nil || v == "" {
+		return DefaultPreferredPortMode
+	}
+	if v != "auto" && v != "manual" {
+		return DefaultPreferredPortMode
+	}
+	return v
+}
+
+func (s *SettingsService) SetPortRangeStart(v int) error {
+	return models.SetSetting(s.db, SettingPortRangeStart, strconv.Itoa(v))
+}
+
+func (s *SettingsService) SetPortRangeEnd(v int) error {
+	return models.SetSetting(s.db, SettingPortRangeEnd, strconv.Itoa(v))
+}
+
+func (s *SettingsService) SetPreferredPortMode(mode string) error {
+	if mode != "auto" && mode != "manual" {
+		mode = DefaultPreferredPortMode
+	}
+	return models.SetSetting(s.db, SettingPreferredPortMode, mode)
 }

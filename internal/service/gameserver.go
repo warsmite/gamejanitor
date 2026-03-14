@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -22,10 +23,11 @@ type GameserverService struct {
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
+	settingsSvc *SettingsService
 }
 
-func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, log: log}
+func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, settingsSvc *SettingsService, log *slog.Logger) *GameserverService {
+	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, settingsSvc: settingsSvc, log: log}
 }
 
 // SetQueryService sets the query service for GSQ polling after start.
@@ -43,6 +45,114 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 	return models.GetGameserver(s.db, id)
 }
 
+// UsedHostPorts returns the set of all host port numbers used by gameservers, excluding excludeID.
+func (s *GameserverService) UsedHostPorts(excludeID string) (map[int]bool, error) {
+	allGS, err := models.ListGameservers(s.db, models.GameserverFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("listing gameservers for port check: %w", err)
+	}
+
+	used := make(map[int]bool)
+	for _, gs := range allGS {
+		if gs.ID == excludeID {
+			continue
+		}
+		var ports []portMapping
+		if err := json.Unmarshal(gs.Ports, &ports); err != nil {
+			continue
+		}
+		for _, p := range ports {
+			hp := int(p.HostPort)
+			if hp == 0 {
+				hp = int(p.Port)
+			}
+			if hp != 0 {
+				used[hp] = true
+			}
+		}
+	}
+	return used, nil
+}
+
+// AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
+func (s *GameserverService) AllocatePorts(game *models.Game, excludeID string) (json.RawMessage, error) {
+	type defaultPort struct {
+		Name     string `json:"name"`
+		Port     int    `json:"port"`
+		Protocol string `json:"protocol"`
+	}
+	var gamePorts []defaultPort
+	if err := json.Unmarshal(game.DefaultPorts, &gamePorts); err != nil {
+		return nil, fmt.Errorf("parsing game default_ports: %w", err)
+	}
+	if len(gamePorts) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+
+	// Find unique port numbers in order
+	seen := make(map[int]bool)
+	var uniquePorts []int
+	for _, p := range gamePorts {
+		if !seen[p.Port] {
+			seen[p.Port] = true
+			uniquePorts = append(uniquePorts, p.Port)
+		}
+	}
+	sort.Ints(uniquePorts)
+	blockSize := len(uniquePorts)
+
+	// Build mapping from original port number to its index (for assignment)
+	portIndex := make(map[int]int)
+	for i, p := range uniquePorts {
+		portIndex[p] = i
+	}
+
+	rangeStart := s.settingsSvc.GetPortRangeStart()
+	rangeEnd := s.settingsSvc.GetPortRangeEnd()
+
+	used, err := s.UsedHostPorts(excludeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find first contiguous block of blockSize free ports
+	base := -1
+	for candidate := rangeStart; candidate+blockSize-1 <= rangeEnd; candidate++ {
+		free := true
+		for offset := 0; offset < blockSize; offset++ {
+			if used[candidate+offset] {
+				free = false
+				candidate = candidate + offset // skip ahead
+				break
+			}
+		}
+		if free {
+			base = candidate
+			break
+		}
+	}
+
+	if base == -1 {
+		return nil, fmt.Errorf("no contiguous block of %d ports available in range %d-%d", blockSize, rangeStart, rangeEnd)
+	}
+
+	// Map game ports to allocated ports
+	result := make([]portMapping, len(gamePorts))
+	for i, p := range gamePorts {
+		allocatedPort := base + portIndex[p.Port]
+		result[i] = portMapping{
+			Name:          p.Name,
+			HostPort:      flexInt(allocatedPort),
+			ContainerPort: flexInt(p.Port),
+			Protocol:      p.Protocol,
+		}
+	}
+
+	s.log.Info("auto-allocated ports", "game", game.ID, "base", base, "block_size", blockSize)
+
+	return json.Marshal(result)
+}
+
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) error {
 	gs.ID = uuid.New().String()
 	gs.VolumeName = "gamejanitor-" + gs.ID
@@ -56,11 +166,19 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
+	if gs.PortMode == "auto" {
+		allocatedPorts, err := s.AllocatePorts(game, "")
+		if err != nil {
+			return fmt.Errorf("auto-allocating ports: %w", err)
+		}
+		gs.Ports = allocatedPorts
+	}
+
 	if err := applyGameDefaults(gs, game); err != nil {
 		return fmt.Errorf("applying game defaults: %w", err)
 	}
 
-	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID)
+	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode)
 
 	if err := s.docker.CreateVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
