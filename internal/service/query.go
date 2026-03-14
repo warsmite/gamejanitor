@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	// queryPollInterval is how often GSQ polls each gameserver for status.
+	// queryStartupPollInterval is the fast poll rate while waiting for first successful query.
+	queryStartupPollInterval = 2 * time.Second
+	// queryPollInterval is the steady-state poll rate after promotion to running.
 	queryPollInterval = 5 * time.Second
 	// queryMaxConsecutiveFails is how many poll failures before setting error status.
 	queryMaxConsecutiveFails = 5
@@ -133,7 +135,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	consecutiveFailures := 0
 	promoted := false
 
-	ticker := time.NewTicker(queryPollInterval)
+	ticker := time.NewTicker(queryStartupPollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -187,6 +189,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 				s.log.Info("GSQ query succeeded, promoting to running", "id", gameserverID, "players", info.Players, "max", info.MaxPlayers)
 				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
 				promoted = true
+				ticker.Reset(queryPollInterval)
 			} else if changed {
 				s.log.Debug("GSQ data changed, notifying", "id", gameserverID, "players", info.Players)
 				s.broadcaster.Publish(StatusEvent{
