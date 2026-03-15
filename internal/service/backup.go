@@ -11,23 +11,23 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/google/uuid"
 )
 
 type BackupService struct {
 	db            *sql.DB
-	docker        *docker.Client
+	dispatcher    *worker.Dispatcher
 	gameserverSvc *GameserverService
 	gameStore     *games.GameStore
 	dataDir       string
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dockerClient *docker.Client, gameserverSvc *GameserverService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *BackupService {
-	return &BackupService{db: db, docker: dockerClient, gameserverSvc: gameserverSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *BackupService {
+	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 func (s *BackupService) ListBackups(gameserverID string) ([]models.Backup, error) {
@@ -52,10 +52,12 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 
 	game := s.gameStore.GetGame(gs.GameID)
 
+	w := s.dispatcher.WorkerFor(gameserverID)
+
 	// Run save-server if game supports it
 	if game != nil && HasCapability(game, "save") {
 		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
-		exitCode, _, stderr, execErr := s.docker.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
+		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {
 			s.log.Warn("save-server exec failed, proceeding with backup", "error", execErr)
 		} else if exitCode != 0 {
@@ -77,7 +79,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	s.log.Info("creating backup", "gameserver_id", gameserverID, "backup_id", backupID, "path", backupPath)
 
 	// Get tar stream of /data from container
-	tarReader, err := s.docker.CopyDirFromContainer(ctx, *gs.ContainerID, "/data")
+	tarReader, err := w.CopyDirFromContainer(ctx, *gs.ContainerID, "/data")
 	if err != nil {
 		return nil, fmt.Errorf("copying data from container: %w", err)
 	}
@@ -158,9 +160,11 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		}
 	}
 
+	w := s.dispatcher.WorkerFor(gs.ID)
+
 	// Spin up temp container to clear volume and restore
 	tempName := "gamejanitor-backup-" + gs.ID
-	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,
 		Env:        []string{},
@@ -171,20 +175,20 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return fmt.Errorf("creating temp container for restore: %w", err)
 	}
 	defer func() {
-		if stopErr := s.docker.StopContainer(ctx, tempID, 5); stopErr != nil {
+		if stopErr := w.StopContainer(ctx, tempID, 5); stopErr != nil {
 			s.log.Warn("failed to stop temp backup container", "error", stopErr)
 		}
-		if rmErr := s.docker.RemoveContainer(ctx, tempID); rmErr != nil {
+		if rmErr := w.RemoveContainer(ctx, tempID); rmErr != nil {
 			s.log.Warn("failed to remove temp backup container", "error", rmErr)
 		}
 	}()
 
-	if err := s.docker.StartContainer(ctx, tempID); err != nil {
+	if err := w.StartContainer(ctx, tempID); err != nil {
 		return fmt.Errorf("starting temp container for restore: %w", err)
 	}
 
 	// Clear volume contents
-	exitCode, _, stderr, execErr := s.docker.Exec(ctx, tempID, []string{"sh", "-c", "rm -rf /data/* /data/.[!.]* /data/..?*"})
+	exitCode, _, stderr, execErr := w.Exec(ctx, tempID, []string{"sh", "-c", "rm -rf /data/* /data/.[!.]* /data/..?*"})
 	if execErr != nil {
 		return fmt.Errorf("clearing volume: %w", execErr)
 	}
@@ -208,7 +212,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 	// Extract tar into /data
 	// docker cp extracts the tar at the dest path, but CopyFromContainer wraps /data contents
 	// under a "data/" prefix in the tar. We extract to "/" so "data/..." maps to "/data/..."
-	if err := s.docker.CopyTarToContainer(ctx, tempID, "/", gzReader); err != nil {
+	if err := w.CopyTarToContainer(ctx, tempID, "/", gzReader); err != nil {
 		return fmt.Errorf("extracting backup into container: %w", err)
 	}
 

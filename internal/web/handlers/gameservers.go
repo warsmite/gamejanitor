@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,12 +19,11 @@ type GameserverHandlers struct {
 	svc        *service.GameserverService
 	consoleSvc *service.ConsoleService
 	querySvc   *service.QueryService
-	docker     *docker.Client
 	log        *slog.Logger
 }
 
-func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.ConsoleService, querySvc *service.QueryService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, docker: dockerClient, log: log}
+func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.ConsoleService, querySvc *service.QueryService, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +200,7 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if gs.ContainerID != nil {
-		info, err := h.docker.InspectContainer(r.Context(), *gs.ContainerID)
+		info, err := h.svc.GetContainerInfo(r.Context(), id)
 		if err != nil {
 			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
 		} else {
@@ -217,22 +216,8 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	gs, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver for stats", "id", id, "error", err)
-		respondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if gs == nil {
-		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
-		return
-	}
-	if gs.ContainerID == nil {
-		respondError(w, http.StatusBadRequest, "gameserver has no container")
-		return
-	}
 
-	stats, err := h.docker.ContainerStats(r.Context(), *gs.ContainerID)
+	stats, err := h.svc.GetContainerStats(r.Context(), id)
 	if err != nil {
 		h.log.Warn("failed to get container stats", "id", id, "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to get container stats")
@@ -248,20 +233,6 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	gs, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver for logs", "id", id, "error", err)
-		respondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if gs == nil {
-		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
-		return
-	}
-	if gs.ContainerID == nil {
-		respondError(w, http.StatusBadRequest, "gameserver has no container")
-		return
-	}
 
 	tail := 100
 	if v := r.URL.Query().Get("tail"); v != "" {
@@ -270,7 +241,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reader, err := h.docker.ContainerLogs(r.Context(), *gs.ContainerID, tail, false)
+	reader, err := h.svc.GetContainerLogs(r.Context(), id, tail)
 	if err != nil {
 		h.log.Error("reading container logs", "id", id, "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
@@ -278,7 +249,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	lines := docker.ParseLogLines(reader)
+	lines := worker.ParseLogLines(reader)
 	respondOK(w, map[string]any{"lines": lines})
 }
 

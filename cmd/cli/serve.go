@@ -16,6 +16,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/spf13/cobra"
 )
 
@@ -90,18 +91,22 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
+	// Initialize worker layer
+	localWorker := worker.NewLocalWorker(dockerClient, logger)
+	dispatcher := worker.NewLocalDispatcher(localWorker)
+
 	// Initialize services
 	broadcaster := service.NewEventBroadcaster()
 	settingsSvc := service.NewSettingsService(database, logger)
-	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	gameserverSvc.SetQueryService(querySvc)
-	consoleSvc := service.NewConsoleService(database, dockerClient, gameStore, logger)
-	fileSvc := service.NewFileService(database, dockerClient, logger)
-	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, gameStore, cfg.DataDir, logger)
+	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
+	fileSvc := service.NewFileService(database, dispatcher, logger)
+	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, cfg.DataDir, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
-	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, querySvc, logger)
+	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, logger)
 
 	// Crash recovery
 	ctx := context.Background()
@@ -126,7 +131,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, dockerClient, broadcaster, netInfo, logPath, cfg.DataDir, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, broadcaster, netInfo, logPath, cfg.DataDir, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

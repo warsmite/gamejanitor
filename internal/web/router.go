@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
@@ -29,7 +28,6 @@ func NewRouter(
 	backupSvc *service.BackupService,
 	querySvc *service.QueryService,
 	settingsSvc *service.SettingsService,
-	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	netInfo *netinfo.Info,
 	logPath string,
@@ -70,12 +68,12 @@ func NewRouter(
 	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
 	gameHandlers := handlers.NewGameHandlers(gameStore, log)
 	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
-	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, dockerClient, log)
+	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
 	logHandlers := handlers.NewLogHandlers(logPath, log)
-	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, dockerClient, log)
+	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)

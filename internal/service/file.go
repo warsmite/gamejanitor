@@ -10,16 +10,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 )
 
 const fileopsImage = "alpine:latest"
 
 type FileService struct {
-	db     *sql.DB
-	docker *docker.Client
-	log    *slog.Logger
+	db         *sql.DB
+	dispatcher *worker.Dispatcher
+	log        *slog.Logger
 }
 
 type FileEntry struct {
@@ -30,11 +30,11 @@ type FileEntry struct {
 	Permissions string
 }
 
-func NewFileService(db *sql.DB, dockerClient *docker.Client, log *slog.Logger) *FileService {
+func NewFileService(db *sql.DB, dispatcher *worker.Dispatcher, log *slog.Logger) *FileService {
 	return &FileService{
-		db:     db,
-		docker: dockerClient,
-		log:    log,
+		db:         db,
+		dispatcher: dispatcher,
+		log:        log,
 	}
 }
 
@@ -46,23 +46,24 @@ func fileopsContainerName(gameserverID string) string {
 // given gameserver, creating or recovering it as needed.
 func (s *FileService) ensureFileopsContainer(ctx context.Context, gs *models.Gameserver) (string, error) {
 	containerName := fileopsContainerName(gs.ID)
+	w := s.dispatcher.WorkerFor(gs.ID)
 
-	info, err := s.docker.InspectContainer(ctx, containerName)
+	info, err := w.InspectContainer(ctx, containerName)
 	if err == nil {
 		if info.State == "running" {
 			return info.ID, nil
 		}
 		// Exists but not running — try to start it
-		if startErr := s.docker.StartContainer(ctx, info.ID); startErr == nil {
+		if startErr := w.StartContainer(ctx, info.ID); startErr == nil {
 			s.log.Info("restarted fileops container", "gameserver_id", gs.ID)
 			return info.ID, nil
 		}
 		// Can't start — remove and recreate
 		s.log.Warn("removing unrecoverable fileops container", "gameserver_id", gs.ID, "state", info.State)
-		s.docker.RemoveContainer(ctx, info.ID)
+		w.RemoveContainer(ctx, info.ID)
 	}
 
-	containerID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+	containerID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       containerName,
 		Image:      fileopsImage,
 		Env:        []string{},
@@ -74,8 +75,8 @@ func (s *FileService) ensureFileopsContainer(ctx context.Context, gs *models.Gam
 		return "", fmt.Errorf("creating fileops container for %s: %w", gs.ID, err)
 	}
 
-	if err := s.docker.StartContainer(ctx, containerID); err != nil {
-		s.docker.RemoveContainer(ctx, containerID)
+	if err := w.StartContainer(ctx, containerID); err != nil {
+		w.RemoveContainer(ctx, containerID)
 		return "", fmt.Errorf("starting fileops container for %s: %w", gs.ID, err)
 	}
 
@@ -87,7 +88,7 @@ func (s *FileService) ensureFileopsContainer(ctx context.Context, gs *models.Gam
 // Called when a gameserver is deleted.
 func (s *FileService) RemoveFileopsContainer(ctx context.Context, gameserverID string) {
 	containerName := fileopsContainerName(gameserverID)
-	if err := s.docker.RemoveContainer(ctx, containerName); err != nil {
+	if err := s.dispatcher.WorkerFor(gameserverID).RemoveContainer(ctx, containerName); err != nil {
 		s.log.Debug("no fileops container to remove", "gameserver_id", gameserverID)
 	} else {
 		s.log.Info("removed fileops container", "gameserver_id", gameserverID)
@@ -98,7 +99,7 @@ func (s *FileService) RemoveFileopsContainer(ctx context.Context, gameserverID s
 // Handles migration from the old temp container system and recovery after crashes.
 func (s *FileService) RecoverOnStartup(ctx context.Context) error {
 	s.log.Info("pulling fileops image", "image", fileopsImage)
-	if err := s.docker.PullImage(ctx, fileopsImage); err != nil {
+	if err := s.dispatcher.DefaultWorker().PullImage(ctx, fileopsImage); err != nil {
 		return fmt.Errorf("pulling fileops image: %w", err)
 	}
 
@@ -124,8 +125,8 @@ func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, di
 	}
 
 	var entries []FileEntry
-	err = s.withContainer(ctx, gameserverID, func(containerID string) error {
-		exitCode, stdout, stderr, execErr := s.docker.Exec(ctx, containerID, []string{"ls", "-la", dirPath})
+	err = s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
+		exitCode, stdout, stderr, execErr := w.Exec(ctx, containerID, []string{"ls", "-la", dirPath})
 		if execErr != nil {
 			return fmt.Errorf("listing directory %s: %w", dirPath, execErr)
 		}
@@ -145,9 +146,9 @@ func (s *FileService) ReadFile(ctx context.Context, gameserverID string, filePat
 	}
 
 	var content []byte
-	err = s.withContainer(ctx, gameserverID, func(containerID string) error {
+	err = s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
 		var copyErr error
-		content, copyErr = s.docker.CopyFromContainer(ctx, containerID, filePath)
+		content, copyErr = w.CopyFromContainer(ctx, containerID, filePath)
 		return copyErr
 	})
 	return content, err
@@ -159,8 +160,8 @@ func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePa
 		return err
 	}
 
-	return s.withContainer(ctx, gameserverID, func(containerID string) error {
-		return s.docker.CopyToContainer(ctx, containerID, filePath, content)
+	return s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
+		return w.CopyToContainer(ctx, containerID, filePath, content)
 	})
 }
 
@@ -173,8 +174,8 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 		return fmt.Errorf("cannot delete the root data directory")
 	}
 
-	return s.withContainer(ctx, gameserverID, func(containerID string) error {
-		exitCode, _, stderr, execErr := s.docker.Exec(ctx, containerID, []string{"rm", "-rf", targetPath})
+	return s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
+		exitCode, _, stderr, execErr := w.Exec(ctx, containerID, []string{"rm", "-rf", targetPath})
 		if execErr != nil {
 			return fmt.Errorf("deleting %s: %w", targetPath, execErr)
 		}
@@ -191,8 +192,8 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 		return err
 	}
 
-	return s.withContainer(ctx, gameserverID, func(containerID string) error {
-		exitCode, _, stderr, execErr := s.docker.Exec(ctx, containerID, []string{"mkdir", "-p", dirPath})
+	return s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
+		exitCode, _, stderr, execErr := w.Exec(ctx, containerID, []string{"mkdir", "-p", dirPath})
 		if execErr != nil {
 			return fmt.Errorf("creating directory %s: %w", dirPath, execErr)
 		}
@@ -203,7 +204,7 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 	})
 }
 
-func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn func(containerID string) error) error {
+func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn func(w worker.Worker, containerID string) error) error {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
@@ -216,7 +217,7 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 	if err != nil {
 		return err
 	}
-	return fn(containerID)
+	return fn(s.dispatcher.WorkerFor(gameserverID), containerID)
 }
 
 func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPath string, newPath string) error {
@@ -232,8 +233,8 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 		return fmt.Errorf("cannot rename the root data directory")
 	}
 
-	return s.withContainer(ctx, gameserverID, func(containerID string) error {
-		exitCode, _, stderr, execErr := s.docker.Exec(ctx, containerID, []string{"mv", oldPath, newPath})
+	return s.withContainer(ctx, gameserverID, func(w worker.Worker, containerID string) error {
+		exitCode, _, stderr, execErr := w.Exec(ctx, containerID, []string{"mv", oldPath, newPath})
 		if execErr != nil {
 			return fmt.Errorf("renaming %s to %s: %w", oldPath, newPath, execErr)
 		}

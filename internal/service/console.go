@@ -7,20 +7,20 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
 type ConsoleService struct {
-	db        *sql.DB
-	docker    *docker.Client
-	gameStore *games.GameStore
-	log       *slog.Logger
+	db         *sql.DB
+	dispatcher *worker.Dispatcher
+	gameStore  *games.GameStore
+	log        *slog.Logger
 }
 
-func NewConsoleService(db *sql.DB, dockerClient *docker.Client, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
-	return &ConsoleService{db: db, docker: dockerClient, gameStore: gameStore, log: log}
+func NewConsoleService(db *sql.DB, dispatcher *worker.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
+	return &ConsoleService{db: db, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 
 // StreamLogs returns a follow-mode log stream for a running gameserver's container.
@@ -48,7 +48,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	}
 
 	s.log.Info("streaming logs", "gameserver_id", gameserverID, "container_id", (*gs.ContainerID)[:12])
-	return s.docker.ContainerLogs(ctx, *gs.ContainerID, tail, true)
+	return s.dispatcher.WorkerFor(gameserverID).ContainerLogs(ctx, *gs.ContainerID, tail, true)
 }
 
 // SendCommand executes a command inside a running gameserver's container via /scripts/send-command.
@@ -79,7 +79,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
 
-	exitCode, stdout, stderr, err := s.docker.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
+	exitCode, stdout, stderr, err := s.dispatcher.WorkerFor(gameserverID).Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
 	if err != nil {
 		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}

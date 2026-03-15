@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -87,7 +87,7 @@ func (h *PageConsoleHandlers) LogStream(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		defer close(lines)
 		defer close(done)
-		docker.ParseLogStream(reader, lines)
+		worker.ParseLogStream(reader, lines)
 	}()
 
 	for {

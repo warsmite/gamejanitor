@@ -7,28 +7,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 )
 
 type StatusManager struct {
 	db          *sql.DB
-	docker      *docker.Client
+	worker      worker.Worker
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
 	cancel      context.CancelFunc
 }
 
-func NewStatusManager(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, querySvc *QueryService, log *slog.Logger) *StatusManager {
-	return &StatusManager{db: db, docker: dockerClient, broadcaster: broadcaster, querySvc: querySvc, log: log}
+func NewStatusManager(db *sql.DB, w worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, log *slog.Logger) *StatusManager {
+	return &StatusManager{db: db, worker: w, broadcaster: broadcaster, querySvc: querySvc, log: log}
 }
 
 // Start begins watching Docker events and updating gameserver status.
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 
-	eventCh, errCh := m.docker.WatchEvents(ctx)
+	eventCh, errCh := m.worker.WatchEvents(ctx)
 
 	go func() {
 		for {
@@ -88,7 +88,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 		return
 	}
 
-	info, err := m.docker.InspectContainer(ctx, *gs.ContainerID)
+	info, err := m.worker.InspectContainer(ctx, *gs.ContainerID)
 	if err != nil {
 		m.log.Warn("container not found, setting stopped", "id", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
@@ -132,7 +132,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 	}
 }
 
-func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
+func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	// Extract gameserver ID from container name "gamejanitor-<id>"
 	gsID := strings.TrimPrefix(event.ContainerName, "gamejanitor-")
 	if gsID == event.ContainerName {

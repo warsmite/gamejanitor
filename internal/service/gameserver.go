@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,15 +15,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/google/uuid"
 )
 
 type GameserverService struct {
 	db          *sql.DB
-	docker      *docker.Client
+	dispatcher  *worker.Dispatcher
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
@@ -31,8 +32,8 @@ type GameserverService struct {
 	dataDir     string
 }
 
-func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBroadcaster, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 // SetQueryService sets the query service for GSQ polling after start.
@@ -170,12 +171,12 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode)
 
-	if err := s.docker.CreateVolume(ctx, gs.VolumeName); err != nil {
+	if err := s.dispatcher.DefaultWorker().CreateVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
 	}
 
 	if err := models.CreateGameserver(s.db, gs); err != nil {
-		if rmErr := s.docker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
+		if rmErr := s.dispatcher.DefaultWorker().RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
 		}
 		return err
@@ -302,24 +303,25 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 
+	w := s.dispatcher.WorkerFor(id)
 	if gs.ContainerID != nil {
-		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
 		}
 	}
 	// Also try by name in case ContainerID was cleared but container still exists
 	containerName := "gamejanitor-" + id
-	if err := s.docker.RemoveContainer(ctx, containerName); err != nil {
+	if err := w.RemoveContainer(ctx, containerName); err != nil {
 		s.log.Debug("no container to remove by name during delete", "name", containerName)
 	}
 
 	// Remove fileops container before volume (it has the volume mounted)
 	fileopsName := "gamejanitor-fileops-" + id
-	if err := s.docker.RemoveContainer(ctx, fileopsName); err != nil {
+	if err := w.RemoveContainer(ctx, fileopsName); err != nil {
 		s.log.Debug("no fileops container to remove during delete", "id", id)
 	}
 
-	if err := s.docker.RemoveVolume(ctx, gs.VolumeName); err != nil {
+	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("removing volume during delete: %w", err)
 	}
 
@@ -363,11 +365,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
 	}
 
+	w := s.dispatcher.WorkerFor(id)
+
 	// Pull image
 	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling, ""); err != nil {
 		return err
 	}
-	if err := s.docker.PullImage(ctx, game.BaseImage); err != nil {
+	if err := w.PullImage(ctx, game.BaseImage); err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
@@ -405,16 +409,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
 	containerName := "gamejanitor-" + id
 	if gs.ContainerID != nil {
-		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
 		}
 	}
-	if err := s.docker.RemoveContainer(ctx, containerName); err != nil {
+	if err := w.RemoveContainer(ctx, containerName); err != nil {
 		s.log.Debug("no stale container to remove by name", "name", containerName)
 	}
 
 	// Create container
-	containerID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+	containerID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:          containerName,
 		Image:         game.BaseImage,
 		Env:           env,
@@ -434,12 +438,12 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	gs.Status = StatusStarting
 	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
-		s.docker.RemoveContainer(ctx, containerID)
+		w.RemoveContainer(ctx, containerID)
 		return err
 	}
 
 	// Start container
-	if err := s.docker.StartContainer(ctx, containerID); err != nil {
+	if err := w.StartContainer(ctx, containerID); err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to start container", err))
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
@@ -475,10 +479,11 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	}
 
 	if gs.ContainerID != nil {
-		if err := s.docker.StopContainer(ctx, *gs.ContainerID, 30); err != nil {
+		w := s.dispatcher.WorkerFor(id)
+		if err := w.StopContainer(ctx, *gs.ContainerID, 30); err != nil {
 			s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
 		}
-		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove container", "id", id, "error", err)
 		}
 	}
@@ -545,8 +550,10 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		}
 	}
 
+	w := s.dispatcher.WorkerFor(id)
+
 	// Pull latest image
-	if err := s.docker.PullImage(ctx, game.BaseImage); err != nil {
+	if err := w.PullImage(ctx, game.BaseImage); err != nil {
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
@@ -559,7 +566,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 
 	// Run update-server in temp container
 	tempName := "gamejanitor-update-" + id
-	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,
 		Env:        []string{},
@@ -569,13 +576,13 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	if err != nil {
 		return fmt.Errorf("creating temp container for update: %w", err)
 	}
-	defer s.docker.RemoveContainer(ctx, tempID)
+	defer w.RemoveContainer(ctx, tempID)
 
-	if err := s.docker.StartContainer(ctx, tempID); err != nil {
+	if err := w.StartContainer(ctx, tempID); err != nil {
 		return fmt.Errorf("starting temp container for update: %w", err)
 	}
 
-	exitCode, stdout, stderr, err := s.docker.Exec(ctx, tempID, []string{"/scripts/update-server"})
+	exitCode, stdout, stderr, err := w.Exec(ctx, tempID, []string{"/scripts/update-server"})
 	if err != nil {
 		return fmt.Errorf("running update-server: %w", err)
 	}
@@ -584,7 +591,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
-	if err := s.docker.StopContainer(ctx, tempID, 10); err != nil {
+	if err := w.StopContainer(ctx, tempID, 10); err != nil {
 		s.log.Warn("failed to stop temp update container", "id", id, "error", err)
 	}
 
@@ -620,9 +627,11 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("extracting scripts for reinstall: %w", err)
 	}
 
+	w := s.dispatcher.WorkerFor(id)
+
 	// Remove .installed marker via temp container
 	tempName := "gamejanitor-reinstall-" + id
-	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
+	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,
 		Env:        []string{},
@@ -632,13 +641,13 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp container for reinstall: %w", err)
 	}
-	defer s.docker.RemoveContainer(ctx, tempID)
+	defer w.RemoveContainer(ctx, tempID)
 
-	if err := s.docker.StartContainer(ctx, tempID); err != nil {
+	if err := w.StartContainer(ctx, tempID); err != nil {
 		return fmt.Errorf("starting temp container for reinstall: %w", err)
 	}
 
-	exitCode, _, stderr, err := s.docker.Exec(ctx, tempID, []string{"rm", "-f", "/data/.installed"})
+	exitCode, _, stderr, err := w.Exec(ctx, tempID, []string{"rm", "-f", "/data/.installed"})
 	if err != nil {
 		return fmt.Errorf("removing install marker: %w", err)
 	}
@@ -646,7 +655,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("removing install marker failed (exit %d): %s", exitCode, stderr)
 	}
 
-	if err := s.docker.StopContainer(ctx, tempID, 10); err != nil {
+	if err := w.StopContainer(ctx, tempID, 10); err != nil {
 		s.log.Warn("failed to stop temp reinstall container", "id", id, "error", err)
 	}
 
@@ -746,19 +755,61 @@ func mergeEnv(game *games.Game, gs *models.Gameserver) ([]string, error) {
 	return result, nil
 }
 
-func parseGameserverPorts(gs *models.Gameserver) ([]docker.PortBinding, error) {
+func parseGameserverPorts(gs *models.Gameserver) ([]worker.PortBinding, error) {
 	var ports []portMapping
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return nil, fmt.Errorf("parsing gameserver ports: %w", err)
 	}
 
-	bindings := make([]docker.PortBinding, len(ports))
+	bindings := make([]worker.PortBinding, len(ports))
 	for i, p := range ports {
-		bindings[i] = docker.PortBinding{
+		bindings[i] = worker.PortBinding{
 			HostPort:      int(p.HostPort),
 			ContainerPort: int(p.ContainerPort),
 			Protocol:      p.Protocol,
 		}
 	}
 	return bindings, nil
+}
+
+func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID string) (*worker.ContainerInfo, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return nil, err
+	}
+	if gs == nil {
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+	if gs.ContainerID == nil {
+		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+	}
+	return s.dispatcher.WorkerFor(gameserverID).InspectContainer(ctx, *gs.ContainerID)
+}
+
+func (s *GameserverService) GetContainerStats(ctx context.Context, gameserverID string) (*worker.ContainerStats, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return nil, err
+	}
+	if gs == nil {
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+	if gs.ContainerID == nil {
+		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+	}
+	return s.dispatcher.WorkerFor(gameserverID).ContainerStats(ctx, *gs.ContainerID)
+}
+
+func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return nil, err
+	}
+	if gs == nil {
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+	if gs.ContainerID == nil {
+		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+	}
+	return s.dispatcher.WorkerFor(gameserverID).ContainerLogs(ctx, *gs.ContainerID, tail, false)
 }

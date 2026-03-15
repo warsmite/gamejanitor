@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 )
@@ -12,12 +11,11 @@ import (
 type StatusHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
-	docker        *docker.Client
 	log           *slog.Logger
 }
 
-func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, dockerClient *docker.Client, log *slog.Logger) *StatusHandlers {
-	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, docker: dockerClient, log: log}
+func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, log *slog.Logger) *StatusHandlers {
+	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, log: log}
 }
 
 type gameserverOverview struct {
@@ -64,7 +62,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			summary.Running++
 
 			if gs.ContainerID != nil {
-				stats, err := h.docker.ContainerStats(r.Context(), *gs.ContainerID)
+				stats, err := h.gameserverSvc.GetContainerStats(r.Context(), gs.ID)
 				if err != nil {
 					h.log.Warn("failed to get container stats", "id", gs.ID, "error", err)
 				} else {
