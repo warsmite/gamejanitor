@@ -3,6 +3,7 @@ name: "Garry's Mod"
 base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
 recommended_memory_mb: 1024
 disabled_capabilities: []
+ready_pattern: 'Lua initialized'
 assets:
   icon: garrys-mod-icon.ico
   grid: garrys-mod-grid.png

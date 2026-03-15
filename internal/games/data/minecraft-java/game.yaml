@@ -3,6 +3,7 @@ name: "Minecraft: Java Edition"
 base_image: registry.0xkowalski.dev/gamejanitor/java
 recommended_memory_mb: 2048
 disabled_capabilities: []
+ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
 assets:
   icon: minecraft-icon.ico
   grid: minecraft-grid.png

@@ -3,6 +3,7 @@ name: "7 Days to Die"
 base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: []
+ready_pattern: 'GameServer.Init successful'
 
 ports:
   - name: game

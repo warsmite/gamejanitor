@@ -12,16 +12,17 @@ import (
 )
 
 type StatusManager struct {
-	db          *sql.DB
-	worker      worker.Worker
-	log         *slog.Logger
-	broadcaster *EventBroadcaster
-	querySvc    *QueryService
-	cancel      context.CancelFunc
+	db           *sql.DB
+	worker       worker.Worker
+	log          *slog.Logger
+	broadcaster  *EventBroadcaster
+	querySvc     *QueryService
+	readyWatcher *ReadyWatcher
+	cancel       context.CancelFunc
 }
 
-func NewStatusManager(db *sql.DB, w worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, log *slog.Logger) *StatusManager {
-	return &StatusManager{db: db, worker: w, broadcaster: broadcaster, querySvc: querySvc, log: log}
+func NewStatusManager(db *sql.DB, w worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, log *slog.Logger) *StatusManager {
+	return &StatusManager{db: db, worker: w, broadcaster: broadcaster, querySvc: querySvc, readyWatcher: readyWatcher, log: log}
 }
 
 // Start begins watching Docker events and updating gameserver status.
@@ -62,8 +63,7 @@ func (m *StatusManager) Stop() {
 
 // RecoverOnStartup reconciles DB status with Docker reality.
 // Any gameserver not in a terminal state (stopped/error) is checked against
-// the actual Docker container and corrected. This handles gamejanitor crashes
-// mid-lifecycle and also resumes GSQ polling for running servers.
+// the actual Docker container and corrected.
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	m.log.Info("recovering gameserver status from docker state")
 
@@ -97,9 +97,18 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 
 	switch info.State {
 	case "running":
-		m.log.Info("container is running, setting started and starting GSQ poll", "id", gs.ID)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
-		m.querySvc.StartPolling(gs.ID)
+		uptime := time.Since(info.StartedAt)
+		if uptime > 60*time.Second {
+			// Running for over a minute — assume ready, promote directly and start query polling
+			m.log.Info("container running >60s, promoting to running", "id", gs.ID, "uptime", uptime)
+			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusRunning, "")
+			m.querySvc.StartPolling(gs.ID)
+		} else {
+			// Recently started — use ReadyWatcher to detect ready pattern
+			m.log.Info("container recently started, watching for ready pattern", "id", gs.ID, "uptime", uptime)
+			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
+			m.readyWatcher.Watch(gs.ID, m.worker, *gs.ContainerID)
+		}
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
@@ -110,7 +119,6 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 }
 
 // clearContainerAndSetStatus clears the container_id and updates status in one DB write.
-// Used during recovery when the container no longer exists.
 func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.ContainerID = nil
@@ -133,7 +141,6 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 }
 
 func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
-	// Extract gameserver ID from container name "gamejanitor-<id>"
 	gsID := strings.TrimPrefix(event.ContainerName, "gamejanitor-")
 	if gsID == event.ContainerName {
 		return
@@ -151,17 +158,14 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 
 	switch event.Action {
 	case "start":
-		// Container started — lifecycle service handles status transitions,
-		// so we only log here to avoid conflicting updates
 		m.log.Debug("docker event: container started", "id", gsID)
 
 	case "die", "stop":
+		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		if gs.Status == StatusStopping {
-			// Expected stop — lifecycle service handles the transition
 			m.log.Debug("docker event: expected container stop", "id", gsID)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
-			// Unexpected death
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
 			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")
 		}

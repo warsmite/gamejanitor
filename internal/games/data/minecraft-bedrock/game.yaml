@@ -3,6 +3,7 @@ name: "Minecraft: Bedrock Edition"
 base_image: registry.0xkowalski.dev/gamejanitor/base
 recommended_memory_mb: 1024
 disabled_capabilities: []
+ready_pattern: 'Server started'
 
 ports:
   - name: game

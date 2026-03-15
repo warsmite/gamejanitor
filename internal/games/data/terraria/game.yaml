@@ -3,6 +3,7 @@ name: "Terraria"
 base_image: registry.0xkowalski.dev/gamejanitor/dotnet
 recommended_memory_mb: 1024
 disabled_capabilities: []
+ready_pattern: "Type 'help' for a list of commands"
 assets:
   icon: terraria-icon.ico
   grid: terraria-grid.png

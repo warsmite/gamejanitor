@@ -100,13 +100,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	settingsSvc := service.NewSettingsService(database, logger)
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
-	gameserverSvc.SetQueryService(querySvc)
+	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
+	readyWatcher.SetQueryService(querySvc)
+	gameserverSvc.SetReadyWatcher(readyWatcher)
 	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
 	fileSvc := service.NewFileService(database, dispatcher, logger)
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, cfg.DataDir, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
-	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, logger)
+	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, logger)
 
 	// Crash recovery
 	ctx := context.Background()
@@ -123,6 +125,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start scheduler: %w", err)
 	}
 	defer scheduler.Stop()
+	defer readyWatcher.StopAll()
 	defer querySvc.StopAll()
 
 	netInfo := netinfo.Detect(logger)

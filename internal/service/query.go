@@ -14,21 +14,16 @@ import (
 )
 
 const (
-	// queryStartupPollInterval is the fast poll rate while waiting for first successful query.
-	queryStartupPollInterval = 2 * time.Second
-	// queryPollInterval is the steady-state poll rate after promotion to running.
 	queryPollInterval = 5 * time.Second
-	// queryMaxConsecutiveFails is how many poll failures before setting error status.
-	queryMaxConsecutiveFails = 5
 )
 
 type QueryData struct {
-	PlayersOnline int          `json:"players_online"`
-	MaxPlayers    int          `json:"max_players"`
+	PlayersOnline int           `json:"players_online"`
+	MaxPlayers    int           `json:"max_players"`
 	Players       []QueryPlayer `json:"players"`
-	Map           string       `json:"map"`
-	Version       string       `json:"version"`
-	UpdatedAt     time.Time    `json:"updated_at"`
+	Map           string        `json:"map"`
+	Version       string        `json:"version"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 type QueryPlayer struct {
@@ -63,9 +58,9 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 }
 
 // StartPolling begins GSQ polling for a gameserver.
-// For games without query support, immediately promotes started → running.
+// Only collects player/map/version data — does not promote status.
+// No-op for games without query support.
 func (s *QueryService) StartPolling(gameserverID string) {
-	// DB lookups outside lock
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("failed to load gameserver for polling", "id", gameserverID, "error", err)
@@ -79,25 +74,18 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	}
 
 	if !s.gameSupportsQuery(game) {
-		if gs.Status == StatusStarted {
-			s.log.Info("game does not support query, promoting to running", "id", gameserverID)
-			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
-		}
+		s.log.Debug("game does not support query, skipping polling", "id", gameserverID)
 		return
 	}
 
 	hostPort := s.getHostPort(gs)
 	if hostPort == 0 {
-		s.log.Warn("no host port found for gameserver, promoting immediately", "id", gameserverID)
-		if gs.Status == StatusStarted {
-			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
-		}
+		s.log.Warn("no host port found for gameserver, skipping polling", "id", gameserverID)
 		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Hold lock through cancel + register to prevent TOCTOU race
 	s.mu.Lock()
 	if oldCancel, exists := s.pollers[gameserverID]; exists {
 		oldCancel()
@@ -136,23 +124,21 @@ func (s *QueryService) StopAll() {
 	s.log.Info("all query pollers stopped")
 }
 
+// pollLoop collects query data at a steady interval.
+// Does not manage gameserver status — that's ReadyWatcher's job.
 func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug string, port uint16) {
 	s.log.Debug("starting GSQ poll loop", "id", gameserverID, "game", gameSlug, "port", port)
 
-	consecutiveFailures := 0
-	promoted := false
-
-	ticker := time.NewTicker(queryStartupPollInterval)
+	ticker := time.NewTicker(queryPollInterval)
 	defer ticker.Stop()
 
 	for {
-		// Check if we should be polling this gameserver
 		gs, err := models.GetGameserver(s.db, gameserverID)
 		if err != nil || gs == nil {
 			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
 			return
 		}
-		if gs.Status != StatusStarted && gs.Status != StatusRunning {
+		if !isRunningStatus(gs.Status) {
 			s.log.Debug("gameserver not in pollable state, stopping", "id", gameserverID, "status", gs.Status)
 			return
 		}
@@ -165,17 +151,8 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 		})
 
 		if err != nil {
-			consecutiveFailures++
-			s.log.Debug("GSQ poll failed", "id", gameserverID, "failures", consecutiveFailures, "error", err)
-
-			if promoted && consecutiveFailures >= queryMaxConsecutiveFails {
-				s.log.Warn("GSQ poll exceeded max consecutive failures, setting error", "id", gameserverID, "failures", queryMaxConsecutiveFails)
-				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError, "Gameserver stopped responding to queries.")
-				return
-			}
+			s.log.Debug("GSQ poll failed", "id", gameserverID, "error", err)
 		} else {
-			consecutiveFailures = 0
-
 			data := &QueryData{
 				PlayersOnline: info.Players,
 				MaxPlayers:    info.MaxPlayers,
@@ -193,13 +170,8 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.cache[gameserverID] = data
 			s.mu.Unlock()
 
-			if !promoted {
-				s.log.Info("GSQ query succeeded, promoting to running", "id", gameserverID, "players", info.Players, "max", info.MaxPlayers)
-				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
-				promoted = true
-				ticker.Reset(queryPollInterval)
-			} else if changed {
-				s.log.Debug("GSQ data changed, notifying", "id", gameserverID, "players", info.Players)
+			if changed {
+				s.log.Debug("GSQ data changed", "id", gameserverID, "players", info.Players)
 				s.broadcaster.Publish(StatusEvent{
 					GameserverID: gameserverID,
 					OldStatus:    StatusRunning,
@@ -238,7 +210,6 @@ func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return 0
 	}
-	// Prefer dedicated "query" port, fall back to "game" port
 	for _, p := range ports {
 		if p.Name == "query" {
 			return uint16(p.HostPort)
@@ -249,7 +220,6 @@ func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
 			return uint16(p.HostPort)
 		}
 	}
-	// Fallback to first port
 	if len(ports) > 0 {
 		return uint16(ports[0].HostPort)
 	}

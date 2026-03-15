@@ -41,6 +41,8 @@ type GameDefinition struct {
 	BaseImage            string   `yaml:"base_image"`
 	RecommendedMemoryMB  int      `yaml:"recommended_memory_mb"`
 	GSQSlug              string   `yaml:"gsq_slug,omitempty"`
+	ReadyPattern         string   `yaml:"ready_pattern,omitempty"`
+	ReadyTimeout         int      `yaml:"ready_timeout,omitempty"`
 	DisabledCapabilities []string `yaml:"disabled_capabilities"`
 	Assets               Assets   `yaml:"assets,omitempty"`
 	Ports                []Port   `yaml:"ports"`
@@ -59,6 +61,8 @@ type Game struct {
 	DefaultEnv           []EnvVar `json:"default_env"`
 	RecommendedMemoryMB  int      `json:"recommended_memory_mb"`
 	GSQSlug              string   `json:"gsq_slug,omitempty"`
+	ReadyPattern         string   `json:"ready_pattern,omitempty"`
+	ReadyTimeout         int      `json:"ready_timeout,omitempty"`
 	DisabledCapabilities []string `json:"disabled_capabilities"`
 }
 
@@ -188,12 +192,19 @@ func definitionToGame(def GameDefinition) *Game {
 		env = []EnvVar{}
 	}
 
+	readyTimeout := def.ReadyTimeout
+	if readyTimeout == 0 {
+		readyTimeout = 300
+	}
+
 	return &Game{
 		ID:                   def.ID,
 		Name:                 def.Name,
 		BaseImage:            def.BaseImage,
 		RecommendedMemoryMB:  def.RecommendedMemoryMB,
 		GSQSlug:              def.GSQSlug,
+		ReadyPattern:         def.ReadyPattern,
+		ReadyTimeout:         readyTimeout,
 		DefaultPorts:         ports,
 		DefaultEnv:           env,
 		DisabledCapabilities: caps,

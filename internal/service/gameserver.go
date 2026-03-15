@@ -22,24 +22,24 @@ import (
 )
 
 type GameserverService struct {
-	db          *sql.DB
-	dispatcher  *worker.Dispatcher
-	log         *slog.Logger
-	broadcaster *EventBroadcaster
-	querySvc    *QueryService
-	settingsSvc *SettingsService
-	gameStore   *games.GameStore
-	dataDir     string
+	db           *sql.DB
+	dispatcher   *worker.Dispatcher
+	log          *slog.Logger
+	broadcaster  *EventBroadcaster
+	readyWatcher *ReadyWatcher
+	settingsSvc  *SettingsService
+	gameStore    *games.GameStore
+	dataDir      string
 }
 
 func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBroadcaster, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
-// SetQueryService sets the query service for GSQ polling after start.
+// SetReadyWatcher sets the ready watcher for log-based ready detection after start.
 // Called after both services are created to break the circular dependency.
-func (s *GameserverService) SetQueryService(qs *QueryService) {
-	s.querySvc = qs
+func (s *GameserverService) SetReadyWatcher(rw *ReadyWatcher) {
+	s.readyWatcher = rw
 }
 
 
@@ -446,8 +446,8 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return err
 	}
 
-	if s.querySvc != nil {
-		s.querySvc.StartPolling(id)
+	if s.readyWatcher != nil {
+		s.readyWatcher.Watch(id, w, containerID)
 	}
 
 	s.log.Info("gameserver started", "id", id, "container_id", containerID[:12])
