@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "[install-server] no install script provided"
-exit 0

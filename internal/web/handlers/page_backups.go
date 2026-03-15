@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -12,14 +13,14 @@ import (
 
 type PageBackupHandlers struct {
 	backupSvc     *service.BackupService
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageBackupHandlers(backupSvc *service.BackupService, gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageBackupHandlers {
-	return &PageBackupHandlers{backupSvc: backupSvc, gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageBackupHandlers(backupSvc *service.BackupService, gameStore *games.GameStore, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageBackupHandlers {
+	return &PageBackupHandlers{backupSvc: backupSvc, gameStore: gameStore, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
 }
 
 func (h *PageBackupHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -36,10 +37,7 @@ func (h *PageBackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for backups", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	backups, err := h.backupSvc.ListBackups(id)
 	if err != nil {
@@ -111,10 +109,7 @@ func (h *PageBackupHandlers) renderList(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for backups", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	backups, err := h.backupSvc.ListBackups(gsID)
 	if err != nil {

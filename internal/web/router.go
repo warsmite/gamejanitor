@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/handlers"
@@ -20,7 +21,7 @@ import (
 )
 
 func NewRouter(
-	gameSvc *service.GameService,
+	gameStore *games.GameStore,
 	gameserverSvc *service.GameserverService,
 	consoleSvc *service.ConsoleService,
 	fileSvc *service.FileService,
@@ -63,8 +64,11 @@ func NewRouter(
 	staticFS, _ := fs.Sub(static.Files, ".")
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
+	// Game assets served from the embedded/override game store
+	r.Handle("/static/games/*", http.StripPrefix("/static/games/", http.FileServer(http.FS(gameStore.AssetsFS()))))
+
 	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
-	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
+	gameHandlers := handlers.NewGameHandlers(gameStore, log)
 	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
@@ -80,13 +84,8 @@ func NewRouter(
 
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", gameHandlers.List)
-			r.Post("/", gameHandlers.Create)
 			r.Get("/minecraft-java/versions", minecraftVersions.List)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", gameHandlers.Get)
-				r.Put("/", gameHandlers.Update)
-				r.Delete("/", gameHandlers.Delete)
-			})
+			r.Get("/{id}", gameHandlers.Get)
 		})
 
 		r.Route("/gameservers", func(r chi.Router) {
@@ -151,15 +150,15 @@ func NewRouter(
 	}
 
 	// Page handlers (HTML)
-	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, settingsSvc, renderer, log)
-	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, querySvc, settingsSvc, renderer, log)
+	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
+	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
 	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, renderer, log)
-	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
-	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
-	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameSvc, gameserverSvc, renderer, log)
-	pageSchedules := handlers.NewPageScheduleHandlers(scheduleSvc, gameSvc, gameserverSvc, renderer, log)
-	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameSvc, gameserverSvc, renderer, log)
+	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
+	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
+	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameStore, gameserverSvc, renderer, log)
+	pageSchedules := handlers.NewPageScheduleHandlers(scheduleSvc, gameStore, gameserverSvc, renderer, log)
+	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameStore, gameserverSvc, renderer, log)
 
 	r.Group(func(r chi.Router) {
 		r.Use(plaintextMiddleware)
@@ -169,14 +168,7 @@ func NewRouter(
 
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", pageGames.List)
-			r.Get("/new", pageGames.New)
-			r.Post("/", pageGames.Create)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", pageGames.Detail)
-				r.Get("/edit", pageGames.Edit)
-				r.Put("/", pageGames.Update)
-				r.Delete("/", pageGames.Delete)
-			})
+			r.Get("/{id}", pageGames.Detail)
 		})
 
 		r.Post("/settings/connection-address", pageSettings.SetConnectionAddress)

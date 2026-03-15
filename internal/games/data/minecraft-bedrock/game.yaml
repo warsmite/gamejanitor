@@ -1,0 +1,50 @@
+id: minecraft-bedrock
+name: "Minecraft: Bedrock Edition"
+base_image: registry.0xkowalski.dev/gamejanitor/base
+recommended_memory_mb: 1024
+disabled_capabilities: []
+
+ports:
+  - name: game
+    port: 19132
+    protocol: udp
+
+env:
+  - key: SERVER_NAME
+    default: "Gamejanitor Bedrock Server"
+    label: "Server Name"
+  - key: GAMEMODE
+    default: "survival"
+    label: "Game Mode"
+    type: select
+    options: ["survival", "creative", "adventure"]
+  - key: DIFFICULTY
+    default: "normal"
+    label: "Difficulty"
+    type: select
+    options: ["peaceful", "easy", "normal", "hard"]
+  - key: MAX_PLAYERS
+    default: "10"
+    label: "Max Players"
+    type: number
+  - key: LEVEL_NAME
+    default: "Gamejanitor"
+    label: "World Name"
+  - key: ONLINE_MODE
+    default: "true"
+    label: "Online Mode (Xbox Auth)"
+    type: boolean
+  - key: ALLOW_CHEATS
+    default: "false"
+    label: "Allow Cheats"
+    type: boolean
+  - key: VIEW_DISTANCE
+    default: "32"
+    label: "View Distance"
+    type: number
+  - key: SERVER_PORT
+    default: "19132"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "5"
+    system: true

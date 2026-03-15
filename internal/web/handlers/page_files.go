@@ -8,20 +8,21 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type PageFileHandlers struct {
 	fileSvc       *service.FileService
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageFileHandlers(fileSvc *service.FileService, gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageFileHandlers {
-	return &PageFileHandlers{fileSvc: fileSvc, gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageFileHandlers(fileSvc *service.FileService, gameStore *games.GameStore, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageFileHandlers {
+	return &PageFileHandlers{fileSvc: fileSvc, gameStore: gameStore, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
 }
 
 func (h *PageFileHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -42,12 +43,7 @@ func (h *PageFileHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for files", "game_id", gs.GameID, "error", err)
-		h.renderer.RenderError(w, r, http.StatusInternalServerError)
-		return
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	entries, err := h.fileSvc.ListDirectory(r.Context(), id, dirPath)
 	if err != nil {

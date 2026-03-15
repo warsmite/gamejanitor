@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "[send-command] no send-command script provided"
-exit 0

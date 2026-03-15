@@ -1,0 +1,37 @@
+id: valheim
+name: "Valheim"
+base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+recommended_memory_mb: 2048
+disabled_capabilities: ["command"]
+assets:
+  icon: valheim-icon.ico
+  grid: valheim-grid.png
+  hero: valheim-hero.png
+
+ports:
+  - name: game
+    port: 2456
+    protocol: udp
+  - name: query
+    port: 2457
+    protocol: udp
+
+env:
+  - key: SERVER_NAME
+    default: "Gamejanitor Valheim Server"
+    label: "Server Name"
+  - key: WORLD_NAME
+    default: "Gamejanitor"
+    label: "World Name"
+  - key: SERVER_PASSWORD
+    default: ""
+    label: "Server Password"
+  - key: GAME_PORT
+    default: "2456"
+    system: true
+  - key: QUERY_PORT
+    default: "2457"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "15"
+    system: true

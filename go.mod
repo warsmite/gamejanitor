@@ -3,7 +3,7 @@ module github.com/0xkowalskidev/gamejanitor
 go 1.25.5
 
 require (
-	github.com/0xkowalskidev/gsq v0.0.0-20260314074011-47d48412d517
+	github.com/0xkowalskidev/gsq v0.0.0-20260315175728-2770648ace31
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/go-chi/chi/v5 v5.2.5
@@ -46,6 +46,7 @@ require (
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

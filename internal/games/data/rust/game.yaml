@@ -1,0 +1,53 @@
+id: rust
+name: "Rust"
+base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+recommended_memory_mb: 6144
+disabled_capabilities: []
+assets:
+  icon: rust-icon.ico
+  grid: rust-grid.png
+  hero: rust-hero.png
+
+ports:
+  - name: game
+    port: 28015
+    protocol: udp
+  - name: query
+    port: 28017
+    protocol: udp
+  - name: rcon
+    port: 28016
+    protocol: tcp
+
+env:
+  - key: SERVER_MAXPLAYERS
+    default: "50"
+    label: "Max Players"
+    type: number
+  - key: SERVER_HOSTNAME
+    default: "Gamejanitor Rust Server"
+    label: "Server Name"
+  - key: SERVER_WORLDSIZE
+    default: "3000"
+    label: "World Size"
+    type: number
+  - key: RCON_PASSWORD
+    default: ""
+    label: "RCON Password"
+    autogenerate: password
+  - key: OXIDE_ENABLED
+    default: "false"
+    label: "Enable Oxide (uMod)"
+    type: boolean
+  - key: SERVER_PORT
+    default: "28015"
+    system: true
+  - key: QUERY_PORT
+    default: "28017"
+    system: true
+  - key: RCON_PORT
+    default: "28016"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "15"
+    system: true

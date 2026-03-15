@@ -1,20 +1,21 @@
 package handlers
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type PageGameserverHandlers struct {
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	settingsSvc   *service.SettingsService
@@ -22,8 +23,8 @@ type PageGameserverHandlers struct {
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
+func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
 }
 
 type gameserverFormData struct {
@@ -57,6 +58,16 @@ func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
 	}, nil
 }
 
+func validateJSONOrDefault(raw string, fallback string) json.RawMessage {
+	if raw == "" {
+		return json.RawMessage(fallback)
+	}
+	if !json.Valid([]byte(raw)) {
+		return json.RawMessage(fallback)
+	}
+	return json.RawMessage(raw)
+}
+
 // usedPortEntry tracks a host port claimed by another gameserver.
 type usedPortEntry struct {
 	Port           int    `json:"port"`
@@ -78,21 +89,14 @@ func (h *PageGameserverHandlers) buildUsedPorts(excludeID string) []usedPortEntr
 			continue
 		}
 		var ports []struct {
-			HostPort json.Number `json:"host_port"`
-			Port     json.Number `json:"port"`
+			HostPort int `json:"host_port"`
 		}
-		dec := json.NewDecoder(bytes.NewReader(gs.Ports))
-		dec.UseNumber()
-		if err := dec.Decode(&ports); err != nil {
+		if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 			continue
 		}
 		for _, p := range ports {
-			hp, _ := p.HostPort.Int64()
-			if hp == 0 {
-				hp, _ = p.Port.Int64()
-			}
-			if hp != 0 {
-				used = append(used, usedPortEntry{Port: int(hp), GameserverName: gs.Name, GameserverID: gs.ID})
+			if p.HostPort != 0 {
+				used = append(used, usedPortEntry{Port: p.HostPort, GameserverName: gs.Name, GameserverID: gs.ID})
 			}
 		}
 	}
@@ -100,14 +104,9 @@ func (h *PageGameserverHandlers) buildUsedPorts(excludeID string) []usedPortEntr
 }
 
 func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
-	games, err := h.gameSvc.ListGames()
-	if err != nil {
-		h.log.Error("listing games for new gameserver form", "error", err)
-		h.renderer.RenderError(w, r, http.StatusInternalServerError)
-		return
-	}
-	if games == nil {
-		games = []models.Game{}
+	gameList := h.gameStore.ListGames()
+	if gameList == nil {
+		gameList = []games.Game{}
 	}
 
 	// Build JSON representation of games for Alpine.js
@@ -116,12 +115,12 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		Name         string          `json:"name"`
 		IconPath     string          `json:"icon_path"`
 		GridPath     string          `json:"grid_path"`
-		DefaultPorts json.RawMessage `json:"default_ports"`
-		DefaultEnv   json.RawMessage `json:"default_env"`
-		RecommendedMemoryMB int             `json:"recommended_memory_mb"`
+		DefaultPorts []games.Port   `json:"default_ports"`
+		DefaultEnv   []games.EnvVar `json:"default_env"`
+		RecommendedMemoryMB int            `json:"recommended_memory_mb"`
 	}
-	gamesForJS := make([]gameJSON, len(games))
-	for i, g := range games {
+	gamesForJS := make([]gameJSON, len(gameList))
+	for i, g := range gameList {
 		gamesForJS[i] = gameJSON{
 			ID:                  g.ID,
 			Name:                g.Name,
@@ -143,7 +142,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
 		"Mode":              "new",
-		"Games":             games,
+		"Games":             gameList,
 		"GamesJSON":         string(gamesJSONBytes),
 		"PortsJSON":         "[]",
 		"EnvJSON":           "{}",
@@ -209,19 +208,8 @@ type portEntry struct {
 }
 
 // buildGameSettings merges game default env metadata with the gameserver's actual env values.
-func buildGameSettings(game *models.Game, gs *models.Gameserver) []gameSetting {
+func buildGameSettings(game *games.Game, gs *models.Gameserver) []gameSetting {
 	if game == nil {
-		return nil
-	}
-
-	var defaults []struct {
-		Key     string   `json:"key"`
-		Label   string   `json:"label"`
-		Type    string   `json:"type"`
-		System  bool     `json:"system"`
-		Options []string `json:"options"`
-	}
-	if err := json.Unmarshal(game.DefaultEnv, &defaults); err != nil {
 		return nil
 	}
 
@@ -231,7 +219,7 @@ func buildGameSettings(game *models.Game, gs *models.Gameserver) []gameSetting {
 	}
 
 	var settings []gameSetting
-	for _, d := range defaults {
+	for _, d := range game.DefaultEnv {
 		if d.System || d.Label == "" {
 			continue
 		}
@@ -264,7 +252,6 @@ func parsePorts(portsJSON json.RawMessage) []portEntry {
 		Name          string `json:"name"`
 		HostPort      int    `json:"host_port"`
 		ContainerPort int    `json:"container_port"`
-		Port          int    `json:"port"`
 		Protocol      string `json:"protocol"`
 	}
 	if err := json.Unmarshal(portsJSON, &raw); err != nil {
@@ -272,18 +259,10 @@ func parsePorts(portsJSON json.RawMessage) []portEntry {
 	}
 	entries := make([]portEntry, len(raw))
 	for i, p := range raw {
-		hp := p.HostPort
-		if hp == 0 {
-			hp = p.Port
-		}
-		cp := p.ContainerPort
-		if cp == 0 {
-			cp = p.Port
-		}
 		entries[i] = portEntry{
 			Name:          p.Name,
-			HostPort:      hp,
-			ContainerPort: cp,
+			HostPort:      p.HostPort,
+			ContainerPort: p.ContainerPort,
 			Protocol:      p.Protocol,
 		}
 	}
@@ -303,10 +282,7 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for gameserver detail", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 	h.renderer.Render(w, r, "gameservers/detail", map[string]any{
 		"Gameserver":   gs,
 		"Game":         game,
@@ -319,7 +295,8 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 
 func (h *PageGameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.gameserverSvc.DeleteGameserver(r.Context(), id); err != nil {
+	// Use background context — delete must complete even if the HTTP request is cancelled
+	if err := h.gameserverSvc.DeleteGameserver(context.Background(), id); err != nil {
 		h.log.Error("deleting gameserver from web", "id", id, "error", err)
 		http.Error(w, "Failed to delete gameserver: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -351,10 +328,7 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for gameserver edit", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	portsJSON := "[]"
 	if len(gs.Ports) > 0 {
@@ -370,9 +344,9 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		ID           string          `json:"id"`
 		Name         string          `json:"name"`
 		GridPath     string          `json:"grid_path"`
-		DefaultPorts json.RawMessage `json:"default_ports"`
-		DefaultEnv   json.RawMessage `json:"default_env"`
-		RecommendedMemoryMB int             `json:"recommended_memory_mb"`
+		DefaultPorts []games.Port   `json:"default_ports"`
+		DefaultEnv   []games.EnvVar `json:"default_env"`
+		RecommendedMemoryMB int            `json:"recommended_memory_mb"`
 	}{}
 	if game != nil {
 		gameForJS.ID = game.ID
@@ -386,11 +360,16 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 
 	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(gs.ID))
 
+	gamesForTemplate := []games.Game{}
+	if game != nil {
+		gamesForTemplate = []games.Game{*game}
+	}
+
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
 		"Mode":              "edit",
 		"Gameserver":        gs,
 		"Game":              game,
-		"Games":             []models.Game{*game},
+		"Games":             gamesForTemplate,
 		"GamesJSON":         string(gamesJSONBytes),
 		"PortsJSON":         portsJSON,
 		"EnvJSON":           envJSON,
@@ -434,9 +413,9 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 	// If switching to auto, re-allocate ports
 	ports := form.Ports
 	if form.PortMode == "auto" {
-		game, err := h.gameSvc.GetGame(existing.GameID)
-		if err != nil || game == nil {
-			h.log.Error("getting game for port allocation", "game_id", existing.GameID, "error", err)
+		game := h.gameStore.GetGame(existing.GameID)
+		if game == nil {
+			h.log.Error("getting game for port allocation", "game_id", existing.GameID)
 			http.Error(w, "Failed to load game for port allocation", http.StatusInternalServerError)
 			return
 		}
@@ -495,10 +474,7 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for card", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 	connectIP := h.settingsSvc.GetConnectionAddress()
 	connectionConfigured := connectIP != ""
 	if connectIP == "" {

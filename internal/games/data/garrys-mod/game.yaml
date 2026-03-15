@@ -1,0 +1,47 @@
+id: garrys-mod
+name: "Garry's Mod"
+base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+recommended_memory_mb: 1024
+disabled_capabilities: []
+assets:
+  icon: garrys-mod-icon.ico
+  grid: garrys-mod-grid.png
+  hero: garrys-mod-hero.png
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+  - name: rcon
+    port: 27015
+    protocol: tcp
+
+env:
+  - key: HOSTNAME
+    default: "Gamejanitor GMod Server"
+    label: "Server Name"
+  - key: MAXPLAYERS
+    default: "16"
+    label: "Max Players"
+    type: number
+  - key: RCON_PASSWORD
+    default: ""
+    label: "RCON Password"
+    autogenerate: password
+  - key: GAMEMODE
+    default: "sandbox"
+    label: "Game Mode"
+    type: select
+    options: ["sandbox", "terrortown", "prop_hunt", "murder", "deathrun"]
+  - key: MAP
+    default: "gm_flatgrass"
+    label: "Starting Map"
+  - key: GAME_PORT
+    default: "27015"
+    system: true
+  - key: RCON_PORT
+    default: "27015"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "5"
+    system: true

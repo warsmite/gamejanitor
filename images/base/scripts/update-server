@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "[update-server] no update script provided"
-exit 0

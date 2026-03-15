@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "[start-server] no start script provided — override this in your game image"
-exit 1

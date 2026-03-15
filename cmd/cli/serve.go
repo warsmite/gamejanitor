@@ -11,8 +11,8 @@ import (
 
 	"github.com/0xkowalskidev/gamejanitor/internal/config"
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
-	"github.com/0xkowalskidev/gamejanitor/internal/db/seed"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
@@ -78,27 +78,27 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	logger.Info("seeding game data")
-	if err := seed.SeedGames(database); err != nil {
-		return fmt.Errorf("failed to seed games: %w", err)
-	}
-
 	dockerClient, err := docker.New(logger)
 	if err != nil {
 		return fmt.Errorf("failed to connect to docker: %w", err)
 	}
 	defer dockerClient.Close()
 
+	// Initialize game store
+	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize game store: %w", err)
+	}
+
 	// Initialize services
 	broadcaster := service.NewEventBroadcaster()
-	gameSvc := service.NewGameService(database, logger)
 	settingsSvc := service.NewSettingsService(database, logger)
-	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, settingsSvc, logger)
-	querySvc := service.NewQueryService(database, broadcaster, logger)
+	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	gameserverSvc.SetQueryService(querySvc)
-	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
+	consoleSvc := service.NewConsoleService(database, dockerClient, gameStore, logger)
 	fileSvc := service.NewFileService(database, dockerClient, logger)
-	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, cfg.DataDir, logger)
+	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, gameStore, cfg.DataDir, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, querySvc, logger)
@@ -126,7 +126,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, dockerClient, broadcaster, netInfo, logPath, cfg.DataDir, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, dockerClient, broadcaster, netInfo, logPath, cfg.DataDir, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

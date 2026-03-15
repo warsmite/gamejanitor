@@ -48,32 +48,33 @@
             tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
           '';
 
+          # TODO: migrate to ghcr.io/gamejanitor when going public
           build-image = pkgs.writeShellScriptBin "build-image" ''
-            game="$1"
-            if [ -z "$game" ]; then
-              echo "Usage: build-image <game>"
+            image="$1"
+            if [ -z "$image" ]; then
+              echo "Usage: build-image <base|steamcmd|java|dotnet>"
               exit 1
             fi
-            docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
+            docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
           '';
 
           push-image = pkgs.writeShellScriptBin "push-image" ''
-            game="$1"
-            if [ -z "$game" ]; then
-              echo "Usage: push-image <game>"
+            image="$1"
+            if [ -z "$image" ]; then
+              echo "Usage: push-image <base|steamcmd|java|dotnet>"
               exit 1
             fi
-            echo "Building and pushing $game..."
-            docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
-            docker push "registry.0xkowalski.dev/gamejanitor/$game"
+            echo "Building and pushing $image..."
+            docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
+            docker push "registry.0xkowalski.dev/gamejanitor/$image"
           '';
 
           push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
-            for dir in images/*/; do
-              game=$(basename "$dir")
-              echo "Building and pushing $game..."
-              docker build -t "registry.0xkowalski.dev/gamejanitor/$game" "images/$game"
-              docker push "registry.0xkowalski.dev/gamejanitor/$game"
+            # Build order matters: base must be built first since others depend on it
+            for image in base steamcmd java dotnet; do
+              echo "Building and pushing $image..."
+              docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
+              docker push "registry.0xkowalski.dev/gamejanitor/$image"
             done
           '';
 

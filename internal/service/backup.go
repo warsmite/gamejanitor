@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/google/uuid"
 )
@@ -20,12 +21,13 @@ type BackupService struct {
 	db            *sql.DB
 	docker        *docker.Client
 	gameserverSvc *GameserverService
+	gameStore     *games.GameStore
 	dataDir       string
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dockerClient *docker.Client, gameserverSvc *GameserverService, dataDir string, log *slog.Logger) *BackupService {
-	return &BackupService{db: db, docker: dockerClient, gameserverSvc: gameserverSvc, dataDir: dataDir, log: log}
+func NewBackupService(db *sql.DB, dockerClient *docker.Client, gameserverSvc *GameserverService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *BackupService {
+	return &BackupService{db: db, docker: dockerClient, gameserverSvc: gameserverSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 func (s *BackupService) ListBackups(gameserverID string) ([]models.Backup, error) {
@@ -48,10 +50,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, fmt.Errorf("gameserver must be running to create backup (current status: %s)", gs.Status)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return nil, fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 
 	// Run save-server if game supports it
 	if game != nil && HasCapability(game, "save") {
@@ -143,10 +142,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", gs.ID, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
@@ -166,7 +162,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 	tempName := "gamejanitor-backup-" + gs.ID
 	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:       tempName,
-		Image:      game.Image,
+		Image:      game.BaseImage,
 		Env:        []string{},
 		VolumeName: gs.VolumeName,
 		Entrypoint: []string{"sleep", "infinity"},

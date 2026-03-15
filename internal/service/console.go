@@ -3,23 +3,24 @@ package service
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
 type ConsoleService struct {
-	db     *sql.DB
-	docker *docker.Client
-	log    *slog.Logger
+	db        *sql.DB
+	docker    *docker.Client
+	gameStore *games.GameStore
+	log       *slog.Logger
 }
 
-func NewConsoleService(db *sql.DB, dockerClient *docker.Client, log *slog.Logger) *ConsoleService {
-	return &ConsoleService{db: db, docker: dockerClient, log: log}
+func NewConsoleService(db *sql.DB, dockerClient *docker.Client, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
+	return &ConsoleService{db: db, docker: dockerClient, gameStore: gameStore, log: log}
 }
 
 // StreamLogs returns a follow-mode log stream for a running gameserver's container.
@@ -38,10 +39,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return nil, fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return nil, ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
@@ -71,10 +69,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return "", fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return "", ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
@@ -96,17 +91,12 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
-func HasCapability(game *models.Game, capability string) bool {
+func HasCapability(game *games.Game, capability string) bool {
 	if len(game.DisabledCapabilities) == 0 {
 		return true
 	}
 
-	var disabled []string
-	if err := json.Unmarshal(game.DisabledCapabilities, &disabled); err != nil {
-		return true
-	}
-
-	for _, cap := range disabled {
+	for _, cap := range game.DisabledCapabilities {
 		if cap == capability {
 			return false
 		}

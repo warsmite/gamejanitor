@@ -1,0 +1,53 @@
+id: ark-survival-evolved
+name: "ARK: Survival Evolved"
+base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+recommended_memory_mb: 8192
+disabled_capabilities: []
+assets:
+  icon: ark-survival-evolved-icon.ico
+  grid: ark-survival-evolved-grid.png
+  hero: ark-survival-evolved-hero.png
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+  - name: rcon
+    port: 27020
+    protocol: tcp
+
+env:
+  - key: SESSION_NAME
+    default: "Gamejanitor ARK Server"
+    label: "Session Name"
+  - key: MAX_PLAYERS
+    default: "70"
+    label: "Max Players"
+    type: number
+  - key: ADMIN_PASSWORD
+    default: ""
+    label: "Admin Password"
+    autogenerate: password
+  - key: SERVER_PASSWORD
+    default: ""
+    label: "Server Password"
+  - key: MAP
+    default: "TheIsland"
+    label: "Map"
+    type: select
+    options: ["TheIsland", "TheCenter", "ScorchedEarth_P", "Ragnarok", "Aberration_P", "Extinction", "Valguero_P", "Genesis", "CrystalIsles", "LostIsland", "Fjordur"]
+  - key: GAME_PORT
+    default: "7777"
+    system: true
+  - key: QUERY_PORT
+    default: "27015"
+    system: true
+  - key: RCON_PORT
+    default: "27020"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "30"
+    system: true

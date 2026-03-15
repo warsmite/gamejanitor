@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type PageConsoleHandlers struct {
 	consoleSvc    *service.ConsoleService
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageConsoleHandlers(consoleSvc *service.ConsoleService, gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageConsoleHandlers {
-	return &PageConsoleHandlers{consoleSvc: consoleSvc, gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageConsoleHandlers(consoleSvc *service.ConsoleService, gameStore *games.GameStore, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageConsoleHandlers {
+	return &PageConsoleHandlers{consoleSvc: consoleSvc, gameStore: gameStore, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
 }
 
 func (h *PageConsoleHandlers) Console(w http.ResponseWriter, r *http.Request) {
@@ -38,12 +39,7 @@ func (h *PageConsoleHandlers) Console(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for console", "game_id", gs.GameID, "error", err)
-		h.renderer.RenderError(w, r, http.StatusInternalServerError)
-		return
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	canRead := game != nil && service.HasCapability(game, "console_read")
 	canSend := game != nil && service.HasCapability(game, "command")

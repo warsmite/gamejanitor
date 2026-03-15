@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -101,7 +102,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteGameserver(r.Context(), id); err != nil {
+	if err := h.svc.DeleteGameserver(context.Background(), id); err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return

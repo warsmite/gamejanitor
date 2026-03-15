@@ -1,0 +1,48 @@
+id: terraria
+name: "Terraria"
+base_image: registry.0xkowalski.dev/gamejanitor/dotnet
+recommended_memory_mb: 1024
+disabled_capabilities: []
+assets:
+  icon: terraria-icon.ico
+  grid: terraria-grid.png
+  hero: terraria-hero.png
+
+ports:
+  - name: game
+    port: 7777
+    protocol: tcp
+  - name: query
+    port: 7878
+    protocol: tcp
+
+env:
+  - key: WORLD_NAME
+    default: "Gamejanitor"
+    label: "World Name"
+  - key: MAX_PLAYERS
+    default: "8"
+    label: "Max Players"
+    type: number
+  - key: PASSWORD
+    default: ""
+    label: "Server Password"
+  - key: DIFFICULTY
+    default: "1"
+    label: "Difficulty"
+    type: select
+    options: ["0", "1", "2", "3"]
+  - key: WORLD_SIZE
+    default: "2"
+    label: "World Size"
+    type: select
+    options: ["1", "2", "3"]
+  - key: GAME_PORT
+    default: "7777"
+    system: true
+  - key: QUERY_PORT
+    default: "7878"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "5"
+    system: true

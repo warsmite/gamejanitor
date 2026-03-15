@@ -39,6 +39,7 @@ type ContainerOptions struct {
 	CPULimit      float64
 	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"] for fileops containers)
 	User          string   // Run as specific user (e.g., "1001:1001")
+	Binds         []string // Host bind mounts in "host:container:opts" format
 }
 
 func shortID(id string) string {
@@ -188,6 +189,7 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 	resp, err := c.cli.ContainerCreate(ctx,
 		cfg,
 		&container.HostConfig{
+			Binds:         opts.Binds,
 			PortBindings:  portBindings,
 			Resources:     resources,
 			RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyDisabled},

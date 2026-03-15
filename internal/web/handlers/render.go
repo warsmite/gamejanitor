@@ -51,8 +51,6 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*
 		"dashboard.html",
 		"games/list.html",
 		"games/detail.html",
-		"games/new.html",
-		"games/edit.html",
 		"gameservers/form.html",
 		"gameservers/detail.html",
 		"gameservers/console.html",
@@ -232,17 +230,13 @@ func queryJSON(v any) template.JS {
 	return template.JS(b)
 }
 
-func jsonPretty(raw json.RawMessage) string {
-	if len(raw) == 0 {
+func jsonPretty(v any) string {
+	if v == nil {
 		return "{}"
-	}
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return string(raw)
 	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return string(raw)
+		return fmt.Sprintf("%v", v)
 	}
 	return string(b)
 }

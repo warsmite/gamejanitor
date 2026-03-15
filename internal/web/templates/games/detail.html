@@ -16,10 +16,6 @@
         <h1 class="font-display font-bold text-3xl text-white">{{.Game.Name}}</h1>
       </div>
       <div class="flex items-center gap-2">
-        <a href="/games/{{.Game.ID}}/edit" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-800/60 hover:bg-surface-700 border border-surface-700/60 text-surface-300 hover:text-white text-xs font-medium transition-colors">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
-          Edit
-        </a>
         <a href="/gameservers/new?game={{.Game.ID}}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent-600 hover:bg-accent-500 text-white text-sm font-semibold transition-colors shadow-lg shadow-accent-600/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
           Create Gameserver
@@ -38,7 +34,7 @@
     </div>
     <div class="col-span-3 rounded-xl bg-surface-850/80 border border-surface-800/60 p-4">
       <p class="text-xs text-surface-400 mb-1">Container Image</p>
-      <p class="text-sm text-white font-mono truncate">{{.Game.Image}}</p>
+      <p class="text-sm text-white font-mono truncate">{{.Game.BaseImage}}</p>
     </div>
   </div>
 
@@ -76,37 +72,5 @@
   {{end}}
 
   <!-- Danger Zone -->
-  <div x-data="{ open: false, confirmDelete: false }" class="rounded-xl border border-red-900/30 bg-red-950/10">
-    <button @click="open = !open" class="w-full flex items-center justify-between p-4 text-left">
-      <span class="text-sm font-medium text-red-400">Danger Zone</span>
-      <svg :class="open && 'rotate-180'" class="w-4 h-4 text-red-400/60 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-    </button>
-    <div x-show="open" x-cloak x-transition class="border-t border-red-900/30 p-4">
-      <button @click="confirmDelete = true"
-              class="px-4 py-2 text-sm font-medium rounded-lg bg-red-900/30 border border-red-800/40 text-red-400 hover:bg-red-900/50 transition-colors">
-        Delete Game
-      </button>
-      <p class="text-xs text-surface-500 mt-2">Cannot delete a game while gameservers reference it.</p>
-
-      <!-- Delete confirmation modal -->
-      <div x-show="confirmDelete" x-cloak
-           class="fixed inset-0 z-50 flex items-center justify-center bg-black/70" @click.self="confirmDelete = false">
-        <div class="glass rounded-2xl border border-surface-700 p-6 max-w-sm w-full mx-4 shadow-2xl animate-fade-in">
-          <h3 class="font-display font-semibold text-white mb-2">Delete Game</h3>
-          <p class="text-sm text-surface-400 mb-5">Are you sure you want to delete <strong>{{.Game.Name}}</strong>? This will fail if any gameservers still use this game.</p>
-          <div class="flex gap-2">
-            <button x-show="confirmDelete" hx-delete="/games/{{.Game.ID}}" hx-push-url="false" @click="confirmDelete = false"
-                    class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors">
-              Delete
-            </button>
-            <button @click="confirmDelete = false"
-                    class="px-4 py-2 text-sm font-medium rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {{end}}

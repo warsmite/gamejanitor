@@ -6,12 +6,13 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 )
 
 type PageDashboardHandlers struct {
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	settingsSvc   *service.SettingsService
@@ -19,8 +20,8 @@ type PageDashboardHandlers struct {
 	log           *slog.Logger
 }
 
-func NewPageDashboardHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
-	return &PageDashboardHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
+func NewPageDashboardHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
+	return &PageDashboardHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
 }
 
 type gameserverView struct {
@@ -50,7 +51,7 @@ func shouldShowLogTail(status string) bool {
 	return false
 }
 
-func buildGameserverView(gs *models.Gameserver, game *models.Game, querySvc *service.QueryService, connectIP string, connectionConfigured bool) gameserverView {
+func buildGameserverView(gs *models.Gameserver, game *games.Game, querySvc *service.QueryService, connectIP string, connectionConfigured bool) gameserverView {
 	port := firstGamePort(gs.Ports)
 	connectAddr := ""
 	if port != "" && connectIP != "" {
@@ -91,14 +92,9 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	}
 
 	// Build game lookup
-	games, err := h.gameSvc.ListGames()
-	if err != nil {
-		h.log.Error("listing games for dashboard", "error", err)
-		h.renderer.RenderError(w, r, http.StatusInternalServerError)
-		return
-	}
-	gameLookup := make(map[string]models.Game, len(games))
-	for _, g := range games {
+	gameList := h.gameStore.ListGames()
+	gameLookup := make(map[string]games.Game, len(gameList))
+	for _, g := range gameList {
 		gameLookup[g.ID] = g
 	}
 
@@ -123,7 +119,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		"ActiveGameservers":  activeViews,
 		"StoppedGameservers": stoppedViews,
 		"HasGameservers":     len(gameservers) > 0,
-		"Games":              games,
+		"Games":              gameList,
 		"RunningCount":       len(activeViews),
 		"StoppedCount":       len(stoppedViews),
 		"TotalCount":         len(gameservers),

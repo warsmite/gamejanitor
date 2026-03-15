@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gsq"
 )
@@ -38,16 +39,18 @@ type QueryService struct {
 	db          *sql.DB
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
+	gameStore   *games.GameStore
 	mu          sync.RWMutex
 	cache       map[string]*QueryData
 	pollers     map[string]context.CancelFunc
 }
 
-func NewQueryService(db *sql.DB, broadcaster *EventBroadcaster, log *slog.Logger) *QueryService {
+func NewQueryService(db *sql.DB, broadcaster *EventBroadcaster, gameStore *games.GameStore, log *slog.Logger) *QueryService {
 	return &QueryService{
 		db:          db,
 		log:         log,
 		broadcaster: broadcaster,
+		gameStore:   gameStore,
 		cache:       make(map[string]*QueryData),
 		pollers:     make(map[string]context.CancelFunc),
 	}
@@ -69,9 +72,9 @@ func (s *QueryService) StartPolling(gameserverID string) {
 		return
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil || game == nil {
-		s.log.Error("failed to load game for polling", "id", gameserverID, "game_id", gs.GameID, "error", err)
+	game := s.gameStore.GetGame(gs.GameID)
+	if game == nil {
+		s.log.Error("game not found for polling", "id", gameserverID, "game_id", gs.GameID)
 		return
 	}
 
@@ -103,7 +106,11 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	delete(s.cache, gameserverID)
 	s.mu.Unlock()
 
-	go s.pollLoop(ctx, gameserverID, *game.GSQGameSlug, hostPort)
+	slug := game.ID
+	if game.GSQSlug != "" {
+		slug = game.GSQSlug
+	}
+	go s.pollLoop(ctx, gameserverID, slug, hostPort)
 }
 
 func (s *QueryService) StopPolling(gameserverID string) {
@@ -153,6 +160,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 		info, err := gsq.Query(ctx, "localhost", port, gsq.QueryOptions{
 			Game:    gameSlug,
 			Players: true,
+			Direct:  true,
 			Timeout: 5 * time.Second,
 		})
 
@@ -209,16 +217,12 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	}
 }
 
-func (s *QueryService) gameSupportsQuery(game *models.Game) bool {
-	if game.GSQGameSlug == nil || *game.GSQGameSlug == "" {
+func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
+	if game.ID == "" {
 		return false
 	}
 
-	var caps []string
-	if err := json.Unmarshal(game.DisabledCapabilities, &caps); err != nil {
-		return true
-	}
-	for _, c := range caps {
+	for _, c := range game.DisabledCapabilities {
 		if c == "query" {
 			return false
 		}

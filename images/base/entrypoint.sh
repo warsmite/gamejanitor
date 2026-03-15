@@ -13,4 +13,6 @@ fi
 
 /scripts/start-server &
 SERVER_PID=$!
+
+trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
 wait "$SERVER_PID"

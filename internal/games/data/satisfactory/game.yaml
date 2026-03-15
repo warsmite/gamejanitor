@@ -1,0 +1,38 @@
+id: satisfactory
+name: "Satisfactory"
+base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+recommended_memory_mb: 8192
+disabled_capabilities: ["query", "command", "save"]
+assets:
+  icon: satisfactory-icon.ico
+  grid: satisfactory-grid.png
+  hero: satisfactory-hero.png
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: api
+    port: 7777
+    protocol: tcp
+  - name: reliable
+    port: 8888
+    protocol: tcp
+
+env:
+  - key: SERVER_NAME
+    default: "Gamejanitor Satisfactory Server"
+    label: "Server Name"
+  - key: MAX_PLAYERS
+    default: "4"
+    label: "Max Players"
+    type: number
+  - key: GAME_PORT
+    default: "7777"
+    system: true
+  - key: RELIABLE_PORT
+    default: "8888"
+    system: true
+  - key: SAVE_TIMEOUT_SECONDS
+    default: "15"
+    system: true

@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/google/uuid"
 )
@@ -24,10 +27,12 @@ type GameserverService struct {
 	broadcaster *EventBroadcaster
 	querySvc    *QueryService
 	settingsSvc *SettingsService
+	gameStore   *games.GameStore
+	dataDir     string
 }
 
-func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, settingsSvc *SettingsService, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, settingsSvc: settingsSvc, log: log}
+func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 // SetQueryService sets the query service for GSQ polling after start.
@@ -62,11 +67,7 @@ func (s *GameserverService) UsedHostPorts(excludeID string) (map[int]bool, error
 			continue
 		}
 		for _, p := range ports {
-			hp := int(p.HostPort)
-			if hp == 0 {
-				hp = int(p.Port)
-			}
-			if hp != 0 {
+			if hp := int(p.HostPort); hp != 0 {
 				used[hp] = true
 			}
 		}
@@ -75,16 +76,8 @@ func (s *GameserverService) UsedHostPorts(excludeID string) (map[int]bool, error
 }
 
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
-func (s *GameserverService) AllocatePorts(game *models.Game, excludeID string) (json.RawMessage, error) {
-	type defaultPort struct {
-		Name     string `json:"name"`
-		Port     int    `json:"port"`
-		Protocol string `json:"protocol"`
-	}
-	var gamePorts []defaultPort
-	if err := json.Unmarshal(game.DefaultPorts, &gamePorts); err != nil {
-		return nil, fmt.Errorf("parsing game default_ports: %w", err)
-	}
+func (s *GameserverService) AllocatePorts(game *games.Game, excludeID string) (json.RawMessage, error) {
+	gamePorts := game.DefaultPorts
 	if len(gamePorts) == 0 {
 		return json.RawMessage("[]"), nil
 	}
@@ -158,10 +151,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	gs.VolumeName = "gamejanitor-" + gs.ID
 	gs.Status = StatusStopped
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("looking up game %s: %w", gs.GameID, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
@@ -195,25 +185,15 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 }
 
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.
-func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
+func applyGameDefaults(gs *models.Gameserver, game *games.Game) error {
 	if gs.MemoryLimitMB == 0 {
 		gs.MemoryLimitMB = game.RecommendedMemoryMB
 	}
 
 	// Apply default ports if none provided
 	if len(gs.Ports) == 0 || string(gs.Ports) == "null" || string(gs.Ports) == "[]" {
-		type defaultPort struct {
-			Name     string `json:"name"`
-			Port     int    `json:"port"`
-			Protocol string `json:"protocol"`
-		}
-		var gamePorts []defaultPort
-		if err := json.Unmarshal(game.DefaultPorts, &gamePorts); err != nil {
-			return fmt.Errorf("parsing game default_ports: %w", err)
-		}
-
-		gsPorts := make([]portMapping, len(gamePorts))
-		for i, p := range gamePorts {
+		gsPorts := make([]portMapping, len(game.DefaultPorts))
+		for i, p := range game.DefaultPorts {
 			gsPorts[i] = portMapping{
 				Name:          p.Name,
 				HostPort:      flexInt(p.Port),
@@ -229,13 +209,8 @@ func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 	}
 
 	// Merge env: start with game defaults, then overlay user-provided values
-	var defs []envVarDef
-	if err := json.Unmarshal(game.DefaultEnv, &defs); err != nil {
-		return fmt.Errorf("parsing game default_env: %w", err)
-	}
-
 	env := make(map[string]string)
-	for _, d := range defs {
+	for _, d := range game.DefaultEnv {
 		if d.System {
 			continue
 		}
@@ -254,7 +229,7 @@ func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 	}
 
 	// Autogenerate values for fields where the final value is empty
-	for _, d := range defs {
+	for _, d := range game.DefaultEnv {
 		if d.Autogenerate == "" || d.System {
 			continue
 		}
@@ -329,8 +304,13 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	if gs.ContainerID != nil {
 		if err := s.docker.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-			return fmt.Errorf("removing container during delete: %w", err)
+			s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
 		}
+	}
+	// Also try by name in case ContainerID was cleared but container still exists
+	containerName := "gamejanitor-" + id
+	if err := s.docker.RemoveContainer(ctx, containerName); err != nil {
+		s.log.Debug("no container to remove by name during delete", "name", containerName)
 	}
 
 	// Remove fileops container before volume (it has the volume mounted)
@@ -378,10 +358,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return nil
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
 	}
@@ -390,7 +367,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling, ""); err != nil {
 		return err
 	}
-	if err := s.docker.PullImage(ctx, game.Image); err != nil {
+	if err := s.docker.PullImage(ctx, game.BaseImage); err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
@@ -409,6 +386,20 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
+	// Extract game scripts so they can be bind-mounted into the container
+	gsDir := filepath.Join(s.dataDir, "gameservers", id)
+	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to extract game scripts.")
+		return fmt.Errorf("extracting scripts for gameserver %s: %w", id, err)
+	}
+
+	binds := []string{
+		filepath.Join(gsDir, "scripts") + ":/scripts:ro",
+	}
+	if _, statErr := os.Stat(filepath.Join(gsDir, "defaults")); statErr == nil {
+		binds = append(binds, filepath.Join(gsDir, "defaults")+":/defaults:ro")
+	}
+
 	// Remove old container if exists (stale from prior run/crash).
 	// Always try by name in case the DB lost track of the container ID
 	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
@@ -425,12 +416,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// Create container
 	containerID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:          containerName,
-		Image:         game.Image,
+		Image:         game.BaseImage,
 		Env:           env,
 		Ports:         ports,
 		VolumeName:    gs.VolumeName,
 		MemoryLimitMB: gs.MemoryLimitMB,
 		CPULimit:      gs.CPULimit,
+		Binds:         binds,
 	})
 	if err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to create container", err))
@@ -540,10 +532,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
@@ -557,17 +546,25 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	}
 
 	// Pull latest image
-	if err := s.docker.PullImage(ctx, game.Image); err != nil {
+	if err := s.docker.PullImage(ctx, game.BaseImage); err != nil {
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
+
+	// Extract scripts for update container
+	gsDir := filepath.Join(s.dataDir, "gameservers", id)
+	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
+		return fmt.Errorf("extracting scripts for update: %w", err)
+	}
+	updateBinds := []string{filepath.Join(gsDir, "scripts") + ":/scripts:ro"}
 
 	// Run update-server in temp container
 	tempName := "gamejanitor-update-" + id
 	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:       tempName,
-		Image:      game.Image,
+		Image:      game.BaseImage,
 		Env:        []string{},
 		VolumeName: gs.VolumeName,
+		Binds:      updateBinds,
 	})
 	if err != nil {
 		return fmt.Errorf("creating temp container for update: %w", err)
@@ -604,10 +601,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
-	}
+	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
@@ -620,13 +614,20 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		}
 	}
 
+	// Extract scripts for reinstall container
+	gsDir := filepath.Join(s.dataDir, "gameservers", id)
+	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
+		return fmt.Errorf("extracting scripts for reinstall: %w", err)
+	}
+
 	// Remove .installed marker via temp container
 	tempName := "gamejanitor-reinstall-" + id
 	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:       tempName,
-		Image:      game.Image,
+		Image:      game.BaseImage,
 		Env:        []string{},
 		VolumeName: gs.VolumeName,
+		Binds:      []string{filepath.Join(gsDir, "scripts") + ":/scripts:ro"},
 	})
 	if err != nil {
 		return fmt.Errorf("creating temp container for reinstall: %w", err)
@@ -653,17 +654,6 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	return s.Start(ctx, id)
 }
 
-
-// Env var definition from game's default_env JSON
-type envVarDef struct {
-	Key          string   `json:"key"`
-	Default      string   `json:"default"`
-	Label        string   `json:"label,omitempty"`
-	Type         string   `json:"type,omitempty"`
-	Options      []string `json:"options,omitempty"`
-	System       bool     `json:"system,omitempty"`
-	Autogenerate string   `json:"autogenerate,omitempty"`
-}
 
 // Port mapping from gameserver's ports JSON
 // flexInt handles JSON values that may be a number or a string containing a number.
@@ -697,21 +687,14 @@ type portMapping struct {
 	Name          string  `json:"name"`
 	HostPort      flexInt `json:"host_port"`
 	ContainerPort flexInt `json:"container_port"`
-	Port          flexInt `json:"port"`
 	Protocol      string  `json:"protocol"`
 }
 
-func mergeEnv(game *models.Game, gs *models.Gameserver) ([]string, error) {
-	// Step 1: Parse game default_env → extract key/default pairs
-	var defs []envVarDef
-	if err := json.Unmarshal(game.DefaultEnv, &defs); err != nil {
-		return nil, fmt.Errorf("parsing game default_env: %w", err)
-	}
-
+func mergeEnv(game *games.Game, gs *models.Gameserver) ([]string, error) {
 	env := make(map[string]string)
 	systemKeys := make(map[string]bool)
 
-	for _, d := range defs {
+	for _, d := range game.DefaultEnv {
 		env[d.Key] = d.Default
 		if d.System {
 			systemKeys[d.Key] = true
@@ -737,7 +720,7 @@ func mergeEnv(game *models.Game, gs *models.Gameserver) ([]string, error) {
 
 	// Build port name → container_port map for system env var overrides
 	// System env keys that end with _PORT get their value from the matching container port
-	for _, d := range defs {
+	for _, d := range game.DefaultEnv {
 		if !d.System {
 			continue
 		}
@@ -771,17 +754,9 @@ func parseGameserverPorts(gs *models.Gameserver) ([]docker.PortBinding, error) {
 
 	bindings := make([]docker.PortBinding, len(ports))
 	for i, p := range ports {
-		hp := int(p.HostPort)
-		if hp == 0 {
-			hp = int(p.Port)
-		}
-		cp := int(p.ContainerPort)
-		if cp == 0 {
-			cp = int(p.Port)
-		}
 		bindings[i] = docker.PortBinding{
-			HostPort:      hp,
-			ContainerPort: cp,
+			HostPort:      int(p.HostPort),
+			ContainerPort: int(p.ContainerPort),
 			Protocol:      p.Protocol,
 		}
 	}

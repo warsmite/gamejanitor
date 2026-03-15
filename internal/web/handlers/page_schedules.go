@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -12,14 +13,14 @@ import (
 
 type PageScheduleHandlers struct {
 	scheduleSvc   *service.ScheduleService
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageScheduleHandlers(scheduleSvc *service.ScheduleService, gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageScheduleHandlers {
-	return &PageScheduleHandlers{scheduleSvc: scheduleSvc, gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageScheduleHandlers(scheduleSvc *service.ScheduleService, gameStore *games.GameStore, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageScheduleHandlers {
+	return &PageScheduleHandlers{scheduleSvc: scheduleSvc, gameStore: gameStore, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
 }
 
 func (h *PageScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -36,10 +37,7 @@ func (h *PageScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for schedules", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	schedules, err := h.scheduleSvc.ListSchedules(id)
 	if err != nil {
@@ -175,10 +173,7 @@ func (h *PageScheduleHandlers) renderList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	game, err := h.gameSvc.GetGame(gs.GameID)
-	if err != nil {
-		h.log.Error("getting game for schedules", "game_id", gs.GameID, "error", err)
-	}
+	game := h.gameStore.GetGame(gs.GameID)
 
 	schedules, err := h.scheduleSvc.ListSchedules(gsID)
 	if err != nil {

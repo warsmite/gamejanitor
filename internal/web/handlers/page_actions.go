@@ -5,19 +5,20 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type PageActionHandlers struct {
-	gameSvc       *service.GameService
+	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageActionHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageActionHandlers {
-	return &PageActionHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageActionHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageActionHandlers {
+	return &PageActionHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
 }
 
 func (h *PageActionHandlers) Start(w http.ResponseWriter, r *http.Request) {
