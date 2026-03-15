@@ -109,6 +109,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
+	authSvc := service.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, logger)
 
 	// Crash recovery
@@ -131,7 +132,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, broadcaster, netInfo, logPath, cfg.DataDir, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, logPath, cfg.DataDir, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

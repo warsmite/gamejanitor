@@ -15,6 +15,8 @@ const (
 	SettingPortRangeEnd      = "port_range_end"
 	SettingPreferredPortMode = "preferred_port_mode"
 	SettingMaxBackups        = "max_backups"
+	SettingAuthEnabled       = "auth_enabled"
+	SettingLocalhostBypass   = "localhost_bypass"
 
 	DefaultPortRangeStart    = 27000
 	DefaultPortRangeEnd      = 28999
@@ -134,4 +136,56 @@ func (s *SettingsService) GetMaxBackups() int {
 
 func (s *SettingsService) SetMaxBackups(v int) error {
 	return models.SetSetting(s.db, SettingMaxBackups, strconv.Itoa(v))
+}
+
+// GetAuthEnabled returns true if auth is enabled.
+// ENV var GJ_AUTH_ENABLED overrides DB setting.
+func (s *SettingsService) GetAuthEnabled() bool {
+	if v := os.Getenv("GJ_AUTH_ENABLED"); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, SettingAuthEnabled)
+	if err != nil || v == "" {
+		return false
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) IsAuthEnabledFromEnv() bool {
+	return os.Getenv("GJ_AUTH_ENABLED") != ""
+}
+
+func (s *SettingsService) SetAuthEnabled(enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	s.log.Info("setting auth_enabled", "enabled", enabled)
+	return models.SetSetting(s.db, SettingAuthEnabled, v)
+}
+
+// GetLocalhostBypass returns true if localhost requests bypass auth.
+// ENV var GJ_LOCALHOST_BYPASS overrides DB setting. Defaults to true.
+func (s *SettingsService) GetLocalhostBypass() bool {
+	if v := os.Getenv("GJ_LOCALHOST_BYPASS"); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, SettingLocalhostBypass)
+	if err != nil || v == "" {
+		return true // default: bypass enabled
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) IsLocalhostBypassFromEnv() bool {
+	return os.Getenv("GJ_LOCALHOST_BYPASS") != ""
+}
+
+func (s *SettingsService) SetLocalhostBypass(enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	s.log.Info("setting localhost_bypass", "enabled", enabled)
+	return models.SetSetting(s.db, SettingLocalhostBypass, v)
 }

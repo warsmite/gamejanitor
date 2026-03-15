@@ -1,0 +1,36 @@
+{{define "title"}}Login - Gamejanitor{{end}}
+
+{{define "content"}}
+<div class="flex items-center justify-center min-h-[75vh] px-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent-500/20">
+        <img src="/static/logo.svg" alt="Gamejanitor" class="w-7 h-7">
+      </div>
+      <h1 class="font-display font-bold text-2xl text-white">GameJanitor</h1>
+      <p class="text-surface-400 text-sm mt-1">Enter your access token to continue</p>
+    </div>
+
+    <form method="POST" action="/login" class="space-y-4">
+      <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+
+      {{if .Error}}
+      <div class="bg-red-950/30 border border-red-900/30 rounded-lg p-3 text-red-400 text-sm">
+        {{.Error}}
+      </div>
+      {{end}}
+
+      <div>
+        <input type="password" name="token" placeholder="Paste your token here"
+               class="w-full px-4 py-3 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-500 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none text-sm"
+               autofocus>
+      </div>
+
+      <button type="submit"
+              class="w-full px-4 py-3 bg-accent-600 hover:bg-accent-500 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-accent-600/20">
+        Login
+      </button>
+    </form>
+  </div>
+</div>
+{{end}}

@@ -28,6 +28,7 @@ func NewRouter(
 	backupSvc *service.BackupService,
 	querySvc *service.QueryService,
 	settingsSvc *service.SettingsService,
+	authSvc *service.AuthService,
 	broadcaster *service.EventBroadcaster,
 	netInfo *netinfo.Info,
 	logPath string,
@@ -65,6 +66,9 @@ func NewRouter(
 	// Game assets served from the embedded/override game store
 	r.Handle("/static/games/*", http.StripPrefix("/static/games/", http.FileServer(http.FS(gameStore.AssetsFS()))))
 
+	// Auth middleware — applied to both API and page routes
+	authMiddleware := AuthMiddleware(authSvc, settingsSvc)
+
 	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
 	gameHandlers := handlers.NewGameHandlers(gameStore, log)
 	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
@@ -74,9 +78,21 @@ func NewRouter(
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
 	logHandlers := handlers.NewLogHandlers(logPath, log)
 	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
+	authHandlers := handlers.NewAuthHandlers(authSvc, log)
+
+	requireAdmin := RequireAdmin(settingsSvc)
+	requireAccess := RequireGameserverAccess(settingsSvc)
+	requireStart := RequirePermission(settingsSvc, "start")
+	requireStop := RequirePermission(settingsSvc, "stop")
+	requireRestart := RequirePermission(settingsSvc, "restart")
+	requireConsole := RequirePermission(settingsSvc, "console")
+	requireFiles := RequirePermission(settingsSvc, "files")
+	requireBackups := RequirePermission(settingsSvc, "backups")
+	requireSettings := RequirePermission(settingsSvc, "settings")
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
+		r.Use(authMiddleware)
 
 		r.Get("/status", statusHandlers.Get)
 
@@ -88,22 +104,23 @@ func NewRouter(
 
 		r.Route("/gameservers", func(r chi.Router) {
 			r.Get("/", gameserverHandlers.List)
-			r.Post("/", gameserverHandlers.Create)
+			r.With(requireAdmin).Post("/", gameserverHandlers.Create)
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", gameserverHandlers.Get)
-				r.Put("/", gameserverHandlers.Update)
-				r.Delete("/", gameserverHandlers.Delete)
-				r.Post("/start", gameserverHandlers.Start)
-				r.Post("/stop", gameserverHandlers.Stop)
-				r.Post("/restart", gameserverHandlers.Restart)
-				r.Post("/update-game", gameserverHandlers.UpdateServerGame)
-				r.Post("/reinstall", gameserverHandlers.Reinstall)
-				r.Get("/status", gameserverHandlers.Status)
-				r.Get("/stats", gameserverHandlers.Stats)
-				r.Get("/logs", gameserverHandlers.Logs)
-				r.Post("/command", gameserverHandlers.SendCommand)
+				r.With(requireAccess).Get("/", gameserverHandlers.Get)
+				r.With(requireSettings).Put("/", gameserverHandlers.Update)
+				r.With(requireSettings).Delete("/", gameserverHandlers.Delete)
+				r.With(requireStart).Post("/start", gameserverHandlers.Start)
+				r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
+				r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
+				r.With(requireSettings).Post("/update-game", gameserverHandlers.UpdateServerGame)
+				r.With(requireSettings).Post("/reinstall", gameserverHandlers.Reinstall)
+				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
+				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
+				r.With(requireConsole).Get("/logs", gameserverHandlers.Logs)
+				r.With(requireConsole).Post("/command", gameserverHandlers.SendCommand)
 
 				r.Route("/schedules", func(r chi.Router) {
+					r.Use(requireSettings)
 					r.Get("/", scheduleHandlers.List)
 					r.Post("/", scheduleHandlers.Create)
 					r.Route("/{scheduleId}", func(r chi.Router) {
@@ -114,6 +131,7 @@ func NewRouter(
 				})
 
 				r.Route("/backups", func(r chi.Router) {
+					r.Use(requireBackups)
 					r.Get("/", backupHandlers.List)
 					r.Post("/", backupHandlers.Create)
 					r.Route("/{backupId}", func(r chi.Router) {
@@ -126,6 +144,13 @@ func NewRouter(
 
 		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
+
+		r.Route("/tokens", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", authHandlers.ListTokens)
+			r.Post("/", authHandlers.CreateToken)
+			r.Delete("/{tokenId}", authHandlers.DeleteToken)
+		})
 	})
 
 	// CSRF middleware for page routes (HTML forms + HTMX)
@@ -147,6 +172,16 @@ func NewRouter(
 		})
 	}
 
+	// Auth page handlers — login/logout outside auth middleware
+	pageAuth := handlers.NewPageAuthHandlers(authSvc, settingsSvc, gameserverSvc, renderer, log)
+	r.Group(func(r chi.Router) {
+		r.Use(plaintextMiddleware)
+		r.Use(csrfMiddleware)
+		r.Get("/login", pageAuth.LoginPage)
+		r.Post("/login", pageAuth.Login)
+		r.Post("/logout", pageAuth.Logout)
+	})
+
 	// Page handlers (HTML)
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
@@ -161,6 +196,7 @@ func NewRouter(
 	r.Group(func(r chi.Router) {
 		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
+		r.Use(authMiddleware)
 
 		r.Get("/", pageDashboard.Dashboard)
 
@@ -169,44 +205,66 @@ func NewRouter(
 			r.Get("/{id}", pageGames.Detail)
 		})
 
-		r.Post("/settings/connection-address", pageSettings.SetConnectionAddress)
-		r.Delete("/settings/connection-address", pageSettings.ClearConnectionAddress)
+		// Settings — admin only
+		r.Route("/settings", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Post("/connection-address", pageSettings.SetConnectionAddress)
+			r.Delete("/connection-address", pageSettings.ClearConnectionAddress)
+			r.Get("/tokens", pageAuth.TokensPage)
+			r.Post("/tokens", pageAuth.CreateToken)
+			r.Delete("/tokens/{tokenId}", pageAuth.DeleteToken)
+			r.Post("/auth/enable", pageAuth.EnableAuth)
+			r.Post("/auth/disable", pageAuth.DisableAuth)
+		})
 
 		r.Route("/gameservers", func(r chi.Router) {
-			r.Get("/new", pageGameservers.New)
-			r.Post("/", pageGameservers.Create)
+			r.With(requireAdmin).Get("/new", pageGameservers.New)
+			r.With(requireAdmin).Post("/", pageGameservers.Create)
 			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", pageGameservers.Detail)
-				r.Get("/edit", pageGameservers.Edit)
-				r.Put("/", pageGameservers.Update)
-				r.Delete("/", pageGameservers.Delete)
-				r.Get("/card", pageGameservers.Card)
-				r.Post("/start", pageActions.Start)
-				r.Post("/stop", pageActions.Stop)
-				r.Post("/restart", pageActions.Restart)
-				r.Post("/update-game", pageActions.UpdateGame)
-				r.Post("/reinstall", pageActions.Reinstall)
-				r.Get("/console", pageConsole.Console)
-				r.Get("/console/stream", pageConsole.LogStream)
-				r.Post("/console/command", pageConsole.SendCommand)
-				r.Get("/files", pageFiles.List)
-				r.Get("/files/list", pageFiles.ListJSON)
-				r.Get("/files/content", pageFiles.ReadFile)
-				r.Put("/files/content", pageFiles.WriteFile)
-				r.Delete("/files/entry", pageFiles.DeletePath)
-				r.Post("/files/mkdir", pageFiles.CreateDirectory)
-				r.Get("/files/download", pageFiles.DownloadFile)
-				r.Post("/files/upload", pageFiles.UploadFile)
-				r.Post("/files/rename", pageFiles.RenamePath)
-				r.Get("/schedules", pageSchedules.List)
-				r.Post("/schedules", pageSchedules.Create)
-				r.Put("/schedules/{scheduleId}", pageSchedules.Update)
-				r.Delete("/schedules/{scheduleId}", pageSchedules.Delete)
-				r.Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
-				r.Get("/backups", pageBackups.List)
-				r.Post("/backups", pageBackups.Create)
-				r.Post("/backups/{backupId}/restore", pageBackups.Restore)
-				r.Delete("/backups/{backupId}", pageBackups.Delete)
+				// View access
+				r.With(requireAccess).Get("/", pageGameservers.Detail)
+				r.With(requireAccess).Get("/card", pageGameservers.Card)
+
+				// Settings permission
+				r.With(requireSettings).Get("/edit", pageGameservers.Edit)
+				r.With(requireSettings).Put("/", pageGameservers.Update)
+				r.With(requireSettings).Delete("/", pageGameservers.Delete)
+
+				// Lifecycle actions
+				r.With(requireStart).Post("/start", pageActions.Start)
+				r.With(requireStop).Post("/stop", pageActions.Stop)
+				r.With(requireRestart).Post("/restart", pageActions.Restart)
+				r.With(requireSettings).Post("/update-game", pageActions.UpdateGame)
+				r.With(requireSettings).Post("/reinstall", pageActions.Reinstall)
+
+				// Console
+				r.With(requireConsole).Get("/console", pageConsole.Console)
+				r.With(requireConsole).Get("/console/stream", pageConsole.LogStream)
+				r.With(requireConsole).Post("/console/command", pageConsole.SendCommand)
+
+				// Files
+				r.With(requireFiles).Get("/files", pageFiles.List)
+				r.With(requireFiles).Get("/files/list", pageFiles.ListJSON)
+				r.With(requireFiles).Get("/files/content", pageFiles.ReadFile)
+				r.With(requireFiles).Put("/files/content", pageFiles.WriteFile)
+				r.With(requireFiles).Delete("/files/entry", pageFiles.DeletePath)
+				r.With(requireFiles).Post("/files/mkdir", pageFiles.CreateDirectory)
+				r.With(requireFiles).Get("/files/download", pageFiles.DownloadFile)
+				r.With(requireFiles).Post("/files/upload", pageFiles.UploadFile)
+				r.With(requireFiles).Post("/files/rename", pageFiles.RenamePath)
+
+				// Schedules
+				r.With(requireSettings).Get("/schedules", pageSchedules.List)
+				r.With(requireSettings).Post("/schedules", pageSchedules.Create)
+				r.With(requireSettings).Put("/schedules/{scheduleId}", pageSchedules.Update)
+				r.With(requireSettings).Delete("/schedules/{scheduleId}", pageSchedules.Delete)
+				r.With(requireSettings).Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
+
+				// Backups
+				r.With(requireBackups).Get("/backups", pageBackups.List)
+				r.With(requireBackups).Post("/backups", pageBackups.Create)
+				r.With(requireBackups).Post("/backups/{backupId}/restore", pageBackups.Restore)
+				r.With(requireBackups).Delete("/backups/{backupId}", pageBackups.Delete)
 			})
 		})
 	})

@@ -36,6 +36,18 @@ CREATE TABLE backups (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE tokens (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    hashed_token TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'gameserver',
+    gameserver_ids JSON NOT NULL DEFAULT '[]',
+    permissions JSON NOT NULL DEFAULT '[]',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME,
+    expires_at DATETIME
+);
+
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

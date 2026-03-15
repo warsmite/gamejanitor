@@ -57,6 +57,9 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*
 		"gameservers/files.html",
 		"gameservers/schedules.html",
 		"gameservers/backups.html",
+		"auth/login.html",
+		"auth/tokens.html",
+		"auth/token_created.html",
 	}
 
 	for _, page := range pages {
