@@ -1,0 +1,20 @@
+#!/bin/bash
+if [ -z "$1" ]; then
+    echo "[send-command] usage: send-command <command>"
+    exit 1
+fi
+
+TELNET_PORT="${TELNET_PORT:-8081}"
+TELNET_PASSWORD="${TELNET_PASSWORD:-}"
+
+# Send command via Telnet, handling optional password prompt
+{
+    if [ -n "$TELNET_PASSWORD" ]; then
+        sleep 0.5
+        echo "$TELNET_PASSWORD"
+    fi
+    sleep 0.5
+    echo "$1"
+    sleep 0.5
+    echo "exit"
+} | curl -s telnet://localhost:"$TELNET_PORT" 2>/dev/null || true

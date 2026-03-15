@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+CONFIG_TEMPLATE="/data/server/serverconfig.xml"
+CONFIG="/data/serverconfig.xml"
+
+# Copy template on first run
+if [ ! -f "$CONFIG" ]; then
+    echo "[start-server] copying default serverconfig.xml"
+    cp "$CONFIG_TEMPLATE" "$CONFIG"
+fi
+
+# Update or insert an XML property by name
+update_xml_property() {
+    local name="$1" value="$2" file="$3"
+    if xmlstarlet sel -Q -t -c "//property[@name='${name}']" "$file" 2>/dev/null; then
+        xmlstarlet ed -L \
+            -u "//property[@name='${name}']/@value" -v "$value" \
+            "$file"
+    else
+        xmlstarlet ed -L \
+            -s "/ServerSettings" -t elem -n "property" \
+            -i "/ServerSettings/property[not(@name)]" -t attr -n "name" -v "$name" \
+            -i "/ServerSettings/property[@name='${name}']" -t attr -n "value" -v "$value" \
+            "$file"
+    fi
+}
+
+update_xml_property "ServerName"           "${SERVER_NAME:-Gamejanitor 7D2D Server}" "$CONFIG"
+update_xml_property "ServerPassword"       "${SERVER_PASSWORD:-}"                    "$CONFIG"
+update_xml_property "ServerPort"           "${GAME_PORT:-26900}"                     "$CONFIG"
+update_xml_property "ServerMaxPlayerCount" "${MAX_PLAYERS:-8}"                       "$CONFIG"
+update_xml_property "GameWorld"            "${GAME_WORLD:-Navezgane}"                "$CONFIG"
+update_xml_property "WorldGenSeed"         "${WORLD_GEN_SEED:-Gamejanitor}"          "$CONFIG"
+update_xml_property "GameDifficulty"       "${GAME_DIFFICULTY:-2}"                   "$CONFIG"
+update_xml_property "DayNightLength"       "${DAY_NIGHT_LENGTH:-60}"                 "$CONFIG"
+update_xml_property "UserDataFolder"       "/data/worlds"                            "$CONFIG"
+update_xml_property "TelnetEnabled"        "true"                                    "$CONFIG"
+update_xml_property "TelnetPort"           "8081"                                    "$CONFIG"
+update_xml_property "TelnetPassword"       "${TELNET_PASSWORD:-}"                    "$CONFIG"
+
+echo "[start-server] updated serverconfig.xml"
+
+export LD_LIBRARY_PATH="/data/server:${LD_LIBRARY_PATH}"
+cd /data/server
+
+echo "[start-server] starting 7 Days to Die dedicated server"
+exec ./7DaysToDieServer.x86_64 \
+    -configfile="$CONFIG" \
+    -logfile /dev/stdout \
+    -quit \
+    -batchmode \
+    -nographics \
+    -dedicated

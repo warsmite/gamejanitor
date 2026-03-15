@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "[install-server] downloading 7 Days to Die dedicated server via SteamCMD (app 294420)"
+steamcmd.sh \
+    +force_install_dir /data/server \
+    +login anonymous \
+    +app_update 294420 validate \
+    +quit
+
+echo "[install-server] 7 Days to Die dedicated server installed"

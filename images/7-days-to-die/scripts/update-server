@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "[update-server] updating 7 Days to Die dedicated server via SteamCMD"
+steamcmd.sh \
+    +force_install_dir /data/server \
+    +login anonymous \
+    +app_update 294420 validate \
+    +quit
+
+echo "[update-server] update complete"

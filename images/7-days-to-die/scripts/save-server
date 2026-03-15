@@ -1,0 +1,7 @@
+#!/bin/bash
+TIMEOUT=${SAVE_TIMEOUT_SECONDS:-15}
+
+echo "[save-server] sending saveworld command (timeout: ${TIMEOUT}s)"
+/scripts/send-command "saveworld"
+sleep "$TIMEOUT"
+echo "[save-server] save complete"

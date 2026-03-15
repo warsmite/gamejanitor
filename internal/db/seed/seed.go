@@ -242,6 +242,31 @@ func SeedGames(db *sql.DB) error {
 			gsqGameSlug:          "minecraft-bedrock",
 			disabledCapabilities: `[]`,
 		},
+		{
+			id:       "7-days-to-die",
+			name:     "7 Days to Die",
+			image:    "registry.0xkowalski.dev/gamejanitor/7-days-to-die",
+			iconPath: "/static/games/7-days-to-die/7-days-to-die-icon.ico",
+			gridPath: "/static/games/7-days-to-die/7-days-to-die-grid.png",
+			heroPath: "/static/games/7-days-to-die/7-days-to-die-hero.png",
+			defaultPorts: `[{"name":"game","port":26900,"protocol":"udp"},{"name":"game-tcp","port":26900,"protocol":"tcp"}]`,
+			defaultEnv: `[
+				{"key":"SERVER_NAME","default":"Gamejanitor 7D2D Server","label":"Server Name"},
+				{"key":"SERVER_PASSWORD","default":"","label":"Server Password"},
+				{"key":"MAX_PLAYERS","default":"8","label":"Max Players","type":"number"},
+				{"key":"GAME_WORLD","default":"Navezgane","label":"Game World","type":"select","options":["Navezgane","RWG"]},
+				{"key":"WORLD_GEN_SEED","default":"Gamejanitor","label":"World Gen Seed"},
+				{"key":"GAME_DIFFICULTY","default":"2","label":"Difficulty","type":"select","options":["0","1","2","3","4","5"]},
+				{"key":"DAY_NIGHT_LENGTH","default":"60","label":"Day/Night Length (minutes)","type":"number"},
+				{"key":"GAME_PORT","default":"26900","system":true},
+				{"key":"TELNET_PORT","default":"8081","system":true},
+				{"key":"TELNET_PASSWORD","default":"","system":true,"autogenerate":"password"},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
+			]`,
+			recommendedMemoryMB:  8192,
+			gsqGameSlug:          "7-days-to-die",
+			disabledCapabilities: `[]`,
+		},
 	}
 
 	for _, g := range games {
