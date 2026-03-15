@@ -315,12 +315,6 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.log.Debug("no container to remove by name during delete", "name", containerName)
 	}
 
-	// Remove fileops container before volume (it has the volume mounted)
-	fileopsName := "gamejanitor-fileops-" + id
-	if err := w.RemoveContainer(ctx, fileopsName); err != nil {
-		s.log.Debug("no fileops container to remove during delete", "id", id)
-	}
-
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("removing volume during delete: %w", err)
 	}

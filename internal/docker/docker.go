@@ -37,7 +37,7 @@ type ContainerOptions struct {
 	VolumeName    string
 	MemoryLimitMB int
 	CPULimit      float64
-	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"] for fileops containers)
+	Entrypoint    []string // Override image entrypoint
 	User          string   // Run as specific user (e.g., "1001:1001")
 	Binds         []string // Host bind mounts in "host:container:opts" format
 }
@@ -152,6 +152,14 @@ func (c *Client) RemoveVolume(ctx context.Context, name string) error {
 		return fmt.Errorf("removing volume %s: %w", name, err)
 	}
 	return nil
+}
+
+func (c *Client) VolumeMountpoint(ctx context.Context, name string) (string, error) {
+	vol, err := c.cli.VolumeInspect(ctx, name)
+	if err != nil {
+		return "", fmt.Errorf("inspecting volume %s: %w", name, err)
+	}
+	return vol.Mountpoint, nil
 }
 
 func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (string, error) {

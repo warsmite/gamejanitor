@@ -39,3 +39,11 @@ type ContainerEvent struct {
 	ContainerName string
 	Action        string // "start", "stop", "die", "kill", etc.
 }
+
+type FileEntry struct {
+	Name        string
+	IsDir       bool
+	Size        int64
+	ModTime     time.Time
+	Permissions string
+}

@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"io"
+	"os"
 )
 
 // Worker abstracts all container and host operations.
@@ -24,7 +25,15 @@ type Worker interface {
 	CreateVolume(ctx context.Context, name string) error
 	RemoveVolume(ctx context.Context, name string) error
 
-	// Copy operations (used by backup/restore and file ops via container)
+	// Volume file operations (direct filesystem access)
+	ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error)
+	ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error)
+	WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error
+	DeletePath(ctx context.Context, volumeName string, path string) error
+	CreateDirectory(ctx context.Context, volumeName string, path string) error
+	RenamePath(ctx context.Context, volumeName string, from string, to string) error
+
+	// Copy operations (used by backup/restore)
 	CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error)
 	CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error
 	CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error)

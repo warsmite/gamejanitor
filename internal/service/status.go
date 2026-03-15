@@ -138,7 +138,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	if gsID == event.ContainerName {
 		return
 	}
-	// Skip temp containers (update/reinstall/backup/files)
+	// Skip temp containers (update/reinstall/backup/fileops)
 	if strings.Contains(gsID, "-update-") || strings.Contains(gsID, "-reinstall-") || strings.Contains(gsID, "-backup-") || strings.Contains(gsID, "-fileops-") {
 		return
 	}

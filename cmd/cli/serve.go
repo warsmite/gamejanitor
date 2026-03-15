@@ -114,10 +114,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to recover gameserver status: %w", err)
 	}
 
-	if err := fileSvc.RecoverOnStartup(ctx); err != nil {
-		return fmt.Errorf("failed to recover fileops containers: %w", err)
-	}
-
 	// Start status manager (Docker events watcher)
 	statusMgr.Start(ctx)
 	defer statusMgr.Stop()
