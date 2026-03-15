@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/google/uuid"
 )
 
@@ -22,12 +20,13 @@ type BackupService struct {
 	dispatcher    *worker.Dispatcher
 	gameserverSvc *GameserverService
 	gameStore     *games.GameStore
-	dataDir       string
+	store         BackupStore
+	settingsSvc   *SettingsService
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *BackupService {
-	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, log *slog.Logger) *BackupService {
+	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, log: log}
 }
 
 func (s *BackupService) ListBackups(gameserverID string) ([]models.Backup, error) {
@@ -65,18 +64,17 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		}
 	}
 
+	// Enforce retention before creating new backup
+	if err := s.enforceRetention(ctx, gameserverID); err != nil {
+		s.log.Warn("retention enforcement failed, proceeding with backup", "gameserver_id", gameserverID, "error", err)
+	}
+
 	backupID := uuid.New().String()
 	if name == "" {
 		name = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	backupDir := filepath.Join(s.dataDir, "backups", gameserverID)
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating backup directory: %w", err)
-	}
-	backupPath := filepath.Join(backupDir, backupID+".tar.gz")
-
-	s.log.Info("creating backup", "gameserver_id", gameserverID, "backup_id", backupID, "path", backupPath)
+	s.log.Info("creating backup", "gameserver_id", gameserverID, "backup_id", backupID)
 
 	// Get tar stream of /data from container
 	tarReader, err := w.CopyDirFromContainer(ctx, *gs.ContainerID, "/data")
@@ -85,45 +83,50 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}
 	defer tarReader.Close()
 
-	// Write gzipped tar to file
-	outFile, err := os.Create(backupPath)
-	if err != nil {
-		return nil, fmt.Errorf("creating backup file: %w", err)
-	}
-	defer outFile.Close()
+	// Pipe gzipped tar through to the store
+	pr, pw := io.Pipe()
+	var compressErr error
+	go func() {
+		gzWriter := gzip.NewWriter(pw)
+		if _, err := io.Copy(gzWriter, tarReader); err != nil {
+			compressErr = fmt.Errorf("compressing backup data: %w", err)
+			gzWriter.Close()
+			pw.CloseWithError(compressErr)
+			return
+		}
+		if err := gzWriter.Close(); err != nil {
+			compressErr = fmt.Errorf("closing gzip writer: %w", err)
+			pw.CloseWithError(compressErr)
+			return
+		}
+		pw.Close()
+	}()
 
-	gzWriter := gzip.NewWriter(outFile)
-	if _, err := io.Copy(gzWriter, tarReader); err != nil {
-		os.Remove(backupPath)
-		return nil, fmt.Errorf("writing backup data: %w", err)
+	if err := s.store.Save(ctx, gameserverID, backupID, pr); err != nil {
+		return nil, fmt.Errorf("saving backup to store: %w", err)
 	}
-	if err := gzWriter.Close(); err != nil {
-		os.Remove(backupPath)
-		return nil, fmt.Errorf("closing gzip writer: %w", err)
-	}
-	if err := outFile.Close(); err != nil {
-		os.Remove(backupPath)
-		return nil, fmt.Errorf("closing backup file: %w", err)
+	if compressErr != nil {
+		s.store.Delete(ctx, gameserverID, backupID)
+		return nil, compressErr
 	}
 
-	fi, err := os.Stat(backupPath)
+	sizeBytes, err := s.store.Size(ctx, gameserverID, backupID)
 	if err != nil {
-		return nil, fmt.Errorf("stat backup file: %w", err)
+		s.log.Warn("failed to get backup size", "backup_id", backupID, "error", err)
 	}
 
 	backup := &models.Backup{
 		ID:           backupID,
 		GameserverID: gameserverID,
 		Name:         name,
-		FilePath:     backupPath,
-		SizeBytes:    fi.Size(),
+		SizeBytes:    sizeBytes,
 	}
 	if err := models.CreateBackup(s.db, backup); err != nil {
-		os.Remove(backupPath)
+		s.store.Delete(ctx, gameserverID, backupID)
 		return nil, fmt.Errorf("recording backup in database: %w", err)
 	}
 
-	s.log.Info("backup created", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", fi.Size())
+	s.log.Info("backup created", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 	return backup, nil
 }
 
@@ -196,22 +199,20 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return fmt.Errorf("clearing volume failed (exit %d): %s", exitCode, stderr)
 	}
 
-	// Open backup and decompress
-	backupFile, err := os.Open(backup.FilePath)
+	// Load backup from store and decompress
+	reader, err := s.store.Load(ctx, backup.GameserverID, backup.ID)
 	if err != nil {
-		return fmt.Errorf("opening backup file: %w", err)
+		return fmt.Errorf("loading backup from store: %w", err)
 	}
-	defer backupFile.Close()
+	defer reader.Close()
 
-	gzReader, err := gzip.NewReader(backupFile)
+	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
 		return fmt.Errorf("creating gzip reader: %w", err)
 	}
 	defer gzReader.Close()
 
 	// Extract tar into /data
-	// docker cp extracts the tar at the dest path, but CopyFromContainer wraps /data contents
-	// under a "data/" prefix in the tar. We extract to "/" so "data/..." maps to "/data/..."
 	if err := w.CopyTarToContainer(ctx, tempID, "/", gzReader); err != nil {
 		return fmt.Errorf("extracting backup into container: %w", err)
 	}
@@ -237,16 +238,16 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 		return ErrNotFoundf("backup %s not found", backupID)
 	}
 
-	s.log.Info("deleting backup", "backup_id", backupID, "path", backup.FilePath)
+	s.log.Info("deleting backup", "backup_id", backupID, "gameserver_id", backup.GameserverID)
 
-	if err := os.Remove(backup.FilePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing backup file: %w", err)
+	if err := s.store.Delete(ctx, backup.GameserverID, backup.ID); err != nil {
+		return fmt.Errorf("removing backup from store: %w", err)
 	}
 
 	return models.DeleteBackup(s.db, backupID)
 }
 
-// DeleteBackupsByGameserver removes all backups for a gameserver (DB records + files).
+// DeleteBackupsByGameserver removes all backups for a gameserver (DB records + store files).
 func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserverID string) error {
 	backups, err := models.ListBackups(s.db, gameserverID)
 	if err != nil {
@@ -254,10 +255,41 @@ func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserve
 	}
 
 	for _, b := range backups {
-		if err := os.Remove(b.FilePath); err != nil && !os.IsNotExist(err) {
-			s.log.Warn("failed to remove backup file during cleanup", "path", b.FilePath, "error", err)
+		if err := s.store.Delete(ctx, gameserverID, b.ID); err != nil {
+			s.log.Warn("failed to remove backup from store during cleanup", "backup_id", b.ID, "error", err)
 		}
 	}
 
 	return models.DeleteBackupsByGameserver(s.db, gameserverID)
+}
+
+// enforceRetention deletes the oldest backups if the gameserver has reached its retention limit.
+func (s *BackupService) enforceRetention(ctx context.Context, gameserverID string) error {
+	maxBackups := s.settingsSvc.GetMaxBackups()
+	if maxBackups <= 0 {
+		return nil
+	}
+
+	backups, err := models.ListBackups(s.db, gameserverID)
+	if err != nil {
+		return fmt.Errorf("listing backups for retention: %w", err)
+	}
+
+	// ListBackups returns newest first — delete from the end to stay under limit
+	// We need to be at maxBackups-1 after this to make room for the new backup
+	for len(backups) >= maxBackups {
+		oldest := backups[len(backups)-1]
+		s.log.Info("retention: deleting oldest backup", "backup_id", oldest.ID, "gameserver_id", gameserverID, "count", len(backups), "max", maxBackups)
+
+		if err := s.store.Delete(ctx, gameserverID, oldest.ID); err != nil {
+			s.log.Warn("retention: failed to delete backup file", "backup_id", oldest.ID, "error", err)
+		}
+		if err := models.DeleteBackup(s.db, oldest.ID); err != nil {
+			return fmt.Errorf("retention: deleting backup record: %w", err)
+		}
+
+		backups = backups[:len(backups)-1]
+	}
+
+	return nil
 }

@@ -14,10 +14,12 @@ const (
 	SettingPortRangeStart    = "port_range_start"
 	SettingPortRangeEnd      = "port_range_end"
 	SettingPreferredPortMode = "preferred_port_mode"
+	SettingMaxBackups        = "max_backups"
 
 	DefaultPortRangeStart    = 27000
 	DefaultPortRangeEnd      = 28999
 	DefaultPreferredPortMode = "auto"
+	DefaultMaxBackups        = 10
 )
 
 type SettingsService struct {
@@ -114,4 +116,22 @@ func (s *SettingsService) SetPreferredPortMode(mode string) error {
 		mode = DefaultPreferredPortMode
 	}
 	return models.SetSetting(s.db, SettingPreferredPortMode, mode)
+}
+
+// GetMaxBackups returns the maximum number of backups to keep per gameserver.
+// 0 means unlimited.
+func (s *SettingsService) GetMaxBackups() int {
+	v, err := models.GetSetting(s.db, SettingMaxBackups)
+	if err != nil || v == "" {
+		return DefaultMaxBackups
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultMaxBackups
+	}
+	return n
+}
+
+func (s *SettingsService) SetMaxBackups(v int) error {
+	return models.SetSetting(s.db, SettingMaxBackups, strconv.Itoa(v))
 }
