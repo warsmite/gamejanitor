@@ -38,6 +38,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sf
 		"queryJSON":   queryJSON,
 		"multiply":    func(a, b int) int { return a * b },
 		"gamePort":    func(portsJSON json.RawMessage) string { return firstGamePort(portsJSON) },
+		"formatMB":    formatMB,
 	}
 
 	// Parse partials and layout as the base template set
@@ -107,6 +108,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		m["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
 		m["SFTPPort"] = r.sftpPort
 		m["Role"] = r.role
+		m["AuthEnabled"] = r.settingsSvc.GetAuthEnabled()
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -165,6 +167,7 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 	data["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
 	data["SFTPPort"] = r.sftpPort
 	data["Role"] = r.role
+	data["AuthEnabled"] = r.settingsSvc.GetAuthEnabled()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -239,6 +242,29 @@ func queryJSON(v any) template.JS {
 		return template.JS("null")
 	}
 	return template.JS(b)
+}
+
+func formatMB(v any) string {
+	var mb int64
+	switch n := v.(type) {
+	case int:
+		mb = int64(n)
+	case int64:
+		mb = n
+	default:
+		return fmt.Sprintf("%v MB", v)
+	}
+	if mb == 0 {
+		return "unlimited"
+	}
+	if mb >= 1024 {
+		gb := float64(mb) / 1024
+		if gb == float64(int64(gb)) {
+			return fmt.Sprintf("%d GB", int64(gb))
+		}
+		return fmt.Sprintf("%.1f GB", gb)
+	}
+	return fmt.Sprintf("%d MB", mb)
 }
 
 func jsonPretty(v any) string {

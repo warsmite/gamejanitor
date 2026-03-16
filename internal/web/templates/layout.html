@@ -11,6 +11,15 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
   <script>
+    function fmtMB(mb) {
+      if (mb === 0) return 'unlimited';
+      if (mb >= 1024) {
+        const gb = mb / 1024;
+        return (gb % 1 === 0) ? gb + ' GB' : gb.toFixed(1) + ' GB';
+      }
+      return mb + ' MB';
+    }
+
     function gsHero(id, initialStatus) {
       return {
         eventSource: null,
@@ -163,6 +172,16 @@
         </div>
       </div>
     </nav>
+
+    {{if not .AuthEnabled}}
+    <div class="bg-amber-500/10 border-b border-amber-500/30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center gap-2 text-sm text-amber-300">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span>Authentication is disabled. Anyone with network access can control your gameservers.</span>
+        <a href="/settings" class="ml-auto text-amber-200 hover:text-white font-medium transition-colors whitespace-nowrap">Enable in Settings</a>
+      </div>
+    </div>
+    {{end}}
 
     <!-- Main Content -->
     <main id="content" class="flex-1">

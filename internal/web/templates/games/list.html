@@ -17,7 +17,7 @@
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
       <div class="absolute bottom-0 left-0 right-0 p-3">
         <a href="/games/{{.ID}}" class="font-display font-semibold text-sm text-white hover:text-accent-300 transition-colors">{{.Name}}</a>
-        <p class="text-xs text-surface-400 mt-0.5">{{if .RecommendedMemoryMB}}{{.RecommendedMemoryMB}} MB{{else}}Unbounded{{end}}</p>
+        <p class="text-xs text-surface-400 mt-0.5">{{if .RecommendedMemoryMB}}{{formatMB .RecommendedMemoryMB}}{{else}}Unbounded{{end}}</p>
       </div>
       <!-- Hover overlay with create action -->
       <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">

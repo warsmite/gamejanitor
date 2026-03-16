@@ -106,6 +106,20 @@ func newTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 }
 
+func formatMemory(mb int) string {
+	if mb == 0 {
+		return "unlimited"
+	}
+	if mb >= 1024 {
+		gb := float64(mb) / 1024
+		if gb == float64(int(gb)) {
+			return fmt.Sprintf("%d GB", int(gb))
+		}
+		return fmt.Sprintf("%.1f GB", gb)
+	}
+	return fmt.Sprintf("%d MB", mb)
+}
+
 func exitError(err error) error {
 	fmt.Fprintln(os.Stderr, "Error:", err)
 	os.Exit(1)

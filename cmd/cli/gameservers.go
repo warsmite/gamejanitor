@@ -105,8 +105,12 @@ var gameserversGetCmd = &cobra.Command{
 		fmt.Printf("Name:       %s\n", gs.Name)
 		fmt.Printf("Game:       %s\n", gs.GameID)
 		fmt.Printf("Status:     %s\n", gs.Status)
-		fmt.Printf("Memory:     %d MB\n", gs.MemoryLimitMB)
-		fmt.Printf("CPU:        %.1f\n", gs.CPULimit)
+		fmt.Printf("Memory:     %s\n", formatMemory(gs.MemoryLimitMB))
+		if gs.CPULimit > 0 {
+			fmt.Printf("CPU:        %.1f cores\n", gs.CPULimit)
+		} else {
+			fmt.Printf("CPU:        unlimited\n")
+		}
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
 		fmt.Printf("Ports:      %s\n", string(gs.Ports))
 		fmt.Printf("Env:        %s\n", string(gs.Env))

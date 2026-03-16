@@ -146,7 +146,7 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Container:\n")
 			fmt.Printf("  State:      %s\n", status.Container.State)
 			fmt.Printf("  Started:    %s\n", status.Container.StartedAt)
-			fmt.Printf("  Memory:     %d / %d MB\n", status.Container.MemoryUsageMB, status.Container.MemoryLimitMB)
+			fmt.Printf("  Memory:     %s / %s\n", formatMemory(status.Container.MemoryUsageMB), formatMemory(status.Container.MemoryLimitMB))
 			fmt.Printf("  CPU:        %.1f%%\n", status.Container.CPUPercent)
 		}
 		return nil

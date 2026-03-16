@@ -63,9 +63,9 @@ var overviewStatusCmd = &cobra.Command{
 			if isRunning {
 				cpu = fmt.Sprintf("%.1f%%", gs.CPUPercent)
 				if gs.MemoryLimitMB > 0 {
-					memory = fmt.Sprintf("%d/%d MB", gs.MemoryUsageMB, gs.MemoryLimitMB)
+					memory = fmt.Sprintf("%s / %s", formatMemory(gs.MemoryUsageMB), formatMemory(gs.MemoryLimitMB))
 				} else {
-					memory = fmt.Sprintf("%d MB", gs.MemoryUsageMB)
+					memory = formatMemory(gs.MemoryUsageMB)
 				}
 				if gs.PlayersOnline != nil {
 					players = fmt.Sprintf("%d/%d", *gs.PlayersOnline, *gs.MaxPlayers)

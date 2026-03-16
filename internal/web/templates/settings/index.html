@@ -309,7 +309,7 @@
         <td class="px-4 py-2.5 text-surface-200 font-medium">{{.ID}}</td>
         <td class="px-4 py-2.5 text-surface-300 font-mono text-xs">{{.LanIP}}</td>
         <td class="px-4 py-2.5 text-surface-300">{{.CPUCores}} cores</td>
-        <td class="px-4 py-2.5 text-surface-300">{{.MemoryAvailableMB}} / {{.MemoryTotalMB}} MB</td>
+        <td class="px-4 py-2.5 text-surface-300">{{formatMB .MemoryAvailableMB}} / {{formatMB .MemoryTotalMB}}</td>
         <td class="px-4 py-2.5" x-data="{ editing: false }">
           <div x-show="!editing">
             {{if .PortRangeStart}}
@@ -344,7 +344,7 @@
             <div class="text-xs space-y-0.5">
               {{if .MaxGameservers}}<span class="text-surface-200">{{.GameserverCount}}/{{derefInt .MaxGameservers}} gameservers</span>{{end}}
               {{if and .MaxMemoryMB .MaxGameservers}}<br>{{end}}
-              {{if .MaxMemoryMB}}<span class="text-surface-200">{{.AllocatedMemoryMB}}/{{derefInt .MaxMemoryMB}} MB</span>{{end}}
+              {{if .MaxMemoryMB}}<span class="text-surface-200">{{formatMB .AllocatedMemoryMB}} / {{formatMB (derefInt .MaxMemoryMB)}}</span>{{end}}
             </div>
             <button @click="editingLimits = true" class="mt-0.5 text-[11px] text-accent-400 hover:text-accent-300 transition-colors">Edit</button>
             {{else}}

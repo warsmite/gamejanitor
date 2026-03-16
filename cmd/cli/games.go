@@ -73,7 +73,7 @@ var gamesGetCmd = &cobra.Command{
 		fmt.Printf("ID:                  %s\n", game.ID)
 		fmt.Printf("Name:                %s\n", game.Name)
 		fmt.Printf("Image:               %s\n", game.Image)
-		fmt.Printf("Recommended Memory:  %d MB\n", game.RecommendedMemoryMB)
+		fmt.Printf("Recommended Memory:  %s\n", formatMemory(game.RecommendedMemoryMB))
 		return nil
 	},
 }

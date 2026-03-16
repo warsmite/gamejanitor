@@ -51,7 +51,7 @@ var workersListCmd = &cobra.Command{
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tLAN IP\tCPU\tMEMORY\tGAMESERVERS\tSTATUS")
 		for _, wk := range workers {
-			memory := fmt.Sprintf("%d/%d MB", wk.MemoryAvailableMB, wk.MemoryTotalMB)
+			memory := fmt.Sprintf("%s / %s", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
 
 			gs := fmt.Sprintf("%d", wk.GameserverCount)
 			if wk.MaxGameservers != nil {
@@ -109,9 +109,9 @@ var workersGetCmd = &cobra.Command{
 			fmt.Fprintf(w, "External IP:\t%s\n", wk.ExternalIP)
 		}
 		fmt.Fprintf(w, "CPU:\t%d cores\n", wk.CPUCores)
-		fmt.Fprintf(w, "Memory:\t%d / %d MB available\n", wk.MemoryAvailableMB, wk.MemoryTotalMB)
+		fmt.Fprintf(w, "Memory:\t%s / %s available\n", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
 		fmt.Fprintf(w, "Gameservers:\t%d\n", wk.GameserverCount)
-		fmt.Fprintf(w, "Allocated Memory:\t%d MB\n", wk.AllocatedMemoryMB)
+		fmt.Fprintf(w, "Allocated Memory:\t%s\n", formatMemory(wk.AllocatedMemoryMB))
 
 		if wk.PortRangeStart != nil && wk.PortRangeEnd != nil {
 			fmt.Fprintf(w, "Port Range:\t%d-%d\n", *wk.PortRangeStart, *wk.PortRangeEnd)
@@ -122,7 +122,7 @@ var workersGetCmd = &cobra.Command{
 			fmt.Fprintf(w, "Max Gameservers:\t%d\n", *wk.MaxGameservers)
 		}
 		if wk.MaxMemoryMB != nil {
-			fmt.Fprintf(w, "Max Memory:\t%d MB\n", *wk.MaxMemoryMB)
+			fmt.Fprintf(w, "Max Memory:\t%s\n", formatMemory(*wk.MaxMemoryMB))
 		}
 		fmt.Fprintf(w, "Last Seen:\t%s\n", wk.LastSeen)
 		w.Flush()

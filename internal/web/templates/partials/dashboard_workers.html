@@ -13,7 +13,7 @@
     <span class="font-mono text-surface-200">{{.LanIP}}</span>
     <span class="text-surface-500">{{.CPUCores}} cores</span>
     <span class="text-surface-500">·</span>
-    <span class="text-surface-300">{{.MemoryAvailableMB}}<span class="text-surface-500">/{{.MemoryTotalMB}} MB</span></span>
+    <span class="text-surface-300">{{formatMB .MemoryAvailableMB}}<span class="text-surface-500"> / {{formatMB .MemoryTotalMB}}</span></span>
     <span class="text-surface-500">·</span>
     <span class="text-surface-300">{{.GameserverCount}} <span class="text-surface-500">gameservers</span></span>
   </div>
