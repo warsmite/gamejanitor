@@ -14,6 +14,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/handlers"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/static"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/csrf"
@@ -31,11 +32,14 @@ func NewRouter(
 	authSvc *service.AuthService,
 	broadcaster *service.EventBroadcaster,
 	netInfo *netinfo.Info,
+	registry *worker.Registry,
 	logPath string,
 	dataDir string,
+	sftpPort int,
+	role string,
 	log *slog.Logger,
 ) (http.Handler, error) {
-	renderer, err := handlers.NewRenderer(netInfo, settingsSvc)
+	renderer, err := handlers.NewRenderer(netInfo, settingsSvc, sftpPort, role)
 	if err != nil {
 		return nil, fmt.Errorf("initializing template renderer: %w", err)
 	}
@@ -186,7 +190,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, renderer, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
 	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameStore, gameserverSvc, renderer, log)
@@ -208,8 +212,17 @@ func NewRouter(
 		// Settings — admin only
 		r.Route("/settings", func(r chi.Router) {
 			r.Use(requireAdmin)
+			r.Get("/", pageSettings.SettingsPage)
+			r.Get("/workers", pageSettings.WorkersPartial)
 			r.Post("/connection-address", pageSettings.SetConnectionAddress)
 			r.Delete("/connection-address", pageSettings.ClearConnectionAddress)
+			r.Post("/port-range", pageSettings.SavePortRange)
+			r.Post("/port-mode", pageSettings.SavePortMode)
+			r.Post("/max-backups", pageSettings.SaveMaxBackups)
+			r.Post("/localhost-bypass/enable", pageSettings.SetLocalhostBypass(true))
+			r.Post("/localhost-bypass/disable", pageSettings.SetLocalhostBypass(false))
+			r.Post("/worker-tokens", pageSettings.CreateWorkerToken)
+			r.Delete("/worker-tokens/{tokenId}", pageSettings.DeleteWorkerToken)
 			r.Get("/tokens", pageAuth.TokensPage)
 			r.Post("/tokens", pageAuth.CreateToken)
 			r.Delete("/tokens/{tokenId}", pageAuth.DeleteToken)

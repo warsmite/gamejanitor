@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -9,13 +10,14 @@ import (
 
 // WorkerInfo tracks a connected worker's metadata and status.
 type WorkerInfo struct {
-	ID               string
-	LanIP            string
-	ExternalIP       string
-	CPUCores         int64
-	MemoryTotalMB    int64
+	ID                string
+	LanIP             string
+	ExternalIP        string
+	CPUCores          int64
+	MemoryTotalMB     int64
 	MemoryAvailableMB int64
-	LastSeen         time.Time
+	LastSeen          time.Time
+	TokenID           string
 }
 
 // Registry tracks connected remote workers.
@@ -24,6 +26,10 @@ type Registry struct {
 	workers map[string]*registeredWorker
 	mu      sync.RWMutex
 	log     *slog.Logger
+
+	// Callbacks fired on registration/unregistration (e.g. StatusManager subscribes)
+	onRegister   func(nodeID string, w Worker)
+	onUnregister func(nodeID string)
 }
 
 type registeredWorker struct {
@@ -38,23 +44,47 @@ func NewRegistry(log *slog.Logger) *Registry {
 	}
 }
 
+// SetCallbacks sets the registration/unregistration callbacks.
+// Must be called before any workers register.
+func (r *Registry) SetCallbacks(onRegister func(string, Worker), onUnregister func(string)) {
+	r.onRegister = onRegister
+	r.onUnregister = onUnregister
+}
+
 func (r *Registry) Register(w *RemoteWorker, info WorkerInfo) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+
+	// Close old connection if re-registering
+	if old, ok := r.workers[w.nodeID]; ok {
+		old.worker.Close()
+	}
 
 	info.LastSeen = time.Now()
 	r.workers[w.nodeID] = &registeredWorker{worker: w, info: info}
 	r.log.Info("worker registered", "worker_id", w.nodeID, "lan_ip", info.LanIP, "external_ip", info.ExternalIP)
+	r.mu.Unlock()
+
+	if r.onRegister != nil {
+		r.onRegister(w.nodeID, w)
+	}
 }
 
 func (r *Registry) Unregister(nodeID string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
-	if rw, ok := r.workers[nodeID]; ok {
-		rw.worker.Close()
-		delete(r.workers, nodeID)
-		r.log.Info("worker unregistered", "worker_id", nodeID)
+	rw, ok := r.workers[nodeID]
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+
+	rw.worker.Close()
+	delete(r.workers, nodeID)
+	r.log.Info("worker unregistered", "worker_id", nodeID)
+	r.mu.Unlock()
+
+	if r.onUnregister != nil {
+		r.onUnregister(nodeID)
 	}
 }
 
@@ -89,6 +119,7 @@ func (r *Registry) UpdateHeartbeat(nodeID string, info WorkerInfo) error {
 		return fmt.Errorf("worker %s not registered", nodeID)
 	}
 	info.LastSeen = time.Now()
+	info.TokenID = rw.info.TokenID // preserve token from registration
 	rw.info = info
 	return nil
 }
@@ -128,4 +159,39 @@ func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.workers)
+}
+
+// StartReaper starts a goroutine that removes workers with stale heartbeats.
+func (r *Registry) StartReaper(ctx context.Context, log *slog.Logger) {
+	const heartbeatTimeout = 30 * time.Second
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				r.reapStale(heartbeatTimeout, log)
+			}
+		}
+	}()
+}
+
+func (r *Registry) reapStale(timeout time.Duration, log *slog.Logger) {
+	r.mu.RLock()
+	var stale []string
+	for id, rw := range r.workers {
+		if time.Since(rw.info.LastSeen) > timeout {
+			stale = append(stale, id)
+		}
+	}
+	r.mu.RUnlock()
+
+	for _, id := range stale {
+		log.Warn("worker heartbeat timeout, unregistering", "worker_id", id)
+		r.Unregister(id)
+	}
 }

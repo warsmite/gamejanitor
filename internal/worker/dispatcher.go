@@ -66,6 +66,7 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // DefaultWorker returns the Worker for new gameservers.
 // In standalone mode, returns the local worker.
 // In multi-node mode, picks the worker with the most available resources.
+// Returns nil if no workers are available (controller-only with no remote workers).
 func (d *Dispatcher) DefaultWorker() Worker {
 	if d.registry == nil {
 		return d.local
@@ -78,6 +79,11 @@ func (d *Dispatcher) DefaultWorker() Worker {
 			return w
 		}
 		d.log.Warn("failed to pick best worker, falling back to local", "error", err)
+	}
+
+	if d.local == nil {
+		d.log.Error("no workers available for gameserver placement")
+		return nil
 	}
 
 	return d.local

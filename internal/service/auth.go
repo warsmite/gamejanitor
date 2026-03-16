@@ -17,6 +17,7 @@ import (
 const (
 	ScopeAdmin      = "admin"
 	ScopeGameserver = "gameserver"
+	ScopeWorker     = "worker"
 )
 
 // All available permissions for scoped tokens.
@@ -140,6 +141,46 @@ func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, per
 
 	s.log.Info("scoped token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
 	return rawToken, token, nil
+}
+
+// CreateWorkerToken creates a new worker token for gRPC authentication.
+// Returns the raw token string — must be shown to the admin once.
+func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, error) {
+	if name == "" {
+		return "", nil, fmt.Errorf("token name is required")
+	}
+
+	rawToken, err := generateSecureToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("generating token: %w", err)
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", nil, fmt.Errorf("hashing token: %w", err)
+	}
+
+	token := &models.Token{
+		ID:            uuid.New().String(),
+		Name:          name,
+		HashedToken:   string(hashed),
+		Scope:         ScopeWorker,
+		GameserverIDs: json.RawMessage("[]"),
+		Permissions:   json.RawMessage("[]"),
+	}
+
+	if err := models.CreateToken(s.db, token); err != nil {
+		return "", nil, fmt.Errorf("saving worker token: %w", err)
+	}
+
+	s.log.Info("worker token created", "id", token.ID, "name", name)
+	return rawToken, token, nil
+}
+
+// IsWorkerTokenValid checks if a token ID still exists with worker scope.
+// Used for heartbeat fast-path validation (no bcrypt needed).
+func (s *AuthService) IsWorkerTokenValid(tokenID string) bool {
+	return models.TokenExistsByScope(s.db, tokenID, ScopeWorker)
 }
 
 func (s *AuthService) ListTokens() ([]models.Token, error) {

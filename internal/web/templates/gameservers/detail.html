@@ -254,6 +254,37 @@
       </div>
       {{end}}
 
+      <!-- SFTP Access -->
+      {{if .SFTPPort}}
+      {{- $sftpHost := .ConnectionAddress -}}
+      {{- if not $sftpHost -}}{{- $sftpHost = "127.0.0.1" -}}{{- end -}}
+      <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-4" x-data="{ sftpCopied: false }">
+        <h3 class="text-xs font-medium text-surface-400 uppercase tracking-wider mb-3">File Access (SFTP)</h3>
+        <div class="space-y-2">
+          <div>
+            <p class="text-[11px] text-surface-500 mb-0.5">Host</p>
+            <p class="text-sm font-mono text-surface-200">{{$sftpHost}}:{{.SFTPPort}}</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-surface-500 mb-0.5">Username</p>
+            <p class="text-sm font-mono text-surface-200">{{.Gameserver.ID}}</p>
+          </div>
+          <div>
+            <p class="text-[11px] text-surface-500 mb-0.5">Password</p>
+            <p class="text-xs text-surface-400">Use an auth token with <span class="font-mono text-surface-300">files</span> permission</p>
+          </div>
+          <div class="pt-2 border-t border-surface-800/40">
+            <button @click="navigator.clipboard.writeText('sftp://{{.Gameserver.ID}}@{{$sftpHost}}:{{.SFTPPort}}'); sftpCopied = true; setTimeout(() => sftpCopied = false, 1500)"
+                    class="flex items-center gap-1.5 text-xs text-accent-400 hover:text-accent-300 transition-colors">
+              <svg x-show="!sftpCopied" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"/></svg>
+              <svg x-show="sftpCopied" x-cloak class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+              <span x-text="sftpCopied ? 'Copied!' : 'Copy SFTP URL'"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      {{end}}
+
       <!-- Maintenance -->
       <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-4">
         <h3 class="text-xs font-medium text-surface-400 uppercase tracking-wider mb-3">Maintenance</h3>

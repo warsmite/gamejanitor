@@ -19,9 +19,11 @@ type Renderer struct {
 	templates   map[string]*template.Template
 	netInfo     *netinfo.Info
 	settingsSvc *service.SettingsService
+	sftpPort    int
+	role        string
 }
 
-func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*Renderer, error) {
+func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sftpPort int, role string) (*Renderer, error) {
 	funcMap := template.FuncMap{
 		"statusColor": statusColor,
 		"formatTime":  formatTime,
@@ -43,7 +45,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*
 		return nil, fmt.Errorf("parsing base templates: %w", err)
 	}
 
-	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc}
+	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc, sftpPort: sftpPort, role: role}
 
 	// Find all page templates (top-level and subdirectories, excluding partials and layout)
 	pages := []string{
@@ -60,6 +62,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*
 		"auth/login.html",
 		"auth/tokens.html",
 		"auth/token_created.html",
+		"settings/index.html",
 	}
 
 	for _, page := range pages {
@@ -101,6 +104,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		m["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
 		m["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
 		m["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+		m["SFTPPort"] = r.sftpPort
+		m["Role"] = r.role
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -157,6 +162,8 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 	data["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
 	data["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
 	data["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+	data["SFTPPort"] = r.sftpPort
+	data["Role"] = r.role
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

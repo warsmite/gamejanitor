@@ -2370,6 +2370,246 @@ func (x *HeartbeatResponse) GetAccepted() bool {
 	return false
 }
 
+type RegisterRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	WorkerId          string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	GrpcAddress       string                 `protobuf:"bytes,2,opt,name=grpc_address,json=grpcAddress,proto3" json:"grpc_address,omitempty"`
+	CpuCores          int64                  `protobuf:"varint,3,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryTotalMb     int64                  `protobuf:"varint,4,opt,name=memory_total_mb,json=memoryTotalMb,proto3" json:"memory_total_mb,omitempty"`
+	MemoryAvailableMb int64                  `protobuf:"varint,5,opt,name=memory_available_mb,json=memoryAvailableMb,proto3" json:"memory_available_mb,omitempty"`
+	LanIp             string                 `protobuf:"bytes,6,opt,name=lan_ip,json=lanIp,proto3" json:"lan_ip,omitempty"`
+	ExternalIp        string                 `protobuf:"bytes,7,opt,name=external_ip,json=externalIp,proto3" json:"external_ip,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RegisterRequest) Reset() {
+	*x = RegisterRequest{}
+	mi := &file_proto_worker_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterRequest) ProtoMessage() {}
+
+func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterRequest) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *RegisterRequest) GetWorkerId() string {
+	if x != nil {
+		return x.WorkerId
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetGrpcAddress() string {
+	if x != nil {
+		return x.GrpcAddress
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetCpuCores() int64 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetMemoryTotalMb() int64 {
+	if x != nil {
+		return x.MemoryTotalMb
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetMemoryAvailableMb() int64 {
+	if x != nil {
+		return x.MemoryAvailableMb
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetLanIp() string {
+	if x != nil {
+		return x.LanIp
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetExternalIp() string {
+	if x != nil {
+		return x.ExternalIp
+	}
+	return ""
+}
+
+type RegisterResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterResponse) Reset() {
+	*x = RegisterResponse{}
+	mi := &file_proto_worker_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterResponse) ProtoMessage() {}
+
+func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
+func (*RegisterResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *RegisterResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+type PrepareGameScriptsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GameId        string                 `protobuf:"bytes,1,opt,name=game_id,json=gameId,proto3" json:"game_id,omitempty"`
+	GameserverId  string                 `protobuf:"bytes,2,opt,name=gameserver_id,json=gameserverId,proto3" json:"gameserver_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareGameScriptsRequest) Reset() {
+	*x = PrepareGameScriptsRequest{}
+	mi := &file_proto_worker_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareGameScriptsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareGameScriptsRequest) ProtoMessage() {}
+
+func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareGameScriptsRequest.ProtoReflect.Descriptor instead.
+func (*PrepareGameScriptsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *PrepareGameScriptsRequest) GetGameId() string {
+	if x != nil {
+		return x.GameId
+	}
+	return ""
+}
+
+func (x *PrepareGameScriptsRequest) GetGameserverId() string {
+	if x != nil {
+		return x.GameserverId
+	}
+	return ""
+}
+
+type PrepareGameScriptsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ScriptDir     string                 `protobuf:"bytes,1,opt,name=script_dir,json=scriptDir,proto3" json:"script_dir,omitempty"`
+	DefaultsDir   string                 `protobuf:"bytes,2,opt,name=defaults_dir,json=defaultsDir,proto3" json:"defaults_dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareGameScriptsResponse) Reset() {
+	*x = PrepareGameScriptsResponse{}
+	mi := &file_proto_worker_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareGameScriptsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareGameScriptsResponse) ProtoMessage() {}
+
+func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareGameScriptsResponse.ProtoReflect.Descriptor instead.
+func (*PrepareGameScriptsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *PrepareGameScriptsResponse) GetScriptDir() string {
+	if x != nil {
+		return x.ScriptDir
+	}
+	return ""
+}
+
+func (x *PrepareGameScriptsResponse) GetDefaultsDir() string {
+	if x != nil {
+		return x.DefaultsDir
+	}
+	return ""
+}
+
 var File_proto_worker_proto protoreflect.FileDescriptor
 
 const file_proto_worker_proto_rawDesc = "" +
@@ -2515,7 +2755,25 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\vexternal_ip\x18\x06 \x01(\tR\n" +
 	"externalIp\"/\n" +
 	"\x11HeartbeatResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted2\xd7\r\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xfe\x01\n" +
+	"\x0fRegisterRequest\x12\x1b\n" +
+	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12!\n" +
+	"\fgrpc_address\x18\x02 \x01(\tR\vgrpcAddress\x12\x1b\n" +
+	"\tcpu_cores\x18\x03 \x01(\x03R\bcpuCores\x12&\n" +
+	"\x0fmemory_total_mb\x18\x04 \x01(\x03R\rmemoryTotalMb\x12.\n" +
+	"\x13memory_available_mb\x18\x05 \x01(\x03R\x11memoryAvailableMb\x12\x15\n" +
+	"\x06lan_ip\x18\x06 \x01(\tR\x05lanIp\x12\x1f\n" +
+	"\vexternal_ip\x18\a \x01(\tR\n" +
+	"externalIp\".\n" +
+	"\x10RegisterResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"Y\n" +
+	"\x19PrepareGameScriptsRequest\x12\x17\n" +
+	"\agame_id\x18\x01 \x01(\tR\x06gameId\x12#\n" +
+	"\rgameserver_id\x18\x02 \x01(\tR\fgameserverId\"^\n" +
+	"\x1aPrepareGameScriptsResponse\x12\x1d\n" +
+	"\n" +
+	"script_dir\x18\x01 \x01(\tR\tscriptDir\x12!\n" +
+	"\fdefaults_dir\x18\x02 \x01(\tR\vdefaultsDir2\xb4\x0e\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
@@ -2541,6 +2799,10 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x14CopyDirFromContainer\x12#.worker.CopyDirFromContainerRequest\x1a\x11.worker.DataChunk0\x01\x12]\n" +
 	"\x12CopyTarToContainer\x12!.worker.CopyTarToContainerRequest\x1a\".worker.CopyTarToContainerResponse(\x01\x12F\n" +
 	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x19.worker.ContainerEventMsg0\x01\x12@\n" +
+	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
+	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse2\x94\x01\n" +
+	"\x11ControllerService\x12=\n" +
+	"\bRegister\x12\x17.worker.RegisterRequest\x1a\x18.worker.RegisterResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponseB9Z7github.com/0xkowalskidev/gamejanitor/internal/worker/pbb\x06proto3"
 
 var (
@@ -2555,7 +2817,7 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 	return file_proto_worker_proto_rawDescData
 }
 
-var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_proto_worker_proto_goTypes = []any{
 	(*DataChunk)(nil),                   // 0: worker.DataChunk
 	(*PullImageRequest)(nil),            // 1: worker.PullImageRequest
@@ -2604,6 +2866,10 @@ var file_proto_worker_proto_goTypes = []any{
 	(*ContainerEventMsg)(nil),           // 44: worker.ContainerEventMsg
 	(*HeartbeatRequest)(nil),            // 45: worker.HeartbeatRequest
 	(*HeartbeatResponse)(nil),           // 46: worker.HeartbeatResponse
+	(*RegisterRequest)(nil),             // 47: worker.RegisterRequest
+	(*RegisterResponse)(nil),            // 48: worker.RegisterResponse
+	(*PrepareGameScriptsRequest)(nil),   // 49: worker.PrepareGameScriptsRequest
+	(*PrepareGameScriptsResponse)(nil),  // 50: worker.PrepareGameScriptsResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
@@ -2631,31 +2897,37 @@ var file_proto_worker_proto_depIdxs = []int32{
 	41, // 22: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
 	43, // 23: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
 	45, // 24: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	2,  // 25: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 26: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
-	7,  // 27: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
-	9,  // 28: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
-	11, // 29: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
-	13, // 30: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
-	15, // 31: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 32: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
-	18, // 33: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
-	20, // 34: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
-	22, // 35: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
-	25, // 36: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
-	27, // 37: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
-	29, // 38: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
-	31, // 39: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
-	33, // 40: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
-	35, // 41: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
-	37, // 42: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
-	39, // 43: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
-	0,  // 44: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
-	42, // 45: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
-	44, // 46: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
-	46, // 47: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	25, // [25:48] is the sub-list for method output_type
-	2,  // [2:25] is the sub-list for method input_type
+	49, // 25: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
+	47, // 26: worker.ControllerService.Register:input_type -> worker.RegisterRequest
+	45, // 27: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	2,  // 28: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
+	5,  // 29: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
+	7,  // 30: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
+	9,  // 31: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
+	11, // 32: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
+	13, // 33: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
+	15, // 34: worker.WorkerService.Exec:output_type -> worker.ExecResponse
+	0,  // 35: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
+	18, // 36: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
+	20, // 37: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
+	22, // 38: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
+	25, // 39: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
+	27, // 40: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
+	29, // 41: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
+	31, // 42: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
+	33, // 43: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
+	35, // 44: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
+	37, // 45: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
+	39, // 46: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
+	0,  // 47: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
+	42, // 48: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
+	44, // 49: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
+	46, // 50: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	50, // 51: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
+	48, // 52: worker.ControllerService.Register:output_type -> worker.RegisterResponse
+	46, // 53: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	28, // [28:54] is the sub-list for method output_type
+	2,  // [2:28] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -2672,9 +2944,9 @@ func file_proto_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_worker_proto_rawDesc), len(file_proto_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   47,
+			NumMessages:   51,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_proto_worker_proto_goTypes,
 		DependencyIndexes: file_proto_worker_proto_depIdxs,

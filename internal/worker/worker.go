@@ -41,4 +41,7 @@ type Worker interface {
 
 	// Events
 	WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error)
+
+	// Game scripts — extract to local filesystem, return host paths for bind-mounts
+	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
 }

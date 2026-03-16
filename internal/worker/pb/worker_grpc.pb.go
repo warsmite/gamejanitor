@@ -42,6 +42,7 @@ const (
 	WorkerService_CopyTarToContainer_FullMethodName   = "/worker.WorkerService/CopyTarToContainer"
 	WorkerService_WatchEvents_FullMethodName          = "/worker.WorkerService/WatchEvents"
 	WorkerService_Heartbeat_FullMethodName            = "/worker.WorkerService/Heartbeat"
+	WorkerService_PrepareGameScripts_FullMethodName   = "/worker.WorkerService/PrepareGameScripts"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -80,6 +81,8 @@ type WorkerServiceClient interface {
 	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error)
 	// Health
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	// Game scripts — worker extracts scripts locally from embedded game data
+	PrepareGameScripts(ctx context.Context, in *PrepareGameScriptsRequest, opts ...grpc.CallOption) (*PrepareGameScriptsResponse, error)
 }
 
 type workerServiceClient struct {
@@ -350,6 +353,16 @@ func (c *workerServiceClient) Heartbeat(ctx context.Context, in *HeartbeatReques
 	return out, nil
 }
 
+func (c *workerServiceClient) PrepareGameScripts(ctx context.Context, in *PrepareGameScriptsRequest, opts ...grpc.CallOption) (*PrepareGameScriptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareGameScriptsResponse)
+	err := c.cc.Invoke(ctx, WorkerService_PrepareGameScripts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
 // for forward compatibility.
@@ -386,6 +399,8 @@ type WorkerServiceServer interface {
 	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[ContainerEventMsg]) error
 	// Health
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	// Game scripts — worker extracts scripts locally from embedded game data
+	PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error)
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -464,6 +479,9 @@ func (UnimplementedWorkerServiceServer) WatchEvents(*WatchEventsRequest, grpc.Se
 }
 func (UnimplementedWorkerServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedWorkerServiceServer) PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareGameScripts not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -868,6 +886,24 @@ func _WorkerService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerService_PrepareGameScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareGameScriptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).PrepareGameScripts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_PrepareGameScripts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).PrepareGameScripts(ctx, req.(*PrepareGameScriptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -951,6 +987,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Heartbeat",
 			Handler:    _WorkerService_Heartbeat_Handler,
 		},
+		{
+			MethodName: "PrepareGameScripts",
+			Handler:    _WorkerService_PrepareGameScripts_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -974,5 +1014,149 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "proto/worker.proto",
+}
+
+const (
+	ControllerService_Register_FullMethodName  = "/worker.ControllerService/Register"
+	ControllerService_Heartbeat_FullMethodName = "/worker.ControllerService/Heartbeat"
+)
+
+// ControllerServiceClient is the client API for ControllerService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ControllerService runs on the controller and accepts worker registrations/heartbeats.
+type ControllerServiceClient interface {
+	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+}
+
+type controllerServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewControllerServiceClient(cc grpc.ClientConnInterface) ControllerServiceClient {
+	return &controllerServiceClient{cc}
+}
+
+func (c *controllerServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterResponse)
+	err := c.cc.Invoke(ctx, ControllerService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, ControllerService_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ControllerServiceServer is the server API for ControllerService service.
+// All implementations must embed UnimplementedControllerServiceServer
+// for forward compatibility.
+//
+// ControllerService runs on the controller and accepts worker registrations/heartbeats.
+type ControllerServiceServer interface {
+	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	mustEmbedUnimplementedControllerServiceServer()
+}
+
+// UnimplementedControllerServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedControllerServiceServer struct{}
+
+func (UnimplementedControllerServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedControllerServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedControllerServiceServer) mustEmbedUnimplementedControllerServiceServer() {}
+func (UnimplementedControllerServiceServer) testEmbeddedByValue()                           {}
+
+// UnsafeControllerServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ControllerServiceServer will
+// result in compilation errors.
+type UnsafeControllerServiceServer interface {
+	mustEmbedUnimplementedControllerServiceServer()
+}
+
+func RegisterControllerServiceServer(s grpc.ServiceRegistrar, srv ControllerServiceServer) {
+	// If the following call panics, it indicates UnimplementedControllerServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ControllerService_ServiceDesc, srv)
+}
+
+func _ControllerService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControllerService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).Register(ctx, req.(*RegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControllerService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControllerService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ControllerService_ServiceDesc is the grpc.ServiceDesc for ControllerService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ControllerService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "worker.ControllerService",
+	HandlerType: (*ControllerServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Register",
+			Handler:    _ControllerService_Register_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _ControllerService_Heartbeat_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/worker.proto",
 }

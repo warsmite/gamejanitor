@@ -41,6 +41,15 @@ service WorkerService {
 
     // Health
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+    // Game scripts — worker extracts scripts locally from embedded game data
+    rpc PrepareGameScripts(PrepareGameScriptsRequest) returns (PrepareGameScriptsResponse);
+}
+
+// ControllerService runs on the controller and accepts worker registrations/heartbeats.
+service ControllerService {
+    rpc Register(RegisterRequest) returns (RegisterResponse);
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
 
 // Shared
@@ -244,4 +253,30 @@ message HeartbeatRequest {
 }
 message HeartbeatResponse {
     bool accepted = 1;
+}
+
+// Registration
+
+message RegisterRequest {
+    string worker_id = 1;
+    string grpc_address = 2;
+    int64 cpu_cores = 3;
+    int64 memory_total_mb = 4;
+    int64 memory_available_mb = 5;
+    string lan_ip = 6;
+    string external_ip = 7;
+}
+message RegisterResponse {
+    bool accepted = 1;
+}
+
+// Game scripts
+
+message PrepareGameScriptsRequest {
+    string game_id = 1;
+    string gameserver_id = 2;
+}
+message PrepareGameScriptsResponse {
+    string script_dir = 1;
+    string defaults_dir = 2;
 }

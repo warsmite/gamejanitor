@@ -14,10 +14,11 @@
     {{end}}
 
     <h2 class="font-display font-semibold text-white text-lg mb-1">
-      {{if .IsAdmin}}Admin Token{{else}}Token Created: {{.Name}}{{end}}
+      {{if .IsAdmin}}Admin Token{{else if .IsWorker}}Worker Token Created: {{.Name}}{{else}}Token Created: {{.Name}}{{end}}
     </h2>
     <p class="text-surface-400 text-sm mb-4">
       Copy this token now. It will not be shown again.
+      {{if .IsWorker}}Pass it to the worker via <code class="text-accent-400">--worker-token</code> or the <code class="text-accent-400">GJ_WORKER_TOKEN</code> environment variable.{{end}}
     </p>
 
     <div class="relative" x-data="{ copied: false }">
@@ -30,9 +31,15 @@
     </div>
 
     <div class="mt-6">
+      {{if .IsWorker}}
+      <a href="/settings" class="px-4 py-2 bg-surface-800/60 hover:bg-surface-700 text-white rounded-lg text-sm font-medium transition-colors">
+        Back to Settings
+      </a>
+      {{else}}
       <a href="/settings/tokens" class="px-4 py-2 bg-surface-800/60 hover:bg-surface-700 text-white rounded-lg text-sm font-medium transition-colors">
         Go to Token Management
       </a>
+      {{end}}
     </div>
   </div>
 </div>

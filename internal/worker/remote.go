@@ -332,6 +332,17 @@ func (r *grpcStreamReader) Close() error {
 	return nil
 }
 
+func (w *RemoteWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
+	resp, err := w.client.PrepareGameScripts(ctx, &pb.PrepareGameScriptsRequest{
+		GameId:       gameID,
+		GameserverId: gameserverID,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return resp.ScriptDir, resp.DefaultsDir, nil
+}
+
 // Sendbeat sends a heartbeat to the controller (called by worker nodes).
 func (w *RemoteWorker) Sendbeat(ctx context.Context, req *pb.HeartbeatRequest) error {
 	_, err := w.client.Heartbeat(ctx, req)

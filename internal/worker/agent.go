@@ -7,8 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
 )
 
@@ -16,12 +18,14 @@ import (
 // Runs on worker nodes; the controller connects via RemoteWorker.
 type Agent struct {
 	pb.UnimplementedWorkerServiceServer
-	worker Worker
-	log    *slog.Logger
+	worker    Worker
+	gameStore *games.GameStore
+	dataDir   string
+	log       *slog.Logger
 }
 
-func NewAgent(w Worker, log *slog.Logger) *Agent {
-	return &Agent{worker: w, log: log}
+func NewAgent(w Worker, gameStore *games.GameStore, dataDir string, log *slog.Logger) *Agent {
+	return &Agent{worker: w, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 func (a *Agent) PullImage(ctx context.Context, req *pb.PullImageRequest) (*pb.PullImageResponse, error) {
@@ -306,6 +310,25 @@ func (a *Agent) WatchEvents(req *pb.WatchEventsRequest, stream pb.WorkerService_
 			return err
 		}
 	}
+}
+
+func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScriptsRequest) (*pb.PrepareGameScriptsResponse, error) {
+	gsDir := filepath.Join(a.dataDir, "gameservers", req.GameserverId)
+	if err := a.gameStore.ExtractScripts(req.GameId, gsDir); err != nil {
+		return nil, fmt.Errorf("extracting scripts: %w", err)
+	}
+
+	resp := &pb.PrepareGameScriptsResponse{
+		ScriptDir: filepath.Join(gsDir, "scripts"),
+	}
+
+	defaultsDir := filepath.Join(gsDir, "defaults")
+	if _, err := os.Stat(defaultsDir); err == nil {
+		resp.DefaultsDir = defaultsDir
+	}
+
+	a.log.Debug("prepared game scripts", "game_id", req.GameId, "gameserver_id", req.GameserverId)
+	return resp, nil
 }
 
 func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {

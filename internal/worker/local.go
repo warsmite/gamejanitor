@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/games"
 )
 
 const fileopsImage = "alpine:latest"
@@ -21,8 +22,10 @@ const fileopsImage = "alpine:latest"
 // LocalWorker implements Worker by delegating to the Docker client.
 // Used in standalone mode where controller and worker run in the same process.
 type LocalWorker struct {
-	docker *docker.Client
-	log    *slog.Logger
+	docker    *docker.Client
+	log       *slog.Logger
+	gameStore *games.GameStore
+	dataDir   string
 
 	mountMu    sync.RWMutex
 	mountCache map[string]string // volume name → mountpoint
@@ -36,10 +39,12 @@ type LocalWorker struct {
 	sidecarCache map[string]string // volume name → container ID
 }
 
-func NewLocalWorker(dockerClient *docker.Client, log *slog.Logger) *LocalWorker {
+func NewLocalWorker(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	return &LocalWorker{
 		docker:       dockerClient,
 		log:          log,
+		gameStore:    gameStore,
+		dataDir:      dataDir,
 		mountCache:   make(map[string]string),
 		sidecarCache: make(map[string]string),
 	}
@@ -591,6 +596,23 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <
 	}()
 
 	return eventCh, errCh
+}
+
+func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
+	gsDir := filepath.Join(w.dataDir, "gameservers", gameserverID)
+	if err := w.gameStore.ExtractScripts(gameID, gsDir); err != nil {
+		return "", "", fmt.Errorf("extracting scripts for %s: %w", gameserverID, err)
+	}
+
+	scriptDir := filepath.Join(gsDir, "scripts")
+	defaultsDir := filepath.Join(gsDir, "defaults")
+
+	// Only return defaults dir if it exists
+	if _, err := os.Stat(defaultsDir); err != nil {
+		defaultsDir = ""
+	}
+
+	return scriptDir, defaultsDir, nil
 }
 
 func toDockerPorts(ports []PortBinding) []docker.PortBinding {

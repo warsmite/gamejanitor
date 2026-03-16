@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -169,14 +167,21 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return fmt.Errorf("applying game defaults: %w", err)
 	}
 
-	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode)
+	// Pick worker for placement and set node_id
+	targetWorker := s.dispatcher.DefaultWorker()
+	nodeID := s.dispatcher.DefaultWorkerNodeID()
+	if nodeID != "" {
+		gs.NodeID = &nodeID
+	}
 
-	if err := s.dispatcher.DefaultWorker().CreateVolume(ctx, gs.VolumeName); err != nil {
+	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)
+
+	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
 	}
 
 	if err := models.CreateGameserver(s.db, gs); err != nil {
-		if rmErr := s.dispatcher.DefaultWorker().RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
+		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
 		}
 		return err
@@ -384,18 +389,18 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
-	// Extract game scripts so they can be bind-mounted into the container
-	gsDir := filepath.Join(s.dataDir, "gameservers", id)
-	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
+	// Prepare game scripts on the target worker (extracts locally for bind-mounting)
+	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
+	if err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to extract game scripts.")
-		return fmt.Errorf("extracting scripts for gameserver %s: %w", id, err)
+		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
 	binds := []string{
-		filepath.Join(gsDir, "scripts") + ":/scripts:ro",
+		scriptDir + ":/scripts:ro",
 	}
-	if _, statErr := os.Stat(filepath.Join(gsDir, "defaults")); statErr == nil {
-		binds = append(binds, filepath.Join(gsDir, "defaults")+":/defaults:ro")
+	if defaultsDir != "" {
+		binds = append(binds, defaultsDir+":/defaults:ro")
 	}
 
 	// Remove old container if exists (stale from prior run/crash).
@@ -551,12 +556,12 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
-	// Extract scripts for update container
-	gsDir := filepath.Join(s.dataDir, "gameservers", id)
-	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
-		return fmt.Errorf("extracting scripts for update: %w", err)
+	// Prepare scripts on the target worker for update container
+	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
+	if err != nil {
+		return fmt.Errorf("preparing scripts for update: %w", err)
 	}
-	updateBinds := []string{filepath.Join(gsDir, "scripts") + ":/scripts:ro"}
+	updateBinds := []string{scriptDir + ":/scripts:ro"}
 
 	// Run update-server in temp container
 	tempName := "gamejanitor-update-" + id
@@ -615,13 +620,13 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		}
 	}
 
-	// Extract scripts for reinstall container
-	gsDir := filepath.Join(s.dataDir, "gameservers", id)
-	if err := s.gameStore.ExtractScripts(gs.GameID, gsDir); err != nil {
-		return fmt.Errorf("extracting scripts for reinstall: %w", err)
-	}
-
 	w := s.dispatcher.WorkerFor(id)
+
+	// Prepare scripts on the target worker for reinstall container
+	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
+	if err != nil {
+		return fmt.Errorf("preparing scripts for reinstall: %w", err)
+	}
 
 	// Remove .installed marker via temp container
 	tempName := "gamejanitor-reinstall-" + id
@@ -630,7 +635,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		Image:      game.BaseImage,
 		Env:        []string{},
 		VolumeName: gs.VolumeName,
-		Binds:      []string{filepath.Join(gsDir, "scripts") + ":/scripts:ro"},
+		Binds:      []string{scriptDir + ":/scripts:ro"},
 	})
 	if err != nil {
 		return fmt.Errorf("creating temp container for reinstall: %w", err)

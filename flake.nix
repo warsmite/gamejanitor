@@ -78,6 +78,31 @@
             done
           '';
 
+          # Multi-node test scripts — separate data dirs so they don't conflict
+          dev-controller = pkgs.writeShellScriptBin "dev-controller" ''
+            echo "Starting controller on :8090 (gRPC :9090)"
+            exec go run ./cmd/gamejanitor serve \
+              --role controller+worker \
+              -p 8090 --grpc-port 9090 --sftp-port 2022 \
+              -d /tmp/gamejanitor-controller "$@"
+          '';
+
+          dev-worker = pkgs.writeShellScriptBin "dev-worker" ''
+            PORT=''${1:-9091}
+            CTRL=''${2:-localhost:9090}
+            TOKEN=''${3:-}
+            EXTRA_ARGS=()
+            if [ -n "$TOKEN" ]; then
+              EXTRA_ARGS+=(--worker-token "$TOKEN")
+            fi
+            echo "Starting worker agent on gRPC :$PORT, registering with controller at $CTRL"
+            exec go run ./cmd/gamejanitor serve \
+              --role worker \
+              --grpc-port "$PORT" \
+              --controller "$CTRL" \
+              -d "/tmp/gamejanitor-worker-$PORT" "''${EXTRA_ARGS[@]}" "''${@:4}"
+          '';
+
           gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
             protoc --go_out=. --go_opt=module=github.com/0xkowalskidev/gamejanitor \
                    --go-grpc_out=. --go-grpc_opt=module=github.com/0xkowalskidev/gamejanitor \
@@ -89,8 +114,8 @@
             docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
             echo "Removing gamejanitor volumes..."
             docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r docker volume rm -f
-            echo "Removing /tmp/gamejanitor-data..."
-            rm -rf /tmp/gamejanitor-data
+            echo "Removing /tmp/gamejanitor-*..."
+            rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-*
             echo "Cleanup complete."
           '';
         in
@@ -109,6 +134,8 @@
             build-image
             push-image
             push-all-images
+            dev-controller
+            dev-worker
             gen-proto
             cleanup
           ];

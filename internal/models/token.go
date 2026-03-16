@@ -99,6 +99,16 @@ func DeleteToken(db *sql.DB, id string) error {
 	return nil
 }
 
+// TokenExistsByScope checks if a token with the given ID and scope still exists and is not expired.
+func TokenExistsByScope(db *sql.DB, id string, scope string) bool {
+	var exists int
+	err := db.QueryRow(
+		"SELECT 1 FROM tokens WHERE id = ? AND scope = ? AND (expires_at IS NULL OR expires_at > ?)",
+		id, scope, time.Now(),
+	).Scan(&exists)
+	return err == nil
+}
+
 func DeleteTokensByScope(db *sql.DB, scope string) error {
 	_, err := db.Exec("DELETE FROM tokens WHERE scope = ?", scope)
 	if err != nil {

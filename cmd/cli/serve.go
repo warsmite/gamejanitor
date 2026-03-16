@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/config"
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
@@ -20,6 +22,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -36,6 +39,9 @@ func init() {
 	serveCmd.Flags().Int("grpc-port", 0, "gRPC agent port for worker mode (0 to disable)")
 	serveCmd.Flags().String("role", "standalone", "Server role: standalone, controller, worker, controller+worker")
 	serveCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory for database and backups")
+	serveCmd.Flags().String("controller", "", "Controller gRPC address for worker registration (e.g. 192.168.1.10:9090)")
+	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
+	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration (or GJ_WORKER_TOKEN env)")
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
@@ -58,6 +64,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 	dataDir, err := cmd.Flags().GetString("data-dir")
 	if err != nil {
 		return fmt.Errorf("invalid data-dir flag: %w", err)
+	}
+	controllerAddr, err := cmd.Flags().GetString("controller")
+	if err != nil {
+		return fmt.Errorf("invalid controller flag: %w", err)
+	}
+	workerID, err := cmd.Flags().GetString("worker-id")
+	if err != nil {
+		return fmt.Errorf("invalid worker-id flag: %w", err)
+	}
+	workerToken, err := cmd.Flags().GetString("worker-token")
+	if err != nil {
+		return fmt.Errorf("invalid worker-token flag: %w", err)
+	}
+	if workerToken == "" {
+		workerToken = os.Getenv("GJ_WORKER_TOKEN")
 	}
 
 	hasLocalWorker := role == "standalone" || role == "worker" || role == "controller+worker"
@@ -95,7 +116,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Worker-only mode: start gRPC agent and exit (no DB, no web UI)
 	if role == "worker" {
-		return runWorkerAgent(cfg, grpcPort, logger)
+		return runWorkerAgent(cfg, grpcPort, controllerAddr, workerID, workerToken, logger)
 	}
 
 	// Controller and standalone modes need a database
@@ -111,6 +132,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// Initialize game store
+	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize game store: %w", err)
+	}
+
 	// Initialize local worker if this node runs containers
 	var localWorker worker.Worker
 	if hasLocalWorker {
@@ -119,13 +146,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to connect to docker: %w", err)
 		}
 		defer dockerClient.Close()
-		localWorker = worker.NewLocalWorker(dockerClient, logger)
-	}
-
-	// Initialize game store
-	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize game store: %w", err)
+		localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
 	}
 
 	// Initialize dispatcher
@@ -154,21 +175,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	authSvc := service.NewAuthService(database, logger)
 
-	// Status manager needs a local worker for Docker event watching
-	if localWorker != nil {
-		statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, logger)
+	// Status manager — watches Docker events for status updates
+	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, logger)
 
-		ctx := context.Background()
+	ctx := context.Background()
+	if localWorker != nil {
 		if err := statusMgr.RecoverOnStartup(ctx); err != nil {
 			return fmt.Errorf("failed to recover gameserver status: %w", err)
 		}
-
 		statusMgr.Start(ctx)
-		defer statusMgr.Stop()
 	}
+	defer statusMgr.Stop()
 
 	// Start scheduler
-	ctx := context.Background()
 	if err := scheduler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start scheduler: %w", err)
 	}
@@ -176,18 +195,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer readyWatcher.StopAll()
 	defer querySvc.StopAll()
 
-	// Start gRPC agent if this node also runs containers (controller+worker mode)
-	if hasLocalWorker && grpcPort > 0 {
+	// Start gRPC server for controller and/or local worker agent
+	if grpcPort > 0 {
 		go func() {
-			if err := startGRPCAgent(localWorker, grpcPort, logger); err != nil {
-				logger.Error("grpc agent stopped", "error", err)
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, grpcPort, logger); err != nil {
+				logger.Error("grpc server stopped", "error", err)
 			}
 		}()
 	}
 
+	// Start heartbeat reaper for multi-node mode
+	if registry != nil {
+		registry.StartReaper(ctx, logger)
+	}
+
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, logPath, cfg.DataDir, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, registry, logPath, cfg.DataDir, sftpPort, role, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
@@ -224,7 +248,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 // runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.
 // No database, no web UI, no scheduler.
-func runWorkerAgent(cfg config.Config, grpcPort int, logger *slog.Logger) error {
+func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, workerID string, workerToken string, logger *slog.Logger) error {
 	if grpcPort == 0 {
 		grpcPort = 9090
 	}
@@ -235,21 +259,167 @@ func runWorkerAgent(cfg config.Config, grpcPort int, logger *slog.Logger) error 
 	}
 	defer dockerClient.Close()
 
-	localWorker := worker.NewLocalWorker(dockerClient, logger)
-	logger.Info("starting worker agent", "grpc_port", grpcPort)
-	return startGRPCAgent(localWorker, grpcPort, logger)
+	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize game store: %w", err)
+	}
+
+	localWorker := worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
+
+	// Start gRPC agent in background (no auth interceptor — worker's own agent doesn't need it)
+	go func() {
+		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, grpcPort, logger); err != nil {
+			logger.Error("grpc agent stopped", "error", err)
+		}
+	}()
+
+	// If controller address is provided, register with it and start heartbeat loop
+	if controllerAddr != "" {
+		if workerID == "" {
+			workerID, _ = os.Hostname()
+			if workerID == "" {
+				workerID = fmt.Sprintf("worker-%d", os.Getpid())
+			}
+		}
+
+		if workerToken == "" {
+			logger.Warn("no worker token provided, controller will likely reject registration")
+		}
+
+		netInfo := netinfo.Detect(logger)
+		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
+
+		logger.Info("registering with controller",
+			"controller", controllerAddr,
+			"worker_id", workerID,
+			"own_grpc_address", ownAddr,
+			"has_token", workerToken != "",
+		)
+
+		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, netInfo, logger)
+		// runRegistrationLoop blocks forever
+	}
+
+	// No controller — just serve gRPC forever
+	logger.Info("worker agent running without controller (standalone gRPC)")
+	select {}
 }
 
-func startGRPCAgent(w worker.Worker, port int, logger *slog.Logger) error {
+// runRegistrationLoop connects to the controller, registers, and sends heartbeats.
+// Reconnects with backoff on failure. Blocks forever.
+func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, netInfo *netinfo.Info, logger *slog.Logger) {
+	backoff := time.Second
+	maxBackoff := 30 * time.Second
+
+	for {
+		client, conn, err := worker.DialController(controllerAddr, workerToken)
+		if err != nil {
+			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
+			time.Sleep(backoff)
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+
+		// Register
+		ctx := context.Background()
+		req := buildHeartbeatRequest(workerID, netInfo)
+		regResp, err := client.Register(ctx, &pb.RegisterRequest{
+			WorkerId:          workerID,
+			GrpcAddress:       ownAddr,
+			CpuCores:          req.CpuCores,
+			MemoryTotalMb:     req.MemoryTotalMb,
+			MemoryAvailableMb: req.MemoryAvailableMb,
+			LanIp:             req.LanIp,
+			ExternalIp:        req.ExternalIp,
+		})
+		if err != nil {
+			logger.Error("registration failed", "error", err, "retry_in", backoff)
+			conn.Close()
+			time.Sleep(backoff)
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+		if !regResp.Accepted {
+			logger.Error("registration rejected by controller", "retry_in", backoff)
+			conn.Close()
+			time.Sleep(backoff)
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+
+		logger.Info("registered with controller", "controller", controllerAddr)
+		backoff = time.Second // reset on success
+
+		// Heartbeat loop
+		ticker := time.NewTicker(10 * time.Second)
+		heartbeatFailed := false
+		for range ticker.C {
+			hbReq := buildHeartbeatRequest(workerID, netInfo)
+			resp, err := client.Heartbeat(ctx, hbReq)
+			if err != nil {
+				logger.Warn("heartbeat failed", "error", err)
+				heartbeatFailed = true
+				break
+			}
+			if !resp.Accepted {
+				logger.Warn("heartbeat rejected, re-registering")
+				heartbeatFailed = true
+				break
+			}
+			logger.Debug("heartbeat sent", "memory_available_mb", hbReq.MemoryAvailableMb)
+		}
+		ticker.Stop()
+		conn.Close()
+
+		if heartbeatFailed {
+			logger.Info("reconnecting to controller", "retry_in", backoff)
+			time.Sleep(backoff)
+		}
+	}
+}
+
+func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.HeartbeatRequest {
+	req := &pb.HeartbeatRequest{
+		WorkerId:   workerID,
+		CpuCores:   int64(runtime.NumCPU()),
+		LanIp:      netInfo.LANIP,
+		ExternalIp: netInfo.ExternalIP,
+	}
+
+	if v, err := mem.VirtualMemory(); err == nil {
+		req.MemoryTotalMb = int64(v.Total / 1024 / 1024)
+		req.MemoryAvailableMb = int64(v.Available / 1024 / 1024)
+	}
+
+	return req
+}
+
+// startGRPCServer starts a gRPC server with WorkerService and/or ControllerService.
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, port int, logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("grpc listen: %w", err)
 	}
 
-	grpcServer := grpc.NewServer()
-	agent := worker.NewAgent(w, logger)
-	pb.RegisterWorkerServiceServer(grpcServer, agent)
+	var opts []grpc.ServerOption
+	// Add auth interceptor when running as controller (registry present)
+	if registry != nil {
+		opts = append(opts, grpc.UnaryInterceptor(worker.WorkerAuthInterceptor()))
+	}
+	grpcServer := grpc.NewServer(opts...)
 
-	logger.Info("grpc agent listening", "port", port)
+	// Register WorkerService if we have a local worker (worker or controller+worker mode)
+	if w != nil {
+		agent := worker.NewAgent(w, gameStore, dataDir, logger)
+		pb.RegisterWorkerServiceServer(grpcServer, agent)
+	}
+
+	// Register ControllerService if we have a registry (controller or controller+worker mode)
+	if registry != nil {
+		controllerSvc := worker.NewControllerGRPC(registry, authSvc, logger)
+		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
+	}
+
+	logger.Info("grpc server listening", "port", port)
 	return grpcServer.Serve(listener)
 }

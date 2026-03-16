@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
@@ -13,43 +14,49 @@ import (
 
 type StatusManager struct {
 	db           *sql.DB
-	worker       worker.Worker
+	localWorker  worker.Worker
 	log          *slog.Logger
 	broadcaster  *EventBroadcaster
 	querySvc     *QueryService
 	readyWatcher *ReadyWatcher
-	cancel       context.CancelFunc
+	dispatcher   *worker.Dispatcher
+	registry     *worker.Registry
+
+	cancel context.CancelFunc
+
+	// Per-worker event watchers for multi-node
+	workerCancels map[string]context.CancelFunc
+	workerMu      sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, w worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, log *slog.Logger) *StatusManager {
-	return &StatusManager{db: db, worker: w, broadcaster: broadcaster, querySvc: querySvc, readyWatcher: readyWatcher, log: log}
+func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, log *slog.Logger) *StatusManager {
+	sm := &StatusManager{
+		db:            db,
+		localWorker:   localWorker,
+		broadcaster:   broadcaster,
+		querySvc:      querySvc,
+		readyWatcher:  readyWatcher,
+		dispatcher:    dispatcher,
+		registry:      registry,
+		log:           log,
+		workerCancels: make(map[string]context.CancelFunc),
+	}
+
+	// Subscribe to worker registration events for multi-node event watching
+	if registry != nil {
+		registry.SetCallbacks(sm.onWorkerRegistered, sm.onWorkerUnregistered)
+	}
+
+	return sm
 }
 
-// Start begins watching Docker events and updating gameserver status.
+// Start begins watching Docker events from the local worker.
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 
-	eventCh, errCh := m.worker.WatchEvents(ctx)
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case err, ok := <-errCh:
-				if !ok {
-					return
-				}
-				m.log.Error("docker event watcher error", "error", err)
-				return
-			case event, ok := <-eventCh:
-				if !ok {
-					return
-				}
-				m.handleEvent(event)
-			}
-		}
-	}()
+	if m.localWorker != nil {
+		m.watchWorkerEvents(ctx, "local", m.localWorker)
+	}
 
 	m.log.Info("status manager started")
 }
@@ -58,6 +65,15 @@ func (m *StatusManager) Stop() {
 	if m.cancel != nil {
 		m.cancel()
 	}
+
+	// Stop all remote worker watchers
+	m.workerMu.Lock()
+	for id, cancel := range m.workerCancels {
+		cancel()
+		delete(m.workerCancels, id)
+	}
+	m.workerMu.Unlock()
+
 	m.log.Info("status manager stopped")
 }
 
@@ -73,22 +89,40 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	}
 
 	for _, gs := range gameservers {
-		if needsRecovery(gs.Status) {
-			m.recoverGameserver(ctx, &gs)
+		if !needsRecovery(gs.Status) {
+			continue
 		}
+
+		// For multi-node: skip gameservers on remote workers (recovered when worker registers)
+		w := m.workerForGameserver(&gs)
+		if w == nil {
+			m.log.Debug("skipping recovery for gameserver on offline worker", "id", gs.ID, "node_id", gs.NodeID)
+			continue
+		}
+
+		m.recoverGameserver(ctx, &gs, w)
 	}
 
 	return nil
 }
 
-func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver) {
+// workerForGameserver returns the appropriate worker, or nil if unavailable.
+func (m *StatusManager) workerForGameserver(gs *models.Gameserver) worker.Worker {
+	if m.dispatcher != nil {
+		w := m.dispatcher.WorkerFor(gs.ID)
+		return w
+	}
+	return m.localWorker
+}
+
+func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
 		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStopped, "")
 		return
 	}
 
-	info, err := m.worker.InspectContainer(ctx, *gs.ContainerID)
+	info, err := w.InspectContainer(ctx, *gs.ContainerID)
 	if err != nil {
 		m.log.Warn("container not found, setting stopped", "id", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
@@ -99,15 +133,13 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 	case "running":
 		uptime := time.Since(info.StartedAt)
 		if uptime > 60*time.Second {
-			// Running for over a minute — assume ready, promote directly and start query polling
 			m.log.Info("container running >60s, promoting to running", "id", gs.ID, "uptime", uptime)
 			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusRunning, "")
 			m.querySvc.StartPolling(gs.ID)
 		} else {
-			// Recently started — use ReadyWatcher to detect ready pattern
 			m.log.Info("container recently started, watching for ready pattern", "id", gs.ID, "uptime", uptime)
 			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
-			m.readyWatcher.Watch(gs.ID, m.worker, *gs.ContainerID)
+			m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
 		}
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
@@ -140,6 +172,32 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 	}
 }
 
+// watchWorkerEvents starts a goroutine that watches Docker events from a worker.
+func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w worker.Worker) {
+	eventCh, errCh := w.WatchEvents(ctx)
+
+	go func() {
+		m.log.Debug("watching events", "worker", label)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok := <-errCh:
+				if !ok {
+					return
+				}
+				m.log.Error("event watcher error", "worker", label, "error", err)
+				return
+			case event, ok := <-eventCh:
+				if !ok {
+					return
+				}
+				m.handleEvent(event)
+			}
+		}
+	}()
+}
+
 func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	gsID := strings.TrimPrefix(event.ContainerName, "gamejanitor-")
 	if gsID == event.ContainerName {
@@ -155,6 +213,8 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		m.log.Debug("docker event for unknown gameserver", "container_name", event.ContainerName, "action", event.Action)
 		return
 	}
+
+	w := m.workerForGameserver(gs)
 
 	switch event.Action {
 	case "start":
@@ -172,5 +232,60 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 
 	case "kill":
 		m.log.Debug("docker event: container killed", "id", gsID)
+	}
+
+	_ = w // available for future per-worker recovery logic
+}
+
+// onWorkerRegistered is called when a remote worker registers.
+// Starts event watching and recovers gameservers on that worker.
+func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
+	m.workerMu.Lock()
+
+	// Cancel existing watcher if re-registering
+	if cancel, ok := m.workerCancels[nodeID]; ok {
+		cancel()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.workerCancels[nodeID] = cancel
+	m.workerMu.Unlock()
+
+	m.log.Info("starting event watcher for remote worker", "worker_id", nodeID)
+	m.watchWorkerEvents(ctx, nodeID, w)
+
+	// Recover gameservers on this worker
+	go m.recoverWorkerGameservers(ctx, nodeID, w)
+}
+
+// onWorkerUnregistered is called when a remote worker is unregistered (timeout or explicit).
+func (m *StatusManager) onWorkerUnregistered(nodeID string) {
+	m.workerMu.Lock()
+	if cancel, ok := m.workerCancels[nodeID]; ok {
+		cancel()
+		delete(m.workerCancels, nodeID)
+	}
+	m.workerMu.Unlock()
+
+	m.log.Info("stopped event watcher for disconnected worker", "worker_id", nodeID)
+}
+
+// recoverWorkerGameservers recovers gameservers assigned to a specific worker node.
+func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
+	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{})
+	if err != nil {
+		m.log.Error("failed to list gameservers for worker recovery", "worker_id", nodeID, "error", err)
+		return
+	}
+
+	for _, gs := range gameservers {
+		if gs.NodeID == nil || *gs.NodeID != nodeID {
+			continue
+		}
+		if !needsRecovery(gs.Status) {
+			continue
+		}
+		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID)
+		m.recoverGameserver(ctx, &gs, w)
 	}
 }
