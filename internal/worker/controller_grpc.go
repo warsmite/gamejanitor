@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 
@@ -23,11 +24,12 @@ type ControllerGRPC struct {
 	pb.UnimplementedControllerServiceServer
 	registry  *Registry
 	tokenAuth TokenValidator
+	db        *sql.DB
 	log       *slog.Logger
 }
 
-func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, log *slog.Logger) *ControllerGRPC {
-	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, log: log}
+func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, log *slog.Logger) *ControllerGRPC {
+	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, log: log}
 }
 
 func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -77,6 +79,13 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	}
 
 	c.registry.Register(remote, info)
+
+	if err := models.UpsertWorkerNode(c.db, &models.WorkerNode{
+		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
+	}); err != nil {
+		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
+	}
+
 	c.log.Info("worker registered successfully", "worker_id", req.WorkerId, "grpc_address", req.GrpcAddress, "token_id", token.ID)
 	return &pb.RegisterResponse{Accepted: true}, nil
 }
@@ -101,6 +110,12 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 	if !ok || !c.tokenAuth.IsWorkerTokenValid(storedInfo.TokenID) {
 		c.log.Warn("worker token revoked, rejecting heartbeat", "worker_id", req.WorkerId, "token_id", storedInfo.TokenID)
 		return &pb.HeartbeatResponse{Accepted: false}, nil
+	}
+
+	if err := models.UpsertWorkerNode(c.db, &models.WorkerNode{
+		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
+	}); err != nil {
+		c.log.Error("failed to persist worker node on heartbeat", "worker_id", req.WorkerId, "error", err)
 	}
 
 	c.log.Debug("heartbeat received", "worker_id", req.WorkerId, "memory_available_mb", req.MemoryAvailableMb)

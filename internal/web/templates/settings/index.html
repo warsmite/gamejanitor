@@ -12,7 +12,7 @@
        hx-get="/settings/workers" hx-trigger="every 5s" hx-swap="innerHTML" hx-target="#workers-table">
     <h2 class="font-display font-semibold text-white mb-3">Workers</h2>
     <div id="workers-table">
-      {{template "workers_table" .Workers}}
+      {{template "workers_table" .}}
     </div>
   </div>
 
@@ -123,10 +123,16 @@
 
     <!-- Port Range -->
     <div class="border-t border-surface-800/40 pt-4 mb-5">
-      <form method="POST" action="/settings/port-range" hx-post="/settings/port-range" hx-swap="none" class="space-y-3">
+      <label class="block text-sm font-medium text-surface-300">Port Range</label>
+      <p class="text-xs text-surface-500">Range of host ports allocated for gameserver port mappings.</p>
+      {{if .PortRangeFromEnv}}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-sm font-mono text-white">{{.PortRangeStart}} - {{.PortRangeEnd}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+      <form method="POST" action="/settings/port-range" hx-post="/settings/port-range" hx-swap="none" class="mt-2">
         <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-        <label class="block text-sm font-medium text-surface-300">Port Range</label>
-        <p class="text-xs text-surface-500">Range of host ports allocated for gameserver port mappings.</p>
         <div class="flex items-center gap-2">
           <input type="number" name="port_range_start" value="{{.PortRangeStart}}" min="1024" max="65535"
                  class="w-28 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
@@ -139,14 +145,21 @@
           </button>
         </div>
       </form>
+      {{end}}
     </div>
 
     <!-- Preferred Port Mode -->
     <div class="border-t border-surface-800/40 pt-4">
-      <form method="POST" action="/settings/port-mode" hx-post="/settings/port-mode" hx-swap="none" class="space-y-3">
+      <label class="block text-sm font-medium text-surface-300">Port Allocation Mode</label>
+      <p class="text-xs text-surface-500">How ports are assigned when creating a new gameserver.</p>
+      {{if .PortModeFromEnv}}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-sm text-white capitalize">{{.PreferredPortMode}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+      <form method="POST" action="/settings/port-mode" hx-post="/settings/port-mode" hx-swap="none" class="mt-2">
         <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-        <label class="block text-sm font-medium text-surface-300">Port Allocation Mode</label>
-        <p class="text-xs text-surface-500">How ports are assigned when creating a new gameserver.</p>
         <div class="flex items-center gap-3">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" name="port_mode" value="auto" {{if eq .PreferredPortMode "auto"}}checked{{end}} class="accent-accent-500">
@@ -162,16 +175,23 @@
           </button>
         </div>
       </form>
+      {{end}}
     </div>
   </div>
 
   <!-- Backups Section -->
   <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
     <h2 class="font-display font-semibold text-white mb-4">Backups</h2>
-    <form method="POST" action="/settings/max-backups" hx-post="/settings/max-backups" hx-swap="none" class="space-y-3">
+    <label class="block text-sm font-medium text-surface-300">Max Backups Per Gameserver</label>
+    <p class="text-xs text-surface-500">Oldest backups are deleted when this limit is exceeded. Set to 0 for unlimited.</p>
+    {{if .MaxBackupsFromEnv}}
+    <div class="flex items-center gap-2 mt-2">
+      <span class="text-sm font-mono text-white">{{.MaxBackups}}</span>
+      <span class="text-amber-400 text-xs">(set by environment variable)</span>
+    </div>
+    {{else}}
+    <form method="POST" action="/settings/max-backups" hx-post="/settings/max-backups" hx-swap="none" class="mt-2">
       <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-      <label class="block text-sm font-medium text-surface-300">Max Backups Per Gameserver</label>
-      <p class="text-xs text-surface-500">Oldest backups are deleted when this limit is exceeded. Set to 0 for unlimited.</p>
       <div class="flex items-center gap-2">
         <input type="number" name="max_backups" value="{{.MaxBackups}}" min="0"
                class="w-24 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
@@ -181,6 +201,7 @@
         </button>
       </div>
     </form>
+    {{end}}
   </div>
 
   <!-- Authentication Section -->
@@ -268,7 +289,7 @@
 {{end}}
 
 {{define "workers_table"}}
-{{if .}}
+{{if .Workers}}
 <div class="overflow-hidden rounded-lg border border-surface-800/40">
   <table class="w-full text-sm">
     <thead>
@@ -277,16 +298,45 @@
         <th class="text-left px-4 py-2 font-medium">LAN IP</th>
         <th class="text-left px-4 py-2 font-medium">CPU</th>
         <th class="text-left px-4 py-2 font-medium">Memory</th>
+        <th class="text-left px-4 py-2 font-medium">Port Range</th>
         <th class="text-left px-4 py-2 font-medium">Status</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-surface-800/30">
-      {{range .}}
+      {{range .Workers}}
       <tr>
         <td class="px-4 py-2.5 text-surface-200 font-medium">{{.ID}}</td>
         <td class="px-4 py-2.5 text-surface-300 font-mono text-xs">{{.LanIP}}</td>
         <td class="px-4 py-2.5 text-surface-300">{{.CPUCores}} cores</td>
         <td class="px-4 py-2.5 text-surface-300">{{.MemoryAvailableMB}} / {{.MemoryTotalMB}} MB</td>
+        <td class="px-4 py-2.5" x-data="{ editing: false }">
+          <div x-show="!editing">
+            {{if .PortRangeStart}}
+            <span class="text-surface-200 font-mono text-xs">{{derefInt .PortRangeStart}}-{{derefInt .PortRangeEnd}}</span>
+            <button @click="editing = true" class="ml-1 text-[11px] text-accent-400 hover:text-accent-300 transition-colors">Edit</button>
+            {{else}}
+            <span class="text-surface-500 text-xs">Default ({{.DefaultRangeStart}}-{{.DefaultRangeEnd}})</span>
+            <button @click="editing = true" class="ml-1 text-[11px] text-accent-400 hover:text-accent-300 transition-colors">Set</button>
+            {{end}}
+          </div>
+          <div x-show="editing" x-cloak>
+            <form hx-post="/settings/workers/{{.ID}}/port-range" hx-swap="none" class="flex items-center gap-1">
+              <input type="hidden" name="gorilla.csrf.Token" value="{{$.CSRFToken}}">
+              <input type="number" name="port_range_start" value="{{if .PortRangeStart}}{{derefInt .PortRangeStart}}{{else}}{{.DefaultRangeStart}}{{end}}" min="1024" max="65535"
+                     class="w-20 px-1.5 py-1 bg-surface-900/60 border border-surface-700/50 rounded text-white text-xs focus:border-accent-500/50 focus:outline-none">
+              <span class="text-surface-500 text-xs">-</span>
+              <input type="number" name="port_range_end" value="{{if .PortRangeEnd}}{{derefInt .PortRangeEnd}}{{else}}{{.DefaultRangeEnd}}{{end}}" min="1024" max="65535"
+                     class="w-20 px-1.5 py-1 bg-surface-900/60 border border-surface-700/50 rounded text-white text-xs focus:border-accent-500/50 focus:outline-none">
+              <button type="submit" class="px-2 py-1 bg-accent-600 hover:bg-accent-500 text-white rounded text-xs transition-colors">Save</button>
+              {{if .PortRangeStart}}
+              <button type="button" hx-delete="/settings/workers/{{.ID}}/port-range" hx-swap="none"
+                      hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'
+                      class="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors">Reset</button>
+              {{end}}
+              <button type="button" @click="editing = false" class="text-surface-500 hover:text-surface-300 text-xs transition-colors">Cancel</button>
+            </form>
+          </div>
+        </td>
         <td class="px-4 py-2.5">
           {{if .IsHealthy}}
           <span class="inline-flex items-center gap-1.5 text-xs">

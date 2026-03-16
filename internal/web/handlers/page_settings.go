@@ -11,6 +11,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/csrf"
 )
 
 type PageSettingsHandlers struct {
@@ -30,8 +31,11 @@ func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Reque
 	data := map[string]any{
 		"PortRangeStart":         h.settingsSvc.GetPortRangeStart(),
 		"PortRangeEnd":           h.settingsSvc.GetPortRangeEnd(),
+		"PortRangeFromEnv":       h.settingsSvc.IsPortRangeFromEnv(),
 		"PreferredPortMode":      h.settingsSvc.GetPreferredPortMode(),
+		"PortModeFromEnv":        h.settingsSvc.IsPortModeFromEnv(),
 		"MaxBackups":             h.settingsSvc.GetMaxBackups(),
+		"MaxBackupsFromEnv":      h.settingsSvc.IsMaxBackupsFromEnv(),
 		"AuthEnabled":            h.settingsSvc.GetAuthEnabled(),
 		"AuthFromEnv":            h.settingsSvc.IsAuthEnabledFromEnv(),
 		"LocalhostBypass":        h.settingsSvc.GetLocalhostBypass(),
@@ -53,25 +57,41 @@ func (h *PageSettingsHandlers) WorkersPartial(w http.ResponseWriter, r *http.Req
 	if h.registry != nil {
 		views = h.workerViews()
 	}
-	h.renderer.RenderPartial(w, "settings/index", "workers_table", views)
+	h.renderer.RenderPartial(w, "settings/index", "workers_table", map[string]any{
+		"Workers":   views,
+		"CSRFToken": csrf.Token(r),
+	})
 }
 
 type workerView struct {
 	worker.WorkerInfo
-	IsHealthy bool
-	IsWarning bool
+	IsHealthy         bool
+	IsWarning         bool
+	PortRangeStart    *int
+	PortRangeEnd      *int
+	DefaultRangeStart int
+	DefaultRangeEnd   int
 }
 
 func (h *PageSettingsHandlers) workerViews() []workerView {
 	infos := h.registry.ListWorkers()
+	defaultStart := h.settingsSvc.GetPortRangeStart()
+	defaultEnd := h.settingsSvc.GetPortRangeEnd()
 	views := make([]workerView, 0, len(infos))
 	for _, info := range infos {
 		age := time.Since(info.LastSeen)
-		views = append(views, workerView{
-			WorkerInfo: info,
-			IsHealthy:  age < 15*time.Second,
-			IsWarning:  age >= 15*time.Second && age < 25*time.Second,
-		})
+		v := workerView{
+			WorkerInfo:        info,
+			IsHealthy:         age < 15*time.Second,
+			IsWarning:         age >= 15*time.Second && age < 25*time.Second,
+			DefaultRangeStart: defaultStart,
+			DefaultRangeEnd:   defaultEnd,
+		}
+		if node, err := h.settingsSvc.GetWorkerNode(info.ID); err == nil && node != nil {
+			v.PortRangeStart = node.PortRangeStart
+			v.PortRangeEnd = node.PortRangeEnd
+		}
+		views = append(views, v)
 	}
 	return views
 }
@@ -179,8 +199,62 @@ func (h *PageSettingsHandlers) ClearConnectionAddress(w http.ResponseWriter, r *
 	w.WriteHeader(http.StatusOK)
 }
 
+// SaveWorkerPortRange sets a custom port range for a specific worker node.
+func (h *PageSettingsHandlers) SaveWorkerPortRange(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	start, err := strconv.Atoi(r.FormValue("port_range_start"))
+	if err != nil || start < 1024 || start > 65535 {
+		http.Error(w, "Invalid start port", http.StatusBadRequest)
+		return
+	}
+	end, err := strconv.Atoi(r.FormValue("port_range_end"))
+	if err != nil || end < 1024 || end > 65535 {
+		http.Error(w, "Invalid end port", http.StatusBadRequest)
+		return
+	}
+	if end <= start {
+		http.Error(w, "End port must be greater than start port", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, &start, &end); err != nil {
+		h.log.Error("setting worker port range", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to save worker port range: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker port range updated", "worker_id", workerID, "start", start, "end", end)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+// ClearWorkerPortRange reverts a worker to the global default port range.
+func (h *PageSettingsHandlers) ClearWorkerPortRange(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
+		h.log.Error("clearing worker port range", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to clear worker port range: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker port range cleared", "worker_id", workerID)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
 // SavePortRange handles the port range form submission.
 func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsPortRangeFromEnv() {
+		http.Error(w, "Port range is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -219,6 +293,11 @@ func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Requ
 
 // SavePortMode handles the port allocation mode form submission.
 func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsPortModeFromEnv() {
+		http.Error(w, "Port mode is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -238,6 +317,11 @@ func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Reque
 
 // SaveMaxBackups handles the max backups form submission.
 func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsMaxBackupsFromEnv() {
+		http.Error(w, "Max backups is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return

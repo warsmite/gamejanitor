@@ -63,47 +63,28 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 	return w
 }
 
-// DefaultWorker returns the Worker for new gameservers.
-// In standalone mode, returns the local worker.
+// SelectWorkerForPlacement atomically picks both the Worker and its node ID for new gameserver creation.
+// In standalone mode, returns the local worker with empty node ID.
 // In multi-node mode, picks the worker with the most available resources.
-// Returns nil if no workers are available (controller-only with no remote workers).
-func (d *Dispatcher) DefaultWorker() Worker {
+func (d *Dispatcher) SelectWorkerForPlacement() (Worker, string) {
 	if d.registry == nil {
-		return d.local
+		return d.local, ""
 	}
 
-	// If we have remote workers, pick the best one
 	if d.registry.Count() > 0 {
-		w, _, err := d.registry.BestWorker()
+		w, nodeID, err := d.registry.BestWorker()
 		if err == nil {
-			return w
+			return w, nodeID
 		}
 		d.log.Warn("failed to pick best worker, falling back to local", "error", err)
 	}
 
 	if d.local == nil {
 		d.log.Error("no workers available for gameserver placement")
-		return nil
+		return nil, ""
 	}
 
-	return d.local
-}
-
-// DefaultWorkerNodeID returns the node_id for new gameserver placement.
-// Returns "" for local worker.
-func (d *Dispatcher) DefaultWorkerNodeID() string {
-	if d.registry == nil {
-		return ""
-	}
-
-	if d.registry.Count() > 0 {
-		_, nodeID, err := d.registry.BestWorker()
-		if err == nil {
-			return nodeID
-		}
-	}
-
-	return ""
+	return d.local, ""
 }
 
 func (d *Dispatcher) lookupNodeID(gameserverID string) (string, error) {

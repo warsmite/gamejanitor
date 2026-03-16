@@ -49,9 +49,9 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 	return models.GetGameserver(s.db, id)
 }
 
-// UsedHostPorts returns the set of all host port numbers used by gameservers, excluding excludeID.
-func (s *GameserverService) UsedHostPorts(excludeID string) (map[int]bool, error) {
-	allGS, err := models.ListGameservers(s.db, models.GameserverFilter{})
+// UsedHostPorts returns the set of all host port numbers used by gameservers on a given node, excluding excludeID.
+func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
+	allGS, err := models.ListGameservers(s.db, models.GameserverFilter{NodeID: &nodeID})
 	if err != nil {
 		return nil, fmt.Errorf("listing gameservers for port check: %w", err)
 	}
@@ -74,8 +74,18 @@ func (s *GameserverService) UsedHostPorts(excludeID string) (map[int]bool, error
 	return used, nil
 }
 
+func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
+	if nodeID != "" {
+		node, err := models.GetWorkerNode(s.db, nodeID)
+		if err == nil && node != nil && node.PortRangeStart != nil && node.PortRangeEnd != nil {
+			return *node.PortRangeStart, *node.PortRangeEnd
+		}
+	}
+	return s.settingsSvc.GetPortRangeStart(), s.settingsSvc.GetPortRangeEnd()
+}
+
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
-func (s *GameserverService) AllocatePorts(game *games.Game, excludeID string) (json.RawMessage, error) {
+func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, excludeID string) (json.RawMessage, error) {
 	gamePorts := game.DefaultPorts
 	if len(gamePorts) == 0 {
 		return json.RawMessage("[]"), nil
@@ -99,10 +109,9 @@ func (s *GameserverService) AllocatePorts(game *games.Game, excludeID string) (j
 		portIndex[p] = i
 	}
 
-	rangeStart := s.settingsSvc.GetPortRangeStart()
-	rangeEnd := s.settingsSvc.GetPortRangeEnd()
+	rangeStart, rangeEnd := s.portRangeForNode(nodeID)
 
-	used, err := s.UsedHostPorts(excludeID)
+	used, err := s.UsedHostPorts(nodeID, excludeID)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +164,14 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
+	// Pick worker for placement BEFORE allocating ports so ports are scoped to the target node
+	targetWorker, nodeID := s.dispatcher.SelectWorkerForPlacement()
+	if nodeID != "" {
+		gs.NodeID = &nodeID
+	}
+
 	if gs.PortMode == "auto" {
-		allocatedPorts, err := s.AllocatePorts(game, "")
+		allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
 		if err != nil {
 			return fmt.Errorf("auto-allocating ports: %w", err)
 		}
@@ -165,13 +180,6 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 
 	if err := applyGameDefaults(gs, game); err != nil {
 		return fmt.Errorf("applying game defaults: %w", err)
-	}
-
-	// Pick worker for placement and set node_id
-	targetWorker := s.dispatcher.DefaultWorker()
-	nodeID := s.dispatcher.DefaultWorkerNodeID()
-	if nodeID != "" {
-		gs.NodeID = &nodeID
 	}
 
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)

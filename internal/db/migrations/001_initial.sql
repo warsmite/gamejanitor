@@ -55,6 +55,17 @@ CREATE TABLE settings (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE worker_nodes (
+    id TEXT PRIMARY KEY,
+    lan_ip TEXT NOT NULL DEFAULT '',
+    external_ip TEXT NOT NULL DEFAULT '',
+    port_range_start INTEGER,
+    port_range_end INTEGER,
+    last_seen DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
 CREATE INDEX IF NOT EXISTS idx_backups_gameserver_id ON backups(gameserver_id);

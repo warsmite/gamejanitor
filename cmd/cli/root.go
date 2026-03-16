@@ -30,6 +30,7 @@ func init() {
 	backupsCmd.GroupID = "resources"
 
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(tokenCmd)
 	rootCmd.AddCommand(gamesCmd)
 	rootCmd.AddCommand(gameserversCmd)
 	rootCmd.AddCommand(schedulesCmd)

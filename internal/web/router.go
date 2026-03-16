@@ -221,6 +221,8 @@ func NewRouter(
 			r.Post("/max-backups", pageSettings.SaveMaxBackups)
 			r.Post("/localhost-bypass/enable", pageSettings.SetLocalhostBypass(true))
 			r.Post("/localhost-bypass/disable", pageSettings.SetLocalhostBypass(false))
+			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
+			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
 			r.Post("/worker-tokens", pageSettings.CreateWorkerToken)
 			r.Delete("/worker-tokens/{tokenId}", pageSettings.DeleteWorkerToken)
 			r.Get("/tokens", pageAuth.TokensPage)

@@ -283,13 +283,19 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 	}
 
 	game := h.gameStore.GetGame(gs.GameID)
+	connectIP, connectionConfigured := h.settingsSvc.ResolveConnectionIP(gs.NodeID)
+	if connectIP == "" {
+		connectIP = "127.0.0.1"
+	}
 	h.renderer.Render(w, r, "gameservers/detail", map[string]any{
-		"Gameserver":   gs,
-		"Game":         game,
-		"QueryData":    h.querySvc.GetQueryData(id),
-		"GamePort":     firstGamePort(gs.Ports),
-		"GameSettings": buildGameSettings(game, gs),
-		"Ports":        parsePorts(gs.Ports),
+		"Gameserver":                 gs,
+		"Game":                       game,
+		"QueryData":                  h.querySvc.GetQueryData(id),
+		"GamePort":                   firstGamePort(gs.Ports),
+		"GameSettings":               buildGameSettings(game, gs),
+		"Ports":                      parsePorts(gs.Ports),
+		"ConnectionAddress":          connectIP,
+		"ConnectionAddressConfigured": connectionConfigured,
 	})
 }
 
@@ -419,7 +425,11 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "Failed to load game for port allocation", http.StatusInternalServerError)
 			return
 		}
-		allocatedPorts, err := h.gameserverSvc.AllocatePorts(game, existing.ID)
+		nodeID := ""
+		if existing.NodeID != nil {
+			nodeID = *existing.NodeID
+		}
+		allocatedPorts, err := h.gameserverSvc.AllocatePorts(game, nodeID, existing.ID)
 		if err != nil {
 			h.log.Error("auto-allocating ports during update", "id", id, "error", err)
 			http.Error(w, "Failed to allocate ports: "+err.Error(), http.StatusInternalServerError)
@@ -475,8 +485,7 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 	}
 
 	game := h.gameStore.GetGame(gs.GameID)
-	connectIP := h.settingsSvc.GetConnectionAddress()
-	connectionConfigured := connectIP != ""
+	connectIP, connectionConfigured := h.settingsSvc.ResolveConnectionIP(gs.NodeID)
 	if connectIP == "" {
 		connectIP = "127.0.0.1"
 	}

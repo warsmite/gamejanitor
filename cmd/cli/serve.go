@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -198,7 +199,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start gRPC server for controller and/or local worker agent
 	if grpcPort > 0 {
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, grpcPort, logger); err != nil {
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, database, grpcPort, logger); err != nil {
 				logger.Error("grpc server stopped", "error", err)
 			}
 		}()
@@ -268,7 +269,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 	// Start gRPC agent in background (no auth interceptor — worker's own agent doesn't need it)
 	go func() {
-		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, grpcPort, logger); err != nil {
+		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, grpcPort, logger); err != nil {
 			logger.Error("grpc agent stopped", "error", err)
 		}
 	}()
@@ -395,7 +396,7 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 }
 
 // startGRPCServer starts a gRPC server with WorkerService and/or ControllerService.
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, port int, logger *slog.Logger) error {
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, port int, logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("grpc listen: %w", err)
@@ -416,7 +417,7 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
-		controllerSvc := worker.NewControllerGRPC(registry, authSvc, logger)
+		controllerSvc := worker.NewControllerGRPC(registry, authSvc, database, logger)
 		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
 	}
 

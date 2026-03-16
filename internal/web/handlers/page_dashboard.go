@@ -98,15 +98,13 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		gameLookup[g.ID] = g
 	}
 
-	connectIP := h.settingsSvc.GetConnectionAddress()
-	connectionConfigured := connectIP != ""
-	if connectIP == "" {
-		connectIP = "127.0.0.1"
-	}
-
 	var activeViews, stoppedViews []gameserverView
 	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
+		connectIP, connectionConfigured := h.settingsSvc.ResolveConnectionIP(gs.NodeID)
+		if connectIP == "" {
+			connectIP = "127.0.0.1"
+		}
 		v := buildGameserverView(&gs, &game, h.querySvc, connectIP, connectionConfigured)
 		if gs.Status == "stopped" {
 			stoppedViews = append(stoppedViews, v)

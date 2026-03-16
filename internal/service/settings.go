@@ -9,6 +9,36 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
+// ResolveConnectionIP returns the connection IP for a gameserver on the given node.
+// Priority: global override > worker's persisted IP > empty (caller falls back to 127.0.0.1).
+func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, configured bool) {
+	if globalIP := s.GetConnectionAddress(); globalIP != "" {
+		return globalIP, true
+	}
+	if nodeID != nil && *nodeID != "" {
+		node, err := models.GetWorkerNode(s.db, *nodeID)
+		if err == nil && node != nil {
+			if node.ExternalIP != "" {
+				return node.ExternalIP, true
+			}
+			if node.LanIP != "" {
+				return node.LanIP, true
+			}
+		}
+	}
+	return "", false
+}
+
+// GetWorkerNode returns a single worker node by ID.
+func (s *SettingsService) GetWorkerNode(id string) (*models.WorkerNode, error) {
+	return models.GetWorkerNode(s.db, id)
+}
+
+// SetWorkerNodePortRange updates the port range for a specific worker node.
+func (s *SettingsService) SetWorkerNodePortRange(id string, start, end *int) error {
+	return models.SetWorkerNodePortRange(s.db, id, start, end)
+}
+
 const (
 	SettingConnectionAddress = "connection_address"
 	SettingPortRangeStart    = "port_range_start"
@@ -70,7 +100,14 @@ func (s *SettingsService) ClearConnectionAddress() error {
 	return models.DeleteSetting(s.db, SettingConnectionAddress)
 }
 
+// GetPortRangeStart returns the start of the port allocation range.
+// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPortRangeStart() int {
+	if v := os.Getenv("GJ_PORT_RANGE_START"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
 	v, err := models.GetSetting(s.db, SettingPortRangeStart)
 	if err != nil || v == "" {
 		return DefaultPortRangeStart
@@ -82,7 +119,14 @@ func (s *SettingsService) GetPortRangeStart() int {
 	return n
 }
 
+// GetPortRangeEnd returns the end of the port allocation range.
+// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPortRangeEnd() int {
+	if v := os.Getenv("GJ_PORT_RANGE_END"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
 	v, err := models.GetSetting(s.db, SettingPortRangeEnd)
 	if err != nil || v == "" {
 		return DefaultPortRangeEnd
@@ -94,7 +138,18 @@ func (s *SettingsService) GetPortRangeEnd() int {
 	return n
 }
 
+func (s *SettingsService) IsPortRangeFromEnv() bool {
+	return os.Getenv("GJ_PORT_RANGE_START") != "" || os.Getenv("GJ_PORT_RANGE_END") != ""
+}
+
+// GetPreferredPortMode returns the preferred port allocation mode.
+// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPreferredPortMode() string {
+	if v := os.Getenv("GJ_PORT_MODE"); v != "" {
+		if v == "auto" || v == "manual" {
+			return v
+		}
+	}
 	v, err := models.GetSetting(s.db, SettingPreferredPortMode)
 	if err != nil || v == "" {
 		return DefaultPreferredPortMode
@@ -103,6 +158,10 @@ func (s *SettingsService) GetPreferredPortMode() string {
 		return DefaultPreferredPortMode
 	}
 	return v
+}
+
+func (s *SettingsService) IsPortModeFromEnv() bool {
+	return os.Getenv("GJ_PORT_MODE") != ""
 }
 
 func (s *SettingsService) SetPortRangeStart(v int) error {
@@ -121,8 +180,13 @@ func (s *SettingsService) SetPreferredPortMode(mode string) error {
 }
 
 // GetMaxBackups returns the maximum number of backups to keep per gameserver.
-// 0 means unlimited.
+// 0 means unlimited. Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetMaxBackups() int {
+	if v := os.Getenv("GJ_MAX_BACKUPS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
 	v, err := models.GetSetting(s.db, SettingMaxBackups)
 	if err != nil || v == "" {
 		return DefaultMaxBackups
@@ -132,6 +196,10 @@ func (s *SettingsService) GetMaxBackups() int {
 		return DefaultMaxBackups
 	}
 	return n
+}
+
+func (s *SettingsService) IsMaxBackupsFromEnv() bool {
+	return os.Getenv("GJ_MAX_BACKUPS") != ""
 }
 
 func (s *SettingsService) SetMaxBackups(v int) error {

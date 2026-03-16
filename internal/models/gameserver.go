@@ -28,6 +28,7 @@ type Gameserver struct {
 type GameserverFilter struct {
 	GameID *string
 	Status *string
+	NodeID *string
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
@@ -41,6 +42,14 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 	if filter.Status != nil {
 		query += " AND status = ?"
 		args = append(args, *filter.Status)
+	}
+	if filter.NodeID != nil {
+		if *filter.NodeID == "" {
+			query += " AND node_id IS NULL"
+		} else {
+			query += " AND node_id = ?"
+			args = append(args, *filter.NodeID)
+		}
 	}
 	query += " ORDER BY name"
 
