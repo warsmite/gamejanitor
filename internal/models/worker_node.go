@@ -12,6 +12,8 @@ type WorkerNode struct {
 	ExternalIP     string
 	PortRangeStart *int
 	PortRangeEnd   *int
+	MaxMemoryMB    *int
+	MaxGameservers *int
 	LastSeen       *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -40,9 +42,9 @@ func UpsertWorkerNode(db *sql.DB, node *WorkerNode) error {
 func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 	var n WorkerNode
 	err := db.QueryRow(
-		"SELECT id, lan_ip, external_ip, port_range_start, port_range_end, last_seen, created_at, updated_at FROM worker_nodes WHERE id = ?",
+		"SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_gameservers, last_seen, created_at, updated_at FROM worker_nodes WHERE id = ?",
 		id,
-	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxGameservers, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -53,7 +55,7 @@ func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 }
 
 func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
-	rows, err := db.Query("SELECT id, lan_ip, external_ip, port_range_start, port_range_end, last_seen, created_at, updated_at FROM worker_nodes ORDER BY id")
+	rows, err := db.Query("SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_gameservers, last_seen, created_at, updated_at FROM worker_nodes ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("listing worker nodes: %w", err)
 	}
@@ -62,7 +64,7 @@ func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
 	var nodes []WorkerNode
 	for rows.Next() {
 		var n WorkerNode
-		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxGameservers, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
@@ -77,6 +79,24 @@ func SetWorkerNodePortRange(db *sql.DB, id string, start, end *int) error {
 	)
 	if err != nil {
 		return fmt.Errorf("setting port range for worker node %s: %w", id, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("worker node %s not found", id)
+	}
+	return nil
+}
+
+func SetWorkerNodeLimits(db *sql.DB, id string, maxMemoryMB, maxGameservers *int) error {
+	result, err := db.Exec(
+		"UPDATE worker_nodes SET max_memory_mb = ?, max_gameservers = ?, updated_at = ? WHERE id = ?",
+		maxMemoryMB, maxGameservers, time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("setting limits for worker node %s: %w", id, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {

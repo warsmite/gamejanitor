@@ -61,6 +61,8 @@ CREATE TABLE worker_nodes (
     external_ip TEXT NOT NULL DEFAULT '',
     port_range_start INTEGER,
     port_range_end INTEGER,
+    max_memory_mb INTEGER,
+    max_gameservers INTEGER,
     last_seen DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

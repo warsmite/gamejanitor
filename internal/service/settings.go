@@ -39,6 +39,16 @@ func (s *SettingsService) SetWorkerNodePortRange(id string, start, end *int) err
 	return models.SetWorkerNodePortRange(s.db, id, start, end)
 }
 
+// SetWorkerNodeLimits updates the resource limits for a specific worker node.
+func (s *SettingsService) SetWorkerNodeLimits(id string, maxMemoryMB, maxGameservers *int) error {
+	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxGameservers)
+}
+
+// ListGameserversByNode returns all gameservers for computing per-node resource usage.
+func (s *SettingsService) ListGameserversByNode() ([]models.Gameserver, error) {
+	return models.ListGameservers(s.db, models.GameserverFilter{})
+}
+
 const (
 	SettingConnectionAddress = "connection_address"
 	SettingPortRangeStart    = "port_range_start"

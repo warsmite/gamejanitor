@@ -6,9 +6,13 @@ import (
 	"log/slog"
 	"net/http"
 
+	"time"
+
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/gorilla/csrf"
 )
 
 type PageDashboardHandlers struct {
@@ -16,12 +20,13 @@ type PageDashboardHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	settingsSvc   *service.SettingsService
+	registry      *worker.Registry
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageDashboardHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
-	return &PageDashboardHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
+func NewPageDashboardHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
+	return &PageDashboardHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, log: log}
 }
 
 type gameserverView struct {
@@ -41,6 +46,9 @@ type gameserverView struct {
 	HasQueryData               bool
 	ShowLogTail                bool
 	ErrorReason                string
+	NodeID                     string
+	NodeLabel                  string
+	NodeDown                   bool
 }
 
 func shouldShowLogTail(status string) bool {
@@ -51,7 +59,7 @@ func shouldShowLogTail(status string) bool {
 	return false
 }
 
-func buildGameserverView(gs *models.Gameserver, game *games.Game, querySvc *service.QueryService, connectIP string, connectionConfigured bool) gameserverView {
+func buildGameserverView(gs *models.Gameserver, game *games.Game, querySvc *service.QueryService, registry *worker.Registry, connectIP string, connectionConfigured bool) gameserverView {
 	port := firstGamePort(gs.Ports)
 	connectAddr := ""
 	if port != "" && connectIP != "" {
@@ -80,6 +88,18 @@ func buildGameserverView(gs *models.Gameserver, game *games.Game, querySvc *serv
 		v.MaxPlayers = qd.MaxPlayers
 		v.HasQueryData = true
 	}
+
+	if registry != nil && gs.NodeID != nil && *gs.NodeID != "" {
+		v.NodeID = *gs.NodeID
+		if info, ok := registry.GetInfo(*gs.NodeID); ok {
+			v.NodeLabel = info.LanIP
+			v.NodeDown = time.Since(info.LastSeen) > 25*time.Second
+		} else {
+			v.NodeLabel = *gs.NodeID
+			v.NodeDown = true
+		}
+	}
+
 	return v
 }
 
@@ -99,21 +119,25 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	}
 
 	var activeViews, stoppedViews []gameserverView
+	gsCountByNode := make(map[string]int)
 	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
 		connectIP, connectionConfigured := h.settingsSvc.ResolveConnectionIP(gs.NodeID)
 		if connectIP == "" {
 			connectIP = "127.0.0.1"
 		}
-		v := buildGameserverView(&gs, &game, h.querySvc, connectIP, connectionConfigured)
+		v := buildGameserverView(&gs, &game, h.querySvc, h.registry, connectIP, connectionConfigured)
 		if gs.Status == "stopped" {
 			stoppedViews = append(stoppedViews, v)
 		} else {
 			activeViews = append(activeViews, v)
 		}
+		if gs.NodeID != nil && *gs.NodeID != "" {
+			gsCountByNode[*gs.NodeID]++
+		}
 	}
 
-	h.renderer.Render(w, r, "dashboard", map[string]any{
+	data := map[string]any{
 		"ActiveGameservers":  activeViews,
 		"StoppedGameservers": stoppedViews,
 		"HasGameservers":     len(gameservers) > 0,
@@ -121,6 +145,66 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		"RunningCount":       len(activeViews),
 		"StoppedCount":       len(stoppedViews),
 		"TotalCount":         len(gameservers),
+	}
+
+	if h.registry != nil {
+		data["MultiNode"] = true
+		data["Workers"] = h.buildDashboardWorkerViews(gsCountByNode)
+	}
+
+	h.renderer.Render(w, r, "dashboard", data)
+}
+
+type dashboardWorkerView struct {
+	ID                string
+	LanIP             string
+	CPUCores          int64
+	MemoryTotalMB     int64
+	MemoryAvailableMB int64
+	GameserverCount   int
+	IsHealthy         bool
+	IsWarning         bool
+}
+
+func (h *PageDashboardHandlers) buildDashboardWorkerViews(gsCountByNode map[string]int) []dashboardWorkerView {
+	infos := h.registry.ListWorkers()
+	views := make([]dashboardWorkerView, 0, len(infos))
+	for _, info := range infos {
+		age := time.Since(info.LastSeen)
+		views = append(views, dashboardWorkerView{
+			ID:                info.ID,
+			LanIP:             info.LanIP,
+			CPUCores:          info.CPUCores,
+			MemoryTotalMB:     info.MemoryTotalMB,
+			MemoryAvailableMB: info.MemoryAvailableMB,
+			GameserverCount:   gsCountByNode[info.ID],
+			IsHealthy:         age < 15*time.Second,
+			IsWarning:         age >= 15*time.Second && age < 25*time.Second,
+		})
+	}
+	return views
+}
+
+// WorkersPartial renders the dashboard worker summary for HTMX polling.
+func (h *PageDashboardHandlers) WorkersPartial(w http.ResponseWriter, r *http.Request) {
+	var views []dashboardWorkerView
+	if h.registry != nil {
+		gameservers, err := h.gameserverSvc.ListGameservers(models.GameserverFilter{})
+		if err != nil {
+			h.log.Error("listing gameservers for worker partial", "error", err)
+		}
+		gsCountByNode := make(map[string]int)
+		for _, gs := range gameservers {
+			if gs.NodeID != nil && *gs.NodeID != "" {
+				gsCountByNode[*gs.NodeID]++
+			}
+		}
+		views = h.buildDashboardWorkerViews(gsCountByNode)
+	}
+	w.Header().Set("HX-Push-Url", "false")
+	h.renderer.RenderPartial(w, "dashboard", "dashboard_workers", map[string]any{
+		"Workers":   views,
+		"CSRFToken": csrf.Token(r),
 	})
 }
 

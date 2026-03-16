@@ -9,7 +9,7 @@
   {{if .MultiNode}}
   <!-- Workers Section -->
   <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6"
-       hx-get="/settings/workers" hx-trigger="every 5s" hx-swap="innerHTML" hx-target="#workers-table">
+       hx-get="/settings/workers" hx-trigger="every 5s" hx-swap="innerHTML" hx-target="#workers-table" hx-push-url="false">
     <h2 class="font-display font-semibold text-white mb-3">Workers</h2>
     <div id="workers-table">
       {{template "workers_table" .}}
@@ -299,6 +299,7 @@
         <th class="text-left px-4 py-2 font-medium">CPU</th>
         <th class="text-left px-4 py-2 font-medium">Memory</th>
         <th class="text-left px-4 py-2 font-medium">Port Range</th>
+        <th class="text-left px-4 py-2 font-medium">Limits</th>
         <th class="text-left px-4 py-2 font-medium">Status</th>
       </tr>
     </thead>
@@ -334,6 +335,45 @@
                       class="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors">Reset</button>
               {{end}}
               <button type="button" @click="editing = false" class="text-surface-500 hover:text-surface-300 text-xs transition-colors">Cancel</button>
+            </form>
+          </div>
+        </td>
+        <td class="px-4 py-2.5" x-data="{ editingLimits: false }">
+          <div x-show="!editingLimits">
+            {{if or .MaxMemoryMB .MaxGameservers}}
+            <div class="text-xs space-y-0.5">
+              {{if .MaxGameservers}}<span class="text-surface-200">{{.GameserverCount}}/{{derefInt .MaxGameservers}} gameservers</span>{{end}}
+              {{if and .MaxMemoryMB .MaxGameservers}}<br>{{end}}
+              {{if .MaxMemoryMB}}<span class="text-surface-200">{{.AllocatedMemoryMB}}/{{derefInt .MaxMemoryMB}} MB</span>{{end}}
+            </div>
+            <button @click="editingLimits = true" class="mt-0.5 text-[11px] text-accent-400 hover:text-accent-300 transition-colors">Edit</button>
+            {{else}}
+            <span class="text-surface-500 text-xs">Unlimited</span>
+            <button @click="editingLimits = true" class="ml-1 text-[11px] text-accent-400 hover:text-accent-300 transition-colors">Set</button>
+            {{end}}
+          </div>
+          <div x-show="editingLimits" x-cloak>
+            <form hx-post="/settings/workers/{{.ID}}/limits" hx-swap="none" class="space-y-1">
+              <input type="hidden" name="gorilla.csrf.Token" value="{{$.CSRFToken}}">
+              <div class="flex items-center gap-1">
+                <label class="text-[10px] text-surface-500 w-14">Max GS</label>
+                <input type="number" name="max_gameservers" value="{{if .MaxGameservers}}{{derefInt .MaxGameservers}}{{end}}" min="0" placeholder="0 = unlimited"
+                       class="w-20 px-1.5 py-1 bg-surface-900/60 border border-surface-700/50 rounded text-white text-xs focus:border-accent-500/50 focus:outline-none">
+              </div>
+              <div class="flex items-center gap-1">
+                <label class="text-[10px] text-surface-500 w-14">Max MB</label>
+                <input type="number" name="max_memory_mb" value="{{if .MaxMemoryMB}}{{derefInt .MaxMemoryMB}}{{end}}" min="0" step="512" placeholder="0 = unlimited"
+                       class="w-20 px-1.5 py-1 bg-surface-900/60 border border-surface-700/50 rounded text-white text-xs focus:border-accent-500/50 focus:outline-none">
+              </div>
+              <div class="flex items-center gap-1">
+                <button type="submit" class="px-2 py-1 bg-accent-600 hover:bg-accent-500 text-white rounded text-xs transition-colors">Save</button>
+                {{if or .MaxMemoryMB .MaxGameservers}}
+                <button type="button" hx-delete="/settings/workers/{{.ID}}/limits" hx-swap="none"
+                        hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'
+                        class="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors">Reset</button>
+                {{end}}
+                <button type="button" @click="editingLimits = false" class="text-surface-500 hover:text-surface-300 text-xs transition-colors">Cancel</button>
+              </div>
             </form>
           </div>
         </td>

@@ -187,9 +187,9 @@ func NewRouter(
 	})
 
 	// Page handlers (HTML)
-	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
+	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
@@ -203,6 +203,7 @@ func NewRouter(
 		r.Use(authMiddleware)
 
 		r.Get("/", pageDashboard.Dashboard)
+		r.Get("/dashboard/workers", pageDashboard.WorkersPartial)
 
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", pageGames.List)
@@ -223,6 +224,8 @@ func NewRouter(
 			r.Post("/localhost-bypass/disable", pageSettings.SetLocalhostBypass(false))
 			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
 			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
+			r.Post("/workers/{workerID}/limits", pageSettings.SaveWorkerLimits)
+			r.Delete("/workers/{workerID}/limits", pageSettings.ClearWorkerLimits)
 			r.Post("/worker-tokens", pageSettings.CreateWorkerToken)
 			r.Delete("/worker-tokens/{tokenId}", pageSettings.DeleteWorkerToken)
 			r.Get("/tokens", pageAuth.TokensPage)

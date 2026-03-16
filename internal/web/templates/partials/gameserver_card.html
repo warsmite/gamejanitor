@@ -29,7 +29,15 @@
       {{if and (eq .Status "error") .ErrorReason}}
       <p class="text-xs text-red-400 truncate mt-0.5">{{.ErrorReason}}</p>
       {{else}}
-      <p class="text-xs text-surface-400 truncate mt-0.5">{{.GameName}}</p>
+      <p class="text-xs text-surface-400 truncate mt-0.5">
+        {{.GameName}}
+        {{if .NodeLabel}}
+        <span class="inline-flex items-center gap-1 ml-1.5 text-[10px] text-surface-500 font-mono">
+          {{if .NodeDown}}<span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" title="Worker disconnected"></span>{{end}}
+          {{.NodeLabel}}
+        </span>
+        {{end}}
+      </p>
       {{end}}
     </a>
 

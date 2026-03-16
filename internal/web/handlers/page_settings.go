@@ -57,6 +57,7 @@ func (h *PageSettingsHandlers) WorkersPartial(w http.ResponseWriter, r *http.Req
 	if h.registry != nil {
 		views = h.workerViews()
 	}
+	w.Header().Set("HX-Push-Url", "false")
 	h.renderer.RenderPartial(w, "settings/index", "workers_table", map[string]any{
 		"Workers":   views,
 		"CSRFToken": csrf.Token(r),
@@ -71,12 +72,29 @@ type workerView struct {
 	PortRangeEnd      *int
 	DefaultRangeStart int
 	DefaultRangeEnd   int
+	MaxMemoryMB       *int
+	MaxGameservers    *int
+	AllocatedMemoryMB int
+	GameserverCount   int
 }
 
 func (h *PageSettingsHandlers) workerViews() []workerView {
 	infos := h.registry.ListWorkers()
 	defaultStart := h.settingsSvc.GetPortRangeStart()
 	defaultEnd := h.settingsSvc.GetPortRangeEnd()
+
+	// Count gameservers and allocated memory per node
+	gsCountByNode := make(map[string]int)
+	memByNode := make(map[string]int)
+	if gameservers, err := h.settingsSvc.ListGameserversByNode(); err == nil {
+		for _, gs := range gameservers {
+			if gs.NodeID != nil && *gs.NodeID != "" {
+				gsCountByNode[*gs.NodeID]++
+				memByNode[*gs.NodeID] += gs.MemoryLimitMB
+			}
+		}
+	}
+
 	views := make([]workerView, 0, len(infos))
 	for _, info := range infos {
 		age := time.Since(info.LastSeen)
@@ -86,10 +104,14 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 			IsWarning:         age >= 15*time.Second && age < 25*time.Second,
 			DefaultRangeStart: defaultStart,
 			DefaultRangeEnd:   defaultEnd,
+			GameserverCount:   gsCountByNode[info.ID],
+			AllocatedMemoryMB: memByNode[info.ID],
 		}
 		if node, err := h.settingsSvc.GetWorkerNode(info.ID); err == nil && node != nil {
 			v.PortRangeStart = node.PortRangeStart
 			v.PortRangeEnd = node.PortRangeEnd
+			v.MaxMemoryMB = node.MaxMemoryMB
+			v.MaxGameservers = node.MaxGameservers
 		}
 		views = append(views, v)
 	}
@@ -244,6 +266,64 @@ func (h *PageSettingsHandlers) ClearWorkerPortRange(w http.ResponseWriter, r *ht
 	}
 
 	h.log.Info("worker port range cleared", "worker_id", workerID)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+// SaveWorkerLimits sets resource limits for a specific worker node.
+func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	var maxMemoryMB, maxGameservers *int
+
+	if v := r.FormValue("max_memory_mb"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "Invalid max memory value", http.StatusBadRequest)
+			return
+		}
+		if n > 0 {
+			maxMemoryMB = &n
+		}
+	}
+
+	if v := r.FormValue("max_gameservers"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "Invalid max gameservers value", http.StatusBadRequest)
+			return
+		}
+		if n > 0 {
+			maxGameservers = &n
+		}
+	}
+
+	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, maxMemoryMB, maxGameservers); err != nil {
+		h.log.Error("setting worker limits", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to save worker limits: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker limits updated", "worker_id", workerID, "max_memory_mb", maxMemoryMB, "max_gameservers", maxGameservers)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+// ClearWorkerLimits removes resource limits for a worker, reverting to unlimited.
+func (h *PageSettingsHandlers) ClearWorkerLimits(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, nil, nil); err != nil {
+		h.log.Error("clearing worker limits", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to clear worker limits: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker limits cleared", "worker_id", workerID)
 	w.Header().Set("HX-Redirect", "/settings")
 	w.WriteHeader(http.StatusOK)
 }

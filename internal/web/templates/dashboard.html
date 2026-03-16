@@ -32,6 +32,14 @@
     </div>
   </div>
 
+  {{if .MultiNode}}
+  <!-- Worker summary -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 mb-4"
+       hx-get="/dashboard/workers" hx-trigger="every 5s" hx-swap="innerHTML" hx-push-url="false">
+    {{template "dashboard_workers" .}}
+  </div>
+  {{end}}
+
   <!-- Gameserver list -->
   <div class="max-w-5xl mx-auto px-4 sm:px-6">
     <div class="space-y-2">

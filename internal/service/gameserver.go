@@ -84,6 +84,40 @@ func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
 	return s.settingsSvc.GetPortRangeStart(), s.settingsSvc.GetPortRangeEnd()
 }
 
+// checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.
+func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int) error {
+	node, err := models.GetWorkerNode(s.db, nodeID)
+	if err != nil || node == nil {
+		return nil // no node record = no limits
+	}
+
+	if node.MaxGameservers == nil && node.MaxMemoryMB == nil {
+		return nil
+	}
+
+	nid := &nodeID
+	existing, err := s.ListGameservers(models.GameserverFilter{NodeID: nid})
+	if err != nil {
+		return fmt.Errorf("checking worker limits: %w", err)
+	}
+
+	if node.MaxGameservers != nil && len(existing) >= *node.MaxGameservers {
+		return fmt.Errorf("worker %s has reached its gameserver limit (%d)", nodeID, *node.MaxGameservers)
+	}
+
+	if node.MaxMemoryMB != nil {
+		var allocated int
+		for _, gs := range existing {
+			allocated += gs.MemoryLimitMB
+		}
+		if allocated+memoryNeeded > *node.MaxMemoryMB {
+			return fmt.Errorf("worker %s has reached its memory limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxMemoryMB)
+		}
+	}
+
+	return nil
+}
+
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
 func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, excludeID string) (json.RawMessage, error) {
 	gamePorts := game.DefaultPorts
@@ -165,9 +199,28 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	// Pick worker for placement BEFORE allocating ports so ports are scoped to the target node
-	targetWorker, nodeID := s.dispatcher.SelectWorkerForPlacement()
+	var targetWorker worker.Worker
+	var nodeID string
+	if gs.NodeID != nil && *gs.NodeID != "" {
+		// User chose a specific node
+		nodeID = *gs.NodeID
+		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
+		if err != nil {
+			return fmt.Errorf("selected worker unavailable: %w", err)
+		}
+		targetWorker = w
+	} else {
+		targetWorker, nodeID = s.dispatcher.SelectWorkerForPlacement()
+		if nodeID != "" {
+			gs.NodeID = &nodeID
+		}
+	}
+
+	// Check resource limits before allocating
 	if nodeID != "" {
-		gs.NodeID = &nodeID
+		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB); err != nil {
+			return err
+		}
 	}
 
 	if gs.PortMode == "auto" {

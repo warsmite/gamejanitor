@@ -11,6 +11,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,12 +20,13 @@ type PageGameserverHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	settingsSvc   *service.SettingsService
+	registry      *worker.Registry
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
+func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, log: log}
 }
 
 type gameserverFormData struct {
@@ -140,7 +142,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 
 	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(""))
 
-	h.renderer.Render(w, r, "gameservers/form", map[string]any{
+	data := map[string]any{
 		"Mode":              "new",
 		"Games":             gameList,
 		"GamesJSON":         string(gamesJSONBytes),
@@ -149,7 +151,33 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		"UsedPortsJSON":     string(usedPortsJSON),
 		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
 		"CurrentPortMode":   "",
-	})
+	}
+
+	if h.registry != nil {
+		type workerOption struct {
+			ID                string `json:"id"`
+			LanIP             string `json:"lan_ip"`
+			CPUCores          int64  `json:"cpu_cores"`
+			MemoryTotalMB     int64  `json:"memory_total_mb"`
+			MemoryAvailableMB int64  `json:"memory_available_mb"`
+		}
+		infos := h.registry.ListWorkers()
+		opts := make([]workerOption, 0, len(infos))
+		for _, info := range infos {
+			opts = append(opts, workerOption{
+				ID:                info.ID,
+				LanIP:             info.LanIP,
+				CPUCores:          info.CPUCores,
+				MemoryTotalMB:     info.MemoryTotalMB,
+				MemoryAvailableMB: info.MemoryAvailableMB,
+			})
+		}
+		workersJSON, _ := json.Marshal(opts)
+		data["MultiNode"] = true
+		data["WorkersJSON"] = string(workersJSON)
+	}
+
+	h.renderer.Render(w, r, "gameservers/form", data)
 }
 
 func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +207,10 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
 		PortMode:      form.PortMode,
+	}
+
+	if nodeID := r.FormValue("node_id"); nodeID != "" {
+		gs.NodeID = &nodeID
 	}
 
 	if err := h.gameserverSvc.CreateGameserver(r.Context(), gs); err != nil {
@@ -489,7 +521,7 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 	if connectIP == "" {
 		connectIP = "127.0.0.1"
 	}
-	view := buildGameserverView(gs, game, h.querySvc, connectIP, connectionConfigured)
+	view := buildGameserverView(gs, game, h.querySvc, h.registry, connectIP, connectionConfigured)
 
 	w.Header().Set("HX-Push-Url", "false")
 	h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)

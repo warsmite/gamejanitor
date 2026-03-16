@@ -90,6 +90,20 @@
                  placeholder="my-minecraft-gameserver">
         </div>
 
+        {{if and (eq .Mode "new") .MultiNode}}
+        <!-- Node selector -->
+        <div>
+          <label for="node_id" class="block text-sm font-medium text-surface-300 mb-1.5">Node</label>
+          <select name="node_id" x-model="selectedNode"
+                  class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
+            <option value="">Auto (best available)</option>
+            <template x-for="w in workers" :key="w.id">
+              <option :value="w.id" x-text="w.lan_ip + ' — ' + (w.memory_available_mb >= 1024 ? Math.floor(w.memory_available_mb / 1024) + ' GB' : w.memory_available_mb + ' MB') + ' free, ' + w.cpu_cores + ' cores'"></option>
+            </template>
+          </select>
+        </div>
+        {{end}}
+
         <!-- Memory -->
         <div>
           <div class="flex items-center justify-between mb-1.5">
@@ -455,6 +469,8 @@ function gameserverForm() {
     games: games,
     memoryLimitMB: parseInt(existingMemory) || (initialGameData ? initialGameData.recommended_memory_mb || 0 : 0),
     cpuLimit: existingCPU || '',
+    selectedNode: '',
+    workers: {{rawJS (or .WorkersJSON "[]")}},
 
     init() {
       // In new mode with no preselection and ports not yet set, wait for game selection

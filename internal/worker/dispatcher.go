@@ -87,6 +87,35 @@ func (d *Dispatcher) SelectWorkerForPlacement() (Worker, string) {
 	return d.local, ""
 }
 
+// SelectWorkerByNodeID returns the Worker for a specific node ID.
+// Used when the user explicitly chooses a node for placement.
+func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (Worker, error) {
+	if nodeID == "" {
+		if d.local != nil {
+			return d.local, nil
+		}
+		return nil, fmt.Errorf("no local worker available")
+	}
+
+	if d.registry == nil {
+		return nil, fmt.Errorf("multi-node not enabled")
+	}
+
+	w, ok := d.registry.Get(nodeID)
+	if !ok {
+		return nil, fmt.Errorf("worker %s is not connected", nodeID)
+	}
+	return w, nil
+}
+
+// ListWorkers returns info for all registered workers. Returns nil in standalone mode.
+func (d *Dispatcher) ListWorkers() []WorkerInfo {
+	if d.registry == nil {
+		return nil
+	}
+	return d.registry.ListWorkers()
+}
+
 func (d *Dispatcher) lookupNodeID(gameserverID string) (string, error) {
 	if d.db == nil {
 		return "", nil
