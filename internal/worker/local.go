@@ -348,6 +348,10 @@ func (w *LocalWorker) ensureSidecar(ctx context.Context, volumeName string) (str
 		w.docker.RemoveContainer(ctx, info.ID)
 	}
 
+	if err := w.docker.PullImage(ctx, fileopsImage); err != nil {
+		return "", fmt.Errorf("pulling fileops image %s: %w", fileopsImage, err)
+	}
+
 	containerID, err := w.docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:       containerName,
 		Image:      fileopsImage,

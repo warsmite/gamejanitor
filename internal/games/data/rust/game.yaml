@@ -4,6 +4,7 @@ base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
 recommended_memory_mb: 6144
 disabled_capabilities: []
 ready_pattern: 'Server startup complete'
+ready_timeout: 900
 assets:
   icon: rust-icon.ico
   grid: rust-grid.png

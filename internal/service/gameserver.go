@@ -701,6 +701,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 
 	w := s.dispatcher.WorkerFor(id)
 
+	if err := w.PullImage(ctx, game.BaseImage); err != nil {
+		return fmt.Errorf("pulling image for reinstall: %w", err)
+	}
+
 	// Prepare scripts on the target worker for reinstall container
 	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {

@@ -4,6 +4,7 @@ base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: ["query"]
 ready_pattern: 'Setting breakpad minidump AppID'
+ready_timeout: 600
 assets:
   icon: palworld-icon.ico
   grid: palworld-grid.png

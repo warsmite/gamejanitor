@@ -4,6 +4,7 @@ base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: []
 ready_pattern: 'Full Startup:'
+ready_timeout: 900
 assets:
   icon: ark-survival-evolved-icon.ico
   grid: ark-survival-evolved-grid.png

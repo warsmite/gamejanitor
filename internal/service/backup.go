@@ -165,6 +165,10 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 
 	w := s.dispatcher.WorkerFor(gs.ID)
 
+	if err := w.PullImage(ctx, game.BaseImage); err != nil {
+		return fmt.Errorf("pulling image for backup restore: %w", err)
+	}
+
 	// Spin up temp container to clear volume and restore
 	tempName := "gamejanitor-backup-" + gs.ID
 	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
