@@ -56,7 +56,23 @@ Hosting businesses don't need gamejanitor to manage users. They create scoped to
 - **CLI:** Cobra (HTTP client to API)
 - **Query:** GJQ for live player counts and server info
 - **SFTP:** Embedded Go SSH/SFTP server
-- **Packaging:** Nix flake + NixOS module (Docker Compose and binary install planned)
+- **Packaging:** Nix flake + NixOS module, binary install via script
+
+## Install
+
+Requires Docker. One-liner:
+
+```sh
+curl -sSL https://raw.githubusercontent.com/0xkowalskidev/gamejanitor/master/install.sh | bash
+```
+
+Then run:
+
+```sh
+gamejanitor serve
+```
+
+Web UI at http://localhost:8080.
 
 ## Supported games
 
