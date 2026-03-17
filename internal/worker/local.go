@@ -402,16 +402,18 @@ func (w *LocalWorker) sidecarExec(ctx context.Context, volumeName string, cmd []
 }
 
 func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
-	// /data is where the volume is mounted inside the sidecar
 	containerPath := filepath.Join("/data", path)
-	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, []string{"ls", "-la", containerPath})
+	// Use stat with pipe-delimited format for reliable parsing (no locale/year issues)
+	// sh -c is needed for the glob expansion
+	cmd := []string{"sh", "-c", fmt.Sprintf(`stat -c '%%n|%%s|%%f|%%Y|%%F' %s/* %s/.* 2>/dev/null || true`, containerPath, containerPath)}
+	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("listing directory %s: %w", path, err)
 	}
 	if exitCode != 0 {
 		return nil, fmt.Errorf("listing directory %s: %s", path, stderr)
 	}
-	return parseLsOutput(stdout), nil
+	return parseStatOutput(stdout), nil
 }
 
 func (w *LocalWorker) readFileSidecar(ctx context.Context, volumeName string, path string) ([]byte, error) {
@@ -469,69 +471,49 @@ func (w *LocalWorker) renamePathSidecar(ctx context.Context, volumeName string, 
 	return nil
 }
 
-// parseLsOutput parses `ls -la` output into FileEntry structs.
-// Used by the sidecar fallback path.
-func parseLsOutput(output string) []FileEntry {
+// parseStatOutput parses `stat -c '%n|%s|%f|%Y|%F'` output into FileEntry structs.
+// Format: fullpath|size|hex_mode|unix_epoch|file_type
+func parseStatOutput(output string) []FileEntry {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var entries []FileEntry
 
 	for _, line := range lines {
-		if strings.HasPrefix(line, "total ") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 5)
+		if len(parts) < 5 {
 			continue
 		}
 
-		fields := strings.Fields(line)
-		if len(fields) < 9 {
-			continue
-		}
-
-		name := strings.Join(fields[8:], " ")
-		if idx := strings.Index(name, " -> "); idx >= 0 {
-			name = name[:idx]
-		}
+		name := filepath.Base(parts[0])
 		if name == "." || name == ".." {
 			continue
 		}
 
-		perms := fields[0]
-		isDir := len(perms) > 0 && perms[0] == 'd'
-		size, _ := fmt.Sscanf(fields[4], "%d", new(int64))
-		_ = size
-
 		var fileSize int64
-		fmt.Sscanf(fields[4], "%d", &fileSize)
+		fmt.Sscanf(parts[1], "%d", &fileSize)
 
-		// ls -la time format varies; store as-is — the template handles display
-		modTimeStr := fields[5] + " " + fields[6] + " " + fields[7]
+		var modeHex uint32
+		fmt.Sscanf(parts[2], "%x", &modeHex)
+		perm := os.FileMode(modeHex)
+
+		var epoch int64
+		fmt.Sscanf(parts[3], "%d", &epoch)
+
+		isDir := parts[4] == "directory"
 
 		entries = append(entries, FileEntry{
 			Name:        name,
 			IsDir:       isDir,
 			Size:        fileSize,
-			Permissions: perms,
-			// ModTime from ls is a string, but FileEntry.ModTime is time.Time.
-			// Parse best-effort; zero time on failure is acceptable for the fallback.
-			ModTime: parseLsTime(modTimeStr),
+			Permissions: perm.String(),
+			ModTime:     time.Unix(epoch, 0),
 		})
 	}
 
 	sortFileEntries(entries)
 	return entries
-}
-
-// parseLsTime parses the time format from `ls -la` output.
-// Returns zero time on failure — acceptable for the fallback path.
-func parseLsTime(s string) time.Time {
-	// ls outputs either "Jan  2 15:04" (recent) or "Jan  2  2006" (old)
-	for _, layout := range []string{
-		"Jan _2 15:04",
-		"Jan _2  2006",
-	} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
 }
 
 // --- Shared helpers ---

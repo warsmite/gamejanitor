@@ -6,11 +6,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 )
+
+type LogSession struct {
+	Index   int       `json:"index"`
+	ModTime time.Time `json:"mod_time"`
+}
 
 type ConsoleService struct {
 	db         *sql.DB
@@ -88,6 +97,77 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 	}
 
 	return stdout, nil
+}
+
+// ListLogSessions returns available log sessions for a gameserver.
+// Index 0 is the most recent session (console.log), 1 is console.log.0, etc.
+func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID string) ([]LogSession, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
+	}
+	if gs == nil {
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+
+	w := s.dispatcher.WorkerFor(gameserverID)
+	entries, err := w.ListFiles(ctx, gs.VolumeName, ".gamejanitor/logs")
+	if err != nil {
+		return nil, nil
+	}
+
+	var sessions []LogSession
+	for _, e := range entries {
+		if e.IsDir {
+			continue
+		}
+		if e.Name == "console.log" {
+			sessions = append(sessions, LogSession{Index: 0, ModTime: e.ModTime})
+		} else if strings.HasPrefix(e.Name, "console.log.") {
+			suffix := strings.TrimPrefix(e.Name, "console.log.")
+			n, err := strconv.Atoi(suffix)
+			if err != nil {
+				continue
+			}
+			sessions = append(sessions, LogSession{Index: n + 1, ModTime: e.ModTime})
+		}
+	}
+
+	sort.Slice(sessions, func(i, j int) bool { return sessions[i].Index < sessions[j].Index })
+	return sessions, nil
+}
+
+// ReadHistoricalLogs reads persisted logs from the volume for a stopped gameserver.
+// session=0 reads console.log (latest), session=1 reads console.log.0, etc.
+func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID string, session int, tail int) ([]string, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
+	}
+	if gs == nil {
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+
+	path := ".gamejanitor/logs/console.log"
+	if session > 0 {
+		path = fmt.Sprintf(".gamejanitor/logs/console.log.%d", session-1)
+	}
+
+	w := s.dispatcher.WorkerFor(gameserverID)
+	content, err := w.ReadFile(ctx, gs.VolumeName, path)
+	if err != nil {
+		s.log.Debug("no historical logs found", "gameserver_id", gameserverID, "session", session, "error", err)
+		return nil, nil
+	}
+
+	lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return nil, nil
+	}
+	if tail > 0 && len(lines) > tail {
+		lines = lines[len(lines)-tail:]
+	}
+	return lines, nil
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.

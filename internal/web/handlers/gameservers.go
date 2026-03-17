@@ -243,8 +243,17 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := h.svc.GetContainerLogs(r.Context(), id, tail)
 	if err != nil {
-		h.log.Error("reading container logs", "id", id, "error", err)
-		respondError(w, http.StatusInternalServerError, err.Error())
+		// Fall back to historical logs from volume
+		lines, histErr := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, 0, tail)
+		if histErr != nil {
+			h.log.Error("reading logs", "id", id, "live_error", err, "historical_error", histErr)
+			respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if lines == nil {
+			lines = []string{}
+		}
+		respondOK(w, map[string]any{"lines": lines, "historical": true})
 		return
 	}
 	defer reader.Close()

@@ -285,6 +285,7 @@ func NewRouter(
 				// Console
 				r.With(requireConsole).Get("/console", pageConsole.Console)
 				r.With(requireConsole).Get("/console/stream", pageConsole.LogStream)
+				r.With(requireConsole).Get("/console/sessions", pageConsole.Sessions)
 				r.With(requireConsole).Post("/console/command", pageConsole.SendCommand)
 
 				// Files

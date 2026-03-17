@@ -21,9 +21,18 @@
     <div class="flex items-center justify-between px-4 py-2 border-b border-surface-800/60 bg-surface-900/50">
       <div class="flex items-center gap-2">
         <div class="w-2 h-2 rounded-full transition-colors"
-             :class="connected ? 'bg-emerald-500' : !serverRunning ? 'bg-surface-500' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'"></div>
+             :class="connected ? 'bg-emerald-500' : historical ? 'bg-surface-500' : !serverRunning ? 'bg-surface-500' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'"></div>
         <span class="text-xs text-surface-400"
-              x-text="connected ? 'Connected' : !serverRunning ? 'Gameserver is stopped' : reconnecting ? 'Reconnecting...' : 'Disconnected'"></span>
+              x-text="connected ? 'Connected' : historical ? 'Showing logs from last session' : !serverRunning ? 'Gameserver is stopped' : reconnecting ? 'Reconnecting...' : 'Disconnected'"></span>
+        <template x-if="sessions.length > 1">
+          <select x-model.number="selectedSession" @change="switchSession()"
+                  class="ml-2 text-xs bg-surface-800 border border-surface-700 rounded px-1.5 py-0.5 text-surface-300 focus:outline-none focus:ring-1 focus:ring-accent-600">
+            <option value="-1" x-show="serverRunning">Live</option>
+            <template x-for="s in sessions" :key="s.index">
+              <option :value="s.index" x-show="!(serverRunning && s.index === 0)" x-text="s.index === 0 ? 'Latest session' : timeAgo(s.mod_time)"></option>
+            </template>
+          </select>
+        </template>
       </div>
       <div class="flex items-center gap-3">
         <button @click="toggleSearch()" title="Search (Ctrl+F)"
@@ -108,6 +117,9 @@ function consoleApp() {
     command: '',
     connected: false,
     reconnecting: false,
+    historical: false,
+    sessions: [],
+    selectedSession: {{if or (eq .Gameserver.Status "running") (eq .Gameserver.Status "started")}}-1{{else}}0{{end}},
     serverRunning: {{if or (eq .Gameserver.Status "running") (eq .Gameserver.Status "started")}}true{{else}}false{{end}},
     autoScroll: true,
     newLinesSincePause: 0,
@@ -135,6 +147,7 @@ function consoleApp() {
 
     init() {
       this.connectStream();
+      this.fetchSessions();
     },
 
     onStatusChanged(detail) {
@@ -147,6 +160,8 @@ function consoleApp() {
         }
         this.reconnectAttempts = 0;
         this.reconnecting = false;
+        this.historical = false;
+        this.selectedSession = -1;
         this.connectStream();
       } else if (!this.serverRunning) {
         // Stop reconnecting — wait for status event instead
@@ -207,16 +222,25 @@ function consoleApp() {
         this.appendLine(e.data);
       };
 
+      this.eventSource.addEventListener('historical', () => {
+        this.historical = true;
+        this.fetchSessions();
+      });
+
       this.eventSource.addEventListener('eof', () => {
         this.connected = false;
         this.reconnecting = false;
-        this.appendLine('[Stream ended]', 'system');
-        this.scheduleReconnect();
+        if (!this.historical) {
+          this.appendLine('[Stream ended]', 'system');
+          this.scheduleReconnect();
+        }
       });
 
       this.eventSource.onerror = () => {
         this.connected = false;
-        this.scheduleReconnect();
+        if (!this.historical) {
+          this.scheduleReconnect();
+        }
       };
     },
 
@@ -332,6 +356,40 @@ function consoleApp() {
       }
 
       this.$refs.commandInput?.focus();
+    },
+
+    async fetchSessions() {
+      try {
+        const resp = await fetch('/gameservers/{{.Gameserver.ID}}/console/sessions');
+        if (resp.ok) this.sessions = await resp.json();
+      } catch (e) {}
+    },
+
+    switchSession() {
+      this.lines = [];
+      this.nextId = 0;
+      this.historical = false;
+      if (this.eventSource) this.eventSource.close();
+
+      if (this.selectedSession === -1) {
+        this.connectStream();
+        return;
+      }
+
+      const url = '/gameservers/{{.Gameserver.ID}}/console/stream?session=' + this.selectedSession;
+      this.eventSource = new EventSource(url);
+      this.eventSource.onmessage = (e) => this.appendLine(e.data);
+      this.eventSource.addEventListener('historical', () => { this.historical = true; });
+      this.eventSource.addEventListener('eof', () => { this.connected = false; });
+      this.eventSource.onerror = () => { this.connected = false; };
+    },
+
+    timeAgo(dateStr) {
+      const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+      if (seconds < 60) return 'Just now';
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+      if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+      return Math.floor(seconds / 86400) + 'd ago';
     },
 
     destroy() {
