@@ -1,6 +1,6 @@
 id: rust
 name: "Rust"
-base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
 recommended_memory_mb: 6144
 disabled_capabilities: []
 ready_pattern: 'Server startup complete'

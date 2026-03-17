@@ -55,7 +55,7 @@
               echo "Usage: build-image <base|steamcmd|java|dotnet>"
               exit 1
             fi
-            docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
+            docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
           '';
 
           push-image = pkgs.writeShellScriptBin "push-image" ''
@@ -65,16 +65,16 @@
               exit 1
             fi
             echo "Building and pushing $image..."
-            docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
-            docker push "registry.0xkowalski.dev/gamejanitor/$image"
+            docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
+            docker push "ghcr.io/0xkowalskidev/gamejanitor/$image"
           '';
 
           push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
             # Build order matters: base must be built first since others depend on it
             for image in base steamcmd java dotnet; do
               echo "Building and pushing $image..."
-              docker build -t "registry.0xkowalski.dev/gamejanitor/$image" "images/$image"
-              docker push "registry.0xkowalski.dev/gamejanitor/$image"
+              docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
+              docker push "ghcr.io/0xkowalskidev/gamejanitor/$image"
             done
           '';
 

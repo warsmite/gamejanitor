@@ -1,4 +1,4 @@
-FROM registry.0xkowalski.dev/gamejanitor/base
+FROM ghcr.io/0xkowalskidev/gamejanitor/base
 
 USER root
 

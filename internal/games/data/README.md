@@ -35,7 +35,7 @@ User overrides completely replace the embedded game definition for that ID. To c
 ```yaml
 id: minecraft-java
 name: "Minecraft: Java Edition"
-base_image: registry.0xkowalski.dev/gamejanitor/java    # Docker image to use
+base_image: ghcr.io/0xkowalskidev/gamejanitor/java    # Docker image to use
 recommended_memory_mb: 2048
 gjq_slug: minecraft-java                  # GJQ query slug (optional, defaults to id)
 disabled_capabilities: []                 # e.g. ["query", "command", "save"]
@@ -93,10 +93,10 @@ Scripts run inside a Docker container with the game's base image. They are bind-
 
 | Image | Contents | Used by |
 |-------|----------|---------|
-| `registry.0xkowalski.dev/gamejanitor/base` | Ubuntu 24.04, curl, wget, entrypoint | Minecraft Bedrock |
-| `registry.0xkowalski.dev/gamejanitor/steamcmd` | base + SteamCMD, rcon-cli, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
-| `registry.0xkowalski.dev/gamejanitor/java` | base + JDK 21 | Minecraft Java |
-| `registry.0xkowalski.dev/gamejanitor/dotnet` | base + .NET 9 | Terraria |
+| `ghcr.io/0xkowalskidev/gamejanitor/base` | Ubuntu 24.04, curl, wget, entrypoint | Minecraft Bedrock |
+| `ghcr.io/0xkowalskidev/gamejanitor/steamcmd` | base + SteamCMD, rcon-cli, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
+| `ghcr.io/0xkowalskidev/gamejanitor/java` | base + JDK 21 | Minecraft Java |
+| `ghcr.io/0xkowalskidev/gamejanitor/dotnet` | base + .NET 9 | Terraria |
 
 ## Adding a Custom Game
 

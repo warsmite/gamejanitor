@@ -1,6 +1,6 @@
 id: valheim
 name: "Valheim"
-base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
 recommended_memory_mb: 2048
 disabled_capabilities: ["command"]
 ready_pattern: 'Game server connected'

@@ -1,6 +1,6 @@
 id: palworld
 name: "Palworld"
-base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: ["query"]
 ready_pattern: 'Setting breakpad minidump AppID'

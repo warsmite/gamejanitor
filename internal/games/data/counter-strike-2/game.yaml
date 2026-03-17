@@ -1,6 +1,6 @@
 id: counter-strike-2
 name: "Counter-Strike 2"
-base_image: registry.0xkowalski.dev/gamejanitor/steamcmd
+base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
 recommended_memory_mb: 1024
 disabled_capabilities: []
 ready_pattern: 'GC Connection established'

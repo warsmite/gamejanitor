@@ -1,0 +1,114 @@
+name: Build and push Docker images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "images/**"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/0xkowalskidev/gamejanitor
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.filter.outputs.base }}
+      steamcmd: ${{ steps.filter.outputs.steamcmd }}
+      java: ${{ steps.filter.outputs.java }}
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            base:
+              - 'images/base/**'
+            steamcmd:
+              - 'images/steamcmd/**'
+            java:
+              - 'images/java/**'
+            dotnet:
+              - 'images/dotnet/**'
+
+  base:
+    needs: changes
+    if: needs.changes.outputs.base == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/base
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/base:latest
+
+  steamcmd:
+    needs: [changes, base]
+    if: always() && (needs.changes.outputs.steamcmd == 'true' || needs.changes.outputs.base == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/steamcmd
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/steamcmd:latest
+
+  java:
+    needs: [changes, base]
+    if: always() && (needs.changes.outputs.java == 'true' || needs.changes.outputs.base == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/java
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/java:latest
+
+  dotnet:
+    needs: [changes, base]
+    if: always() && (needs.changes.outputs.dotnet == 'true' || needs.changes.outputs.base == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/dotnet
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/dotnet:latest

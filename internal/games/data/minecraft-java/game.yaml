@@ -1,6 +1,6 @@
 id: minecraft-java
 name: "Minecraft: Java Edition"
-base_image: registry.0xkowalski.dev/gamejanitor/java
+base_image: ghcr.io/0xkowalskidev/gamejanitor/java
 recommended_memory_mb: 2048
 disabled_capabilities: []
 ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
