@@ -178,7 +178,7 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 		result[i] = portMapping{
 			Name:          p.Name,
 			HostPort:      flexInt(allocatedPort),
-			ContainerPort: flexInt(p.Port),
+			ContainerPort: flexInt(allocatedPort),
 			Protocol:      p.Protocol,
 		}
 	}
