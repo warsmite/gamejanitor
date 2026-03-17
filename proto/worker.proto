@@ -265,6 +265,8 @@ message RegisterRequest {
     int64 memory_available_mb = 5;
     string lan_ip = 6;
     string external_ip = 7;
+    int32 port_range_start = 8;
+    int32 port_range_end = 9;
 }
 message RegisterResponse {
     bool accepted = 1;

@@ -309,7 +309,7 @@
         <td class="px-4 py-2.5 text-surface-200 font-medium">{{.ID}}</td>
         <td class="px-4 py-2.5 text-surface-300 font-mono text-xs">{{.LanIP}}</td>
         <td class="px-4 py-2.5 text-surface-300">{{.CPUCores}} cores</td>
-        <td class="px-4 py-2.5 text-surface-300">{{formatMB .MemoryAvailableMB}} / {{formatMB .MemoryTotalMB}}</td>
+        <td class="px-4 py-2.5 text-surface-300">{{formatMB .MemoryAvailableMB}} free / {{formatMB .MemoryTotalMB}}</td>
         <td class="px-4 py-2.5" x-data="{ editing: false }">
           <div x-show="!editing">
             {{if .PortRangeStart}}

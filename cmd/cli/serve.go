@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"time"
 
+	"strconv"
+
 	"github.com/0xkowalskidev/gamejanitor/internal/config"
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
@@ -324,7 +326,7 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 		// Register
 		ctx := context.Background()
 		req := buildHeartbeatRequest(workerID, netInfo)
-		regResp, err := client.Register(ctx, &pb.RegisterRequest{
+		regReq := &pb.RegisterRequest{
 			WorkerId:          workerID,
 			GrpcAddress:       ownAddr,
 			CpuCores:          req.CpuCores,
@@ -332,7 +334,14 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 			MemoryAvailableMb: req.MemoryAvailableMb,
 			LanIp:             req.LanIp,
 			ExternalIp:        req.ExternalIp,
-		})
+		}
+		if v, err := strconv.Atoi(os.Getenv("GJ_PORT_RANGE_START")); err == nil {
+			regReq.PortRangeStart = int32(v)
+		}
+		if v, err := strconv.Atoi(os.Getenv("GJ_PORT_RANGE_END")); err == nil {
+			regReq.PortRangeEnd = int32(v)
+		}
+		regResp, err := client.Register(ctx, regReq)
 		if err != nil {
 			logger.Error("registration failed", "error", err, "retry_in", backoff)
 			conn.Close()

@@ -2379,6 +2379,8 @@ type RegisterRequest struct {
 	MemoryAvailableMb int64                  `protobuf:"varint,5,opt,name=memory_available_mb,json=memoryAvailableMb,proto3" json:"memory_available_mb,omitempty"`
 	LanIp             string                 `protobuf:"bytes,6,opt,name=lan_ip,json=lanIp,proto3" json:"lan_ip,omitempty"`
 	ExternalIp        string                 `protobuf:"bytes,7,opt,name=external_ip,json=externalIp,proto3" json:"external_ip,omitempty"`
+	PortRangeStart    int32                  `protobuf:"varint,8,opt,name=port_range_start,json=portRangeStart,proto3" json:"port_range_start,omitempty"`
+	PortRangeEnd      int32                  `protobuf:"varint,9,opt,name=port_range_end,json=portRangeEnd,proto3" json:"port_range_end,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2460,6 +2462,20 @@ func (x *RegisterRequest) GetExternalIp() string {
 		return x.ExternalIp
 	}
 	return ""
+}
+
+func (x *RegisterRequest) GetPortRangeStart() int32 {
+	if x != nil {
+		return x.PortRangeStart
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetPortRangeEnd() int32 {
+	if x != nil {
+		return x.PortRangeEnd
+	}
+	return 0
 }
 
 type RegisterResponse struct {
@@ -2755,7 +2771,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\vexternal_ip\x18\x06 \x01(\tR\n" +
 	"externalIp\"/\n" +
 	"\x11HeartbeatResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xfe\x01\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xce\x02\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12!\n" +
 	"\fgrpc_address\x18\x02 \x01(\tR\vgrpcAddress\x12\x1b\n" +
@@ -2764,7 +2780,9 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x13memory_available_mb\x18\x05 \x01(\x03R\x11memoryAvailableMb\x12\x15\n" +
 	"\x06lan_ip\x18\x06 \x01(\tR\x05lanIp\x12\x1f\n" +
 	"\vexternal_ip\x18\a \x01(\tR\n" +
-	"externalIp\".\n" +
+	"externalIp\x12(\n" +
+	"\x10port_range_start\x18\b \x01(\x05R\x0eportRangeStart\x12$\n" +
+	"\x0eport_range_end\x18\t \x01(\x05R\fportRangeEnd\".\n" +
 	"\x10RegisterResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\"Y\n" +
 	"\x19PrepareGameScriptsRequest\x12\x17\n" +
