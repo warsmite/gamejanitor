@@ -195,7 +195,7 @@ func definitionToGame(def GameDefinition) *Game {
 
 	readyTimeout := def.ReadyTimeout
 	if readyTimeout == 0 {
-		readyTimeout = 300
+		readyTimeout = 600
 	}
 
 	return &Game{

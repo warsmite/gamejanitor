@@ -32,7 +32,7 @@ cd /data/server
 
 # srcds_linux doesn't write to stdout on Linux, -condebug writes to console.log
 # Tail console.log to stdout in background so Docker captures it
-(while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done; tail -f "$CONSOLE_LOG") &
+(while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done; tail -f -n +1 "$CONSOLE_LOG") &
 
 exec ./srcds_linux -game garrysmod \
     -ip 0.0.0.0 \
