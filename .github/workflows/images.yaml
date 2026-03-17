@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - "images/**"
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -35,7 +36,7 @@ jobs:
 
   base:
     needs: changes
-    if: needs.changes.outputs.base == 'true'
+    if: needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,7 +56,9 @@ jobs:
 
   steamcmd:
     needs: [changes, base]
-    if: always() && (needs.changes.outputs.steamcmd == 'true' || needs.changes.outputs.base == 'true')
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.steamcmd == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,7 +78,9 @@ jobs:
 
   java:
     needs: [changes, base]
-    if: always() && (needs.changes.outputs.java == 'true' || needs.changes.outputs.base == 'true')
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.java == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -95,7 +100,9 @@ jobs:
 
   dotnet:
     needs: [changes, base]
-    if: always() && (needs.changes.outputs.dotnet == 'true' || needs.changes.outputs.base == 'true')
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.dotnet == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
