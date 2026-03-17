@@ -364,3 +364,11 @@ var _ fmt.Stringer = (*RemoteWorker)(nil)
 func (w *RemoteWorker) String() string {
 	return fmt.Sprintf("RemoteWorker(%s)", w.nodeID)
 }
+
+func (w *RemoteWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("BackupVolume not yet implemented for remote workers")
+}
+
+func (w *RemoteWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
+	return fmt.Errorf("RestoreVolume not yet implemented for remote workers")
+}

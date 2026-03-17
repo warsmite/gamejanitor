@@ -24,7 +24,6 @@
         <p class="text-xs text-surface-400">{{len .Backups}} backup{{if ne (len .Backups) 1}}s{{end}}</p>
       </div>
     </div>
-    {{if or (eq .Gameserver.Status "running") (eq .Gameserver.Status "started")}}
     <form hx-post="/gameservers/{{.Gameserver.ID}}/backups" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false"
           @htmx:before-request="busy = 'Creating backup\u2026 This may take a moment.'"
           @htmx:after-request="busy = ''">
@@ -35,9 +34,6 @@
         <span x-text="busy ? 'Creating\u2026' : 'Create Backup'"></span>
       </button>
     </form>
-    {{else}}
-    <span class="text-xs text-surface-500">Gameserver must be running to create backups</span>
-    {{end}}
   </div>
 
   <!-- Backup Cards -->

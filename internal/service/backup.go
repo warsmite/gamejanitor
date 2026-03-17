@@ -45,16 +45,12 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	if gs == nil {
 		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if !isRunningStatus(gs.Status) || gs.ContainerID == nil {
-		return nil, fmt.Errorf("gameserver must be running to create backup (current status: %s)", gs.Status)
-	}
 
 	game := s.gameStore.GetGame(gs.GameID)
-
 	w := s.dispatcher.WorkerFor(gameserverID)
 
-	// Run save-server if game supports it
-	if game != nil && HasCapability(game, "save") {
+	// Run save-server if game is running and supports it
+	if isRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && HasCapability(game, "save") {
 		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
 		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {
@@ -76,10 +72,10 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 
 	s.log.Info("creating backup", "gameserver_id", gameserverID, "backup_id", backupID)
 
-	// Get tar stream of /data from container
-	tarReader, err := w.CopyDirFromContainer(ctx, *gs.ContainerID, "/data")
+	// Get tar stream directly from volume (works whether gameserver is running or stopped)
+	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		return nil, fmt.Errorf("copying data from container: %w", err)
+		return nil, fmt.Errorf("backing up volume: %w", err)
 	}
 	defer tarReader.Close()
 
@@ -147,11 +143,6 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return ErrNotFoundf("game %s not found", gs.GameID)
-	}
-
 	wasRunning := isRunningStatus(gs.Status)
 
 	s.log.Info("restoring backup", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
@@ -164,44 +155,6 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 	}
 
 	w := s.dispatcher.WorkerFor(gs.ID)
-
-	if err := w.PullImage(ctx, game.BaseImage); err != nil {
-		return fmt.Errorf("pulling image for backup restore: %w", err)
-	}
-
-	// Spin up temp container to clear volume and restore
-	tempName := "gamejanitor-backup-" + gs.ID
-	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
-		Name:       tempName,
-		Image:      game.BaseImage,
-		Env:        []string{},
-		VolumeName: gs.VolumeName,
-		Entrypoint: []string{"sleep", "infinity"},
-	})
-	if err != nil {
-		return fmt.Errorf("creating temp container for restore: %w", err)
-	}
-	defer func() {
-		if stopErr := w.StopContainer(ctx, tempID, 5); stopErr != nil {
-			s.log.Warn("failed to stop temp backup container", "error", stopErr)
-		}
-		if rmErr := w.RemoveContainer(ctx, tempID); rmErr != nil {
-			s.log.Warn("failed to remove temp backup container", "error", rmErr)
-		}
-	}()
-
-	if err := w.StartContainer(ctx, tempID); err != nil {
-		return fmt.Errorf("starting temp container for restore: %w", err)
-	}
-
-	// Clear volume contents
-	exitCode, _, stderr, execErr := w.Exec(ctx, tempID, []string{"sh", "-c", "rm -rf /data/* /data/.[!.]* /data/..?*"})
-	if execErr != nil {
-		return fmt.Errorf("clearing volume: %w", execErr)
-	}
-	if exitCode != 0 {
-		return fmt.Errorf("clearing volume failed (exit %d): %s", exitCode, stderr)
-	}
 
 	// Load backup from store and decompress
 	reader, err := s.store.Load(ctx, backup.GameserverID, backup.ID)
@@ -216,9 +169,9 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 	}
 	defer gzReader.Close()
 
-	// Extract tar into /data
-	if err := w.CopyTarToContainer(ctx, tempID, "/", gzReader); err != nil {
-		return fmt.Errorf("extracting backup into container: %w", err)
+	// Restore directly into volume (clears existing contents and extracts tar)
+	if err := w.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
+		return fmt.Errorf("restoring backup to volume: %w", err)
 	}
 
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gs.ID)

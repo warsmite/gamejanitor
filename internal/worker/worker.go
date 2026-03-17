@@ -33,11 +33,15 @@ type Worker interface {
 	CreateDirectory(ctx context.Context, volumeName string, path string) error
 	RenamePath(ctx context.Context, volumeName string, from string, to string) error
 
-	// Copy operations (used by backup/restore)
+	// Copy operations (used by config file read/write)
 	CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error)
 	CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error
 	CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error)
 	CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error
+
+	// Volume-level backup operations (container-independent)
+	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
+	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
 
 	// Events
 	WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error)
