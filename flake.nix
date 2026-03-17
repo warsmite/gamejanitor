@@ -37,7 +37,7 @@
             reflex -s -r '\.html$' -- tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify &
 
             # Watch Go/template files and restart server
-            reflex -s -r '\.(go|html)$' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
+            reflex -s -r '\.(go|html)$' -r 'internal/games/data' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''

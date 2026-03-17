@@ -15,6 +15,32 @@ echo "[start-server] config: worldsize=${SERVER_WORLDSIZE} port=${SERVER_PORT} q
 # LD_LIBRARY_PATH needed for Rust's bundled libraries
 export LD_LIBRARY_PATH="/data/server/RustDedicated_Data/Plugins/x86_64:${LD_LIBRARY_PATH}"
 
+# Write EAC settings to server.cfg
+CFG_DIR="/data/server/server/gamejanitor/cfg"
+mkdir -p "$CFG_DIR"
+CFG_FILE="${CFG_DIR}/server.cfg"
+touch "$CFG_FILE"
+
+update_cfg() {
+    local key="$1" value="$2" file="$3"
+    if grep -q "^${key} " "$file" 2>/dev/null; then
+        sed -i "s|^${key} .*|${key} \"${value}\"|" "$file"
+    else
+        echo "${key} \"${value}\"" >> "$file"
+    fi
+}
+
+if [ "${EAC_ENABLED:-true}" = "false" ]; then
+    update_cfg "server.secure" "0" "$CFG_FILE"
+    update_cfg "server.eac" "0" "$CFG_FILE"
+    update_cfg "server.encryption" "0" "$CFG_FILE"
+    echo "[start-server] EAC disabled via server.cfg"
+else
+    update_cfg "server.secure" "1" "$CFG_FILE"
+    update_cfg "server.eac" "1" "$CFG_FILE"
+    update_cfg "server.encryption" "1" "$CFG_FILE"
+fi
+
 echo "[start-server] starting Rust dedicated server"
 cd /data/server
 exec ./RustDedicated -batchmode \
@@ -26,4 +52,4 @@ exec ./RustDedicated -batchmode \
     +server.queryport "$QUERY_PORT" \
     +rcon.port "$RCON_PORT" \
     +rcon.password "$RCON_PASSWORD" \
-    +rcon.web 0 # TODO: rcon.web 1 disables traditional Source RCON, need a WebSocket RCON client before we can switch
+    +rcon.web 0

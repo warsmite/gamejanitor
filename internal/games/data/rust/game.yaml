@@ -41,6 +41,10 @@ env:
     default: "false"
     label: "Enable Oxide (uMod)"
     type: boolean
+  - key: EAC_ENABLED
+    default: "true"
+    label: "Easy Anti-Cheat (EAC)"
+    type: boolean
   - key: SERVER_PORT
     default: "28015"
     system: true
