@@ -149,6 +149,9 @@ var gameserversCreateCmd = &cobra.Command{
 			"memory_limit_mb": memory,
 			"cpu_limit":       cpu,
 		}
+		if len(portFlags) == 0 {
+			body["port_mode"] = "auto"
+		}
 		if nodeID != "" {
 			body["node_id"] = nodeID
 		}
