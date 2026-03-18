@@ -1,17 +1,27 @@
 #!/bin/bash
 # Wraps steamcmd.sh with retry on transient failures (e.g. "Missing configuration")
+# SteamCMD often returns exit code 0 even on failure, so we check output for errors.
 MAX_ATTEMPTS=5
 DELAY=10
 
+LOGFILE=$(mktemp)
+
 for attempt in $(seq 1 $MAX_ATTEMPTS); do
-    if steamcmd.sh "$@"; then
+    steamcmd.sh "$@" 2>&1 | tee "$LOGFILE"
+    EXIT_CODE=${PIPESTATUS[0]}
+
+    # SteamCMD returns 0 on some failures, so also check output for known errors
+    if [ $EXIT_CODE -eq 0 ] && ! grep -q "ERROR!" "$LOGFILE"; then
+        rm -f "$LOGFILE"
         exit 0
     fi
+
     if [ $attempt -lt $MAX_ATTEMPTS ]; then
         echo "[steamcmd-retry] attempt $attempt/$MAX_ATTEMPTS failed, retrying in ${DELAY}s..."
         sleep $DELAY
     fi
 done
 
+rm -f "$LOGFILE"
 echo "[steamcmd-retry] all $MAX_ATTEMPTS attempts failed"
 exit 1
