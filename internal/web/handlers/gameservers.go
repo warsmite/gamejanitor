@@ -158,6 +158,69 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, gs)
 }
 
+func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Action string `json:"action"`
+		NodeID string `json:"node_id"`
+		All    bool   `json:"all"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	actionFn, ok := map[string]func(context.Context, string) error{
+		"start":   h.svc.Start,
+		"stop":    h.svc.Stop,
+		"restart": h.svc.Restart,
+	}[body.Action]
+	if !ok {
+		respondError(w, http.StatusBadRequest, "action must be start, stop, or restart")
+		return
+	}
+
+	if !body.All && body.NodeID == "" {
+		respondError(w, http.StatusBadRequest, "either all or node_id is required")
+		return
+	}
+
+	filter := models.GameserverFilter{}
+	if body.NodeID != "" {
+		filter.NodeID = &body.NodeID
+	}
+
+	gameservers, err := h.svc.ListGameservers(filter)
+	if err != nil {
+		h.log.Error("listing gameservers for bulk action", "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type result struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Error  string `json:"error,omitempty"`
+	}
+	var results []result
+	for _, gs := range gameservers {
+		r := result{ID: gs.ID, Name: gs.Name}
+		if err := actionFn(context.Background(), gs.ID); err != nil {
+			r.Error = err.Error()
+			r.Status = gs.Status
+		} else {
+			updated, _ := h.svc.GetGameserver(gs.ID)
+			if updated != nil {
+				r.Status = updated.Status
+			}
+		}
+		results = append(results, r)
+	}
+
+	h.log.Info("bulk action completed", "action", body.Action, "total", len(gameservers), "node_id", body.NodeID)
+	respondOK(w, results)
+}
+
 // doAction runs a lifecycle action, then fetches and returns the updated gameserver.
 func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, action func(string) error) {
 	id := chi.URLParam(r, "id")

@@ -111,6 +111,7 @@ func NewRouter(
 		r.Route("/gameservers", func(r chi.Router) {
 			r.Get("/", gameserverHandlers.List)
 			r.With(requireAdmin).Post("/", gameserverHandlers.Create)
+			r.With(requireAdmin).Post("/bulk", gameserverHandlers.BulkAction)
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)
 				r.With(requireSettings).Put("/", gameserverHandlers.Update)

@@ -9,22 +9,22 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start <gameserver>",
-	Short: "Start a gameserver",
-	Args:  cobra.ExactArgs(1),
+	Short: "Start a gameserver (or use --all / --node for bulk)",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("start", "Starting"),
 }
 
 var stopCmd = &cobra.Command{
 	Use:   "stop <gameserver>",
-	Short: "Stop a gameserver",
-	Args:  cobra.ExactArgs(1),
+	Short: "Stop a gameserver (or use --all / --node for bulk)",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("stop", "Stopping"),
 }
 
 var restartCmd = &cobra.Command{
 	Use:   "restart <gameserver>",
-	Short: "Restart a gameserver",
-	Args:  cobra.ExactArgs(1),
+	Short: "Restart a gameserver (or use --all / --node for bulk)",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("restart", "Restarting"),
 }
 
@@ -77,6 +77,17 @@ var reinstallCmd = &cobra.Command{
 
 func runAction(action, verb string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
+		all, _ := cmd.Flags().GetBool("all")
+		nodeID, _ := cmd.Flags().GetString("node")
+
+		if all || nodeID != "" {
+			return runBulkAction(cmd, action, verb, all, nodeID)
+		}
+
+		if len(args) == 0 {
+			return exitError(fmt.Errorf("requires a gameserver argument, or --all / --node for bulk"))
+		}
+
 		id, err := resolveGameserverID(args[0])
 		if err != nil {
 			return exitError(err)
@@ -105,6 +116,63 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
 		return nil
 	}
+}
+
+func runBulkAction(cmd *cobra.Command, action, verb string, all bool, nodeID string) error {
+	scope := "all gameservers"
+	if nodeID != "" {
+		scope = fmt.Sprintf("all gameservers on node %s", nodeID)
+	}
+
+	if !confirmAction(fmt.Sprintf("%s %s?", verb, scope)) {
+		fmt.Println("Aborted.")
+		return nil
+	}
+
+	body := map[string]any{"action": action}
+	if all {
+		body["all"] = true
+	}
+	if nodeID != "" {
+		body["node_id"] = nodeID
+	}
+
+	resp, err := apiPost("/api/gameservers/bulk", body)
+	if err != nil {
+		return exitError(err)
+	}
+
+	if jsonOutput {
+		printJSONResponse(resp)
+		return nil
+	}
+
+	var results []struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal(resp.Data, &results); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+
+	if len(results) == 0 {
+		fmt.Println("No gameservers matched.")
+		return nil
+	}
+
+	succeeded := 0
+	for _, r := range results {
+		if r.Error != "" {
+			fmt.Printf("  ✗ %s (%s): %s\n", r.Name, r.ID[:8], r.Error)
+		} else {
+			fmt.Printf("  ✓ %s (%s): %s\n", r.Name, r.ID[:8], r.Status)
+			succeeded++
+		}
+	}
+	fmt.Printf("%s %d/%d gameservers.\n", verb, succeeded, len(results))
+	return nil
 }
 
 var statusCmd = &cobra.Command{
@@ -264,6 +332,10 @@ var migrateCmd = &cobra.Command{
 }
 
 func init() {
+	for _, cmd := range []*cobra.Command{startCmd, stopCmd, restartCmd} {
+		cmd.Flags().Bool("all", false, "Apply to all gameservers")
+		cmd.Flags().String("node", "", "Apply to all gameservers on a specific node")
+	}
 	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
 	migrateCmd.Flags().String("node", "", "Target worker node ID")
 
