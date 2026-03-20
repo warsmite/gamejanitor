@@ -221,6 +221,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		targetWorker = w
 	} else {
 		targetWorker, nodeID = s.dispatcher.SelectWorkerForPlacement()
+		if targetWorker == nil {
+			return "", fmt.Errorf("no workers available — connect a worker node first")
+		}
 		if nodeID != "" {
 			gs.NodeID = &nodeID
 		}
@@ -576,6 +579,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if err != nil {
 		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to configure environment variables.")
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
+	}
+
+	if gs.Installed {
+		env = append(env, "SKIP_INSTALL=1")
 	}
 
 	// Parse port bindings
