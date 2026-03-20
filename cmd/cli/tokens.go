@@ -134,11 +134,9 @@ var tokensCreateAdminCmd = &cobra.Command{
 			return exitError(fmt.Errorf("--name is required"))
 		}
 
-		// Admin tokens use the same endpoint but with no gameserver_ids/permissions
 		body := map[string]any{
-			"name":           name,
-			"gameserver_ids": []string{},
-			"permissions":    []string{},
+			"name":  name,
+			"scope": "admin",
 		}
 
 		resp, err := apiPost("/api/tokens", body)

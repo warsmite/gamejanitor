@@ -63,27 +63,37 @@ func (s *AuthService) ValidateToken(rawToken string) *models.Token {
 	return nil
 }
 
-// GenerateAdminToken creates a new admin token, replacing any existing one.
+// GenerateAdminToken creates a new admin token named "Admin".
 // Returns the raw (unhashed) token string — must be shown to user once.
+// Used by the Enable Auth flow for first-time setup.
 func (s *AuthService) GenerateAdminToken() (string, error) {
-	// Delete existing admin tokens
-	if err := models.DeleteTokensByScope(s.db, ScopeAdmin); err != nil {
-		return "", fmt.Errorf("clearing existing admin tokens: %w", err)
+	rawToken, _, err := s.CreateAdminToken("Admin")
+	if err != nil {
+		return "", err
+	}
+	return rawToken, nil
+}
+
+// CreateAdminToken creates a named admin token. Multiple admin tokens can coexist.
+// Returns the raw token string — must be shown to user once.
+func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, error) {
+	if name == "" {
+		return "", nil, fmt.Errorf("token name is required")
 	}
 
 	rawToken, err := generateSecureToken()
 	if err != nil {
-		return "", fmt.Errorf("generating token: %w", err)
+		return "", nil, fmt.Errorf("generating token: %w", err)
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("hashing token: %w", err)
+		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
 	token := &models.Token{
 		ID:            uuid.New().String(),
-		Name:          "Admin",
+		Name:          name,
 		HashedToken:   string(hashed),
 		Scope:         ScopeAdmin,
 		GameserverIDs: json.RawMessage("[]"),
@@ -91,11 +101,11 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 	}
 
 	if err := models.CreateToken(s.db, token); err != nil {
-		return "", fmt.Errorf("saving admin token: %w", err)
+		return "", nil, fmt.Errorf("saving admin token: %w", err)
 	}
 
-	s.log.Info("admin token generated", "id", token.ID)
-	return rawToken, nil
+	s.log.Info("admin token created", "id", token.ID, "name", name)
+	return rawToken, token, nil
 }
 
 // CreateScopedToken creates a new scoped token for specific gameservers with specific permissions.
@@ -194,12 +204,6 @@ func (s *AuthService) GetToken(id string) (*models.Token, error) {
 func (s *AuthService) DeleteToken(id string) error {
 	s.log.Info("deleting token", "id", id)
 	return models.DeleteToken(s.db, id)
-}
-
-// HasAdminToken returns true if an admin token exists in the database.
-func (s *AuthService) HasAdminToken() bool {
-	t, err := models.GetTokenByScope(s.db, ScopeAdmin)
-	return err == nil && t != nil
 }
 
 // IsAdmin returns true if the token has admin scope.

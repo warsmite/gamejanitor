@@ -126,6 +126,23 @@ func (h *PageAuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := r.FormValue("name")
+	scope := r.FormValue("scope")
+
+	if scope == "admin" {
+		rawToken, _, err := h.authSvc.CreateAdminToken(name)
+		if err != nil {
+			h.log.Error("creating admin token from web", "error", err)
+			http.Error(w, "Failed to create admin token: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		h.renderer.Render(w, r, "auth/token_created", map[string]any{
+			"RawToken": rawToken,
+			"Name":     name,
+			"IsAdmin":  true,
+		})
+		return
+	}
+
 	gameserverIDs := r.Form["gameserver_ids"]
 	permissions := r.Form["permissions"]
 
@@ -145,7 +162,6 @@ func (h *PageAuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Show the raw token once — user must copy it
 	h.renderer.Render(w, r, "auth/token_created", map[string]any{
 		"RawToken": rawToken,
 		"Name":     name,

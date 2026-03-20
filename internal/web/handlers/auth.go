@@ -36,12 +36,28 @@ func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name          string   `json:"name"`
+		Scope         string   `json:"scope"`
 		GameserverIDs []string `json:"gameserver_ids"`
 		Permissions   []string `json:"permissions"`
 		ExpiresIn     string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if req.Scope == "admin" {
+		rawToken, token, err := h.authSvc.CreateAdminToken(req.Name)
+		if err != nil {
+			h.log.Error("creating admin token", "error", err)
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondCreated(w, map[string]any{
+			"token":    rawToken,
+			"token_id": token.ID,
+			"name":     token.Name,
+		})
 		return
 	}
 

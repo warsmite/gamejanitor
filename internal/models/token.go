@@ -50,19 +50,6 @@ func GetToken(db *sql.DB, id string) (*Token, error) {
 	return &t, nil
 }
 
-func GetTokenByScope(db *sql.DB, scope string) (*Token, error) {
-	var t Token
-	err := db.QueryRow("SELECT id, name, hashed_token, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE scope = ? LIMIT 1", scope).
-		Scan(&t.ID, &t.Name, &t.HashedToken, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getting token by scope %s: %w", scope, err)
-	}
-	return &t, nil
-}
-
 func CreateToken(db *sql.DB, t *Token) error {
 	t.CreatedAt = time.Now()
 	_, err := db.Exec(
@@ -109,10 +96,3 @@ func TokenExistsByScope(db *sql.DB, id string, scope string) bool {
 	return err == nil
 }
 
-func DeleteTokensByScope(db *sql.DB, scope string) error {
-	_, err := db.Exec("DELETE FROM tokens WHERE scope = ?", scope)
-	if err != nil {
-		return fmt.Errorf("deleting tokens by scope %s: %w", scope, err)
-	}
-	return nil
-}

@@ -72,11 +72,11 @@ func runTokenCreate(cmd *cobra.Command, args []string) error {
 		fmt.Println(rawToken)
 
 	case "admin":
-		rawToken, err := authSvc.GenerateAdminToken()
+		rawToken, _, err := authSvc.CreateAdminToken(name)
 		if err != nil {
 			return fmt.Errorf("creating admin token: %w", err)
 		}
-		fmt.Fprintln(os.Stderr, "Admin token created (replaces any existing admin token). Store this — it cannot be retrieved later.")
+		fmt.Fprintln(os.Stderr, "Admin token created. Store this — it cannot be retrieved later.")
 		fmt.Println(rawToken)
 	}
 
