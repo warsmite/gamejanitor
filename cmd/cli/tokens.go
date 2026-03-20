@@ -89,6 +89,7 @@ var tokensCreateCmd = &cobra.Command{
 
 		body := map[string]any{
 			"name":           name,
+			"scope":          "gameserver",
 			"gameserver_ids": gameserverIDs,
 			"permissions":    permissions,
 		}

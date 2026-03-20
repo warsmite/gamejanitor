@@ -46,6 +46,14 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Scope == "" {
+		req.Scope = "gameserver"
+	}
+	if req.Scope != "admin" && req.Scope != "gameserver" {
+		respondError(w, http.StatusBadRequest, "scope must be \"admin\" or \"gameserver\"")
+		return
+	}
+
 	if req.Scope == "admin" {
 		rawToken, token, err := h.authSvc.CreateAdminToken(req.Name)
 		if err != nil {
