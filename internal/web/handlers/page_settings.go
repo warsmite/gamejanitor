@@ -40,8 +40,18 @@ func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Reque
 		"AuthFromEnv":            h.settingsSvc.IsAuthEnabledFromEnv(),
 		"LocalhostBypass":        h.settingsSvc.GetLocalhostBypass(),
 		"LocalhostBypassFromEnv": h.settingsSvc.IsLocalhostBypassFromEnv(),
-		"AuditRetentionDays":     h.settingsSvc.GetAuditRetentionDays(),
-		"AuditRetentionFromEnv":  h.settingsSvc.IsAuditRetentionFromEnv(),
+		"AuditRetentionDays":       h.settingsSvc.GetAuditRetentionDays(),
+		"AuditRetentionFromEnv":    h.settingsSvc.IsAuditRetentionFromEnv(),
+		"RateLimitEnabled":         h.settingsSvc.GetRateLimitEnabled(),
+		"RateLimitEnabledFromEnv":  h.settingsSvc.IsRateLimitEnabledFromEnv(),
+		"RateLimitPerIP":           h.settingsSvc.GetRateLimitPerIP(),
+		"RateLimitPerIPFromEnv":    h.settingsSvc.IsRateLimitPerIPFromEnv(),
+		"RateLimitPerToken":        h.settingsSvc.GetRateLimitPerToken(),
+		"RateLimitPerTokenFromEnv": h.settingsSvc.IsRateLimitPerTokenFromEnv(),
+		"RateLimitLogin":           h.settingsSvc.GetRateLimitLogin(),
+		"RateLimitLoginFromEnv":    h.settingsSvc.IsRateLimitLoginFromEnv(),
+		"TrustProxyHeaders":        h.settingsSvc.GetTrustProxyHeaders(),
+		"TrustProxyHeadersFromEnv": h.settingsSvc.IsTrustProxyHeadersFromEnv(),
 	}
 
 	if h.registry != nil {
@@ -453,6 +463,130 @@ func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http
 	h.log.Info("audit retention updated", "days", v)
 	w.Header().Set("HX-Redirect", "/settings")
 	w.WriteHeader(http.StatusOK)
+}
+
+// SetRateLimitEnabled handles enabling/disabling rate limiting.
+func (h *PageSettingsHandlers) SetRateLimitEnabled(enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.settingsSvc.IsRateLimitEnabledFromEnv() {
+			http.Error(w, "Rate limiting is controlled by environment variable", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.settingsSvc.SetRateLimitEnabled(enabled); err != nil {
+			h.log.Error("setting rate limit enabled", "error", err)
+			http.Error(w, "Failed to save rate limit setting", http.StatusInternalServerError)
+			return
+		}
+
+		h.log.Info("rate limiting updated", "enabled", enabled)
+		w.Header().Set("HX-Redirect", "/settings")
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (h *PageSettingsHandlers) SaveRateLimitPerIP(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsRateLimitPerIPFromEnv() {
+		http.Error(w, "Rate limit per IP is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	v, err := strconv.Atoi(r.FormValue("rate_limit_per_ip"))
+	if err != nil || v < 1 {
+		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.settingsSvc.SetRateLimitPerIP(v); err != nil {
+		h.log.Error("setting rate limit per ip", "error", err)
+		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("rate limit per ip updated", "value", v)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PageSettingsHandlers) SaveRateLimitPerToken(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsRateLimitPerTokenFromEnv() {
+		http.Error(w, "Rate limit per token is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	v, err := strconv.Atoi(r.FormValue("rate_limit_per_token"))
+	if err != nil || v < 1 {
+		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.settingsSvc.SetRateLimitPerToken(v); err != nil {
+		h.log.Error("setting rate limit per token", "error", err)
+		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("rate limit per token updated", "value", v)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PageSettingsHandlers) SaveRateLimitLogin(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsRateLimitLoginFromEnv() {
+		http.Error(w, "Login rate limit is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	v, err := strconv.Atoi(r.FormValue("rate_limit_login"))
+	if err != nil || v < 1 {
+		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.settingsSvc.SetRateLimitLogin(v); err != nil {
+		h.log.Error("setting rate limit login", "error", err)
+		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("rate limit login updated", "value", v)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+// SetTrustProxyHeaders handles enabling/disabling trust proxy headers.
+func (h *PageSettingsHandlers) SetTrustProxyHeaders(enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.settingsSvc.IsTrustProxyHeadersFromEnv() {
+			http.Error(w, "Trust proxy headers is controlled by environment variable", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.settingsSvc.SetTrustProxyHeaders(enabled); err != nil {
+			h.log.Error("setting trust proxy headers", "error", err)
+			http.Error(w, "Failed to save trust proxy headers", http.StatusInternalServerError)
+			return
+		}
+
+		h.log.Info("trust proxy headers updated", "enabled", enabled)
+		w.Header().Set("HX-Redirect", "/settings")
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 // SetLocalhostBypass handles enabling/disabling localhost bypass.

@@ -29,8 +29,18 @@ type settingsResponse struct {
 	MaxBackupsFromEnv        bool   `json:"max_backups_from_env"`
 	AuthEnabled              bool   `json:"auth_enabled"`
 	AuthFromEnv              bool   `json:"auth_from_env"`
-	LocalhostBypass          bool   `json:"localhost_bypass"`
-	LocalhostBypassFromEnv   bool   `json:"localhost_bypass_from_env"`
+	LocalhostBypass            bool   `json:"localhost_bypass"`
+	LocalhostBypassFromEnv     bool   `json:"localhost_bypass_from_env"`
+	RateLimitEnabled           bool   `json:"rate_limit_enabled"`
+	RateLimitEnabledFromEnv    bool   `json:"rate_limit_enabled_from_env"`
+	RateLimitPerIP             int    `json:"rate_limit_per_ip"`
+	RateLimitPerIPFromEnv      bool   `json:"rate_limit_per_ip_from_env"`
+	RateLimitPerToken          int    `json:"rate_limit_per_token"`
+	RateLimitPerTokenFromEnv   bool   `json:"rate_limit_per_token_from_env"`
+	RateLimitLogin             int    `json:"rate_limit_login"`
+	RateLimitLoginFromEnv      bool   `json:"rate_limit_login_from_env"`
+	TrustProxyHeaders          bool   `json:"trust_proxy_headers"`
+	TrustProxyHeadersFromEnv   bool   `json:"trust_proxy_headers_from_env"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +56,18 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		MaxBackupsFromEnv:        h.settingsSvc.IsMaxBackupsFromEnv(),
 		AuthEnabled:              h.settingsSvc.GetAuthEnabled(),
 		AuthFromEnv:              h.settingsSvc.IsAuthEnabledFromEnv(),
-		LocalhostBypass:          h.settingsSvc.GetLocalhostBypass(),
-		LocalhostBypassFromEnv:   h.settingsSvc.IsLocalhostBypassFromEnv(),
+		LocalhostBypass:            h.settingsSvc.GetLocalhostBypass(),
+		LocalhostBypassFromEnv:     h.settingsSvc.IsLocalhostBypassFromEnv(),
+		RateLimitEnabled:           h.settingsSvc.GetRateLimitEnabled(),
+		RateLimitEnabledFromEnv:    h.settingsSvc.IsRateLimitEnabledFromEnv(),
+		RateLimitPerIP:             h.settingsSvc.GetRateLimitPerIP(),
+		RateLimitPerIPFromEnv:      h.settingsSvc.IsRateLimitPerIPFromEnv(),
+		RateLimitPerToken:          h.settingsSvc.GetRateLimitPerToken(),
+		RateLimitPerTokenFromEnv:   h.settingsSvc.IsRateLimitPerTokenFromEnv(),
+		RateLimitLogin:             h.settingsSvc.GetRateLimitLogin(),
+		RateLimitLoginFromEnv:      h.settingsSvc.IsRateLimitLoginFromEnv(),
+		TrustProxyHeaders:          h.settingsSvc.GetTrustProxyHeaders(),
+		TrustProxyHeadersFromEnv:   h.settingsSvc.IsTrustProxyHeadersFromEnv(),
 	})
 }
 
@@ -168,6 +188,81 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := h.settingsSvc.SetLocalhostBypass(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "rate_limit_enabled":
+			if h.settingsSvc.IsRateLimitEnabledFromEnv() {
+				respondError(w, http.StatusBadRequest, "rate_limit_enabled is controlled by environment variable")
+				return
+			}
+			var v bool
+			if err := json.Unmarshal(raw, &v); err != nil {
+				respondError(w, http.StatusBadRequest, "invalid rate_limit_enabled value")
+				return
+			}
+			if err := h.settingsSvc.SetRateLimitEnabled(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "rate_limit_per_ip":
+			if h.settingsSvc.IsRateLimitPerIPFromEnv() {
+				respondError(w, http.StatusBadRequest, "rate_limit_per_ip is controlled by environment variable")
+				return
+			}
+			var v int
+			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
+				respondError(w, http.StatusBadRequest, "invalid rate_limit_per_ip value (must be >= 1)")
+				return
+			}
+			if err := h.settingsSvc.SetRateLimitPerIP(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "rate_limit_per_token":
+			if h.settingsSvc.IsRateLimitPerTokenFromEnv() {
+				respondError(w, http.StatusBadRequest, "rate_limit_per_token is controlled by environment variable")
+				return
+			}
+			var v int
+			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
+				respondError(w, http.StatusBadRequest, "invalid rate_limit_per_token value (must be >= 1)")
+				return
+			}
+			if err := h.settingsSvc.SetRateLimitPerToken(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "rate_limit_login":
+			if h.settingsSvc.IsRateLimitLoginFromEnv() {
+				respondError(w, http.StatusBadRequest, "rate_limit_login is controlled by environment variable")
+				return
+			}
+			var v int
+			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
+				respondError(w, http.StatusBadRequest, "invalid rate_limit_login value (must be >= 1)")
+				return
+			}
+			if err := h.settingsSvc.SetRateLimitLogin(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "trust_proxy_headers":
+			if h.settingsSvc.IsTrustProxyHeadersFromEnv() {
+				respondError(w, http.StatusBadRequest, "trust_proxy_headers is controlled by environment variable")
+				return
+			}
+			var v bool
+			if err := json.Unmarshal(raw, &v); err != nil {
+				respondError(w, http.StatusBadRequest, "invalid trust_proxy_headers value")
+				return
+			}
+			if err := h.settingsSvc.SetTrustProxyHeaders(v); err != nil {
 				respondError(w, http.StatusInternalServerError, err.Error())
 				return
 			}

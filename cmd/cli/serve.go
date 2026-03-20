@@ -276,7 +276,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 		"db_path", cfg.DBPath,
 	)
 
-	return http.ListenAndServe(addr, router)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 // runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.

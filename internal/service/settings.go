@@ -57,7 +57,12 @@ const (
 	SettingMaxBackups        = "max_backups"
 	SettingAuthEnabled       = "auth_enabled"
 	SettingLocalhostBypass   = "localhost_bypass"
-	SettingAuditRetention   = "audit_retention_days"
+	SettingAuditRetention    = "audit_retention_days"
+	SettingRateLimitEnabled  = "rate_limit_enabled"
+	SettingRateLimitPerIP    = "rate_limit_per_ip"
+	SettingRateLimitPerToken = "rate_limit_per_token"
+	SettingRateLimitLogin    = "rate_limit_login"
+	SettingTrustProxyHeaders = "trust_proxy_headers"
 
 	DefaultAuditRetention = 30
 
@@ -65,6 +70,10 @@ const (
 	DefaultPortRangeEnd      = 28999
 	DefaultPreferredPortMode = "auto"
 	DefaultMaxBackups        = 10
+
+	DefaultRateLimitPerIP    = 20
+	DefaultRateLimitPerToken = 10
+	DefaultRateLimitLogin    = 10
 )
 
 type SettingsService struct {
@@ -294,4 +303,127 @@ func (s *SettingsService) IsAuditRetentionFromEnv() bool {
 
 func (s *SettingsService) SetAuditRetentionDays(v int) error {
 	return models.SetSetting(s.db, SettingAuditRetention, strconv.Itoa(v))
+}
+
+func (s *SettingsService) GetRateLimitEnabled() bool {
+	if v := os.Getenv("GJ_RATE_LIMIT_ENABLED"); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, SettingRateLimitEnabled)
+	if err != nil || v == "" {
+		return false
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) IsRateLimitEnabledFromEnv() bool {
+	return os.Getenv("GJ_RATE_LIMIT_ENABLED") != ""
+}
+
+func (s *SettingsService) SetRateLimitEnabled(enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	s.log.Info("setting rate_limit_enabled", "enabled", enabled)
+	return models.SetSetting(s.db, SettingRateLimitEnabled, v)
+}
+
+func (s *SettingsService) GetRateLimitPerIP() int {
+	if v := os.Getenv("GJ_RATE_LIMIT_PER_IP"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	v, err := models.GetSetting(s.db, SettingRateLimitPerIP)
+	if err != nil || v == "" {
+		return DefaultRateLimitPerIP
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultRateLimitPerIP
+	}
+	return n
+}
+
+func (s *SettingsService) IsRateLimitPerIPFromEnv() bool {
+	return os.Getenv("GJ_RATE_LIMIT_PER_IP") != ""
+}
+
+func (s *SettingsService) SetRateLimitPerIP(v int) error {
+	return models.SetSetting(s.db, SettingRateLimitPerIP, strconv.Itoa(v))
+}
+
+func (s *SettingsService) GetRateLimitPerToken() int {
+	if v := os.Getenv("GJ_RATE_LIMIT_PER_TOKEN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	v, err := models.GetSetting(s.db, SettingRateLimitPerToken)
+	if err != nil || v == "" {
+		return DefaultRateLimitPerToken
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultRateLimitPerToken
+	}
+	return n
+}
+
+func (s *SettingsService) IsRateLimitPerTokenFromEnv() bool {
+	return os.Getenv("GJ_RATE_LIMIT_PER_TOKEN") != ""
+}
+
+func (s *SettingsService) SetRateLimitPerToken(v int) error {
+	return models.SetSetting(s.db, SettingRateLimitPerToken, strconv.Itoa(v))
+}
+
+func (s *SettingsService) GetRateLimitLogin() int {
+	if v := os.Getenv("GJ_RATE_LIMIT_LOGIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	v, err := models.GetSetting(s.db, SettingRateLimitLogin)
+	if err != nil || v == "" {
+		return DefaultRateLimitLogin
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultRateLimitLogin
+	}
+	return n
+}
+
+func (s *SettingsService) IsRateLimitLoginFromEnv() bool {
+	return os.Getenv("GJ_RATE_LIMIT_LOGIN") != ""
+}
+
+func (s *SettingsService) SetRateLimitLogin(v int) error {
+	return models.SetSetting(s.db, SettingRateLimitLogin, strconv.Itoa(v))
+}
+
+func (s *SettingsService) GetTrustProxyHeaders() bool {
+	if v := os.Getenv("GJ_TRUST_PROXY_HEADERS"); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, SettingTrustProxyHeaders)
+	if err != nil || v == "" {
+		return false
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
+	return os.Getenv("GJ_TRUST_PROXY_HEADERS") != ""
+}
+
+func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	s.log.Info("setting trust_proxy_headers", "enabled", enabled)
+	return models.SetSetting(s.db, SettingTrustProxyHeaders, v)
 }

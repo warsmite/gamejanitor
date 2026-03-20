@@ -56,6 +56,9 @@ func NewRouter(
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 
+	rateLimitStore := NewRateLimitStore(settingsSvc, log)
+	r.Use(rateLimitStore.PerIPMiddleware())
+
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
 		renderer.RenderError(w, req, http.StatusNotFound)
 	})
@@ -105,6 +108,7 @@ func NewRouter(
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
 		r.Use(authMiddleware)
+		r.Use(rateLimitStore.PerTokenMiddleware())
 		r.Use(auditMiddleware)
 
 		r.Get("/status", statusHandlers.Get)
@@ -222,6 +226,7 @@ func NewRouter(
 	r.Group(func(r chi.Router) {
 		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
+		r.Use(rateLimitStore.LoginRateLimitMiddleware())
 		r.Get("/login", pageAuth.LoginPage)
 		r.Post("/login", pageAuth.Login)
 		r.Post("/logout", pageAuth.Logout)
@@ -243,6 +248,7 @@ func NewRouter(
 		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
 		r.Use(authMiddleware)
+		r.Use(rateLimitStore.PerTokenMiddleware())
 		r.Use(auditMiddleware)
 
 		r.Get("/", pageDashboard.Dashboard)
@@ -267,6 +273,13 @@ func NewRouter(
 			r.Post("/audit-retention", pageSettings.SaveAuditRetention)
 			r.Post("/localhost-bypass/enable", pageSettings.SetLocalhostBypass(true))
 			r.Post("/localhost-bypass/disable", pageSettings.SetLocalhostBypass(false))
+			r.Post("/rate-limit/enable", pageSettings.SetRateLimitEnabled(true))
+			r.Post("/rate-limit/disable", pageSettings.SetRateLimitEnabled(false))
+			r.Post("/rate-limit/per-ip", pageSettings.SaveRateLimitPerIP)
+			r.Post("/rate-limit/per-token", pageSettings.SaveRateLimitPerToken)
+			r.Post("/rate-limit/login", pageSettings.SaveRateLimitLogin)
+			r.Post("/trust-proxy-headers/enable", pageSettings.SetTrustProxyHeaders(true))
+			r.Post("/trust-proxy-headers/disable", pageSettings.SetTrustProxyHeaders(false))
 			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
 			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
 			r.Post("/workers/{workerID}/limits", pageSettings.SaveWorkerLimits)

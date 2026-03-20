@@ -320,6 +320,152 @@
     </div>
     {{end}}
   </div>
+
+  <!-- Rate Limiting Section -->
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
+    <h2 class="font-display font-semibold text-white mb-4">Rate Limiting</h2>
+
+    <!-- Rate Limit Toggle -->
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-sm text-surface-300">
+          {{if .RateLimitEnabled}}
+            Rate limiting is enabled. Requests exceeding limits will receive 429 responses.
+          {{else}}
+            Rate limiting is disabled. All requests are allowed without throttling.
+          {{end}}
+          {{if .RateLimitEnabledFromEnv}}
+            <span class="text-amber-400 text-xs ml-1">(set by environment variable)</span>
+          {{end}}
+        </p>
+      </div>
+      {{if not .RateLimitEnabledFromEnv}}
+        {{if .RateLimitEnabled}}
+          <form method="POST" action="/settings/rate-limit/disable" hx-post="/settings/rate-limit/disable" hx-target="#content" hx-push-url="false">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="px-4 py-2 bg-red-500/10 border border-red-900/30 text-red-400 hover:bg-red-500/20 rounded-lg text-sm font-medium transition-colors">
+              Disable
+            </button>
+          </form>
+        {{else}}
+          <form method="POST" action="/settings/rate-limit/enable" hx-post="/settings/rate-limit/enable" hx-target="#content" hx-push-url="false">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="px-4 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-emerald-600/20">
+              Enable
+            </button>
+          </form>
+        {{end}}
+      {{end}}
+    </div>
+
+    <!-- Per-IP Rate Limit -->
+    <div class="border-t border-surface-800/40 pt-4 mb-4">
+      <label class="block text-sm font-medium text-surface-300">Per-IP Limit (req/s)</label>
+      <p class="text-xs text-surface-500">Maximum requests per second from a single IP address.</p>
+      {{if .RateLimitPerIPFromEnv}}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-sm font-mono text-white">{{.RateLimitPerIP}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+      <form method="POST" action="/settings/rate-limit/per-ip" hx-post="/settings/rate-limit/per-ip" hx-swap="none" class="mt-2">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+        <div class="flex items-center gap-2">
+          <input type="number" name="rate_limit_per_ip" value="{{.RateLimitPerIP}}" min="1"
+                 class="w-24 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+          <button type="submit"
+                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+            Save
+          </button>
+        </div>
+      </form>
+      {{end}}
+    </div>
+
+    <!-- Per-Token Rate Limit -->
+    <div class="border-t border-surface-800/40 pt-4 mb-4">
+      <label class="block text-sm font-medium text-surface-300">Per-Token Limit (req/s)</label>
+      <p class="text-xs text-surface-500">Maximum requests per second from a single API token.</p>
+      {{if .RateLimitPerTokenFromEnv}}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-sm font-mono text-white">{{.RateLimitPerToken}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+      <form method="POST" action="/settings/rate-limit/per-token" hx-post="/settings/rate-limit/per-token" hx-swap="none" class="mt-2">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+        <div class="flex items-center gap-2">
+          <input type="number" name="rate_limit_per_token" value="{{.RateLimitPerToken}}" min="1"
+                 class="w-24 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+          <button type="submit"
+                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+            Save
+          </button>
+        </div>
+      </form>
+      {{end}}
+    </div>
+
+    <!-- Login Rate Limit -->
+    <div class="border-t border-surface-800/40 pt-4 mb-4">
+      <label class="block text-sm font-medium text-surface-300">Login Limit (attempts/min)</label>
+      <p class="text-xs text-surface-500">Maximum login attempts per minute from a single IP address.</p>
+      {{if .RateLimitLoginFromEnv}}
+      <div class="flex items-center gap-2 mt-2">
+        <span class="text-sm font-mono text-white">{{.RateLimitLogin}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+      <form method="POST" action="/settings/rate-limit/login" hx-post="/settings/rate-limit/login" hx-swap="none" class="mt-2">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+        <div class="flex items-center gap-2">
+          <input type="number" name="rate_limit_login" value="{{.RateLimitLogin}}" min="1"
+                 class="w-24 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+          <button type="submit"
+                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+            Save
+          </button>
+        </div>
+      </form>
+      {{end}}
+    </div>
+
+    <!-- Trust Proxy Headers -->
+    <div class="border-t border-surface-800/40 pt-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-surface-300">Trust Proxy Headers</p>
+          <p class="text-xs text-surface-500 mt-0.5">
+            {{if .TrustProxyHeaders}}
+              Using X-Forwarded-For / X-Real-IP for client IP detection.
+            {{else}}
+              Using direct connection IP. Enable if behind a reverse proxy.
+            {{end}}
+            {{if .TrustProxyHeadersFromEnv}}
+              <span class="text-amber-400">(set by environment variable)</span>
+            {{end}}
+          </p>
+        </div>
+        {{if not .TrustProxyHeadersFromEnv}}
+          {{if .TrustProxyHeaders}}
+            <form method="POST" action="/settings/trust-proxy-headers/disable" hx-post="/settings/trust-proxy-headers/disable" hx-target="#content" hx-push-url="false">
+              <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+              <button type="submit" class="px-3 py-1.5 bg-surface-800 border border-surface-700/60 text-surface-300 hover:text-white hover:bg-surface-700 rounded-lg text-sm font-medium transition-colors">
+                Disable
+              </button>
+            </form>
+          {{else}}
+            <form method="POST" action="/settings/trust-proxy-headers/enable" hx-post="/settings/trust-proxy-headers/enable" hx-target="#content" hx-push-url="false">
+              <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+              <button type="submit" class="px-3 py-1.5 bg-surface-800 border border-surface-700/60 text-surface-300 hover:text-white hover:bg-surface-700 rounded-lg text-sm font-medium transition-colors">
+                Enable
+              </button>
+            </form>
+          {{end}}
+        {{end}}
+      </div>
+    </div>
+  </div>
 </div>
 {{end}}
 
