@@ -382,7 +382,7 @@
 
           <div x-show="showCaps" x-cloak x-transition class="mt-4 space-y-4 p-4 rounded-xl bg-amber-900/10 border border-amber-800/30">
             <p class="text-xs text-amber-400/70">Set caps to limit what scoped token holders can configure. Leave empty for no cap.</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label class="block text-sm font-medium text-surface-300 mb-1.5">Max Memory (MB)</label>
                 <input type="number" name="max_memory_mb" min="0" step="512"
@@ -402,6 +402,13 @@
                 <input type="number" name="max_backups" min="0" step="1"
                        value="{{if .Gameserver.MaxBackups}}{{derefInt .Gameserver.MaxBackups}}{{end}}"
                        placeholder="Global default"
+                       class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-surface-300 mb-1.5">Max Storage (MB)</label>
+                <input type="number" name="max_storage_mb" min="0" step="512"
+                       value="{{if .Gameserver.MaxStorageMB}}{{derefInt .Gameserver.MaxStorageMB}}{{end}}"
+                       placeholder="No cap"
                        class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
               </div>
             </div>

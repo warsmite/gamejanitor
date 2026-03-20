@@ -26,6 +26,7 @@ type Gameserver struct {
 	MaxMemoryMB   *int            `json:"max_memory_mb"`
 	MaxCPU        *float64        `json:"max_cpu"`
 	MaxBackups    *int            `json:"max_backups"`
+	MaxStorageMB  *int            `json:"max_storage_mb"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
@@ -37,7 +38,7 @@ type GameserverFilter struct {
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
-	query := "SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, created_at, updated_at FROM gameservers WHERE 1=1"
+	query := "SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, max_storage_mb, created_at, updated_at FROM gameservers WHERE 1=1"
 	var args []any
 
 	if filter.GameID != nil {
@@ -76,7 +77,7 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 }
 
 func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
-	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, created_at, updated_at FROM gameservers WHERE id = ?", id)
+	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, max_storage_mb, created_at, updated_at FROM gameservers WHERE id = ?", id)
 	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -92,7 +93,7 @@ func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
 func scanGameserver(scan func(dest ...any) error) (Gameserver, error) {
 	var gs Gameserver
 	var portsStr, envStr string
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.SFTPPassword, &gs.MaxMemoryMB, &gs.MaxCPU, &gs.MaxBackups, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.SFTPPassword, &gs.MaxMemoryMB, &gs.MaxCPU, &gs.MaxBackups, &gs.MaxStorageMB, &gs.CreatedAt, &gs.UpdatedAt)
 	if err != nil {
 		return gs, err
 	}
@@ -107,8 +108,8 @@ func CreateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.SFTPPassword, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, max_storage_mb, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.SFTPPassword, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.MaxStorageMB, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -120,8 +121,8 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = time.Now()
 
 	result, err := db.Exec(
-		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, container_id = ?, volume_name = ?, status = ?, error_reason = ?, port_mode = ?, node_id = ?, sftp_username = ?, sftp_password = ?, max_memory_mb = ?, max_cpu = ?, max_backups = ?, updated_at = ? WHERE id = ?",
-		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.SFTPPassword, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.UpdatedAt, gs.ID,
+		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, container_id = ?, volume_name = ?, status = ?, error_reason = ?, port_mode = ?, node_id = ?, sftp_username = ?, sftp_password = ?, max_memory_mb = ?, max_cpu = ?, max_backups = ?, max_storage_mb = ?, updated_at = ? WHERE id = ?",
+		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.SFTPPassword, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.MaxStorageMB, gs.UpdatedAt, gs.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating gameserver %s: %w", gs.ID, err)
@@ -138,7 +139,7 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 }
 
 func GetGameserverBySFTPUsername(db *sql.DB, username string) (*Gameserver, error) {
-	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, created_at, updated_at FROM gameservers WHERE sftp_username = ?", username)
+	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, sftp_password, max_memory_mb, max_cpu, max_backups, max_storage_mb, created_at, updated_at FROM gameservers WHERE sftp_username = ?", username)
 	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil

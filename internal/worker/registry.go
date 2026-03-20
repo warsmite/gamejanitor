@@ -16,6 +16,8 @@ type WorkerInfo struct {
 	CPUCores          int64
 	MemoryTotalMB     int64
 	MemoryAvailableMB int64
+	DiskTotalMB       int64
+	DiskAvailableMB   int64
 	LastSeen          time.Time
 	TokenID           string
 }

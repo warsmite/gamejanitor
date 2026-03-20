@@ -21,7 +21,7 @@
       </div>
       <div>
         <h2 class="font-display font-semibold text-white text-sm">Backups</h2>
-        <p class="text-xs text-surface-400">{{len .Backups}} backup{{if ne (len .Backups) 1}}s{{end}}</p>
+        <p class="text-xs text-surface-400">{{len .Backups}} backup{{if ne (len .Backups) 1}}s{{end}}{{if .TotalBackupSize}} ({{formatBytes .TotalBackupSize}} total){{end}}</p>
       </div>
     </div>
     <form hx-post="/gameservers/{{.Gameserver.ID}}/backups" hx-target="#gs-content" hx-swap="innerHTML show:none" hx-push-url="false"

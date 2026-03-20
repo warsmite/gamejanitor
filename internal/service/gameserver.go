@@ -381,6 +381,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		if gs.MaxBackups != nil {
 			existing.MaxBackups = gs.MaxBackups
 		}
+		if gs.MaxStorageMB != nil {
+			existing.MaxStorageMB = gs.MaxStorageMB
+		}
 	} else {
 		// Enforce resource caps for scoped tokens
 		if existing.MaxMemoryMB != nil && existing.MemoryLimitMB > *existing.MaxMemoryMB {
@@ -919,7 +922,7 @@ func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID s
 	return s.dispatcher.WorkerFor(gameserverID).InspectContainer(ctx, *gs.ContainerID)
 }
 
-func (s *GameserverService) GetContainerStats(ctx context.Context, gameserverID string) (*worker.ContainerStats, error) {
+func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return nil, err
@@ -927,10 +930,44 @@ func (s *GameserverService) GetContainerStats(ctx context.Context, gameserverID 
 	if gs == nil {
 		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if gs.ContainerID == nil {
-		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+
+	w := s.dispatcher.WorkerFor(gameserverID)
+	stats := &worker.GameserverStats{
+		MaxStorageMB: gs.MaxStorageMB,
 	}
-	return s.dispatcher.WorkerFor(gameserverID).ContainerStats(ctx, *gs.ContainerID)
+
+	// Container stats only available when running
+	if gs.ContainerID != nil {
+		cs, err := w.ContainerStats(ctx, *gs.ContainerID)
+		if err == nil {
+			stats.MemoryUsageMB = cs.MemoryUsageMB
+			stats.MemoryLimitMB = cs.MemoryLimitMB
+			stats.CPUPercent = cs.CPUPercent
+		} else {
+			s.log.Debug("container stats unavailable", "gameserver_id", gameserverID, "error", err)
+		}
+	}
+
+	// Volume size always available (only needs volume name)
+	volSize, err := w.VolumeSize(ctx, gs.VolumeName)
+	if err != nil {
+		s.log.Debug("volume size unavailable", "gameserver_id", gameserverID, "error", err)
+	} else {
+		stats.VolumeSizeBytes = volSize
+	}
+
+	return stats, nil
+}
+
+func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID string) (int64, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return 0, err
+	}
+	if gs == nil {
+		return 0, ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+	return s.dispatcher.WorkerFor(gameserverID).VolumeSize(ctx, gs.VolumeName)
 }
 
 // MigrateGameserver moves a gameserver from its current node to a different node.

@@ -20,6 +20,13 @@
       return mb + ' MB';
     }
 
+    function fmtBytes(bytes) {
+      if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+      return bytes + ' B';
+    }
+
     function gsHero(id, initialStatus) {
       return {
         eventSource: null,
@@ -46,10 +53,6 @@
           this._statsInterval = setInterval(() => this._fetchStats(), 10000);
         },
         async _fetchStats() {
-          if (this.status !== 'running' && this.status !== 'started') {
-            this.stats = null;
-            return;
-          }
           try {
             const resp = await fetch('/api/gameservers/' + id + '/stats');
             const json = await resp.json();

@@ -49,10 +49,13 @@ func (h *PageBackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 		backups = []models.Backup{}
 	}
 
+	totalSize, _ := h.backupSvc.TotalBackupSize(id)
+
 	h.renderer.Render(w, r, "gameservers/backups", map[string]any{
-		"Gameserver": gs,
-		"Game":       game,
-		"Backups":    backups,
+		"Gameserver":      gs,
+		"Game":            game,
+		"Backups":         backups,
+		"TotalBackupSize": totalSize,
 	})
 }
 
@@ -121,9 +124,12 @@ func (h *PageBackupHandlers) renderList(w http.ResponseWriter, r *http.Request, 
 		backups = []models.Backup{}
 	}
 
+	totalSize, _ := h.backupSvc.TotalBackupSize(gsID)
+
 	h.renderer.Render(w, r, "gameservers/backups", map[string]any{
-		"Gameserver": gs,
-		"Game":       game,
-		"Backups":    backups,
+		"Gameserver":      gs,
+		"Game":            game,
+		"Backups":         backups,
+		"TotalBackupSize": totalSize,
 	})
 }

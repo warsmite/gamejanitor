@@ -509,6 +509,12 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 			maxBackups = &n
 		}
 	}
+	var maxStorageMB *int
+	if v := r.FormValue("max_storage_mb"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxStorageMB = &n
+		}
+	}
 
 	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
@@ -526,6 +532,7 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		MaxMemoryMB:   maxMemoryMB,
 		MaxCPU:        maxCPU,
 		MaxBackups:    maxBackups,
+		MaxStorageMB:  maxStorageMB,
 		CreatedAt:     existing.CreatedAt,
 	}
 

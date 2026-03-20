@@ -62,9 +62,9 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			summary.Running++
 
 			if gs.ContainerID != nil {
-				stats, err := h.gameserverSvc.GetContainerStats(r.Context(), gs.ID)
+				stats, err := h.gameserverSvc.GetGameserverStats(r.Context(), gs.ID)
 				if err != nil {
-					h.log.Warn("failed to get container stats", "id", gs.ID, "error", err)
+					h.log.Warn("failed to get gameserver stats", "id", gs.ID, "error", err)
 				} else {
 					o.MemoryUsageMB = stats.MemoryUsageMB
 					o.CPUPercent = stats.CPUPercent

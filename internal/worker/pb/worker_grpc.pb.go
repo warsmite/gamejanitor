@@ -30,6 +30,7 @@ const (
 	WorkerService_ContainerStats_FullMethodName       = "/worker.WorkerService/ContainerStats"
 	WorkerService_CreateVolume_FullMethodName         = "/worker.WorkerService/CreateVolume"
 	WorkerService_RemoveVolume_FullMethodName         = "/worker.WorkerService/RemoveVolume"
+	WorkerService_VolumeSize_FullMethodName           = "/worker.WorkerService/VolumeSize"
 	WorkerService_BackupVolume_FullMethodName         = "/worker.WorkerService/BackupVolume"
 	WorkerService_RestoreVolume_FullMethodName        = "/worker.WorkerService/RestoreVolume"
 	WorkerService_ListFiles_FullMethodName            = "/worker.WorkerService/ListFiles"
@@ -67,6 +68,7 @@ type WorkerServiceClient interface {
 	// Volumes
 	CreateVolume(ctx context.Context, in *CreateVolumeRequest, opts ...grpc.CallOption) (*CreateVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
+	VolumeSize(ctx context.Context, in *VolumeSizeRequest, opts ...grpc.CallOption) (*VolumeSizeResponse, error)
 	BackupVolume(ctx context.Context, in *BackupVolumeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
 	RestoreVolume(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RestoreVolumeRequest, RestoreVolumeResponse], error)
 	// File operations
@@ -210,6 +212,16 @@ func (c *workerServiceClient) RemoveVolume(ctx context.Context, in *RemoveVolume
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveVolumeResponse)
 	err := c.cc.Invoke(ctx, WorkerService_RemoveVolume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerServiceClient) VolumeSize(ctx context.Context, in *VolumeSizeRequest, opts ...grpc.CallOption) (*VolumeSizeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeSizeResponse)
+	err := c.cc.Invoke(ctx, WorkerService_VolumeSize_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +431,7 @@ type WorkerServiceServer interface {
 	// Volumes
 	CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
+	VolumeSize(context.Context, *VolumeSizeRequest) (*VolumeSizeResponse, error)
 	BackupVolume(*BackupVolumeRequest, grpc.ServerStreamingServer[DataChunk]) error
 	RestoreVolume(grpc.ClientStreamingServer[RestoreVolumeRequest, RestoreVolumeResponse]) error
 	// File operations
@@ -481,6 +494,9 @@ func (UnimplementedWorkerServiceServer) CreateVolume(context.Context, *CreateVol
 }
 func (UnimplementedWorkerServiceServer) RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveVolume not implemented")
+}
+func (UnimplementedWorkerServiceServer) VolumeSize(context.Context, *VolumeSizeRequest) (*VolumeSizeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VolumeSize not implemented")
 }
 func (UnimplementedWorkerServiceServer) BackupVolume(*BackupVolumeRequest, grpc.ServerStreamingServer[DataChunk]) error {
 	return status.Error(codes.Unimplemented, "method BackupVolume not implemented")
@@ -735,6 +751,24 @@ func _WorkerService_RemoveVolume_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServiceServer).RemoveVolume(ctx, req.(*RemoveVolumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkerService_VolumeSize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeSizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).VolumeSize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_VolumeSize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).VolumeSize(ctx, req.(*VolumeSizeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1012,6 +1046,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveVolume",
 			Handler:    _WorkerService_RemoveVolume_Handler,
+		},
+		{
+			MethodName: "VolumeSize",
+			Handler:    _WorkerService_VolumeSize_Handler,
 		},
 		{
 			MethodName: "ListFiles",

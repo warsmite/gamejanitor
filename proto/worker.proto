@@ -21,6 +21,7 @@ service WorkerService {
     // Volumes
     rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
     rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
+    rpc VolumeSize(VolumeSizeRequest) returns (VolumeSizeResponse);
     rpc BackupVolume(BackupVolumeRequest) returns (stream DataChunk);
     rpc RestoreVolume(stream RestoreVolumeRequest) returns (RestoreVolumeResponse);
 
@@ -153,6 +154,13 @@ message RemoveVolumeRequest {
 }
 message RemoveVolumeResponse {}
 
+message VolumeSizeRequest {
+    string volume_name = 1;
+}
+message VolumeSizeResponse {
+    int64 size_bytes = 1;
+}
+
 message BackupVolumeRequest {
     string volume_name = 1;
 }
@@ -263,6 +271,8 @@ message HeartbeatRequest {
     int64 memory_available_mb = 4;
     string lan_ip = 5;
     string external_ip = 6;
+    int64 disk_total_mb = 7;
+    int64 disk_available_mb = 8;
 }
 message HeartbeatResponse {
     bool accepted = 1;
@@ -281,6 +291,8 @@ message RegisterRequest {
     int32 port_range_start = 8;
     int32 port_range_end = 9;
     int32 sftp_port = 10;
+    int64 disk_total_mb = 11;
+    int64 disk_available_mb = 12;
 }
 message RegisterResponse {
     bool accepted = 1;

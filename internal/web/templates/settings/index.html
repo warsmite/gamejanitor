@@ -479,6 +479,7 @@
         <th class="text-left px-4 py-2 font-medium">LAN IP</th>
         <th class="text-left px-4 py-2 font-medium">CPU</th>
         <th class="text-left px-4 py-2 font-medium">Memory</th>
+        <th class="text-left px-4 py-2 font-medium">Disk</th>
         <th class="text-left px-4 py-2 font-medium">Port Range</th>
         <th class="text-left px-4 py-2 font-medium">Limits</th>
         <th class="text-left px-4 py-2 font-medium">Status</th>
@@ -491,6 +492,7 @@
         <td class="px-4 py-2.5 text-surface-300 font-mono text-xs">{{.LanIP}}</td>
         <td class="px-4 py-2.5 text-surface-300">{{.CPUCores}} cores</td>
         <td class="px-4 py-2.5 text-surface-300">{{formatMB .MemoryAvailableMB}} free / {{formatMB .MemoryTotalMB}}</td>
+        <td class="px-4 py-2.5 text-surface-300">{{if .DiskTotalMB}}{{formatMB .DiskAvailableMB}} free / {{formatMB .DiskTotalMB}}{{else}}-{{end}}</td>
         <td class="px-4 py-2.5" x-data="{ editing: false }">
           <div x-show="!editing">
             {{if .PortRangeStart}}

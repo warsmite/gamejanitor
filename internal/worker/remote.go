@@ -128,6 +128,14 @@ func (w *RemoteWorker) ContainerStats(ctx context.Context, containerID string) (
 	}, nil
 }
 
+func (w *RemoteWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
+	resp, err := w.client.VolumeSize(ctx, &pb.VolumeSizeRequest{VolumeName: volumeName})
+	if err != nil {
+		return 0, err
+	}
+	return resp.SizeBytes, nil
+}
+
 func (w *RemoteWorker) CreateVolume(ctx context.Context, name string) error {
 	_, err := w.client.CreateVolume(ctx, &pb.CreateVolumeRequest{Name: name})
 	return err

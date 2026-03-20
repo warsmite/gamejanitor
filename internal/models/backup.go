@@ -66,6 +66,15 @@ func DeleteBackupsByGameserver(db *sql.DB, gameserverID string) error {
 	return nil
 }
 
+func TotalBackupSizeByGameserver(db *sql.DB, gameserverID string) (int64, error) {
+	var total int64
+	err := db.QueryRow("SELECT COALESCE(SUM(size_bytes), 0) FROM backups WHERE gameserver_id = ?", gameserverID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying total backup size for gameserver %s: %w", gameserverID, err)
+	}
+	return total, nil
+}
+
 func DeleteBackup(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM backups WHERE id = ?", id)
 	if err != nil {

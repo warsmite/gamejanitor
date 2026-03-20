@@ -146,6 +146,14 @@ func (a *Agent) ContainerStats(ctx context.Context, req *pb.ContainerStatsReques
 	}, nil
 }
 
+func (a *Agent) VolumeSize(ctx context.Context, req *pb.VolumeSizeRequest) (*pb.VolumeSizeResponse, error) {
+	size, err := a.worker.VolumeSize(ctx, req.VolumeName)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.VolumeSizeResponse{SizeBytes: size}, nil
+}
+
 func (a *Agent) CreateVolume(ctx context.Context, req *pb.CreateVolumeRequest) (*pb.CreateVolumeResponse, error) {
 	if err := a.worker.CreateVolume(ctx, req.Name); err != nil {
 		return nil, err

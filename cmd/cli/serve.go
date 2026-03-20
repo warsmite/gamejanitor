@@ -26,6 +26,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
+	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -401,6 +402,8 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 			CpuCores:          req.CpuCores,
 			MemoryTotalMb:     req.MemoryTotalMb,
 			MemoryAvailableMb: req.MemoryAvailableMb,
+			DiskTotalMb:       req.DiskTotalMb,
+			DiskAvailableMb:   req.DiskAvailableMb,
 			LanIp:             req.LanIp,
 			ExternalIp:        req.ExternalIp,
 		}
@@ -471,6 +474,11 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 	if v, err := mem.VirtualMemory(); err == nil {
 		req.MemoryTotalMb = int64(v.Total / 1024 / 1024)
 		req.MemoryAvailableMb = int64(v.Available / 1024 / 1024)
+	}
+
+	if d, err := disk.Usage("/"); err == nil {
+		req.DiskTotalMb = int64(d.Total / 1024 / 1024)
+		req.DiskAvailableMb = int64(d.Free / 1024 / 1024)
 	}
 
 	return req

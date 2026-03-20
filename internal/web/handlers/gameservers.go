@@ -309,18 +309,23 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	stats, err := h.svc.GetContainerStats(r.Context(), id)
+	stats, err := h.svc.GetGameserverStats(r.Context(), id)
 	if err != nil {
-		h.log.Warn("failed to get container stats", "id", id, "error", err)
-		respondError(w, http.StatusInternalServerError, "failed to get container stats")
+		h.log.Warn("failed to get gameserver stats", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to get gameserver stats")
 		return
 	}
 
-	respondOK(w, map[string]any{
-		"cpu_percent":     stats.CPUPercent,
-		"memory_usage_mb": stats.MemoryUsageMB,
-		"memory_limit_mb": stats.MemoryLimitMB,
-	})
+	resp := map[string]any{
+		"cpu_percent":       stats.CPUPercent,
+		"memory_usage_mb":   stats.MemoryUsageMB,
+		"memory_limit_mb":   stats.MemoryLimitMB,
+		"volume_size_bytes": stats.VolumeSizeBytes,
+	}
+	if stats.MaxStorageMB != nil {
+		resp["max_storage_mb"] = *stats.MaxStorageMB
+	}
+	respondOK(w, resp)
 }
 
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {

@@ -34,6 +34,14 @@ type ContainerStats struct {
 	CPUPercent    float64
 }
 
+type GameserverStats struct {
+	MemoryUsageMB int
+	MemoryLimitMB int
+	CPUPercent    float64
+	VolumeSizeBytes int64
+	MaxStorageMB    *int
+}
+
 type ContainerEvent struct {
 	ContainerID   string
 	ContainerName string

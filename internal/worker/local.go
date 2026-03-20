@@ -38,16 +38,26 @@ type LocalWorker struct {
 	// Lazy sidecar containers for when direct volume access is unavailable
 	sidecarMu    sync.Mutex
 	sidecarCache map[string]string // volume name → container ID
+
+	// Volume size cache (120s staleness)
+	volumeSizeMu    sync.Mutex
+	volumeSizeCache map[string]*volumeSizeEntry
+}
+
+type volumeSizeEntry struct {
+	sizeBytes  int64
+	measuredAt time.Time
 }
 
 func NewLocalWorker(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	return &LocalWorker{
-		docker:       dockerClient,
-		log:          log,
-		gameStore:    gameStore,
-		dataDir:      dataDir,
-		mountCache:   make(map[string]string),
-		sidecarCache: make(map[string]string),
+		docker:          dockerClient,
+		log:             log,
+		gameStore:       gameStore,
+		dataDir:         dataDir,
+		mountCache:      make(map[string]string),
+		sidecarCache:    make(map[string]string),
+		volumeSizeCache: make(map[string]*volumeSizeEntry),
 	}
 }
 
@@ -124,9 +134,42 @@ func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {
 	delete(w.mountCache, name)
 	w.mountMu.Unlock()
 
+	w.volumeSizeMu.Lock()
+	delete(w.volumeSizeCache, name)
+	w.volumeSizeMu.Unlock()
+
 	w.removeSidecar(context.Background(), name)
 
 	return w.docker.RemoveVolume(ctx, name)
+}
+
+func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
+	w.volumeSizeMu.Lock()
+	if entry, ok := w.volumeSizeCache[volumeName]; ok && time.Since(entry.measuredAt) < 120*time.Second {
+		size := entry.sizeBytes
+		w.volumeSizeMu.Unlock()
+		return size, nil
+	}
+	w.volumeSizeMu.Unlock()
+
+	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, []string{"du", "-sb", "/data"})
+	if err != nil {
+		return 0, fmt.Errorf("measuring volume size: %w", err)
+	}
+	if exitCode != 0 {
+		return 0, fmt.Errorf("measuring volume size: %s", stderr)
+	}
+
+	var sizeBytes int64
+	if _, err := fmt.Sscanf(strings.TrimSpace(stdout), "%d", &sizeBytes); err != nil {
+		return 0, fmt.Errorf("parsing volume size from %q: %w", stdout, err)
+	}
+
+	w.volumeSizeMu.Lock()
+	w.volumeSizeCache[volumeName] = &volumeSizeEntry{sizeBytes: sizeBytes, measuredAt: time.Now()}
+	w.volumeSizeMu.Unlock()
+
+	return sizeBytes, nil
 }
 
 // --- Volume file operations ---

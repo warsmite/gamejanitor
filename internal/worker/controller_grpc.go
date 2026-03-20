@@ -76,6 +76,8 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		CPUCores:          req.CpuCores,
 		MemoryTotalMB:     req.MemoryTotalMb,
 		MemoryAvailableMB: req.MemoryAvailableMb,
+		DiskTotalMB:       req.DiskTotalMb,
+		DiskAvailableMB:   req.DiskAvailableMb,
 		TokenID:           token.ID,
 	}
 
@@ -112,6 +114,8 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		CPUCores:          req.CpuCores,
 		MemoryTotalMB:     req.MemoryTotalMb,
 		MemoryAvailableMB: req.MemoryAvailableMb,
+		DiskTotalMB:       req.DiskTotalMb,
+		DiskAvailableMB:   req.DiskAvailableMb,
 		LanIP:             req.LanIp,
 		ExternalIP:        req.ExternalIp,
 	}

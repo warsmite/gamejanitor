@@ -24,6 +24,7 @@ type Worker interface {
 	// Volumes
 	CreateVolume(ctx context.Context, name string) error
 	RemoveVolume(ctx context.Context, name string) error
+	VolumeSize(ctx context.Context, volumeName string) (int64, error)
 
 	// Volume file operations (direct filesystem access)
 	ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error)
