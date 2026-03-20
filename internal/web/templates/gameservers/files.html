@@ -37,7 +37,7 @@
     <div class="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed border-accent-500/60 bg-surface-900/80">
       <svg class="w-12 h-12 text-accent-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
       <p class="text-accent-300 font-medium">Drop files to upload</p>
-      <p class="text-xs text-surface-400" x-text="'to ' + currentPath"></p>
+      <p class="text-xs text-surface-400" x-text="'to ' + displayPath(currentPath)"></p>
     </div>
   </div>
 
@@ -240,7 +240,7 @@
         </button>
         <div class="flex items-center gap-2 min-w-0">
           <div class="w-[18px] h-[18px] shrink-0 flex items-center justify-center" x-html="fileIconByName(editingPath.split('/').pop())"></div>
-          <span class="text-sm font-mono text-surface-300 truncate" x-text="editingPath"></span>
+          <span class="text-sm font-mono text-surface-300 truncate" x-text="displayPath(editingPath)"></span>
         </div>
         <span x-show="editorDirty" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">modified</span>
       </div>
@@ -370,11 +370,16 @@ function fileManager() {
       });
     },
 
+    displayPath(p) {
+      return p === '/data' ? '/' : p.replace(/^\/data/, '');
+    },
+
     updateBreadcrumbs() {
-      const parts = this.currentPath.split('/').filter(Boolean);
-      this.breadcrumbs = [];
-      let acc = '';
-      for (const part of parts) { acc += '/' + part; this.breadcrumbs.push({ name: part, path: acc }); }
+      this.breadcrumbs = [{ name: '/', path: '/data' }];
+      const rel = this.currentPath.replace(/^\/data\/?/, '');
+      if (!rel) return;
+      let acc = '/data';
+      for (const part of rel.split('/').filter(Boolean)) { acc += '/' + part; this.breadcrumbs.push({ name: part, path: acc }); }
     },
 
     async navigateTo(path) {
