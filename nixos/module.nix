@@ -133,6 +133,51 @@ in {
       description = "Max backups per gameserver. 0 = unlimited. null = leave at DB/default (10).";
     };
 
+    s3 = {
+      bucket = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "S3 bucket name for backup storage. Enables S3 backend when set.";
+      };
+
+      endpoint = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "s3.amazonaws.com";
+        description = "S3-compatible endpoint (e.g. s3.amazonaws.com, minio.local:9000).";
+      };
+
+      region = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "S3 region (e.g. us-east-1). Defaults to us-east-1 if not set.";
+      };
+
+      accessKeyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to file containing S3 access key. Works with sops-nix, agenix, etc.";
+      };
+
+      secretKeyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to file containing S3 secret key. Works with sops-nix, agenix, etc.";
+      };
+
+      pathStyle = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Use path-style addressing. Required for MinIO and most NAS S3 implementations.";
+      };
+
+      useSSL = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Use HTTPS for S3 connections. Set false for local HTTP endpoints.";
+      };
+    };
+
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
@@ -161,7 +206,12 @@ in {
       // lib.optionalAttrs (cfg.portRange.start != null) { GJ_PORT_RANGE_START = toString cfg.portRange.start; }
       // lib.optionalAttrs (cfg.portRange.end != null) { GJ_PORT_RANGE_END = toString cfg.portRange.end; }
       // lib.optionalAttrs (cfg.portMode != null) { GJ_PORT_MODE = cfg.portMode; }
-      // lib.optionalAttrs (cfg.maxBackups != null) { GJ_MAX_BACKUPS = toString cfg.maxBackups; };
+      // lib.optionalAttrs (cfg.maxBackups != null) { GJ_MAX_BACKUPS = toString cfg.maxBackups; }
+      // lib.optionalAttrs (cfg.s3.bucket != null) { GJ_S3_BUCKET = cfg.s3.bucket; }
+      // lib.optionalAttrs (cfg.s3.endpoint != null) { GJ_S3_ENDPOINT = cfg.s3.endpoint; }
+      // lib.optionalAttrs (cfg.s3.region != null) { GJ_S3_REGION = cfg.s3.region; }
+      // lib.optionalAttrs (cfg.s3.pathStyle) { GJ_S3_PATH_STYLE = "true"; }
+      // lib.optionalAttrs (!cfg.s3.useSSL) { GJ_S3_USE_SSL = "false"; };
   in {
     assertions = [
       {
@@ -201,6 +251,12 @@ in {
       in ''
         ${lib.optionalString (cfg.workerTokenFile != null) ''
           export GJ_WORKER_TOKEN="$(cat ${lib.escapeShellArg cfg.workerTokenFile})"
+        ''}
+        ${lib.optionalString (cfg.s3.accessKeyFile != null) ''
+          export GJ_S3_ACCESS_KEY="$(cat ${lib.escapeShellArg cfg.s3.accessKeyFile})"
+        ''}
+        ${lib.optionalString (cfg.s3.secretKeyFile != null) ''
+          export GJ_S3_SECRET_KEY="$(cat ${lib.escapeShellArg cfg.s3.secretKeyFile})"
         ''}
         exec ${cfg.package}/bin/gamejanitor serve ${args}
       '';

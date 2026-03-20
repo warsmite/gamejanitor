@@ -174,7 +174,26 @@ func runServe(cmd *cobra.Command, args []string) error {
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
 	fileSvc := service.NewFileService(database, dispatcher, logger)
-	backupStore := service.NewLocalStore(cfg.DataDir)
+	var backupStore service.BackupStore
+	if bucket := os.Getenv("GJ_S3_BUCKET"); bucket != "" {
+		s3Store, err := service.NewS3Store(
+			os.Getenv("GJ_S3_ENDPOINT"),
+			bucket,
+			os.Getenv("GJ_S3_REGION"),
+			os.Getenv("GJ_S3_ACCESS_KEY"),
+			os.Getenv("GJ_S3_SECRET_KEY"),
+			os.Getenv("GJ_S3_PATH_STYLE") == "true",
+			os.Getenv("GJ_S3_USE_SSL") != "false",
+			logger,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize S3 backup store: %w", err)
+		}
+		backupStore = s3Store
+	} else {
+		backupStore = service.NewLocalStore(cfg.DataDir)
+		logger.Info("backup store: local", "path", cfg.DataDir)
+	}
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)

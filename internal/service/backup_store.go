@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 // BackupStore abstracts backup file storage.
@@ -80,4 +84,81 @@ func (s *LocalStore) Size(ctx context.Context, gameserverID string, backupID str
 		return 0, fmt.Errorf("stat backup file: %w", err)
 	}
 	return fi.Size(), nil
+}
+
+// S3Store stores backups in an S3-compatible bucket.
+type S3Store struct {
+	client *minio.Client
+	bucket string
+	log    *slog.Logger
+}
+
+func NewS3Store(endpoint, bucket, region, accessKey, secretKey string, pathStyle, useSSL bool, log *slog.Logger) (*S3Store, error) {
+	bucketLookup := minio.BucketLookupAuto
+	if pathStyle {
+		bucketLookup = minio.BucketLookupPath
+	}
+
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:        credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure:       useSSL,
+		Region:       region,
+		BucketLookup: bucketLookup,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating S3 client: %w", err)
+	}
+
+	exists, err := client.BucketExists(context.Background(), bucket)
+	if err != nil {
+		return nil, fmt.Errorf("checking S3 bucket %q: %w", bucket, err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("S3 bucket %q does not exist", bucket)
+	}
+
+	log.Info("S3 backup store connected", "bucket", bucket, "endpoint", endpoint)
+	return &S3Store{client: client, bucket: bucket, log: log}, nil
+}
+
+func (s *S3Store) objectKey(gameserverID, backupID string) string {
+	return "backups/" + gameserverID + "/" + backupID + ".tar.gz"
+}
+
+func (s *S3Store) Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error {
+	key := s.objectKey(gameserverID, backupID)
+	info, err := s.client.PutObject(ctx, s.bucket, key, reader, -1, minio.PutObjectOptions{
+		ContentType: "application/gzip",
+	})
+	if err != nil {
+		return fmt.Errorf("uploading backup to S3: %w", err)
+	}
+	s.log.Info("backup uploaded to S3", "key", key, "size", info.Size)
+	return nil
+}
+
+func (s *S3Store) Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error) {
+	key := s.objectKey(gameserverID, backupID)
+	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("downloading backup from S3: %w", err)
+	}
+	return obj, nil
+}
+
+func (s *S3Store) Delete(ctx context.Context, gameserverID string, backupID string) error {
+	key := s.objectKey(gameserverID, backupID)
+	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		return fmt.Errorf("deleting backup from S3: %w", err)
+	}
+	return nil
+}
+
+func (s *S3Store) Size(ctx context.Context, gameserverID string, backupID string) (int64, error) {
+	key := s.objectKey(gameserverID, backupID)
+	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("stat backup in S3: %w", err)
+	}
+	return info.Size, nil
 }
