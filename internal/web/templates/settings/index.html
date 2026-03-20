@@ -243,14 +243,17 @@
       <div class="flex items-center justify-between">
         <div>
           <p class="text-sm font-medium text-surface-300">Localhost Bypass</p>
+          {{if not .AuthEnabled}}<p class="text-xs text-surface-600 mt-0.5">Has no effect while auth is disabled.</p>{{end}}
           <p class="text-xs text-surface-500 mt-0.5">
             {{if .LocalhostBypass}}
-              Requests from localhost skip auth checks.
+              Requests from localhost (127.0.0.1 / ::1) skip auth checks, even when auth is enabled.
+              This is convenient for single-node setups where you access the UI from the same machine,
+              but should be disabled if untrusted users share the host.
             {{else}}
-              All requests require auth, including localhost.
+              All requests require a valid token, including those from localhost.
             {{end}}
             {{if .LocalhostBypassFromEnv}}
-              <span class="text-amber-400">(set by environment variable)</span>
+              <span class="text-amber-400">(set by GJ_LOCALHOST_BYPASS environment variable)</span>
             {{end}}
           </p>
         </div>
