@@ -19,11 +19,13 @@ type Renderer struct {
 	templates   map[string]*template.Template
 	netInfo     *netinfo.Info
 	settingsSvc *service.SettingsService
+	bindAddress string
+	port        int
 	sftpPort    int
 	role        string
 }
 
-func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sftpPort int, role string) (*Renderer, error) {
+func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, bindAddress string, port int, sftpPort int, role string) (*Renderer, error) {
 	funcMap := template.FuncMap{
 		"statusColor": statusColor,
 		"formatTime":  formatTime,
@@ -48,7 +50,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sf
 		return nil, fmt.Errorf("parsing base templates: %w", err)
 	}
 
-	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc, sftpPort: sftpPort, role: role}
+	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc, bindAddress: bindAddress, port: port, sftpPort: sftpPort, role: role}
 
 	// Find all page templates (top-level and subdirectories, excluding partials and layout)
 	pages := []string{
@@ -108,6 +110,8 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		m["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
 		m["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
 		m["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+		m["BindAddress"] = r.bindAddress
+		m["Port"] = r.port
 		m["SFTPPort"] = r.sftpPort
 		m["Role"] = r.role
 		m["AuthEnabled"] = r.settingsSvc.GetAuthEnabled()

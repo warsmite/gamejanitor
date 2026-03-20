@@ -37,11 +37,13 @@ func NewRouter(
 	db *sql.DB,
 	logPath string,
 	dataDir string,
+	bindAddress string,
+	port int,
 	sftpPort int,
 	role string,
 	log *slog.Logger,
 ) (http.Handler, error) {
-	renderer, err := handlers.NewRenderer(netInfo, settingsSvc, sftpPort, role)
+	renderer, err := handlers.NewRenderer(netInfo, settingsSvc, bindAddress, port, sftpPort, role)
 	if err != nil {
 		return nil, fmt.Errorf("initializing template renderer: %w", err)
 	}
@@ -240,7 +242,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)

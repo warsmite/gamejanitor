@@ -17,9 +17,30 @@
   </div>
   {{end}}
 
+  <!-- General Section -->
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
+    <h2 class="font-display font-semibold text-white mb-4">General</h2>
+    <div>
+      <label class="block text-sm font-medium text-surface-300 mb-1">Data Directory</label>
+      <div class="flex items-center gap-2">
+        <code class="text-sm font-mono text-white bg-surface-800/60 px-3 py-1.5 rounded-lg border border-surface-700/40">{{.DataDir}}</code>
+        <span class="text-xs text-surface-500">Database, backups, and configuration are stored here</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Network Section -->
   <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
     <h2 class="font-display font-semibold text-white mb-4">Network</h2>
+
+    <!-- Bind Address (read-only startup config) -->
+    <div class="mb-5">
+      <label class="block text-sm font-medium text-surface-300 mb-1">Bind Address</label>
+      <div class="flex items-center gap-2">
+        <code class="text-sm font-mono text-white bg-surface-800/60 px-3 py-1.5 rounded-lg border border-surface-700/40">{{.BindAddress}}:{{.Port}}</code>
+        <span class="text-xs text-surface-500">(startup config — change via <code class="text-surface-400">--bind</code> flag or <code class="text-surface-400">GJ_BIND</code> env var)</span>
+      </div>
+    </div>
 
     <!-- Connection Address -->
     <div class="mb-5">

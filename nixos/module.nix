@@ -34,6 +34,12 @@ in {
       description = "Port for the web UI and API. Ignored in worker role.";
     };
 
+    bindAddress = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+      description = "Bind address for all listeners (HTTP, SFTP, gRPC).";
+    };
+
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/gamejanitor";
@@ -264,6 +270,7 @@ in {
       script = let
         args = lib.cli.toGNUCommandLineShell {} ({
           role = cfg.role;
+          bind = cfg.bindAddress;
           port = cfg.port;
           data-dir = cfg.dataDir;
         }

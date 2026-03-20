@@ -43,6 +43,7 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
+	serveCmd.Flags().String("bind", "127.0.0.1", "Bind address for all listeners (or GJ_BIND env)")
 	serveCmd.Flags().Int("sftp-port", 0, "SFTP server port (0 to disable)")
 	serveCmd.Flags().Int("grpc-port", 0, "gRPC agent port for worker mode (0 to disable)")
 	serveCmd.Flags().String("role", "standalone", "Server role: standalone, controller, worker, controller+worker")
@@ -88,6 +89,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if workerToken == "" {
 		workerToken = os.Getenv("GJ_WORKER_TOKEN")
 	}
+	bindAddress, err := cmd.Flags().GetString("bind")
+	if err != nil {
+		return fmt.Errorf("invalid bind flag: %w", err)
+	}
+	if v := os.Getenv("GJ_BIND"); v != "" {
+		bindAddress = v
+	}
 
 	hasLocalWorker := role == "standalone" || role == "worker" || role == "controller+worker"
 	hasController := role == "standalone" || role == "controller" || role == "controller+worker"
@@ -97,9 +105,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := config.Config{
-		Port:    port,
-		DataDir: dataDir,
-		DBPath:  filepath.Join(dataDir, "gamejanitor.db"),
+		Port:        port,
+		BindAddress: bindAddress,
+		DataDir:     dataDir,
+		DBPath:      filepath.Join(dataDir, "gamejanitor.db"),
 	}
 
 	level := slog.LevelInfo
@@ -247,7 +256,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, database, grpcPort, serverTLS, dialBackTLS, logger); err != nil {
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, database, cfg.BindAddress, grpcPort, serverTLS, dialBackTLS, logger); err != nil {
 				logger.Error("grpc server stopped", "error", err)
 			}
 		}()
@@ -260,7 +269,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, registry, database, logPath, cfg.DataDir, sftpPort, role, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, registry, database, logPath, cfg.DataDir, cfg.BindAddress, cfg.Port, sftpPort, role, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
@@ -304,16 +313,22 @@ func runServe(cmd *cobra.Command, args []string) error {
 		defer sftpServer.Close()
 
 		go func() {
-			sftpAddr := fmt.Sprintf(":%d", sftpPort)
+			sftpAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, sftpPort)
 			if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
 				logger.Error("sftp server stopped", "error", err)
 			}
 		}()
 	}
 
-	addr := fmt.Sprintf(":%d", cfg.Port)
+	if !isLoopback(cfg.BindAddress) && !settingsSvc.GetAuthEnabled() {
+		logger.Warn("listening on public address with auth disabled — anyone on your network can manage your gameservers",
+			"bind_address", cfg.BindAddress, "port", cfg.Port)
+	}
+
+	addr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.Port)
 	logger.Info("starting gamejanitor",
 		"role", role,
+		"bind_address", cfg.BindAddress,
 		"port", cfg.Port,
 		"sftp_port", sftpPort,
 		"grpc_port", grpcPort,
@@ -379,7 +394,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 	// Start gRPC agent in background
 	go func() {
-		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, grpcPort, workerServerTLS, nil, logger); err != nil {
+		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, cfg.BindAddress, grpcPort, workerServerTLS, nil, logger); err != nil {
 			logger.Error("grpc agent stopped", "error", err)
 		}
 	}()
@@ -408,7 +423,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 			} else {
 				defer sftpServer.Close()
 				go func() {
-					sftpAddr := fmt.Sprintf(":%d", workerSFTPPort)
+					sftpAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, workerSFTPPort)
 					if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
 						logger.Error("sftp server stopped", "error", err)
 					}
@@ -556,8 +571,8 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 }
 
 // startGRPCServer starts a gRPC server with WorkerService and/or ControllerService.
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, logger *slog.Logger) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, logger *slog.Logger) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindAddress, port))
 	if err != nil {
 		return fmt.Errorf("grpc listen: %w", err)
 	}
@@ -587,4 +602,8 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	logger.Info("grpc server listening", "port", port)
 	return grpcServer.Serve(listener)
+}
+
+func isLoopback(addr string) bool {
+	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
 }

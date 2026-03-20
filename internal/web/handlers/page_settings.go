@@ -19,16 +19,18 @@ type PageSettingsHandlers struct {
 	authSvc     *service.AuthService
 	registry    *worker.Registry
 	renderer    *Renderer
+	dataDir     string
 	log         *slog.Logger
 }
 
-func NewPageSettingsHandlers(settingsSvc *service.SettingsService, authSvc *service.AuthService, registry *worker.Registry, renderer *Renderer, log *slog.Logger) *PageSettingsHandlers {
-	return &PageSettingsHandlers{settingsSvc: settingsSvc, authSvc: authSvc, registry: registry, renderer: renderer, log: log}
+func NewPageSettingsHandlers(settingsSvc *service.SettingsService, authSvc *service.AuthService, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
+	return &PageSettingsHandlers{settingsSvc: settingsSvc, authSvc: authSvc, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
 }
 
 // SettingsPage renders the main settings page.
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
+		"DataDir":                h.dataDir,
 		"PortRangeStart":         h.settingsSvc.GetPortRangeStart(),
 		"PortRangeEnd":           h.settingsSvc.GetPortRangeEnd(),
 		"PortRangeFromEnv":       h.settingsSvc.IsPortRangeFromEnv(),
