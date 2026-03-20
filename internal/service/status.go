@@ -131,16 +131,9 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 
 	switch info.State {
 	case "running":
-		uptime := time.Since(info.StartedAt)
-		if uptime > 60*time.Second {
-			m.log.Info("container running >60s, promoting to running", "id", gs.ID, "uptime", uptime)
-			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusRunning, "")
-			m.querySvc.StartPolling(gs.ID)
-		} else {
-			m.log.Info("container recently started, watching for ready pattern", "id", gs.ID, "uptime", uptime)
-			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
-			m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
-		}
+		m.log.Info("container running, re-attaching ready watcher", "id", gs.ID)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
+		m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)

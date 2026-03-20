@@ -206,9 +206,9 @@ func errorContent(statusCode int) (heading string, message string) {
 
 func statusColor(status string) string {
 	switch status {
-	case "running":
+	case "running", "started":
 		return "green"
-	case "started", "starting", "pulling":
+	case "starting", "pulling":
 		return "yellow"
 	case "stopping":
 		return "orange"

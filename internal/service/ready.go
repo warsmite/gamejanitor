@@ -54,6 +54,12 @@ func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID
 		return
 	}
 
+	// Start query polling immediately — the server is running and may
+	// already be queryable. The query service handles failures gracefully.
+	if w.querySvc != nil {
+		w.querySvc.StartPolling(gameserverID)
+	}
+
 	var pattern *regexp.Regexp
 	if game.ReadyPattern == "" {
 		w.log.Info("no ready pattern, promoting immediately", "id", gameserverID)
