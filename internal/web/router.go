@@ -55,6 +55,7 @@ func NewRouter(
 
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
+	r.Use(securityHeaders)
 
 	rateLimitStore := NewRateLimitStore(settingsSvc, log)
 	r.Use(rateLimitStore.PerIPMiddleware())
@@ -135,6 +136,7 @@ func NewRouter(
 				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
 				r.With(requireAdmin).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
+				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
 				r.With(requireConsole).Get("/logs", gameserverHandlers.Logs)
 				r.With(requireConsole).Post("/command", gameserverHandlers.SendCommand)
@@ -351,6 +353,19 @@ func NewRouter(
 	})
 
 	return r, nil
+}
+
+// securityHeaders sets standard protective headers on every response.
+// script-src/style-src use 'unsafe-inline' because Alpine.js and Tailwind
+// rely on inline scripts and styles throughout the templates.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func jsonContentType(next http.Handler) http.Handler {
