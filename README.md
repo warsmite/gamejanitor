@@ -110,15 +110,24 @@ nixos/                   # NixOS module
 
 ## Roadmap
 
-- [x] Core server management (create, start, stop, delete, restart)
+- [x] Core gameserver management (create, start, stop, delete, restart, update, reinstall)
 - [x] Web UI with real-time status updates (SSE)
-- [x] File browser (web-based)
-- [x] Console (web-based)
-- [x] Scheduled tasks (backups, restarts, commands)
-- [x] Worker abstraction for multi-node readiness
-- [x] Direct volume file access with Docker fallback
+- [x] File browser (web + SFTP)
+- [x] Console with live log streaming and command execution
+- [x] Scheduled tasks (backups, restarts, commands, updates)
+- [x] Direct volume file access with sidecar fallback
 - [x] Log-based ready detection per game
-- [ ] Backup store abstraction (local + S3)
-- [ ] Token-based auth
-- [ ] Embedded SFTP server
-- [ ] Remote worker (gRPC) for multi-node deployment
+- [x] Backup storage (local + S3-compatible)
+- [x] Token-based auth with scoped permissions
+- [x] Embedded SFTP server with per-gameserver credentials
+- [x] Multi-node deployment (controller + workers over gRPC with mTLS)
+- [x] Per-gameserver resource caps (memory, CPU, storage, backups)
+- [x] Per-node resource limits and port ranges
+- [x] Rate limiting (per-IP, per-token, per-login)
+- [x] Audit logging with configurable retention
+- [x] Bulk operations (start/stop/restart all or by node)
+- [x] Gameserver migration between nodes
+- [x] NixOS module with secret management
+- [ ] Server browser (separate repo)
+- [ ] Modding/plugin support
+- [ ] More games

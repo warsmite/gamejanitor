@@ -3,6 +3,10 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -172,6 +176,52 @@ var backupsDeleteCmd = &cobra.Command{
 	},
 }
 
+var backupsDownloadCmd = &cobra.Command{
+	Use:   "download <gameserver> <backup> [file]",
+	Short: "Download a backup to a local file",
+	Args:  cobra.RangeArgs(2, 3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		backupID, err := resolveBackupID(gsID, args[1])
+		if err != nil {
+			return exitError(err)
+		}
+
+		url := strings.TrimRight(apiURL, "/") + "/api/gameservers/" + gsID + "/backups/" + backupID + "/download"
+		resp, err := http.Get(url)
+		if err != nil {
+			return exitError(fmt.Errorf("downloading backup: %w", err))
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return exitError(fmt.Errorf("download failed: HTTP %d", resp.StatusCode))
+		}
+
+		outPath := backupID[:8] + ".tar.gz"
+		if len(args) == 3 {
+			outPath = args[2]
+		}
+
+		f, err := os.Create(outPath)
+		if err != nil {
+			return exitError(fmt.Errorf("creating file: %w", err))
+		}
+		defer f.Close()
+
+		written, err := io.Copy(f, resp.Body)
+		if err != nil {
+			return exitError(fmt.Errorf("writing backup: %w", err))
+		}
+
+		fmt.Printf("Downloaded backup to %s (%s)\n", outPath, formatBytesStr(written))
+		return nil
+	},
+}
+
 func formatBytesStr(b int64) string {
 	const unit = 1024
 	if b < unit {
@@ -188,5 +238,5 @@ func formatBytesStr(b int64) string {
 func init() {
 	backupsCreateCmd.Flags().String("name", "", "Backup name")
 
-	backupsCmd.AddCommand(backupsListCmd, backupsCreateCmd, backupsRestoreCmd, backupsDeleteCmd)
+	backupsCmd.AddCommand(backupsListCmd, backupsCreateCmd, backupsRestoreCmd, backupsDeleteCmd, backupsDownloadCmd)
 }

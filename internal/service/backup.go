@@ -41,6 +41,23 @@ func (s *BackupService) TotalBackupSize(gameserverID string) (int64, error) {
 	return models.TotalBackupSizeByGameserver(s.db, gameserverID)
 }
 
+func (s *BackupService) DownloadBackup(ctx context.Context, backupID string) (io.ReadCloser, *models.Backup, error) {
+	backup, err := models.GetBackup(s.db, backupID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting backup %s: %w", backupID, err)
+	}
+	if backup == nil {
+		return nil, nil, ErrNotFoundf("backup %s not found", backupID)
+	}
+
+	reader, err := s.store.Load(ctx, backup.GameserverID, backup.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading backup from store: %w", err)
+	}
+
+	return reader, backup, nil
+}
+
 func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, name string) (*models.Backup, error) {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {

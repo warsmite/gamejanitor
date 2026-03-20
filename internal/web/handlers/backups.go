@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -63,6 +65,29 @@ func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondOK(w, map[string]string{"status": "restored"})
+}
+
+func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	backupID := chi.URLParam(r, "backupId")
+
+	reader, backup, err := h.svc.DownloadBackup(r.Context(), backupID)
+	if err != nil {
+		h.log.Error("downloading backup", "backup_id", backupID, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	defer reader.Close()
+
+	filename := fmt.Sprintf("%s.tar.gz", backup.Name)
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if backup.SizeBytes > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", backup.SizeBytes))
+	}
+
+	if _, err := io.Copy(w, reader); err != nil {
+		h.log.Error("streaming backup download", "backup_id", backupID, "error", err)
+	}
 }
 
 func (h *BackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {

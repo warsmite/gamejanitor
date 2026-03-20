@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -101,6 +103,29 @@ func (h *PageBackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderList(w, r, gsID)
+}
+
+func (h *PageBackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	backupID := chi.URLParam(r, "backupId")
+
+	reader, backup, err := h.backupSvc.DownloadBackup(r.Context(), backupID)
+	if err != nil {
+		h.log.Error("downloading backup from web", "backup_id", backupID, "error", err)
+		http.Error(w, "Failed to download backup", http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	filename := fmt.Sprintf("%s.tar.gz", backup.Name)
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if backup.SizeBytes > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", backup.SizeBytes))
+	}
+
+	if _, err := io.Copy(w, reader); err != nil {
+		h.log.Error("streaming backup download", "backup_id", backupID, "error", err)
+	}
 }
 
 func (h *PageBackupHandlers) renderList(w http.ResponseWriter, r *http.Request, gsID string) {
