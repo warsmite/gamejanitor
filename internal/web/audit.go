@@ -129,6 +129,7 @@ func deriveAuditAction(method, pattern string) (action, resourceType, resourceID
 		"POST /gameservers/{id}/update-game":                {"gameserver.update-game", "gameserver", "id"},
 		"POST /gameservers/{id}/reinstall":                  {"gameserver.reinstall", "gameserver", "id"},
 		"POST /gameservers/{id}/migrate":                    {"gameserver.migrate", "gameserver", "id"},
+		"POST /gameservers/{id}/regenerate-sftp-password":   {"gameserver.regenerate-sftp-password", "gameserver", "id"},
 		"POST /gameservers/{id}/command":                    {"gameserver.command", "gameserver", "id"},
 		"POST /gameservers/{id}/console/command":            {"gameserver.command", "gameserver", "id"},
 		"POST /gameservers/bulk":                            {"gameserver.bulk", "gameserver", ""},

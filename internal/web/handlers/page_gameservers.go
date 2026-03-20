@@ -218,15 +218,43 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		gs.NodeID = &nodeID
 	}
 
-	if err := h.gameserverSvc.CreateGameserver(r.Context(), gs); err != nil {
+	rawPassword, err := h.gameserverSvc.CreateGameserver(r.Context(), gs)
+	if err != nil {
 		h.log.Error("creating gameserver from web form", "error", err)
 		http.Error(w, "Failed to create gameserver: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Redirect to detail page
-	w.Header().Set("HX-Redirect", "/gameservers/"+gs.ID)
-	http.Redirect(w, r, "/gameservers/"+gs.ID, http.StatusSeeOther)
+	h.renderer.Render(w, r, "gameservers/sftp_password", map[string]any{
+		"GameserverID":   gs.ID,
+		"GameserverName": gs.Name,
+		"SFTPUsername":   gs.SFTPUsername,
+		"SFTPPassword":   rawPassword,
+		"IsCreate":       true,
+	})
+}
+
+func (h *PageGameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rawPassword, err := h.gameserverSvc.RegenerateSFTPPassword(r.Context(), id)
+	if err != nil {
+		h.log.Error("regenerating sftp password from web", "id", id, "error", err)
+		http.Error(w, "Failed to regenerate SFTP password: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	gs, err := h.gameserverSvc.GetGameserver(id)
+	if err != nil || gs == nil {
+		http.Error(w, "Gameserver not found", http.StatusNotFound)
+		return
+	}
+
+	h.renderer.Render(w, r, "gameservers/sftp_password", map[string]any{
+		"GameserverID":   id,
+		"GameserverName": gs.Name,
+		"SFTPUsername":   gs.SFTPUsername,
+		"SFTPPassword":   rawPassword,
+	})
 }
 
 // gameSetting is a human-readable game setting for display on the detail page.

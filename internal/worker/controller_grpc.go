@@ -2,13 +2,13 @@ package worker
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log/slog"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -157,7 +157,7 @@ func (c *ControllerGRPC) ValidateSFTPLogin(ctx context.Context, req *pb.SFTPLogi
 		c.log.Error("sftp login lookup failed", "username", req.Username, "error", err)
 		return &pb.SFTPLoginResponse{Valid: false}, nil
 	}
-	if gs == nil || subtle.ConstantTimeCompare([]byte(gs.SFTPPassword), []byte(req.Password)) != 1 {
+	if gs == nil || bcrypt.CompareHashAndPassword([]byte(gs.HashedSFTPPassword), []byte(req.Password)) != nil {
 		return &pb.SFTPLoginResponse{Valid: false}, nil
 	}
 	return &pb.SFTPLoginResponse{

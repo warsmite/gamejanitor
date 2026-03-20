@@ -133,6 +133,7 @@ func NewRouter(
 				r.With(requireSettings).Post("/update-game", gameserverHandlers.UpdateServerGame)
 				r.With(requireSettings).Post("/reinstall", gameserverHandlers.Reinstall)
 				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
+				r.With(requireAdmin).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
 				r.With(requireConsole).Get("/logs", gameserverHandlers.Logs)
@@ -154,6 +155,7 @@ func NewRouter(
 					r.Get("/", backupHandlers.List)
 					r.Post("/", backupHandlers.Create)
 					r.Route("/{backupId}", func(r chi.Router) {
+						r.Get("/download", backupHandlers.Download)
 						r.Post("/restore", backupHandlers.Restore)
 						r.Delete("/", backupHandlers.Delete)
 					})
@@ -312,6 +314,7 @@ func NewRouter(
 				r.With(requireRestart).Post("/restart", pageActions.Restart)
 				r.With(requireSettings).Post("/update-game", pageActions.UpdateGame)
 				r.With(requireSettings).Post("/reinstall", pageActions.Reinstall)
+				r.With(requireAdmin).Post("/regenerate-sftp-password", pageGameservers.RegenerateSFTPPassword)
 
 				// Console
 				r.With(requireConsole).Get("/console", pageConsole.Console)
@@ -340,6 +343,7 @@ func NewRouter(
 				// Backups
 				r.With(requireBackups).Get("/backups", pageBackups.List)
 				r.With(requireBackups).Post("/backups", pageBackups.Create)
+				r.With(requireBackups).Get("/backups/{backupId}/download", pageBackups.Download)
 				r.With(requireBackups).Post("/backups/{backupId}/restore", pageBackups.Restore)
 				r.With(requireBackups).Delete("/backups/{backupId}", pageBackups.Delete)
 			})

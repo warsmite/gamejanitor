@@ -74,12 +74,30 @@ func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.CreateGameserver(r.Context(), &gs); err != nil {
+	rawPassword, err := h.svc.CreateGameserver(r.Context(), &gs)
+	if err != nil {
 		h.log.Error("creating gameserver", "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
-	respondCreated(w, gs)
+
+	// Include the raw SFTP password in the create response only (show once)
+	type createResponse struct {
+		models.Gameserver
+		SFTPPassword string `json:"sftp_password"`
+	}
+	respondCreated(w, createResponse{Gameserver: gs, SFTPPassword: rawPassword})
+}
+
+func (h *GameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rawPassword, err := h.svc.RegenerateSFTPPassword(r.Context(), id)
+	if err != nil {
+		h.log.Error("regenerating sftp password", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	respondOK(w, map[string]string{"sftp_password": rawPassword})
 }
 
 func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {

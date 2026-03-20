@@ -1,11 +1,11 @@
 package sftp
 
 import (
-	"crypto/subtle"
 	"database/sql"
 	"fmt"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // LocalAuth validates SFTP credentials directly against the database.
@@ -23,7 +23,7 @@ func (a *LocalAuth) ValidateLogin(username, password string) (string, string, er
 	if err != nil || gs == nil {
 		return "", "", fmt.Errorf("unknown sftp user %s", username)
 	}
-	if subtle.ConstantTimeCompare([]byte(gs.SFTPPassword), []byte(password)) != 1 {
+	if err := bcrypt.CompareHashAndPassword([]byte(gs.HashedSFTPPassword), []byte(password)); err != nil {
 		return "", "", fmt.Errorf("invalid credentials")
 	}
 	return gs.ID, gs.VolumeName, nil

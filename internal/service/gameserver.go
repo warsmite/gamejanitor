@@ -15,9 +15,10 @@ import (
 	"strings"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type GameserverService struct {
@@ -189,16 +190,22 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 	return json.Marshal(result)
 }
 
-func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) error {
+func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
 	gs.ID = uuid.New().String()
 	gs.VolumeName = "gamejanitor-" + gs.ID
 	gs.Status = StatusStopped
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
-	gs.SFTPPassword = generateRandomPassword(16)
+
+	rawPassword := generateRandomPassword(16)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("hashing sftp password: %w", err)
+	}
+	gs.HashedSFTPPassword = string(hashed)
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return ErrNotFoundf("game %s not found", gs.GameID)
+		return "", ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	// Pick worker for placement BEFORE allocating ports so ports are scoped to the target node
@@ -209,7 +216,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		nodeID = *gs.NodeID
 		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 		if err != nil {
-			return fmt.Errorf("selected worker unavailable: %w", err)
+			return "", fmt.Errorf("selected worker unavailable: %w", err)
 		}
 		targetWorker = w
 	} else {
@@ -222,36 +229,60 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	// Check resource limits before allocating
 	if nodeID != "" {
 		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if gs.PortMode == "auto" {
 		allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
 		if err != nil {
-			return fmt.Errorf("auto-allocating ports: %w", err)
+			return "", fmt.Errorf("auto-allocating ports: %w", err)
 		}
 		gs.Ports = allocatedPorts
 	}
 
 	if err := applyGameDefaults(gs, game); err != nil {
-		return fmt.Errorf("applying game defaults: %w", err)
+		return "", fmt.Errorf("applying game defaults: %w", err)
 	}
 
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)
 
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
-		return fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
+		return "", fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
 	}
 
 	if err := models.CreateGameserver(s.db, gs); err != nil {
 		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
 		}
-		return err
+		return "", err
 	}
 
-	return nil
+	return rawPassword, nil
+}
+
+func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserverID string) (string, error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return "", err
+	}
+	if gs == nil {
+		return "", ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+
+	rawPassword := generateRandomPassword(16)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("hashing sftp password: %w", err)
+	}
+
+	gs.HashedSFTPPassword = string(hashed)
+	if err := models.UpdateGameserver(s.db, gs); err != nil {
+		return "", err
+	}
+
+	s.log.Info("sftp password regenerated", "gameserver_id", gameserverID)
+	return rawPassword, nil
 }
 
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.

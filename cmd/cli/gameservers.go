@@ -173,13 +173,19 @@ var gameserversCreateCmd = &cobra.Command{
 		}
 
 		var gs struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID           string `json:"id"`
+			Name         string `json:"name"`
+			SFTPUsername string `json:"sftp_username"`
+			SFTPPassword string `json:"sftp_password"`
 		}
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
 		fmt.Printf("Gameserver %s created (id: %s).\n", gs.Name, gs.ID)
+		if gs.SFTPUsername != "" && gs.SFTPPassword != "" {
+			fmt.Printf("SFTP username: %s\n", gs.SFTPUsername)
+			fmt.Printf("SFTP password: %s (will not be shown again)\n", gs.SFTPPassword)
+		}
 		return nil
 	},
 }
