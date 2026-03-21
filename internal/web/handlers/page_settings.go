@@ -16,17 +16,18 @@ import (
 )
 
 type PageSettingsHandlers struct {
-	settingsSvc   *service.SettingsService
-	authSvc       *service.AuthService
-	webhookSender *service.WebhookSender
-	registry      *worker.Registry
-	renderer      *Renderer
-	dataDir       string
-	log           *slog.Logger
+	settingsSvc    *service.SettingsService
+	workerNodeSvc  *service.WorkerNodeService
+	authSvc        *service.AuthService
+	webhookSender  *service.WebhookSender
+	registry       *worker.Registry
+	renderer       *Renderer
+	dataDir        string
+	log            *slog.Logger
 }
 
-func NewPageSettingsHandlers(settingsSvc *service.SettingsService, authSvc *service.AuthService, webhookSender *service.WebhookSender, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
-	return &PageSettingsHandlers{settingsSvc: settingsSvc, authSvc: authSvc, webhookSender: webhookSender, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
+func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc *service.WorkerNodeService, authSvc *service.AuthService, webhookSender *service.WebhookSender, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
+	return &PageSettingsHandlers{settingsSvc: settingsSvc, workerNodeSvc: workerNodeSvc, authSvc: authSvc, webhookSender: webhookSender, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
 }
 
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +112,7 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 	gsCountByNode := make(map[string]int)
 	memByNode := make(map[string]int)
 	cpuByNode := make(map[string]float64)
-	if gameservers, err := h.settingsSvc.ListGameserversByNode(); err == nil {
+	if gameservers, err := h.workerNodeSvc.ListGameserversByNode(); err == nil {
 		for _, gs := range gameservers {
 			if gs.NodeID != nil && *gs.NodeID != "" {
 				gsCountByNode[*gs.NodeID]++
@@ -134,7 +135,7 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 			AllocatedMemoryMB: memByNode[info.ID],
 			AllocatedCPU:      cpuByNode[info.ID],
 		}
-		if node, err := h.settingsSvc.GetWorkerNode(info.ID); err == nil && node != nil {
+		if node, err := h.workerNodeSvc.GetWorkerNode(info.ID); err == nil && node != nil {
 			v.PortRangeStart = node.PortRangeStart
 			v.PortRangeEnd = node.PortRangeEnd
 			v.MaxMemoryMB = node.MaxMemoryMB
@@ -270,7 +271,7 @@ func (h *PageSettingsHandlers) SaveWorkerPortRange(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, &start, &end); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, &start, &end); err != nil {
 		h.log.Error("setting worker port range", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to save worker port range: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -285,7 +286,7 @@ func (h *PageSettingsHandlers) SaveWorkerPortRange(w http.ResponseWriter, r *htt
 func (h *PageSettingsHandlers) ClearWorkerPortRange(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
 		h.log.Error("clearing worker port range", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to clear worker port range: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -340,7 +341,7 @@ func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, maxMemoryMB, maxCPU, maxStorageMB); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, maxMemoryMB, maxCPU, maxStorageMB); err != nil {
 		h.log.Error("setting worker limits", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to save worker limits: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -355,7 +356,7 @@ func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.R
 func (h *PageSettingsHandlers) ClearWorkerLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
 		h.log.Error("clearing worker limits", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to clear worker limits: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -369,7 +370,7 @@ func (h *PageSettingsHandlers) ClearWorkerLimits(w http.ResponseWriter, r *http.
 func (h *PageSettingsHandlers) CordonWorker(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
 		h.log.Error("cordoning worker", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to cordon worker: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -383,7 +384,7 @@ func (h *PageSettingsHandlers) CordonWorker(w http.ResponseWriter, r *http.Reque
 func (h *PageSettingsHandlers) UncordonWorker(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
 		h.log.Error("uncordoning worker", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to uncordon worker: "+err.Error(), http.StatusInternalServerError)
 		return

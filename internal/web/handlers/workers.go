@@ -14,13 +14,13 @@ import (
 
 type WorkerHandlers struct {
 	registry      *worker.Registry
-	settingsSvc   *service.SettingsService
+	workerNodeSvc *service.WorkerNodeService
 	gameserverSvc *service.GameserverService
 	log           *slog.Logger
 }
 
-func NewWorkerHandlers(registry *worker.Registry, settingsSvc *service.SettingsService, gameserverSvc *service.GameserverService, log *slog.Logger) *WorkerHandlers {
-	return &WorkerHandlers{registry: registry, settingsSvc: settingsSvc, gameserverSvc: gameserverSvc, log: log}
+func NewWorkerHandlers(registry *worker.Registry, workerNodeSvc *service.WorkerNodeService, gameserverSvc *service.GameserverService, log *slog.Logger) *WorkerHandlers {
+	return &WorkerHandlers{registry: registry, workerNodeSvc: workerNodeSvc, gameserverSvc: gameserverSvc, log: log}
 }
 
 type workerAPIView struct {
@@ -109,7 +109,7 @@ func (h *WorkerHandlers) List(w http.ResponseWriter, r *http.Request) {
 	views := make([]workerAPIView, 0, len(infos))
 	for _, info := range infos {
 		var node *models.WorkerNode
-		if n, err := h.settingsSvc.GetWorkerNode(info.ID); err == nil {
+		if n, err := h.workerNodeSvc.GetWorkerNode(info.ID); err == nil {
 			node = n
 		}
 		views = append(views, h.buildWorkerView(info, gsCount[info.ID], allocMem[info.ID], allocCPU[info.ID], node))
@@ -133,7 +133,7 @@ func (h *WorkerHandlers) Get(w http.ResponseWriter, r *http.Request) {
 
 	gsCount, allocMem, allocCPU := h.nodeStats()
 	var node *models.WorkerNode
-	if n, err := h.settingsSvc.GetWorkerNode(workerID); err == nil {
+	if n, err := h.workerNodeSvc.GetWorkerNode(workerID); err == nil {
 		node = n
 	}
 
@@ -150,7 +150,7 @@ func (h *WorkerHandlers) getWorkerAndRespond(w http.ResponseWriter, workerID str
 	}
 	gsCount, allocMem, allocCPU := h.nodeStats()
 	var node *models.WorkerNode
-	if n, err := h.settingsSvc.GetWorkerNode(workerID); err == nil {
+	if n, err := h.workerNodeSvc.GetWorkerNode(workerID); err == nil {
 		node = n
 	}
 	respondOK(w, h.buildWorkerView(info, gsCount[workerID], allocMem[workerID], allocCPU[workerID], node))
@@ -180,7 +180,7 @@ func (h *WorkerHandlers) SetPortRange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, &req.PortRangeStart, &req.PortRangeEnd); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, &req.PortRangeStart, &req.PortRangeEnd); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -192,7 +192,7 @@ func (h *WorkerHandlers) SetPortRange(w http.ResponseWriter, r *http.Request) {
 func (h *WorkerHandlers) ClearPortRange(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -214,7 +214,7 @@ func (h *WorkerHandlers) SetLimits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, req.MaxMemoryMB, req.MaxCPU, req.MaxStorageMB); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, req.MaxMemoryMB, req.MaxCPU, req.MaxStorageMB); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -226,7 +226,7 @@ func (h *WorkerHandlers) SetLimits(w http.ResponseWriter, r *http.Request) {
 func (h *WorkerHandlers) ClearLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -238,7 +238,7 @@ func (h *WorkerHandlers) ClearLimits(w http.ResponseWriter, r *http.Request) {
 func (h *WorkerHandlers) Cordon(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -250,7 +250,7 @@ func (h *WorkerHandlers) Cordon(w http.ResponseWriter, r *http.Request) {
 func (h *WorkerHandlers) Uncordon(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
+	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

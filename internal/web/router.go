@@ -93,7 +93,8 @@ func NewRouter(
 	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
 	webhookSender := service.NewWebhookSender(settingsSvc, log)
-	workerHandlers := handlers.NewWorkerHandlers(registry, settingsSvc, gameserverSvc, log)
+	workerNodeSvc := service.NewWorkerNodeService(db, log)
+	workerHandlers := handlers.NewWorkerHandlers(registry, workerNodeSvc, gameserverSvc, log)
 	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, webhookSender, log)
 	auditHandlers := handlers.NewAuditHandlers(db, log)
 
@@ -260,7 +261,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, webhookSender, registry, renderer, dataDir, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, webhookSender, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)

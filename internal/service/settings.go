@@ -29,25 +29,6 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 	return "", false
 }
 
-func (s *SettingsService) GetWorkerNode(id string) (*models.WorkerNode, error) {
-	return models.GetWorkerNode(s.db, id)
-}
-
-func (s *SettingsService) SetWorkerNodePortRange(id string, start, end *int) error {
-	return models.SetWorkerNodePortRange(s.db, id, start, end)
-}
-
-func (s *SettingsService) SetWorkerNodeCordoned(id string, cordoned bool) error {
-	return models.SetWorkerNodeCordoned(s.db, id, cordoned)
-}
-
-func (s *SettingsService) SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
-	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxCPU, maxStorageMB)
-}
-
-func (s *SettingsService) ListGameserversByNode() ([]models.Gameserver, error) {
-	return models.ListGameservers(s.db, models.GameserverFilter{})
-}
 
 const (
 	SettingConnectionAddress = "connection_address"
