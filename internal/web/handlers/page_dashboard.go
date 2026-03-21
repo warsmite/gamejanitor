@@ -53,7 +53,7 @@ type gameserverView struct {
 
 func shouldShowLogTail(status string) bool {
 	switch status {
-	case "starting", "started", "pulling", "error":
+	case service.StatusStarting, service.StatusStarted, service.StatusPulling, service.StatusError:
 		return true
 	}
 	return false
@@ -127,7 +127,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 			connectIP = "127.0.0.1"
 		}
 		v := buildGameserverView(&gs, &game, h.querySvc, h.registry, connectIP, connectionConfigured)
-		if gs.Status == "stopped" {
+		if gs.Status == service.StatusStopped {
 			stoppedViews = append(stoppedViews, v)
 		} else {
 			activeViews = append(activeViews, v)

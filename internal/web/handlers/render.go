@@ -52,24 +52,25 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, bi
 
 	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc, bindAddress: bindAddress, port: port, sftpPort: sftpPort, role: role}
 
-	// Find all page templates (top-level and subdirectories, excluding partials and layout)
-	pages := []string{
-		"error.html",
-		"dashboard.html",
-		"games/list.html",
-		"games/detail.html",
-		"gameservers/form.html",
-		"gameservers/detail.html",
-		"gameservers/console.html",
-		"gameservers/files.html",
-		"gameservers/schedules.html",
-		"gameservers/backups.html",
-		"gameservers/sftp_password.html",
-		"auth/login.html",
-		"auth/tokens.html",
-		"auth/token_created.html",
-		"settings/index.html",
-		"audit/index.html",
+	// Discover all page templates automatically (excludes layout.html and partials/)
+	var pages []string
+	if err := fs.WalkDir(templates.Files, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path == "partials" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".html") || path == "layout.html" {
+			return nil
+		}
+		pages = append(pages, path)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("discovering templates: %w", err)
 	}
 
 	for _, page := range pages {
@@ -207,17 +208,17 @@ func errorContent(statusCode int) (heading string, message string) {
 
 func statusColor(status string) string {
 	switch status {
-	case "running", "started":
+	case service.StatusRunning, service.StatusStarted:
 		return "green"
-	case "starting", "pulling":
+	case service.StatusStarting, service.StatusPulling:
 		return "yellow"
-	case "stopping":
+	case service.StatusStopping:
 		return "orange"
-	case "updating", "reinstalling", "migrating", "restoring":
+	case service.StatusUpdating, service.StatusReinstalling, service.StatusMigrating, service.StatusRestoring:
 		return "blue"
-	case "stopped":
+	case service.StatusStopped:
 		return "gray"
-	case "error":
+	case service.StatusError:
 		return "red"
 	default:
 		return "gray"

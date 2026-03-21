@@ -56,7 +56,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			MemoryLimitMB: gs.MemoryLimitMB,
 		}
 
-		isRunning := gs.Status == "started" || gs.Status == "running"
+		isRunning := gs.Status == service.StatusStarted || gs.Status == service.StatusRunning
 
 		if isRunning {
 			summary.Running++
@@ -75,7 +75,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 				o.PlayersOnline = &qd.PlayersOnline
 				o.MaxPlayers = &qd.MaxPlayers
 			}
-		} else if gs.Status == "stopped" {
+		} else if gs.Status == service.StatusStopped {
 			summary.Stopped++
 		}
 
