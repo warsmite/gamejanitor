@@ -84,6 +84,94 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// badRequestError signals a 400 response in the settings update loop.
+type badRequestError string
+
+func (e badRequestError) Error() string { return string(e) }
+
+type settingDef struct {
+	envLocked func() bool
+	apply     func(json.RawMessage) error // returns badRequestError for 400, other errors for 500
+}
+
+func (h *SettingsAPIHandlers) settingDefs() map[string]settingDef {
+	svc := h.settingsSvc
+
+	boolSetting := func(envLocked func() bool, key string, setter func(bool) error) settingDef {
+		return settingDef{
+			envLocked: envLocked,
+			apply: func(raw json.RawMessage) error {
+				var v bool
+				if err := json.Unmarshal(raw, &v); err != nil {
+					return badRequestError("invalid " + key + " value")
+				}
+				return setter(v)
+			},
+		}
+	}
+
+	intSetting := func(envLocked func() bool, key string, min, max int, errMsg string, setter func(int) error) settingDef {
+		return settingDef{
+			envLocked: envLocked,
+			apply: func(raw json.RawMessage) error {
+				var v int
+				if err := json.Unmarshal(raw, &v); err != nil || v < min || (max > 0 && v > max) {
+					return badRequestError(errMsg)
+				}
+				return setter(v)
+			},
+		}
+	}
+
+	stringSetting := func(envLocked func() bool, key string, setter func(string) error) settingDef {
+		return settingDef{
+			envLocked: envLocked,
+			apply: func(raw json.RawMessage) error {
+				var v string
+				if err := json.Unmarshal(raw, &v); err != nil {
+					return badRequestError("invalid " + key + " value")
+				}
+				return setter(v)
+			},
+		}
+	}
+
+	// Clearable string: empty string clears the setting, non-empty sets it.
+	clearableStringSetting := func(envLocked func() bool, key string, setter func(string) error, clear func() error) settingDef {
+		return settingDef{
+			envLocked: envLocked,
+			apply: func(raw json.RawMessage) error {
+				var v string
+				if err := json.Unmarshal(raw, &v); err != nil {
+					return badRequestError("invalid " + key + " value")
+				}
+				if v == "" {
+					return clear()
+				}
+				return setter(v)
+			},
+		}
+	}
+
+	return map[string]settingDef{
+		"connection_address": clearableStringSetting(svc.IsConnectionAddressFromEnv, "connection_address", svc.SetConnectionAddress, svc.ClearConnectionAddress),
+		"port_range_start":   intSetting(svc.IsPortRangeFromEnv, "port_range_start", 1024, 65535, "invalid port_range_start (1024-65535)", svc.SetPortRangeStart),
+		"port_range_end":     intSetting(svc.IsPortRangeFromEnv, "port_range_end", 1024, 65535, "invalid port_range_end (1024-65535)", svc.SetPortRangeEnd),
+		"port_mode":          stringSetting(svc.IsPortModeFromEnv, "port_mode", svc.SetPreferredPortMode),
+		"max_backups":        intSetting(svc.IsMaxBackupsFromEnv, "max_backups", 0, 0, "invalid max_backups value", svc.SetMaxBackups),
+		"auth_enabled":       boolSetting(svc.IsAuthEnabledFromEnv, "auth_enabled", svc.SetAuthEnabled),
+		"localhost_bypass":   boolSetting(svc.IsLocalhostBypassFromEnv, "localhost_bypass", svc.SetLocalhostBypass),
+		"rate_limit_enabled": boolSetting(svc.IsRateLimitEnabledFromEnv, "rate_limit_enabled", svc.SetRateLimitEnabled),
+		"rate_limit_per_ip":    intSetting(svc.IsRateLimitPerIPFromEnv, "rate_limit_per_ip", 1, 0, "invalid rate_limit_per_ip value (must be >= 1)", svc.SetRateLimitPerIP),
+		"rate_limit_per_token": intSetting(svc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, 0, "invalid rate_limit_per_token value (must be >= 1)", svc.SetRateLimitPerToken),
+		"rate_limit_login":     intSetting(svc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, 0, "invalid rate_limit_login value (must be >= 1)", svc.SetRateLimitLogin),
+		"trust_proxy_headers": boolSetting(svc.IsTrustProxyHeadersFromEnv, "trust_proxy_headers", svc.SetTrustProxyHeaders),
+		"webhook_enabled":     boolSetting(svc.IsWebhookEnabledFromEnv, "webhook_enabled", svc.SetWebhookEnabled),
+		"webhook_url":         clearableStringSetting(svc.IsWebhookURLFromEnv, "webhook_url", svc.SetWebhookURL, svc.ClearWebhookURL),
+		"webhook_secret":      clearableStringSetting(svc.IsWebhookSecretFromEnv, "webhook_secret", svc.SetWebhookSecret, svc.ClearWebhookSecret),
+	}
+}
+
 func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	var req map[string]json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -91,256 +179,24 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defs := h.settingDefs()
+
 	for key, raw := range req {
-		switch key {
-		case "connection_address":
-			if h.settingsSvc.IsConnectionAddressFromEnv() {
-				respondError(w, http.StatusBadRequest, "connection_address is controlled by environment variable")
-				return
-			}
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid connection_address value")
-				return
-			}
-			if v == "" {
-				if err := h.settingsSvc.ClearConnectionAddress(); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			} else {
-				if err := h.settingsSvc.SetConnectionAddress(v); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			}
-
-		case "port_range_start":
-			if h.settingsSvc.IsPortRangeFromEnv() {
-				respondError(w, http.StatusBadRequest, "port_range is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 1024 || v > 65535 {
-				respondError(w, http.StatusBadRequest, "invalid port_range_start (1024-65535)")
-				return
-			}
-			if err := h.settingsSvc.SetPortRangeStart(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "port_range_end":
-			if h.settingsSvc.IsPortRangeFromEnv() {
-				respondError(w, http.StatusBadRequest, "port_range is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 1024 || v > 65535 {
-				respondError(w, http.StatusBadRequest, "invalid port_range_end (1024-65535)")
-				return
-			}
-			if err := h.settingsSvc.SetPortRangeEnd(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "port_mode":
-			if h.settingsSvc.IsPortModeFromEnv() {
-				respondError(w, http.StatusBadRequest, "port_mode is controlled by environment variable")
-				return
-			}
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid port_mode value")
-				return
-			}
-			if err := h.settingsSvc.SetPreferredPortMode(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "max_backups":
-			if h.settingsSvc.IsMaxBackupsFromEnv() {
-				respondError(w, http.StatusBadRequest, "max_backups is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 0 {
-				respondError(w, http.StatusBadRequest, "invalid max_backups value")
-				return
-			}
-			if err := h.settingsSvc.SetMaxBackups(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "auth_enabled":
-			if h.settingsSvc.IsAuthEnabledFromEnv() {
-				respondError(w, http.StatusBadRequest, "auth_enabled is controlled by environment variable")
-				return
-			}
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid auth_enabled value")
-				return
-			}
-			if err := h.settingsSvc.SetAuthEnabled(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "localhost_bypass":
-			if h.settingsSvc.IsLocalhostBypassFromEnv() {
-				respondError(w, http.StatusBadRequest, "localhost_bypass is controlled by environment variable")
-				return
-			}
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid localhost_bypass value")
-				return
-			}
-			if err := h.settingsSvc.SetLocalhostBypass(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "rate_limit_enabled":
-			if h.settingsSvc.IsRateLimitEnabledFromEnv() {
-				respondError(w, http.StatusBadRequest, "rate_limit_enabled is controlled by environment variable")
-				return
-			}
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid rate_limit_enabled value")
-				return
-			}
-			if err := h.settingsSvc.SetRateLimitEnabled(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "rate_limit_per_ip":
-			if h.settingsSvc.IsRateLimitPerIPFromEnv() {
-				respondError(w, http.StatusBadRequest, "rate_limit_per_ip is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
-				respondError(w, http.StatusBadRequest, "invalid rate_limit_per_ip value (must be >= 1)")
-				return
-			}
-			if err := h.settingsSvc.SetRateLimitPerIP(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "rate_limit_per_token":
-			if h.settingsSvc.IsRateLimitPerTokenFromEnv() {
-				respondError(w, http.StatusBadRequest, "rate_limit_per_token is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
-				respondError(w, http.StatusBadRequest, "invalid rate_limit_per_token value (must be >= 1)")
-				return
-			}
-			if err := h.settingsSvc.SetRateLimitPerToken(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "rate_limit_login":
-			if h.settingsSvc.IsRateLimitLoginFromEnv() {
-				respondError(w, http.StatusBadRequest, "rate_limit_login is controlled by environment variable")
-				return
-			}
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil || v < 1 {
-				respondError(w, http.StatusBadRequest, "invalid rate_limit_login value (must be >= 1)")
-				return
-			}
-			if err := h.settingsSvc.SetRateLimitLogin(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "trust_proxy_headers":
-			if h.settingsSvc.IsTrustProxyHeadersFromEnv() {
-				respondError(w, http.StatusBadRequest, "trust_proxy_headers is controlled by environment variable")
-				return
-			}
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid trust_proxy_headers value")
-				return
-			}
-			if err := h.settingsSvc.SetTrustProxyHeaders(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "webhook_enabled":
-			if h.settingsSvc.IsWebhookEnabledFromEnv() {
-				respondError(w, http.StatusBadRequest, "webhook_enabled is controlled by environment variable")
-				return
-			}
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid webhook_enabled value")
-				return
-			}
-			if err := h.settingsSvc.SetWebhookEnabled(v); err != nil {
-				respondError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-
-		case "webhook_url":
-			if h.settingsSvc.IsWebhookURLFromEnv() {
-				respondError(w, http.StatusBadRequest, "webhook_url is controlled by environment variable")
-				return
-			}
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid webhook_url value")
-				return
-			}
-			if v == "" {
-				if err := h.settingsSvc.ClearWebhookURL(); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			} else {
-				if err := h.settingsSvc.SetWebhookURL(v); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			}
-
-		case "webhook_secret":
-			if h.settingsSvc.IsWebhookSecretFromEnv() {
-				respondError(w, http.StatusBadRequest, "webhook_secret is controlled by environment variable")
-				return
-			}
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, "invalid webhook_secret value")
-				return
-			}
-			if v == "" {
-				if err := h.settingsSvc.ClearWebhookSecret(); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			} else {
-				if err := h.settingsSvc.SetWebhookSecret(v); err != nil {
-					respondError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-			}
-
-		default:
+		def, ok := defs[key]
+		if !ok {
 			respondError(w, http.StatusBadRequest, "unknown setting: "+key)
+			return
+		}
+		if def.envLocked() {
+			respondError(w, http.StatusBadRequest, key+" is controlled by environment variable")
+			return
+		}
+		if err := def.apply(raw); err != nil {
+			if _, isBadReq := err.(badRequestError); isBadReq {
+				respondError(w, http.StatusBadRequest, err.Error())
+			} else {
+				respondError(w, http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 	}
