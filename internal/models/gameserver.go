@@ -33,6 +33,8 @@ type Gameserver struct {
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
+const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at"
+
 type GameserverFilter struct {
 	GameID *string
 	Status *string
@@ -40,7 +42,7 @@ type GameserverFilter struct {
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
-	query := "SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at FROM gameservers WHERE 1=1"
+	query := "SELECT " + gameserverColumns + " FROM gameservers WHERE 1=1"
 	var args []any
 
 	if filter.GameID != nil {
@@ -79,7 +81,7 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 }
 
 func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
-	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at FROM gameservers WHERE id = ?", id)
+	row := db.QueryRow("SELECT "+gameserverColumns+" FROM gameservers WHERE id = ?", id)
 	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -141,7 +143,7 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 }
 
 func GetGameserverBySFTPUsername(db *sql.DB, username string) (*Gameserver, error) {
-	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at FROM gameservers WHERE sftp_username = ?", username)
+	row := db.QueryRow("SELECT "+gameserverColumns+" FROM gameservers WHERE sftp_username = ?", username)
 	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil

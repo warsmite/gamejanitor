@@ -22,6 +22,8 @@ type WorkerNode struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+const workerNodeColumns = "id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, sftp_port, last_seen, created_at, updated_at"
+
 // UpsertWorkerNode inserts or updates a worker node's IP and last_seen fields.
 // Does not touch port_range columns — those are managed separately via SetWorkerNodePortRange.
 func UpsertWorkerNode(db *sql.DB, node *WorkerNode) error {
@@ -45,7 +47,7 @@ func UpsertWorkerNode(db *sql.DB, node *WorkerNode) error {
 func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 	var n WorkerNode
 	err := db.QueryRow(
-		"SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, sftp_port, last_seen, created_at, updated_at FROM worker_nodes WHERE id = ?",
+		"SELECT " + workerNodeColumns + " FROM worker_nodes WHERE id = ?",
 		id,
 	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -58,7 +60,7 @@ func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 }
 
 func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
-	rows, err := db.Query("SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, sftp_port, last_seen, created_at, updated_at FROM worker_nodes ORDER BY id")
+	rows, err := db.Query("SELECT " + workerNodeColumns + " FROM worker_nodes ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("listing worker nodes: %w", err)
 	}
