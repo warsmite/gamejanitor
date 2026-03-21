@@ -212,7 +212,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	authSvc := service.NewAuthService(database, logger)
 
 	// Status manager — watches Docker events for status updates
-	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, logger)
+	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 
 	ctx := context.Background()
 	if localWorker != nil {

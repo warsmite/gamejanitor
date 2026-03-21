@@ -19,6 +19,7 @@ CREATE TABLE gameservers (
     max_cpu REAL,
     max_backups INTEGER,
     max_storage_mb INTEGER,
+    auto_restart BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

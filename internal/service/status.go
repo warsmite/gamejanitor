@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -21,15 +22,20 @@ type StatusManager struct {
 	readyWatcher *ReadyWatcher
 	dispatcher   *worker.Dispatcher
 	registry     *worker.Registry
+	restartFunc  func(ctx context.Context, id string) error
 
 	cancel context.CancelFunc
 
 	// Per-worker event watchers for multi-node
 	workerCancels map[string]context.CancelFunc
 	workerMu      sync.Mutex
+
+	// Auto-restart crash counter: reset when gameserver reaches "running"
+	crashCounts map[string]int
+	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
 		localWorker:   localWorker,
@@ -38,8 +44,10 @@ func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventB
 		readyWatcher:  readyWatcher,
 		dispatcher:    dispatcher,
 		registry:      registry,
+		restartFunc:   restartFunc,
 		log:           log,
 		workerCancels: make(map[string]context.CancelFunc),
+		crashCounts:   make(map[string]int),
 	}
 
 	// Subscribe to worker registration events for multi-node event watching
@@ -57,6 +65,27 @@ func (m *StatusManager) Start(ctx context.Context) {
 	if m.localWorker != nil {
 		m.watchWorkerEvents(ctx, "local", m.localWorker)
 	}
+
+	// Reset crash counter when a gameserver successfully reaches "running"
+	events, unsub := m.broadcaster.Subscribe()
+	go func() {
+		defer unsub()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-events:
+				if !ok {
+					return
+				}
+				if ev.NewStatus == StatusRunning {
+					m.crashMu.Lock()
+					delete(m.crashCounts, ev.GameserverID)
+					m.crashMu.Unlock()
+				}
+			}
+		}
+	}()
 
 	m.log.Info("status manager started")
 }
@@ -220,14 +249,14 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
-			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")
+			m.handleUnexpectedDeath(gs)
 		}
 
 	case "kill":
 		m.log.Debug("docker event: container killed", "id", gsID)
 	}
 
-	_ = w // available for future per-worker recovery logic
+	_ = w
 }
 
 // onWorkerRegistered is called when a remote worker registers.
@@ -290,4 +319,36 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID)
 		m.recoverGameserver(ctx, &gs, w)
 	}
+}
+
+const maxAutoRestartAttempts = 3
+
+// handleUnexpectedDeath handles an unexpected container death. If auto-restart
+// is enabled and the crash limit hasn't been reached, restarts the gameserver.
+func (m *StatusManager) handleUnexpectedDeath(gs *models.Gameserver) {
+	if !gs.AutoRestart || m.restartFunc == nil {
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")
+		return
+	}
+
+	m.crashMu.Lock()
+	m.crashCounts[gs.ID]++
+	count := m.crashCounts[gs.ID]
+	m.crashMu.Unlock()
+
+	if count > maxAutoRestartAttempts {
+		m.log.Error("auto-restart limit reached, giving up", "id", gs.ID, "attempts", maxAutoRestartAttempts)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError,
+			fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts))
+		return
+	}
+
+	m.log.Warn("auto-restarting crashed gameserver", "id", gs.ID, "attempt", count, "max", maxAutoRestartAttempts)
+	go func() {
+		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
+			m.log.Error("auto-restart failed", "id", gs.ID, "attempt", count, "error", err)
+			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError,
+				fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()))
+		}
+	}()
 }

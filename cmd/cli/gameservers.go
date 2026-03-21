@@ -96,6 +96,7 @@ var gameserversGetCmd = &cobra.Command{
 			VolumeName    string          `json:"volume_name"`
 			Ports         json.RawMessage `json:"ports"`
 			Env           json.RawMessage `json:"env"`
+			AutoRestart   bool            `json:"auto_restart"`
 			SFTPUsername  string          `json:"sftp_username"`
 			SFTPPassword  string          `json:"sftp_password"`
 		}
@@ -113,6 +114,7 @@ var gameserversGetCmd = &cobra.Command{
 		} else {
 			fmt.Printf("CPU:        unlimited\n")
 		}
+		fmt.Printf("Restart:    %v\n", gs.AutoRestart)
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
 		fmt.Printf("Ports:      %s\n", string(gs.Ports))
 		fmt.Printf("Env:        %s\n", string(gs.Env))
@@ -150,6 +152,7 @@ var gameserversCreateCmd = &cobra.Command{
 		env := parseEnvFlags(envFlags)
 
 		nodeID, _ := cmd.Flags().GetString("node")
+		autoRestart, _ := cmd.Flags().GetBool("auto-restart")
 
 		body := map[string]any{
 			"name":            name,
@@ -158,6 +161,7 @@ var gameserversCreateCmd = &cobra.Command{
 			"env":             env,
 			"memory_limit_mb": memory,
 			"cpu_limit":       cpu,
+			"auto_restart":    autoRestart,
 		}
 		if len(portFlags) == 0 {
 			body["port_mode"] = "auto"
@@ -233,6 +237,10 @@ var gameserversUpdateCmd = &cobra.Command{
 		if cmd.Flags().Changed("cpu") {
 			v, _ := cmd.Flags().GetFloat64("cpu")
 			body["cpu_limit"] = v
+		}
+		if cmd.Flags().Changed("auto-restart") {
+			v, _ := cmd.Flags().GetBool("auto-restart")
+			body["auto_restart"] = v
 		}
 		resp, err := apiPatch("/api/gameservers/"+gsID, body)
 		if err != nil {
@@ -373,12 +381,14 @@ func init() {
 	gameserversCreateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	gameserversCreateCmd.Flags().Float64("cpu", 0, "CPU limit")
 	gameserversCreateCmd.Flags().String("node", "", "Worker node ID for placement (multi-node only)")
+	gameserversCreateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 
 	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
 	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
 	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	gameserversUpdateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit")
+	gameserversUpdateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 
 	gameserversCmd.AddCommand(
 		gameserversListCmd, gameserversGetCmd, gameserversCreateCmd,

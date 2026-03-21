@@ -371,6 +371,20 @@
           </div>
         </div>
 
+        {{if eq .Mode "edit"}}
+        <!-- Auto-Restart -->
+        <div class="flex items-center justify-between p-4 rounded-xl bg-surface-900/40 border border-surface-800/60">
+          <div>
+            <label for="auto_restart" class="text-sm font-medium text-surface-300">Auto-Restart on Crash</label>
+            <p class="text-xs text-surface-500 mt-0.5">Automatically restart if the gameserver crashes unexpectedly. Gives up after 3 consecutive failures.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" name="auto_restart" id="auto_restart" class="sr-only peer" {{if .Gameserver.AutoRestart}}checked{{end}}>
+            <div class="w-9 h-5 bg-surface-700 peer-focus:ring-2 peer-focus:ring-accent-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-500"></div>
+          </label>
+        </div>
+        {{end}}
+
         {{if and (eq .Mode "edit") .IsAdmin}}
         <!-- Resource Caps (admin only) -->
         <div x-data="{ showCaps: false }">

@@ -213,6 +213,7 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		MemoryLimitMB: form.MemoryLimitMB,
 		CPULimit:      form.CPULimit,
 		PortMode:      form.PortMode,
+		AutoRestart:   true,
 	}
 
 	if nodeID := r.FormValue("node_id"); nodeID != "" {
@@ -575,6 +576,7 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		MaxCPU:        maxCPU,
 		MaxBackups:    maxBackups,
 		MaxStorageMB:  maxStorageMB,
+		AutoRestart:   r.FormValue("auto_restart") == "on",
 		CreatedAt:     existing.CreatedAt,
 	}
 
