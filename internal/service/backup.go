@@ -68,15 +68,6 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
-	if gs.MaxStorageMB != nil {
-		volSize, err := s.dispatcher.WorkerFor(gameserverID).VolumeSize(ctx, gs.VolumeName)
-		if err != nil {
-			s.log.Warn("failed to check volume size before backup", "gameserver_id", gameserverID, "error", err)
-		} else if volSize >= int64(*gs.MaxStorageMB)*1024*1024 {
-			return nil, fmt.Errorf("storage limit exceeded (using %d MB of %d MB)", volSize/1024/1024, *gs.MaxStorageMB)
-		}
-	}
-
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 

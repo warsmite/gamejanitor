@@ -72,16 +72,6 @@ func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePa
 		return err
 	}
 
-	if gs.MaxStorageMB != nil {
-		w := s.dispatcher.WorkerFor(gameserverID)
-		volSize, err := w.VolumeSize(ctx, gs.VolumeName)
-		if err != nil {
-			s.log.Warn("failed to check volume size before write", "gameserver_id", gameserverID, "error", err)
-		} else if volSize >= int64(*gs.MaxStorageMB)*1024*1024 {
-			return fmt.Errorf("storage limit exceeded (using %d MB of %d MB)", volSize/1024/1024, *gs.MaxStorageMB)
-		}
-	}
-
 	relPath := strings.TrimPrefix(filePath, "/data")
 	return s.dispatcher.WorkerFor(gameserverID).WriteFile(ctx, gs.VolumeName, relPath, content, 0644)
 }
