@@ -24,6 +24,12 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
+const (
+	ContainerPrefix        = "gamejanitor-"
+	UpdateContainerPrefix  = ContainerPrefix + "update-"
+	FileopsContainerPrefix = ContainerPrefix + "fileops-"
+)
+
 type Client struct {
 	cli *client.Client
 	log *slog.Logger
@@ -570,7 +576,7 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 					return
 				}
 				name := msg.Actor.Attributes["name"]
-				if !strings.HasPrefix(name, "gamejanitor-") {
+				if !strings.HasPrefix(name, ContainerPrefix) {
 					continue
 				}
 

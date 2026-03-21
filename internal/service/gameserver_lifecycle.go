@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
@@ -87,7 +88,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// Remove old container if exists (stale from prior run/crash).
 	// Always try by name in case the DB lost track of the container ID
 	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
-	containerName := "gamejanitor-" + id
+	containerName := docker.ContainerPrefix + id
 	if gs.ContainerID != nil {
 		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
@@ -178,7 +179,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found after stop", id)
+		return ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 
 	// Preserve operation status — the calling operation will transition
@@ -262,7 +263,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	updateBinds := []string{scriptDir + ":/scripts:ro"}
 
 	// Run update-server in temp container
-	tempName := "gamejanitor-update-" + id
+	tempName := docker.UpdateContainerPrefix + id
 	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,

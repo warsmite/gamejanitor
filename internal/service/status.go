@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 )
@@ -221,7 +222,7 @@ func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w w
 }
 
 func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
-	gsID := strings.TrimPrefix(event.ContainerName, "gamejanitor-")
+	gsID := strings.TrimPrefix(event.ContainerName, docker.ContainerPrefix)
 	if gsID == event.ContainerName {
 		return
 	}

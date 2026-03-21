@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
@@ -47,7 +48,7 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
 	gs.ID = uuid.New().String()
-	gs.VolumeName = "gamejanitor-" + gs.ID
+	gs.VolumeName = docker.ContainerPrefix + gs.ID
 	gs.Status = StatusStopped
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
 
@@ -392,7 +393,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 	// Also try by name in case ContainerID was cleared but container still exists
-	containerName := "gamejanitor-" + id
+	containerName := docker.ContainerPrefix + id
 	if err := w.RemoveContainer(ctx, containerName); err != nil {
 		s.log.Debug("no container to remove by name during delete", "name", containerName)
 	}
