@@ -27,6 +27,19 @@ const (
 	StatusRestoring    = "restoring"
 )
 
+// Container contract constants — shared between gamejanitor and game container scripts.
+// Changing these requires updating the corresponding entrypoint.sh in images/base/.
+const (
+	InstallMarker = "[gamejanitor:installed]" // Emitted by entrypoint.sh after first install completes
+	EnvSkipInstall = "SKIP_INSTALL=1"         // Passed to container when gs.Installed is true
+
+	PortNameQuery = "query" // Port used for server query polling (A2S/GJQ)
+	PortNameGame  = "game"  // Fallback port for query polling if no "query" port defined
+)
+
+// Disabled capability names — used in game definitions to opt out of features.
+const CapabilityQuery = "query"
+
 // setGameserverStatus updates a gameserver's status in the DB and logs the transition.
 // When transitioning to error, errorReason is stored; otherwise it's cleared.
 func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadcaster, id string, newStatus string, errorReason string) error {

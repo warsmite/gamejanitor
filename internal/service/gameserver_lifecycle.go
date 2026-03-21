@@ -61,7 +61,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	if gs.Installed {
-		env = append(env, "SKIP_INSTALL=1")
+		env = append(env, EnvSkipInstall)
 	}
 
 	// Parse port bindings

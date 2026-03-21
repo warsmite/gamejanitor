@@ -195,7 +195,7 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 	}
 
 	for _, c := range game.DisabledCapabilities {
-		if c == "query" {
+		if c == CapabilityQuery {
 			return false
 		}
 	}
@@ -211,12 +211,12 @@ func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
 		return 0
 	}
 	for _, p := range ports {
-		if p.Name == "query" {
+		if p.Name == PortNameQuery {
 			return uint16(p.HostPort)
 		}
 	}
 	for _, p := range ports {
-		if p.Name == "game" {
+		if p.Name == PortNameGame {
 			return uint16(p.HostPort)
 		}
 	}

@@ -148,7 +148,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 				w.log.Debug("log stream ended", "id", gameserverID)
 				return
 			}
-			if !installDetected && line == "[gamejanitor:installed]" {
+			if !installDetected && line == InstallMarker {
 				w.markInstalled(gameserverID)
 				installDetected = true
 				if pattern == nil {
