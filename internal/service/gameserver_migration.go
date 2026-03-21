@@ -11,7 +11,7 @@ import (
 
 // MigrateGameserver moves a gameserver from its current node to a different node.
 // Requires both source and target workers to be online.
-func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) error {
+func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) (err error) {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return err
@@ -48,6 +48,14 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
 	setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusMigrating, "")
+	defer func() {
+		if err != nil {
+			if gs, e := models.GetGameserver(s.db, gameserverID); e == nil && gs != nil && gs.Status != StatusError {
+				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError,
+					operationFailedReason("Migration failed", err))
+			}
+		}
+	}()
 
 	// Stop if running
 	if gs.Status != StatusStopped {
@@ -88,7 +96,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	// Reallocate ports on target node's range
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return fmt.Errorf("game %s not found", gs.GameID)
+		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 	newPorts, err := s.AllocatePorts(game, targetNodeID, "")
 	if err != nil {

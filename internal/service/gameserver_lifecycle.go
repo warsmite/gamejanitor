@@ -22,6 +22,20 @@ func userFriendlyError(prefix string, err error) string {
 	return prefix + "."
 }
 
+// operationFailedReason builds a user-facing error reason for failed multi-step
+// operations (update, reinstall, migrate, restore).
+func operationFailedReason(prefix string, err error) string {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "pulling image") || strings.Contains(msg, "pull"):
+		return prefix + ". Check your internet connection."
+	case strings.Contains(msg, "volume") || strings.Contains(msg, "disk") || strings.Contains(msg, "no space"):
+		return prefix + ". There may be a storage issue."
+	default:
+		return prefix + "."
+	}
+}
+
 func (s *GameserverService) Start(ctx context.Context, id string) error {
 	gs, err := models.GetGameserver(s.db, id)
 	if err != nil {
@@ -224,7 +238,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 	return s.Start(ctx, id)
 }
 
-func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) error {
+func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (err error) {
 	gs, err := models.GetGameserver(s.db, id)
 	if err != nil {
 		return err
@@ -241,6 +255,14 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
 	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusUpdating, "")
+	defer func() {
+		if err != nil {
+			if gs, e := models.GetGameserver(s.db, id); e == nil && gs != nil && gs.Status != StatusError {
+				setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError,
+					operationFailedReason("Game update failed", err))
+			}
+		}
+	}()
 
 	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
@@ -297,7 +319,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	return s.Start(ctx, id)
 }
 
-func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
+func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error) {
 	gs, err := models.GetGameserver(s.db, id)
 	if err != nil {
 		return err
@@ -309,6 +331,14 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
 	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusReinstalling, "")
+	defer func() {
+		if err != nil {
+			if gs, e := models.GetGameserver(s.db, id); e == nil && gs != nil && gs.Status != StatusError {
+				setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError,
+					operationFailedReason("Reinstall failed", err))
+			}
+		}
+	}()
 
 	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {

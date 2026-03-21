@@ -148,7 +148,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	return backup, nil
 }
 
-func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) error {
+func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err error) {
 	backup, err := models.GetBackup(s.db, backupID)
 	if err != nil {
 		return fmt.Errorf("getting backup %s: %w", backupID, err)
@@ -170,6 +170,14 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 	s.log.Info("restoring backup", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
 	setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusRestoring, "")
+	defer func() {
+		if err != nil {
+			if curr, e := models.GetGameserver(s.db, gs.ID); e == nil && curr != nil && curr.Status != StatusError {
+				setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusError,
+					operationFailedReason("Backup restore failed", err))
+			}
+		}
+	}()
 
 	// Stop gameserver if running
 	if gs.Status != StatusStopped {
