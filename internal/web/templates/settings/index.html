@@ -198,6 +198,119 @@
     </div>
   </div>
 
+  <!-- Webhooks Section -->
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
+    <h2 class="font-display font-semibold text-white mb-4">Webhooks</h2>
+
+    <!-- Webhook Toggle -->
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="text-sm text-surface-300">
+          {{if .WebhookEnabled}}
+            Webhooks are enabled. All successful mutations will fire an HTTP POST to the configured URL.
+          {{else}}
+            Webhooks are disabled. No outbound notifications will be sent.
+          {{end}}
+          {{if .WebhookEnabledFromEnv}}
+            <span class="text-amber-400 text-xs ml-1">(set by environment variable)</span>
+          {{end}}
+        </p>
+      </div>
+      {{if not .WebhookEnabledFromEnv}}
+        {{if .WebhookEnabled}}
+          <form method="POST" action="/settings/webhook/disable" hx-post="/settings/webhook/disable" hx-target="#content" hx-push-url="false">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="px-4 py-2 bg-red-500/10 border border-red-900/30 text-red-400 hover:bg-red-500/20 rounded-lg text-sm font-medium transition-colors">
+              Disable
+            </button>
+          </form>
+        {{else}}
+          <form method="POST" action="/settings/webhook/enable" hx-post="/settings/webhook/enable" hx-target="#content" hx-push-url="false">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="px-4 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-emerald-600/20">
+              Enable
+            </button>
+          </form>
+        {{end}}
+      {{end}}
+    </div>
+
+    <!-- Webhook URL -->
+    <div class="border-t border-surface-800/40 pt-4 mb-4">
+      <label class="block text-sm font-medium text-surface-300 mb-1">Webhook URL</label>
+      <p class="text-xs text-surface-500 mb-2">HTTP endpoint that receives POST requests with JSON payloads for every mutation.</p>
+      {{if .WebhookURLFromEnv}}
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-mono text-white">{{.WebhookURL}}</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+        {{if .WebhookURL}}
+        <div class="flex items-center gap-3 mb-2">
+          <span class="text-sm font-mono text-white break-all">{{.WebhookURL}}</span>
+          <form method="POST" action="/settings/webhook/url" hx-delete="/settings/webhook/url" hx-swap="none">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
+          </form>
+        </div>
+        {{end}}
+        <form method="POST" action="/settings/webhook/url" hx-post="/settings/webhook/url" hx-swap="none" class="flex items-center gap-2">
+          <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+          <input type="text" name="webhook_url" placeholder="https://example.com/webhook" value="{{.WebhookURL}}"
+                 class="text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none flex-1">
+          <button type="submit"
+                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+            Save
+          </button>
+        </form>
+      {{end}}
+    </div>
+
+    <!-- Webhook Secret -->
+    <div class="border-t border-surface-800/40 pt-4 mb-4">
+      <label class="block text-sm font-medium text-surface-300 mb-1">Webhook Secret</label>
+      <p class="text-xs text-surface-500 mb-2">HMAC-SHA256 signing key. When set, requests include an <code class="text-surface-400">X-Webhook-Signature</code> header.</p>
+      {{if .WebhookSecretFromEnv}}
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-white">Configured</span>
+        <span class="text-amber-400 text-xs">(set by environment variable)</span>
+      </div>
+      {{else}}
+        {{if .WebhookSecretSet}}
+        <div class="flex items-center gap-3 mb-2">
+          <span class="text-sm text-surface-300">Secret is set</span>
+          <form method="POST" action="/settings/webhook/secret" hx-delete="/settings/webhook/secret" hx-swap="none">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <button type="submit" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
+          </form>
+        </div>
+        {{end}}
+        <form method="POST" action="/settings/webhook/secret" hx-post="/settings/webhook/secret" hx-swap="none" class="flex items-center gap-2">
+          <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+          <input type="password" name="webhook_secret" placeholder="{{if .WebhookSecretSet}}Replace existing secret{{else}}Enter signing secret{{end}}"
+                 class="text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none w-64">
+          <button type="submit"
+                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+            Save
+          </button>
+        </form>
+      {{end}}
+    </div>
+
+    <!-- Webhook Test -->
+    {{if .WebhookURL}}
+    <div class="border-t border-surface-800/40 pt-4">
+      <form method="POST" action="/settings/webhook/test" hx-post="/settings/webhook/test" hx-swap="none">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+        <button type="submit" class="inline-flex items-center gap-2 text-sm text-accent-400 hover:text-accent-300 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
+          Send Test Webhook
+        </button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+
   <!-- Authentication Section -->
   <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
     <h2 class="font-display font-semibold text-white mb-4">Authentication</h2>

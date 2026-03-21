@@ -41,6 +41,12 @@ var settingsGetCmd = &cobra.Command{
 			AuthFromEnv              bool   `json:"auth_from_env"`
 			LocalhostBypass          bool   `json:"localhost_bypass"`
 			LocalhostBypassFromEnv   bool   `json:"localhost_bypass_from_env"`
+			WebhookEnabled           bool   `json:"webhook_enabled"`
+			WebhookEnabledFromEnv    bool   `json:"webhook_enabled_from_env"`
+			WebhookURL               string `json:"webhook_url"`
+			WebhookURLFromEnv        bool   `json:"webhook_url_from_env"`
+			WebhookSecretSet         bool   `json:"webhook_secret_set"`
+			WebhookSecretFromEnv     bool   `json:"webhook_secret_from_env"`
 		}
 		if err := json.Unmarshal(resp.Data, &s); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
@@ -64,6 +70,17 @@ var settingsGetCmd = &cobra.Command{
 		fmt.Fprintf(w, "Max Backups:\t%d%s\n", s.MaxBackups, envTag(s.MaxBackupsFromEnv))
 		fmt.Fprintf(w, "Auth Enabled:\t%v%s\n", s.AuthEnabled, envTag(s.AuthFromEnv))
 		fmt.Fprintf(w, "Localhost Bypass:\t%v%s\n", s.LocalhostBypass, envTag(s.LocalhostBypassFromEnv))
+		fmt.Fprintf(w, "Webhook Enabled:\t%v%s\n", s.WebhookEnabled, envTag(s.WebhookEnabledFromEnv))
+		webhookURL := s.WebhookURL
+		if webhookURL == "" {
+			webhookURL = "(not set)"
+		}
+		fmt.Fprintf(w, "Webhook URL:\t%s%s\n", webhookURL, envTag(s.WebhookURLFromEnv))
+		secretStatus := "not set"
+		if s.WebhookSecretSet {
+			secretStatus = "set"
+		}
+		fmt.Fprintf(w, "Webhook Secret:\t%s%s\n", secretStatus, envTag(s.WebhookSecretFromEnv))
 		w.Flush()
 		return nil
 	},
@@ -111,6 +128,22 @@ var settingsSetCmd = &cobra.Command{
 			}
 			body["localhost_bypass"] = b
 		}
+		if cmd.Flags().Changed("webhook-enabled") {
+			v, _ := cmd.Flags().GetString("webhook-enabled")
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return exitError(fmt.Errorf("invalid --webhook-enabled value: use true or false"))
+			}
+			body["webhook_enabled"] = b
+		}
+		if cmd.Flags().Changed("webhook-url") {
+			v, _ := cmd.Flags().GetString("webhook-url")
+			body["webhook_url"] = v
+		}
+		if cmd.Flags().Changed("webhook-secret") {
+			v, _ := cmd.Flags().GetString("webhook-secret")
+			body["webhook_secret"] = v
+		}
 
 		if len(body) == 0 {
 			return exitError(fmt.Errorf("no settings flags provided — use --help to see available options"))
@@ -139,6 +172,9 @@ func init() {
 	settingsSetCmd.Flags().Int("max-backups", 0, "Max backups per gameserver (0 = unlimited)")
 	settingsSetCmd.Flags().String("auth-enabled", "", "Enable authentication: true or false")
 	settingsSetCmd.Flags().String("localhost-bypass", "", "Localhost auth bypass: true or false")
+	settingsSetCmd.Flags().String("webhook-enabled", "", "Enable webhooks: true or false")
+	settingsSetCmd.Flags().String("webhook-url", "", "Webhook URL (empty to clear)")
+	settingsSetCmd.Flags().String("webhook-secret", "", "Webhook HMAC secret (empty to clear)")
 
 	settingsCmd.AddCommand(settingsGetCmd, settingsSetCmd)
 }

@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 // AuditMiddleware logs all mutating requests (POST/PUT/DELETE) to the audit_log table.
-func AuditMiddleware(db *sql.DB, log *slog.Logger) func(http.Handler) http.Handler {
+func AuditMiddleware(db *sql.DB, webhookSender *service.WebhookSender, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -66,6 +67,17 @@ func AuditMiddleware(db *sql.DB, log *slog.Logger) func(http.Handler) http.Handl
 
 			if err := models.CreateAuditLog(db, entry); err != nil {
 				log.Error("failed to write audit log", "action", action, "error", err)
+			}
+
+			if webhookSender != nil && sw.statusCode < 400 {
+				go webhookSender.Send(service.WebhookPayload{
+					ID:           entry.ID,
+					Timestamp:    entry.Timestamp,
+					Action:       action,
+					ResourceType: resourceType,
+					ResourceID:   resourceID,
+					StatusCode:   sw.statusCode,
+				})
 			}
 		})
 	}
@@ -153,12 +165,24 @@ func deriveAuditAction(method, pattern string) (action, resourceType, resourceID
 		"DELETE /settings/worker-tokens/{tokenId}":            {"worker-token.delete", "token", "tokenId"},
 		"POST /settings/tokens":                               {"token.create", "token", ""},
 		"DELETE /settings/tokens/{tokenId}":                    {"token.delete", "token", "tokenId"},
+		"POST /settings/webhook/enable":                       {"settings.webhook", "settings", ""},
+		"POST /settings/webhook/disable":                      {"settings.webhook", "settings", ""},
+		"POST /settings/webhook/url":                          {"settings.webhook", "settings", ""},
+		"DELETE /settings/webhook/url":                        {"settings.webhook", "settings", ""},
+		"POST /settings/webhook/secret":                       {"settings.webhook", "settings", ""},
+		"DELETE /settings/webhook/secret":                     {"settings.webhook", "settings", ""},
+		"POST /settings/webhook/test":                         {"settings.webhook-test", "settings", ""},
+		"POST /settings/workers/{workerID}/cordon":            {"worker.cordon", "worker", "workerID"},
+		"DELETE /settings/workers/{workerID}/cordon":          {"worker.uncordon", "worker", "workerID"},
 		"PATCH /settings":                                        {"settings.update", "settings", ""},
 		"PATCH /workers/{workerID}":                             {"worker.update", "worker", "workerID"},
 		"PATCH /workers/{workerID}/port-range":                  {"worker.update", "worker", "workerID"},
 		"DELETE /workers/{workerID}/port-range":               {"worker.update", "worker", "workerID"},
 		"PATCH /workers/{workerID}/limits":                      {"worker.update", "worker", "workerID"},
 		"DELETE /workers/{workerID}/limits":                   {"worker.update", "worker", "workerID"},
+		"POST /workers/{workerID}/cordon":                    {"worker.cordon", "worker", "workerID"},
+		"DELETE /workers/{workerID}/cordon":                  {"worker.uncordon", "worker", "workerID"},
+		"POST /settings/webhook-test":                        {"settings.webhook-test", "settings", ""},
 	}
 
 	key := method + " " + p

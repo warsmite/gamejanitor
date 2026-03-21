@@ -68,6 +68,9 @@ const (
 	SettingRateLimitPerToken = "rate_limit_per_token"
 	SettingRateLimitLogin    = "rate_limit_login"
 	SettingTrustProxyHeaders = "trust_proxy_headers"
+	SettingWebhookEnabled    = "webhook_enabled"
+	SettingWebhookURL        = "webhook_url"
+	SettingWebhookSecret     = "webhook_secret"
 
 	DefaultAuditRetention = 30
 
@@ -431,4 +434,80 @@ func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
 	}
 	s.log.Info("setting trust_proxy_headers", "enabled", enabled)
 	return models.SetSetting(s.db, SettingTrustProxyHeaders, v)
+}
+
+func (s *SettingsService) GetWebhookEnabled() bool {
+	if v := os.Getenv("GJ_WEBHOOK_ENABLED"); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, SettingWebhookEnabled)
+	if err != nil || v == "" {
+		return false
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) IsWebhookEnabledFromEnv() bool {
+	return os.Getenv("GJ_WEBHOOK_ENABLED") != ""
+}
+
+func (s *SettingsService) SetWebhookEnabled(enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	s.log.Info("setting webhook_enabled", "enabled", enabled)
+	return models.SetSetting(s.db, SettingWebhookEnabled, v)
+}
+
+func (s *SettingsService) GetWebhookURL() string {
+	if v := os.Getenv("GJ_WEBHOOK_URL"); v != "" {
+		return v
+	}
+	v, err := models.GetSetting(s.db, SettingWebhookURL)
+	if err != nil {
+		s.log.Error("reading webhook_url setting", "error", err)
+		return ""
+	}
+	return v
+}
+
+func (s *SettingsService) IsWebhookURLFromEnv() bool {
+	return os.Getenv("GJ_WEBHOOK_URL") != ""
+}
+
+func (s *SettingsService) SetWebhookURL(url string) error {
+	s.log.Info("setting webhook_url", "url", url)
+	return models.SetSetting(s.db, SettingWebhookURL, url)
+}
+
+func (s *SettingsService) ClearWebhookURL() error {
+	s.log.Info("clearing webhook_url")
+	return models.DeleteSetting(s.db, SettingWebhookURL)
+}
+
+func (s *SettingsService) GetWebhookSecret() string {
+	if v := os.Getenv("GJ_WEBHOOK_SECRET"); v != "" {
+		return v
+	}
+	v, err := models.GetSetting(s.db, SettingWebhookSecret)
+	if err != nil {
+		s.log.Error("reading webhook_secret setting", "error", err)
+		return ""
+	}
+	return v
+}
+
+func (s *SettingsService) IsWebhookSecretFromEnv() bool {
+	return os.Getenv("GJ_WEBHOOK_SECRET") != ""
+}
+
+func (s *SettingsService) SetWebhookSecret(secret string) error {
+	s.log.Info("setting webhook_secret")
+	return models.SetSetting(s.db, SettingWebhookSecret, secret)
+}
+
+func (s *SettingsService) ClearWebhookSecret() error {
+	s.log.Info("clearing webhook_secret")
+	return models.DeleteSetting(s.db, SettingWebhookSecret)
 }

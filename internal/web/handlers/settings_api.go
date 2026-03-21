@@ -9,12 +9,13 @@ import (
 )
 
 type SettingsAPIHandlers struct {
-	settingsSvc *service.SettingsService
-	log         *slog.Logger
+	settingsSvc   *service.SettingsService
+	webhookSender *service.WebhookSender
+	log           *slog.Logger
 }
 
-func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, log *slog.Logger) *SettingsAPIHandlers {
-	return &SettingsAPIHandlers{settingsSvc: settingsSvc, log: log}
+func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, webhookSender *service.WebhookSender, log *slog.Logger) *SettingsAPIHandlers {
+	return &SettingsAPIHandlers{settingsSvc: settingsSvc, webhookSender: webhookSender, log: log}
 }
 
 type settingsResponse struct {
@@ -41,6 +42,12 @@ type settingsResponse struct {
 	RateLimitLoginFromEnv      bool   `json:"rate_limit_login_from_env"`
 	TrustProxyHeaders          bool   `json:"trust_proxy_headers"`
 	TrustProxyHeadersFromEnv   bool   `json:"trust_proxy_headers_from_env"`
+	WebhookEnabled             bool   `json:"webhook_enabled"`
+	WebhookEnabledFromEnv      bool   `json:"webhook_enabled_from_env"`
+	WebhookURL                 string `json:"webhook_url"`
+	WebhookURLFromEnv          bool   `json:"webhook_url_from_env"`
+	WebhookSecretSet           bool   `json:"webhook_secret_set"`
+	WebhookSecretFromEnv       bool   `json:"webhook_secret_from_env"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +75,12 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		RateLimitLoginFromEnv:      h.settingsSvc.IsRateLimitLoginFromEnv(),
 		TrustProxyHeaders:          h.settingsSvc.GetTrustProxyHeaders(),
 		TrustProxyHeadersFromEnv:   h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		WebhookEnabled:             h.settingsSvc.GetWebhookEnabled(),
+		WebhookEnabledFromEnv:      h.settingsSvc.IsWebhookEnabledFromEnv(),
+		WebhookURL:                 h.settingsSvc.GetWebhookURL(),
+		WebhookURLFromEnv:          h.settingsSvc.IsWebhookURLFromEnv(),
+		WebhookSecretSet:           h.settingsSvc.GetWebhookSecret() != "",
+		WebhookSecretFromEnv:       h.settingsSvc.IsWebhookSecretFromEnv(),
 	})
 }
 
@@ -267,6 +280,65 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+		case "webhook_enabled":
+			if h.settingsSvc.IsWebhookEnabledFromEnv() {
+				respondError(w, http.StatusBadRequest, "webhook_enabled is controlled by environment variable")
+				return
+			}
+			var v bool
+			if err := json.Unmarshal(raw, &v); err != nil {
+				respondError(w, http.StatusBadRequest, "invalid webhook_enabled value")
+				return
+			}
+			if err := h.settingsSvc.SetWebhookEnabled(v); err != nil {
+				respondError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case "webhook_url":
+			if h.settingsSvc.IsWebhookURLFromEnv() {
+				respondError(w, http.StatusBadRequest, "webhook_url is controlled by environment variable")
+				return
+			}
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				respondError(w, http.StatusBadRequest, "invalid webhook_url value")
+				return
+			}
+			if v == "" {
+				if err := h.settingsSvc.ClearWebhookURL(); err != nil {
+					respondError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			} else {
+				if err := h.settingsSvc.SetWebhookURL(v); err != nil {
+					respondError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+
+		case "webhook_secret":
+			if h.settingsSvc.IsWebhookSecretFromEnv() {
+				respondError(w, http.StatusBadRequest, "webhook_secret is controlled by environment variable")
+				return
+			}
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				respondError(w, http.StatusBadRequest, "invalid webhook_secret value")
+				return
+			}
+			if v == "" {
+				if err := h.settingsSvc.ClearWebhookSecret(); err != nil {
+					respondError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			} else {
+				if err := h.settingsSvc.SetWebhookSecret(v); err != nil {
+					respondError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+
 		default:
 			respondError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return
@@ -278,3 +350,22 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	// Return current state after update
 	h.Get(w, r)
 }
+
+func (h *SettingsAPIHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
+	if h.webhookSender == nil {
+		respondError(w, http.StatusBadRequest, "webhooks not configured")
+		return
+	}
+
+	statusCode, err := h.webhookSender.SendTest()
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondOK(w, map[string]any{
+		"response_status": statusCode,
+		"success":         statusCode >= 200 && statusCode < 300,
+	})
+}
+

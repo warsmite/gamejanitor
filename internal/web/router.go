@@ -92,8 +92,9 @@ func NewRouter(
 	logHandlers := handlers.NewLogHandlers(logPath, log)
 	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
+	webhookSender := service.NewWebhookSender(settingsSvc, log)
 	workerHandlers := handlers.NewWorkerHandlers(registry, settingsSvc, gameserverSvc, log)
-	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, log)
+	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, webhookSender, log)
 	auditHandlers := handlers.NewAuditHandlers(db, log)
 
 	requireAdmin := RequireAdmin(settingsSvc)
@@ -108,7 +109,7 @@ func NewRouter(
 	requireConfigure := RequirePermission(settingsSvc, "configure")
 	requireDelete := RequirePermission(settingsSvc, "delete")
 
-	auditMiddleware := AuditMiddleware(db, log)
+	auditMiddleware := AuditMiddleware(db, webhookSender, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -202,6 +203,7 @@ func NewRouter(
 			r.Use(requireAdmin)
 			r.Get("/", settingsAPIHandlers.Get)
 			r.Patch("/", settingsAPIHandlers.Update)
+			r.Post("/webhook-test", settingsAPIHandlers.TestWebhook)
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
@@ -258,7 +260,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, dataDir, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, webhookSender, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
@@ -302,6 +304,13 @@ func NewRouter(
 			r.Post("/rate-limit/login", pageSettings.SaveRateLimitLogin)
 			r.Post("/trust-proxy-headers/enable", pageSettings.SetTrustProxyHeaders(true))
 			r.Post("/trust-proxy-headers/disable", pageSettings.SetTrustProxyHeaders(false))
+			r.Post("/webhook/enable", pageSettings.SetWebhookEnabled(true))
+			r.Post("/webhook/disable", pageSettings.SetWebhookEnabled(false))
+			r.Post("/webhook/url", pageSettings.SaveWebhookURL)
+			r.Delete("/webhook/url", pageSettings.ClearWebhookURL)
+			r.Post("/webhook/secret", pageSettings.SaveWebhookSecret)
+			r.Delete("/webhook/secret", pageSettings.ClearWebhookSecret)
+			r.Post("/webhook/test", pageSettings.TestWebhook)
 			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
 			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
 			r.Post("/workers/{workerID}/limits", pageSettings.SaveWorkerLimits)
