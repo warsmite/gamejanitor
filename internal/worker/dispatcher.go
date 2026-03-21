@@ -205,10 +205,12 @@ func (d *Dispatcher) lookupNodeID(gameserverID string) (string, error) {
 	if d.db == nil {
 		return "", nil
 	}
-	var nodeID sql.NullString
-	err := d.db.QueryRow("SELECT node_id FROM gameservers WHERE id = ?", gameserverID).Scan(&nodeID)
+	gs, err := models.GetGameserver(d.db, gameserverID)
 	if err != nil {
-		return "", fmt.Errorf("querying node_id for gameserver %s: %w", gameserverID, err)
+		return "", fmt.Errorf("looking up node_id for gameserver %s: %w", gameserverID, err)
 	}
-	return nodeID.String, nil
+	if gs == nil || gs.NodeID == nil {
+		return "", nil
+	}
+	return *gs.NodeID, nil
 }
