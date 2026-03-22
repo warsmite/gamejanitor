@@ -75,6 +75,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
+	s.broadcaster.Publish(ImagePulledEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)

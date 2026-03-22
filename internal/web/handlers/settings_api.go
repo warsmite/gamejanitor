@@ -41,6 +41,8 @@ type settingsResponse struct {
 	RateLimitLoginFromEnv    bool   `json:"rate_limit_login_from_env"`
 	TrustProxyHeaders            bool `json:"trust_proxy_headers"`
 	TrustProxyHeadersFromEnv     bool `json:"trust_proxy_headers_from_env"`
+	EventRetentionDays           int  `json:"event_retention_days"`
+	EventRetentionFromEnv        bool `json:"event_retention_from_env"`
 	RequireMemoryLimit           bool `json:"require_memory_limit"`
 	RequireMemoryLimitFromEnv    bool `json:"require_memory_limit_from_env"`
 	RequireCPULimit              bool `json:"require_cpu_limit"`
@@ -74,6 +76,8 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		RateLimitLoginFromEnv:    h.settingsSvc.IsRateLimitLoginFromEnv(),
 		TrustProxyHeaders:          h.settingsSvc.GetTrustProxyHeaders(),
 		TrustProxyHeadersFromEnv:   h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		EventRetentionDays:         h.settingsSvc.GetEventRetentionDays(),
+		EventRetentionFromEnv:      h.settingsSvc.IsEventRetentionFromEnv(),
 		RequireMemoryLimit:         h.settingsSvc.GetRequireMemoryLimit(),
 		RequireMemoryLimitFromEnv:  h.settingsSvc.IsRequireMemoryLimitFromEnv(),
 		RequireCPULimit:            h.settingsSvc.GetRequireCPULimit(),
@@ -165,6 +169,7 @@ func (h *SettingsAPIHandlers) settingDefs() map[string]settingDef {
 		"rate_limit_per_token": intSetting(svc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, 0, "invalid rate_limit_per_token value (must be >= 1)", svc.SetRateLimitPerToken),
 		"rate_limit_login":     intSetting(svc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, 0, "invalid rate_limit_login value (must be >= 1)", svc.SetRateLimitLogin),
 		"trust_proxy_headers":    boolSetting(svc.IsTrustProxyHeadersFromEnv, "trust_proxy_headers", svc.SetTrustProxyHeaders),
+		"event_retention_days":   intSetting(svc.IsEventRetentionFromEnv, "event_retention_days", 1, 365, "invalid event_retention_days (1-365)", svc.SetEventRetentionDays),
 		"require_memory_limit":   boolSetting(svc.IsRequireMemoryLimitFromEnv, "require_memory_limit", svc.SetRequireMemoryLimit),
 		"require_cpu_limit":      boolSetting(svc.IsRequireCPULimitFromEnv, "require_cpu_limit", svc.SetRequireCPULimit),
 		"require_storage_limit":  boolSetting(svc.IsRequireStorageLimitFromEnv, "require_storage_limit", svc.SetRequireStorageLimit),

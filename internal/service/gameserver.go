@@ -140,6 +140,30 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return "", fmt.Errorf("applying game defaults: %w", err)
 	}
 
+	// Enforce require_* settings
+	if s.settingsSvc.GetRequireMemoryLimit() && gs.MemoryLimitMB <= 0 {
+		return "", ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
+	}
+	if s.settingsSvc.GetRequireCPULimit() && gs.CPULimit <= 0 {
+		return "", ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
+	}
+	if s.settingsSvc.GetRequireStorageLimit() && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
+		return "", ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
+	}
+
+	// Warn about unlimited resources in multi-node mode
+	if nodeID != "" {
+		if gs.MemoryLimitMB == 0 {
+			s.log.Warn("gameserver has no memory_limit_mb set, cannot account for memory in node placement", "id", gs.ID)
+		}
+		if gs.CPULimit == 0 {
+			s.log.Warn("gameserver has no cpu_limit set, cannot account for CPU in node placement", "id", gs.ID)
+		}
+		if gs.StorageLimitMB == nil || *gs.StorageLimitMB == 0 {
+			s.log.Warn("gameserver has no storage_limit_mb set, cannot account for storage in node placement", "id", gs.ID)
+		}
+	}
+
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)
 
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
@@ -288,6 +312,14 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	oldCPU := existing.CPULimit
 	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
+	// Field-level permission guard: non-admin tokens can only change name and env
+	token := TokenFromContext(ctx)
+	if token != nil && !IsAdmin(token) {
+		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || (gs.NodeTags != "" && gs.NodeTags != "[]") {
+			return false, ErrBadRequestf("insufficient permissions to modify resource/placement fields")
+		}
+	}
+
 	// Check if install-triggering env vars changed before merging
 	installTriggered := false
 	if gs.Env != nil {
@@ -372,7 +404,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 			}
 
 			if foundNode == "" {
-				return false, fmt.Errorf("upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity. Resource values unchanged.", existing.MemoryLimitMB, existing.CPULimit)
+				reason := fmt.Sprintf("Upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity.", existing.MemoryLimitMB, existing.CPULimit)
+				s.broadcaster.Publish(GameserverErrorEvent{GameserverID: existing.ID, Reason: reason, Timestamp: time.Now()})
+				return false, fmt.Errorf("%s Resource values unchanged.", reason)
 			}
 
 			needsMigration = true

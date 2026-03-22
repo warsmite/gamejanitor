@@ -266,6 +266,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
+			m.broadcaster.Publish(ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		}
 

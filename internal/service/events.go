@@ -78,6 +78,14 @@ type ImagePullingEvent struct {
 func (e ImagePullingEvent) EventType() string        { return EventImagePulling }
 func (e ImagePullingEvent) EventTimestamp() time.Time { return e.Timestamp }
 
+type ImagePulledEvent struct {
+	GameserverID string
+	Timestamp    time.Time
+}
+
+func (e ImagePulledEvent) EventType() string        { return EventImagePulled }
+func (e ImagePulledEvent) EventTimestamp() time.Time { return e.Timestamp }
+
 type ContainerCreatingEvent struct {
 	GameserverID string
 	Timestamp    time.Time

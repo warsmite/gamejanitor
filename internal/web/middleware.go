@@ -95,6 +95,37 @@ func RequireAdmin(settingsSvc *service.SettingsService) func(http.Handler) http.
 	}
 }
 
+// RequireClusterPermission returns 403 if the token doesn't have the given cluster permission.
+// Unlike RequirePermission, this doesn't check gameserver IDs — it's for cluster-level routes.
+func RequireClusterPermission(settingsSvc *service.SettingsService, permission string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := TokenFromContext(r.Context())
+			if token == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if service.IsAdmin(token) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// Check if token has the specific cluster permission
+			var perms []string
+			if err := json.Unmarshal(token.Permissions, &perms); err != nil {
+				handleForbidden(w, r)
+				return
+			}
+			for _, p := range perms {
+				if p == permission {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			handleForbidden(w, r)
+		})
+	}
+}
+
 // RequirePermission returns 403 if the token doesn't have the given permission
 // on the gameserver identified by the {id} URL parameter.
 // No-op when auth is disabled or localhost bypass is active.

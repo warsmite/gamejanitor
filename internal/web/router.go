@@ -189,7 +189,7 @@ func NewRouter(
 		r.Get("/events/history", eventHandlers.History)
 
 		r.Route("/workers", func(r chi.Router) {
-			r.Use(requireAdmin)
+			r.Use(RequireClusterPermission(settingsSvc, service.PermNodesManage))
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
@@ -205,13 +205,12 @@ func NewRouter(
 		})
 
 		r.Route("/settings", func(r chi.Router) {
-			r.Use(requireAdmin)
-			r.Get("/", settingsAPIHandlers.Get)
-			r.Patch("/", settingsAPIHandlers.Update)
+			r.With(RequireClusterPermission(settingsSvc, service.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
+			r.With(RequireClusterPermission(settingsSvc, service.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
 		})
 
 		r.Route("/webhooks", func(r chi.Router) {
-			r.Use(requireAdmin)
+			r.Use(RequireClusterPermission(settingsSvc, service.PermWebhooksManage))
 			r.Get("/", webhookHandlers.List)
 			r.Post("/", webhookHandlers.Create)
 			r.Get("/{webhookId}", webhookHandlers.Get)
@@ -222,15 +221,14 @@ func NewRouter(
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
-			r.Use(requireAdmin)
+			r.Use(RequireClusterPermission(settingsSvc, service.PermTokensManage))
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
 		})
 
-
 		r.Route("/worker-tokens", func(r chi.Router) {
-			r.Use(requireAdmin)
+			r.Use(RequireClusterPermission(settingsSvc, service.PermTokensManage))
 			r.Get("/", authHandlers.ListWorkerTokens)
 			r.Post("/", authHandlers.CreateWorkerToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteWorkerToken)
