@@ -35,8 +35,8 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 		filter.Status = &status
 	}
 
-	// Scoped tokens only see their allowed gameservers
-	if token := service.TokenFromContext(r.Context()); token != nil && token.Scope == service.ScopeGameserver {
+	// Tokens with specific gameserver IDs only see those gameservers
+	if token := service.TokenFromContext(r.Context()); token != nil {
 		var gsIDs []string
 		if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err == nil && len(gsIDs) > 0 {
 			filter.IDs = gsIDs
@@ -214,7 +214,7 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 	if body.NodeID != "" {
 		filter.NodeID = &body.NodeID
 	}
-	if token := service.TokenFromContext(r.Context()); token != nil && token.Scope == service.ScopeGameserver {
+	if token := service.TokenFromContext(r.Context()); token != nil {
 		var gsIDs []string
 		if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err == nil && len(gsIDs) > 0 {
 			filter.IDs = gsIDs

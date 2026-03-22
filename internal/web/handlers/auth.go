@@ -47,10 +47,10 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Scope == "" {
-		req.Scope = "gameserver"
+		req.Scope = "custom"
 	}
-	if req.Scope != "admin" && req.Scope != "gameserver" {
-		respondError(w, http.StatusBadRequest, "scope must be \"admin\" or \"gameserver\"")
+	if req.Scope != "admin" && req.Scope != "custom" {
+		respondError(w, http.StatusBadRequest, "scope must be \"admin\" or \"custom\"")
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
-	rawToken, token, err := h.authSvc.CreateScopedToken(req.Name, req.GameserverIDs, req.Permissions, expiresAt)
+	rawToken, token, err := h.authSvc.CreateCustomToken(req.Name, req.GameserverIDs, req.Permissions, expiresAt)
 	if err != nil {
 		h.log.Error("creating token", "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())

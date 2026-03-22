@@ -44,7 +44,7 @@
 
   {{if .AuthEnabled}}
   <!-- Create Token Form -->
-  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6" x-data="{ open: false, scope: 'gameserver' }">
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6" x-data="{ open: false, scope: 'custom' }">
     <div class="flex items-center justify-between cursor-pointer" @click="open = !open">
       <h2 class="font-display font-semibold text-white">Create Token</h2>
       <svg class="w-5 h-5 text-surface-400 transition-transform" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,14 +64,14 @@
                   :class="scope === 'admin' ? 'bg-amber-900/40 border-amber-800/40 text-amber-400' : 'bg-surface-900/30 border-surface-800/40 text-surface-400 hover:text-surface-200'">
             Admin
           </button>
-          <button type="button" @click="scope = 'gameserver'"
+          <button type="button" @click="scope = 'custom'"
                   class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border"
-                  :class="scope === 'gameserver' ? 'bg-blue-900/40 border-blue-800/40 text-blue-400' : 'bg-surface-900/30 border-surface-800/40 text-surface-400 hover:text-surface-200'">
-            Scoped
+                  :class="scope === 'custom' ? 'bg-blue-900/40 border-blue-800/40 text-blue-400' : 'bg-surface-900/30 border-surface-800/40 text-surface-400 hover:text-surface-200'">
+            Custom
           </button>
         </div>
         <p class="text-xs text-surface-500 mt-1" x-show="scope === 'admin'">Full access to all gameservers and settings.</p>
-        <p class="text-xs text-surface-500 mt-1" x-show="scope === 'gameserver'">Limited to specific gameservers and permissions.</p>
+        <p class="text-xs text-surface-500 mt-1" x-show="scope === 'custom'">Custom permissions. Leave gameserver selection empty for all-access.</p>
       </div>
 
       <div>
@@ -80,7 +80,7 @@
                class="w-full px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-500 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none text-sm">
       </div>
 
-      <template x-if="scope === 'gameserver'">
+      <template x-if="scope === 'custom'">
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-surface-300 mb-1">Gameservers</label>
@@ -146,7 +146,7 @@
             {{if eq .Scope "admin"}}
             <span class="px-1.5 py-0.5 bg-amber-900/40 border border-amber-800/40 text-amber-400 text-[10px] rounded font-medium uppercase">Admin</span>
             {{else}}
-            <span class="px-1.5 py-0.5 bg-blue-900/40 border border-blue-800/40 text-blue-400 text-[10px] rounded font-medium uppercase">Scoped</span>
+            <span class="px-1.5 py-0.5 bg-blue-900/40 border border-blue-800/40 text-blue-400 text-[10px] rounded font-medium uppercase">Custom</span>
             {{end}}
           </div>
           <div class="flex items-center gap-3 mt-1 text-xs text-surface-400">

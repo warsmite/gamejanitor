@@ -29,9 +29,9 @@ func TokenFromContext(ctx context.Context) *models.Token {
 }
 
 const (
-	ScopeAdmin      = "admin"
-	ScopeGameserver = "gameserver"
-	ScopeWorker     = "worker"
+	ScopeAdmin  = "admin"
+	ScopeCustom = "custom"
+	ScopeWorker = "worker"
 )
 
 var AllPermissions = []string{"start", "stop", "restart", "logs", "commands", "files", "backups", "configure", "delete"}
@@ -57,13 +57,11 @@ func (s *AuthService) ValidateToken(rawToken string) *models.Token {
 			continue
 		}
 
-		// Check expiry
 		if t.ExpiresAt != nil && t.ExpiresAt.Before(time.Now()) {
 			s.log.Debug("token expired", "id", t.ID, "expired_at", t.ExpiresAt)
 			return nil
 		}
 
-		// Update last used (best effort)
 		if err := models.UpdateTokenLastUsed(s.db, t.ID); err != nil {
 			s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
 		}
@@ -83,7 +81,6 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 	return rawToken, nil
 }
 
-// Multiple admin tokens can coexist. Raw token must be shown to user once.
 func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, ErrBadRequest("token name is required")
@@ -99,13 +96,16 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
+	// Admin tokens store all permissions for consistency
+	permsJSON, _ := json.Marshal(AllPermissions)
+
 	token := &models.Token{
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
 		Scope:         ScopeAdmin,
 		GameserverIDs: json.RawMessage("[]"),
-		Permissions:   json.RawMessage("[]"),
+		Permissions:   permsJSON,
 	}
 
 	if err := models.CreateToken(s.db, token); err != nil {
@@ -116,13 +116,11 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 	return rawToken, token, nil
 }
 
-// Raw token must be shown to user once.
-func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *models.Token, error) {
+func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, ErrBadRequest("token name is required")
 	}
 
-	// Validate permissions
 	for _, p := range permissions {
 		if !isValidPermission(p) {
 			return "", nil, ErrBadRequestf("invalid permission: %s", p)
@@ -139,6 +137,10 @@ func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, per
 		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
+	// Default to all-access if no gameserver IDs specified
+	if gameserverIDs == nil {
+		gameserverIDs = []string{}
+	}
 	gsIDsJSON, _ := json.Marshal(gameserverIDs)
 	permsJSON, _ := json.Marshal(permissions)
 
@@ -146,21 +148,20 @@ func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, per
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
-		Scope:         ScopeGameserver,
+		Scope:         ScopeCustom,
 		GameserverIDs: gsIDsJSON,
 		Permissions:   permsJSON,
 		ExpiresAt:     expiresAt,
 	}
 
 	if err := models.CreateToken(s.db, token); err != nil {
-		return "", nil, fmt.Errorf("saving scoped token: %w", err)
+		return "", nil, fmt.Errorf("saving custom token: %w", err)
 	}
 
-	s.log.Info("scoped token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
+	s.log.Info("custom token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
 	return rawToken, token, nil
 }
 
-// Raw token must be shown to the admin once.
 func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, ErrBadRequest("token name is required")
@@ -212,10 +213,15 @@ func (s *AuthService) DeleteToken(id string) error {
 	return models.DeleteToken(s.db, id)
 }
 
+// IsAdmin checks if the token was created as an admin token.
+// The scope is a creation-time label — admin tokens have all permissions.
 func IsAdmin(token *models.Token) bool {
 	return token != nil && token.Scope == ScopeAdmin
 }
 
+// HasPermission checks if a token has a specific permission on a gameserver.
+// Empty gameserver_ids means all-access (no ID filtering).
+// Admin tokens always have permission (via scope shortcut).
 func HasPermission(token *models.Token, gameserverID string, permission string) bool {
 	if token == nil {
 		return false
@@ -224,20 +230,22 @@ func HasPermission(token *models.Token, gameserverID string, permission string) 
 		return true
 	}
 
-	// Check gameserver access
+	// Check gameserver access — empty list means all-access
 	var gsIDs []string
 	if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err != nil {
 		return false
 	}
-	hasAccess := false
-	for _, id := range gsIDs {
-		if id == gameserverID {
-			hasAccess = true
-			break
+	if len(gsIDs) > 0 {
+		hasAccess := false
+		for _, id := range gsIDs {
+			if id == gameserverID {
+				hasAccess = true
+				break
+			}
 		}
-	}
-	if !hasAccess {
-		return false
+		if !hasAccess {
+			return false
+		}
 	}
 
 	// Check permission

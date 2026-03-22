@@ -144,6 +144,11 @@ func RequireGameserverAccess(settingsSvc *service.SettingsService) func(http.Han
 				handleForbidden(w, r)
 				return
 			}
+			// Empty list means all-access
+			if len(gsIDs) == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
 			for _, id := range gsIDs {
 				if id == gsID {
 					next.ServeHTTP(w, r)

@@ -155,7 +155,7 @@ func (h *PageAuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rawToken, _, err := h.authSvc.CreateScopedToken(name, gameserverIDs, permissions, expiresAt)
+	rawToken, _, err := h.authSvc.CreateCustomToken(name, gameserverIDs, permissions, expiresAt)
 	if err != nil {
 		h.log.Error("creating token from web", "error", err)
 		http.Error(w, "Failed to create token: "+err.Error(), http.StatusBadRequest)
