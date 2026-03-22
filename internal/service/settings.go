@@ -44,6 +44,7 @@ const (
 	SettingRateLimitPerToken = "rate_limit_per_token"
 	SettingRateLimitLogin    = "rate_limit_login"
 	SettingTrustProxyHeaders    = "trust_proxy_headers"
+	SettingEventRetention      = "event_retention_days"
 	SettingRequireMemoryLimit  = "require_memory_limit"
 	SettingRequireCPULimit     = "require_cpu_limit"
 	SettingRequireStorageLimit = "require_storage_limit"
@@ -312,6 +313,20 @@ func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
 
 func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
 	return s.setBool(SettingTrustProxyHeaders, enabled)
+}
+
+// --- Event Retention ---
+
+func (s *SettingsService) GetEventRetentionDays() int {
+	return s.getInt("GJ_EVENT_RETENTION_DAYS", SettingEventRetention, 30)
+}
+
+func (s *SettingsService) IsEventRetentionFromEnv() bool {
+	return os.Getenv("GJ_EVENT_RETENTION_DAYS") != ""
+}
+
+func (s *SettingsService) SetEventRetentionDays(v int) error {
+	return s.setInt(SettingEventRetention, v)
 }
 
 // --- Require Resource Limits ---

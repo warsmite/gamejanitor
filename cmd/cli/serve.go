@@ -16,6 +16,7 @@ import (
 	"github.com/warsmite/gamejanitor/internal/db"
 	"github.com/warsmite/gamejanitor/internal/docker"
 	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/warsmite/gamejanitor/internal/netinfo"
 	"github.com/warsmite/gamejanitor/internal/service"
 	gjsftp "github.com/warsmite/gamejanitor/internal/sftp"
@@ -57,6 +58,7 @@ type services struct {
 	authSvc        *service.AuthService
 	statusMgr      *service.StatusManager
 	statusSub      *service.StatusSubscriber
+	eventStore     *service.EventStoreSubscriber
 	webhookWorker  *service.WebhookWorker
 }
 
@@ -99,6 +101,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	authSvc := service.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
+	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
 	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
 
 	return &services{
@@ -115,6 +118,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 		authSvc:       authSvc,
 		statusMgr:     statusMgr,
 		statusSub:     statusSub,
+		eventStore:    eventStore,
 		webhookWorker: webhookWorker,
 	}, nil
 }
@@ -257,8 +261,35 @@ func runServe(cmd *cobra.Command, args []string) error {
 	svcs.statusSub.Start(ctx)
 	defer svcs.statusSub.Stop()
 
+	svcs.eventStore.Start(ctx)
+	defer svcs.eventStore.Stop()
+
 	svcs.webhookWorker.Start(ctx)
 	defer svcs.webhookWorker.Stop()
+
+	// Prune old events on startup, then hourly
+	go func() {
+		retDays := svcs.settingsSvc.GetEventRetentionDays()
+		if retDays > 0 {
+			if pruned, err := models.PruneEvents(database, retDays); err != nil {
+				logger.Error("failed to prune events on startup", "error", err)
+			} else if pruned > 0 {
+				logger.Info("pruned old events", "count", pruned, "retention_days", retDays)
+			}
+		}
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			days := svcs.settingsSvc.GetEventRetentionDays()
+			if days > 0 {
+				if pruned, err := models.PruneEvents(database, days); err != nil {
+					logger.Error("failed to prune events", "error", err)
+				} else if pruned > 0 {
+					logger.Info("pruned old events", "count", pruned, "retention_days", days)
+				}
+			}
+		}
+	}()
 
 	if err := svcs.scheduler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start scheduler: %w", err)

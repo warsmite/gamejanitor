@@ -1,22 +1,28 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/warsmite/gamejanitor/internal/service"
 )
 
 type EventHandlers struct {
-	broadcaster *service.EventBus
-	log         *slog.Logger
+	bus *service.EventBus
+	db  *sql.DB
+	log *slog.Logger
 }
 
-func NewEventHandlers(broadcaster *service.EventBus, log *slog.Logger) *EventHandlers {
-	return &EventHandlers{broadcaster: broadcaster, log: log}
+func NewEventHandlers(bus *service.EventBus, db *sql.DB, log *slog.Logger) *EventHandlers {
+	return &EventHandlers{bus: bus, db: db, log: log}
 }
 
 func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
@@ -26,14 +32,23 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse type filter — default to status_changed for backward compatibility
+	typeFilter := []string{service.EventStatusChanged}
+	if types := r.URL.Query().Get("types"); types != "" {
+		if types == "*" {
+			typeFilter = nil // nil = all events
+		} else {
+			typeFilter = strings.Split(types, ",")
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch, unsubscribe := h.broadcaster.Subscribe()
+	ch, unsubscribe := h.bus.Subscribe()
 	defer unsubscribe()
 
-	// Initial heartbeat to establish connection
 	fmt.Fprint(w, ": heartbeat\n\n")
 	flusher.Flush()
 
@@ -48,20 +63,68 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			statusEvent, isStatus := event.(service.StatusEvent)
-			if !isStatus {
+			if !matchesTypeFilter(event.EventType(), typeFilter) {
 				continue
 			}
-			data, err := json.Marshal(statusEvent)
+			data, err := json.Marshal(event)
 			if err != nil {
 				h.log.Error("marshaling SSE event", "error", err)
 				continue
 			}
-			fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.EventType(), data)
 			flusher.Flush()
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": heartbeat\n\n")
 			flusher.Flush()
 		}
 	}
+}
+
+func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
+	filter := models.EventFilter{
+		EventType:    r.URL.Query().Get("type"),
+		GameserverID: r.URL.Query().Get("gameserver_id"),
+		Limit:        50,
+	}
+
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			filter.Limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			filter.Offset = n
+		}
+	}
+
+	events, err := models.ListEvents(h.db, filter)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list events")
+		return
+	}
+	if events == nil {
+		events = []models.Event{}
+	}
+	respondOK(w, events)
+}
+
+// matchesTypeFilter checks if an event type matches any of the filter patterns.
+// nil filter means all events pass.
+func matchesTypeFilter(eventType string, patterns []string) bool {
+	if patterns == nil {
+		return true
+	}
+	for _, p := range patterns {
+		if p == "*" {
+			return true
+		}
+		if p == eventType {
+			return true
+		}
+		if matched, _ := path.Match(p, eventType); matched {
+			return true
+		}
+	}
+	return false
 }

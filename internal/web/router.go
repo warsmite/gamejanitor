@@ -85,7 +85,7 @@ func NewRouter(
 	gameHandlers := handlers.NewGameHandlers(gameStore, log)
 	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, log)
-	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
+	eventHandlers := handlers.NewEventHandlers(broadcaster, db, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
 	fileHandlers := handlers.NewFileHandlers(fileSvc, log)
@@ -186,6 +186,7 @@ func NewRouter(
 
 		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
+		r.Get("/events/history", eventHandlers.History)
 
 		r.Route("/workers", func(r chi.Router) {
 			r.Use(requireAdmin)

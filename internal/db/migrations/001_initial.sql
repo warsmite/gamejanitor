@@ -111,3 +111,16 @@ CREATE TABLE webhook_deliveries (
 
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_state_next ON webhook_deliveries(state, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint ON webhook_deliveries(webhook_endpoint_id);
+
+CREATE TABLE events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    gameserver_id TEXT NOT NULL DEFAULT '',
+    actor JSON NOT NULL DEFAULT '{}',
+    data JSON NOT NULL DEFAULT '{}',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_gameserver ON events(gameserver_id);
+CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
