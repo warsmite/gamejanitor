@@ -30,8 +30,7 @@ func CreateEvent(db *sql.DB, e *Event) error {
 type EventFilter struct {
 	EventType    string // glob pattern
 	GameserverID string
-	Limit        int
-	Offset       int
+	Pagination
 }
 
 func ListEvents(db *sql.DB, f EventFilter) ([]Event, error) {
@@ -49,16 +48,11 @@ func ListEvents(db *sql.DB, f EventFilter) ([]Event, error) {
 
 	query += ` ORDER BY created_at DESC`
 
+	// Events default to 50 if no limit specified
 	if f.Limit <= 0 {
 		f.Limit = 50
 	}
-	if f.Limit > 200 {
-		f.Limit = 200
-	}
-	query += fmt.Sprintf(` LIMIT %d`, f.Limit)
-	if f.Offset > 0 {
-		query += fmt.Sprintf(` OFFSET %d`, f.Offset)
-	}
+	query = f.Pagination.ApplyToQuery(query, 200)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

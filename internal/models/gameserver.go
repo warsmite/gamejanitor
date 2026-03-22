@@ -41,6 +41,7 @@ type GameserverFilter struct {
 	Status *string
 	NodeID *string
 	IDs    []string // restrict results to these IDs (used for scoped token filtering)
+	Pagination
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
@@ -72,6 +73,7 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 		}
 	}
 	query += " ORDER BY name"
+	query = filter.Pagination.ApplyToQuery(query, 0)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

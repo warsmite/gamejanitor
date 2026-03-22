@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
+	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/warsmite/gamejanitor/internal/service"
 )
 
@@ -40,6 +42,22 @@ func respondError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(envelope{Status: "error", Error: message})
+}
+
+// parsePagination extracts optional limit/offset from query params.
+func parsePagination(r *http.Request) models.Pagination {
+	var p models.Pagination
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			p.Limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			p.Offset = n
+		}
+	}
+	return p
 }
 
 // serviceErrorStatus extracts the HTTP status code from a ServiceError, falling back to 500.

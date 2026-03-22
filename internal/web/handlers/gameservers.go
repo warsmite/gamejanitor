@@ -27,7 +27,9 @@ func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.C
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
-	filter := models.GameserverFilter{}
+	filter := models.GameserverFilter{
+		Pagination: parsePagination(r),
+	}
 	if game := r.URL.Query().Get("game"); game != "" {
 		filter.GameID = &game
 	}

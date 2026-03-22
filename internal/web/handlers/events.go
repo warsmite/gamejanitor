@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -77,21 +76,14 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
+	p := parsePagination(r)
+	if p.Limit <= 0 {
+		p.Limit = 50 // events default to 50
+	}
 	filter := models.EventFilter{
 		EventType:    r.URL.Query().Get("type"),
 		GameserverID: r.URL.Query().Get("gameserver_id"),
-		Limit:        50,
-	}
-
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			filter.Limit = n
-		}
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			filter.Offset = n
-		}
+		Pagination:   p,
 	}
 
 	events, err := models.ListEvents(h.db, filter)
