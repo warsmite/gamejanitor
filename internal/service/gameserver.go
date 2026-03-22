@@ -77,7 +77,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 		targetWorker = w
 
-		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
+		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
 			return "", err
 		}
 		if gs.PortMode == "auto" {
@@ -97,7 +97,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		var lastErr error
 		for _, c := range candidates {
 			if c.NodeID != "" {
-				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
+				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
 					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
 					lastErr = err
 					continue
@@ -291,32 +291,27 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	if gs.CPULimit != 0 {
 		existing.CPULimit = gs.CPULimit
 	}
+	// CPUEnforced is always settable (bool — zero value is meaningful)
+	existing.CPUEnforced = gs.CPUEnforced
+	if gs.BackupLimit != nil {
+		existing.BackupLimit = gs.BackupLimit
+	}
+	if gs.StorageLimitMB != nil {
+		existing.StorageLimitMB = gs.StorageLimitMB
+	}
 
-	// Cap fields: only admins (or no-auth mode) can set/change caps
-	token := TokenFromContext(ctx)
-	isAdmin := token == nil || IsAdmin(token)
-
-	if isAdmin {
-		if gs.MaxMemoryMB != nil {
-			existing.MaxMemoryMB = gs.MaxMemoryMB
-		}
-		if gs.MaxCPU != nil {
-			existing.MaxCPU = gs.MaxCPU
-		}
-		if gs.MaxBackups != nil {
-			existing.MaxBackups = gs.MaxBackups
-		}
-		if gs.MaxStorageMB != nil {
-			existing.MaxStorageMB = gs.MaxStorageMB
-		}
-	} else {
-		// Enforce resource caps for scoped tokens
-		if existing.MaxMemoryMB != nil && existing.MemoryLimitMB > *existing.MaxMemoryMB {
-			return fmt.Errorf("memory_limit_mb (%d) exceeds cap (%d MB)", existing.MemoryLimitMB, *existing.MaxMemoryMB)
-		}
-		if existing.MaxCPU != nil && existing.CPULimit > *existing.MaxCPU {
-			return fmt.Errorf("cpu_limit (%.1f) exceeds cap (%.1f cores)", existing.CPULimit, *existing.MaxCPU)
-		}
+	// Input validation
+	if existing.MemoryLimitMB < 0 {
+		return ErrBadRequest("memory_limit_mb must be >= 0")
+	}
+	if existing.CPULimit < 0 {
+		return ErrBadRequest("cpu_limit must be >= 0")
+	}
+	if existing.StorageLimitMB != nil && *existing.StorageLimitMB < 0 {
+		return ErrBadRequest("storage_limit_mb must be >= 0")
+	}
+	if existing.BackupLimit != nil && *existing.BackupLimit < 0 {
+		return ErrBadRequest("backup_limit must be >= 0")
 	}
 
 	s.log.Info("updating gameserver", "id", gs.ID)

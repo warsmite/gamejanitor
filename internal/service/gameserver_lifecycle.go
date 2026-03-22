@@ -122,6 +122,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		VolumeName:    gs.VolumeName,
 		MemoryLimitMB: gs.MemoryLimitMB,
 		CPULimit:      gs.CPULimit,
+		CPUEnforced:   gs.CPUEnforced,
 		Binds:         binds,
 	})
 	if err != nil {

@@ -69,6 +69,7 @@ func (w *LocalWorker) CreateContainer(ctx context.Context, opts ContainerOptions
 		VolumeName:    opts.VolumeName,
 		MemoryLimitMB: opts.MemoryLimitMB,
 		CPULimit:      opts.CPULimit,
+		CPUEnforced:   opts.CPUEnforced,
 		Entrypoint:    opts.Entrypoint,
 		User:          opts.User,
 		Binds:         opts.Binds,

@@ -43,6 +43,7 @@ type ContainerOptions struct {
 	VolumeName    string
 	MemoryLimitMB int
 	CPULimit      float64
+	CPUEnforced   bool
 	Entrypoint    []string // Override image entrypoint
 	User          string   // Run as specific user (e.g., "1001:1001")
 	Binds         []string // Host bind mounts in "host:container:opts" format
@@ -186,7 +187,7 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 	if opts.MemoryLimitMB > 0 {
 		resources.Memory = int64(opts.MemoryLimitMB) * 1024 * 1024
 	}
-	if opts.CPULimit > 0 {
+	if opts.CPULimit > 0 && opts.CPUEnforced {
 		resources.NanoCPUs = int64(opts.CPULimit * 1e9)
 	}
 

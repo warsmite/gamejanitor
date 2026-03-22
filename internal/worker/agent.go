@@ -42,6 +42,7 @@ func (a *Agent) CreateContainer(ctx context.Context, req *pb.CreateContainerRequ
 		VolumeName:    req.VolumeName,
 		MemoryLimitMB: int(req.MemoryLimitMb),
 		CPULimit:      req.CpuLimit,
+		CPUEnforced:   req.CpuEnforced,
 		Entrypoint:    req.Entrypoint,
 		User:          req.User,
 		Binds:         req.Binds,

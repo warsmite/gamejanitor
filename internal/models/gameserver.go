@@ -14,27 +14,26 @@ type Gameserver struct {
 	GameID        string          `json:"game_id"`
 	Ports         json.RawMessage `json:"ports"`
 	Env           json.RawMessage `json:"env"`
-	MemoryLimitMB int             `json:"memory_limit_mb"`
-	CPULimit      float64         `json:"cpu_limit"`
-	ContainerID   *string         `json:"container_id"`
-	VolumeName    string          `json:"volume_name"`
-	Status        string          `json:"status"`
-	ErrorReason   string          `json:"error_reason"`
-	PortMode      string          `json:"port_mode"`
-	NodeID        *string         `json:"node_id"`
-	SFTPUsername  string          `json:"sftp_username"`
-	HashedSFTPPassword string     `json:"-"`
-	Installed     bool            `json:"installed"`
-	MaxMemoryMB   *int            `json:"max_memory_mb"`
-	MaxCPU        *float64        `json:"max_cpu"`
-	MaxBackups    *int            `json:"max_backups"`
-	MaxStorageMB  *int            `json:"max_storage_mb"`
-	AutoRestart   bool            `json:"auto_restart"`
+	MemoryLimitMB  int             `json:"memory_limit_mb"`
+	CPULimit       float64         `json:"cpu_limit"`
+	CPUEnforced    bool            `json:"cpu_enforced"`
+	ContainerID    *string         `json:"container_id"`
+	VolumeName     string          `json:"volume_name"`
+	Status         string          `json:"status"`
+	ErrorReason    string          `json:"error_reason"`
+	PortMode       string          `json:"port_mode"`
+	NodeID         *string         `json:"node_id"`
+	SFTPUsername   string          `json:"sftp_username"`
+	HashedSFTPPassword string      `json:"-"`
+	Installed      bool            `json:"installed"`
+	BackupLimit    *int            `json:"backup_limit"`
+	StorageLimitMB *int            `json:"storage_limit_mb"`
+	AutoRestart    bool            `json:"auto_restart"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
-const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at"
+const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, auto_restart, created_at, updated_at"
 
 type GameserverFilter struct {
 	GameID *string
@@ -107,7 +106,7 @@ func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
 func scanGameserver(scan func(dest ...any) error) (Gameserver, error) {
 	var gs Gameserver
 	var portsStr, envStr string
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.MaxMemoryMB, &gs.MaxCPU, &gs.MaxBackups, &gs.MaxStorageMB, &gs.AutoRestart, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.AutoRestart, &gs.CreatedAt, &gs.UpdatedAt)
 	if err != nil {
 		return gs, err
 	}
@@ -122,8 +121,8 @@ func CreateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, max_memory_mb, max_cpu, max_backups, max_storage_mb, auto_restart, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.MaxStorageMB, gs.AutoRestart, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, auto_restart, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.AutoRestart, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -135,8 +134,8 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = time.Now()
 
 	result, err := db.Exec(
-		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, container_id = ?, volume_name = ?, status = ?, error_reason = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, max_memory_mb = ?, max_cpu = ?, max_backups = ?, max_storage_mb = ?, auto_restart = ?, updated_at = ? WHERE id = ?",
-		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.MaxMemoryMB, gs.MaxCPU, gs.MaxBackups, gs.MaxStorageMB, gs.AutoRestart, gs.UpdatedAt, gs.ID,
+		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, cpu_enforced = ?, container_id = ?, volume_name = ?, status = ?, error_reason = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, backup_limit = ?, storage_limit_mb = ?, auto_restart = ?, updated_at = ? WHERE id = ?",
+		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.AutoRestart, gs.UpdatedAt, gs.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating gameserver %s: %w", gs.ID, err)
@@ -184,10 +183,10 @@ func AllocatedCPUByNode(db *sql.DB, nodeID string) (float64, error) {
 	return total, nil
 }
 
-// AllocatedStorageByNode returns the total max_storage_mb allocated to gameservers on a node.
+// AllocatedStorageByNode returns the total storage_limit_mb allocated to gameservers on a node.
 func AllocatedStorageByNode(db *sql.DB, nodeID string) (int, error) {
 	var total int
-	err := db.QueryRow("SELECT COALESCE(SUM(max_storage_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
+	err := db.QueryRow("SELECT COALESCE(SUM(storage_limit_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("querying allocated storage for node %s: %w", nodeID, err)
 	}

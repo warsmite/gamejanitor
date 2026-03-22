@@ -217,6 +217,7 @@ type CreateContainerRequest struct {
 	Entrypoint    []string               `protobuf:"bytes,8,rep,name=entrypoint,proto3" json:"entrypoint,omitempty"`
 	User          string                 `protobuf:"bytes,9,opt,name=user,proto3" json:"user,omitempty"`
 	Binds         []string               `protobuf:"bytes,10,rep,name=binds,proto3" json:"binds,omitempty"`
+	CpuEnforced   bool                   `protobuf:"varint,11,opt,name=cpu_enforced,json=cpuEnforced,proto3" json:"cpu_enforced,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -319,6 +320,13 @@ func (x *CreateContainerRequest) GetBinds() []string {
 		return x.Binds
 	}
 	return nil
+}
+
+func (x *CreateContainerRequest) GetCpuEnforced() bool {
+	if x != nil {
+		return x.CpuEnforced
+	}
+	return false
 }
 
 type CreateContainerResponse struct {
@@ -3035,7 +3043,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\vPortBinding\x12\x1b\n" +
 	"\thost_port\x18\x01 \x01(\x05R\bhostPort\x12%\n" +
 	"\x0econtainer_port\x18\x02 \x01(\x05R\rcontainerPort\x12\x1a\n" +
-	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xaf\x02\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd2\x02\n" +
 	"\x16CreateContainerRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12\x10\n" +
@@ -3050,7 +3058,8 @@ const file_proto_worker_proto_rawDesc = "" +
 	"entrypoint\x12\x12\n" +
 	"\x04user\x18\t \x01(\tR\x04user\x12\x14\n" +
 	"\x05binds\x18\n" +
-	" \x03(\tR\x05binds\"<\n" +
+	" \x03(\tR\x05binds\x12!\n" +
+	"\fcpu_enforced\x18\v \x01(\bR\vcpuEnforced\"<\n" +
 	"\x17CreateContainerResponse\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\":\n" +
 	"\x15StartContainerRequest\x12!\n" +

@@ -117,7 +117,7 @@
           </span>
         </template>
         <template x-if="stats && stats.volume_size_bytes > 0">
-          <span class="text-surface-400">DISK <span :class="stats.max_storage_mb && stats.volume_size_bytes >= stats.max_storage_mb * 1024 * 1024 ? 'text-red-400' : stats.max_storage_mb && stats.volume_size_bytes >= stats.max_storage_mb * 1024 * 1024 * 0.9 ? 'text-amber-400' : 'text-surface-200'" x-text="fmtBytes(stats.volume_size_bytes) + (stats.max_storage_mb ? ' / ' + fmtMB(stats.max_storage_mb) : '')"></span></span>
+          <span class="text-surface-400">DISK <span :class="stats.storage_limit_mb && stats.volume_size_bytes >= stats.storage_limit_mb * 1024 * 1024 ? 'text-red-400' : stats.storage_limit_mb && stats.volume_size_bytes >= stats.storage_limit_mb * 1024 * 1024 * 0.9 ? 'text-amber-400' : 'text-surface-200'" x-text="fmtBytes(stats.volume_size_bytes) + (stats.storage_limit_mb ? ' / ' + fmtMB(stats.storage_limit_mb) : '')"></span></span>
         </template>
       </div>
     </div>

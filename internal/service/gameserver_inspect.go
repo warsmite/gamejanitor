@@ -34,7 +34,7 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 
 	w := s.dispatcher.WorkerFor(gameserverID)
 	stats := &worker.GameserverStats{
-		MaxStorageMB: gs.MaxStorageMB,
+		StorageLimitMB: gs.StorageLimitMB,
 	}
 
 	// Container stats only available when running

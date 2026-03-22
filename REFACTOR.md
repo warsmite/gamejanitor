@@ -1,10 +1,30 @@
 # Refactor Tracking
 
-All tasks complete. Organized by refactor task, not by file.
+Organized by refactor task, not by file.
+
+---
+
+## In Progress
+
+### Architecture Findings
+
+- **F4** `[TODO]` — **Resource cap enforcement** [MEDIUM]: Caps (MaxMemoryMB, MaxCPU, MaxBackups, MaxStorageMB) not validated on create before game defaults applied; MaxBackups/MaxStorageMB never enforced for scoped tokens on update; no bounds checking on cap values (negative/zero). Files: `gameserver.go:80,100,295-320`, `backup.go:301`
+
+- **F5** `[TODO]` — **API inconsistencies** [MEDIUM]: Inconsistent HTTP status codes (Delete returns 204 vs 200), response envelope varies (Backup Restore returns `{status:"restored"}`), Create returns full object in some handlers but not others. Files: `response.go`, `gameservers.go`, `backups.go`, `schedules.go`, `settings_api.go`
+
+- **F7** `[TODO]` — **Error messages leak internals** [HIGH]: Untyped `fmt.Errorf` errors propagate directly to API responses, exposing Docker errors, port range config, storage backend details, and JSON parse errors. Non-ServiceError types map to 500 with raw message. Files: `gameserver.go`, `gameserver_ports.go:143`, `backup.go:100,124`
+
+- **F8** `[TODO]` — **Multi-node races** [MEDIUM]: Port allocation and worker placement read-then-write without locking. Concurrent creates on same node can allocate same ports or overcommit resources. Docker rejects at runtime but UX is broken. Files: `gameserver.go:84-117`, `gameserver_ports.go:120-160`, `dispatcher.go:101-115`
+
+- **F9** `[TODO]` — **Settings architecture** [LOW]: Flat key-value settings with env override pattern is all-or-nothing global; no per-node settings support (except port range which has a special case). No caching, no schema versioning. Manageable now but design debt for multi-node. Files: `settings.go`, `settings_api.go:143-156`
 
 ---
 
 ## Completed
+
+### Architecture Findings
+
+- **F3** `[DONE]` — **Webhooks insufficient for business automation**: Replaced single global webhook config with multi-endpoint system. 12 event types, per-endpoint event filtering (glob patterns), HMAC signing, persistent delivery with 24h retry window, enriched payloads with actor token ID, versioned payloads, delivery history API, full CRUD API at `/api/webhooks`, UI management. Commits: `3012d49`, `bc03201`, `d94f97e`, `bad3ed0`, `1951255`, `4148772`, `7cfba56`
 
 ### Pass 2 (structural refactors)
 - **Task 1** `[DONE]` — Settings getter/setter helpers (`ab79a27`): 481→380 lines, extracted `getInt`/`getBool`/`getString`/`setInt`/`setBool`

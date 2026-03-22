@@ -298,8 +298,8 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 	maxBackups := s.settingsSvc.GetMaxBackups()
 
 	// Per-gameserver override takes precedence over global setting
-	if gs, err := models.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.MaxBackups != nil {
-		maxBackups = *gs.MaxBackups
+	if gs, err := models.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.BackupLimit != nil {
+		maxBackups = *gs.BackupLimit
 	}
 
 	if maxBackups <= 0 {

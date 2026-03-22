@@ -10,6 +10,7 @@ type ContainerOptions struct {
 	VolumeName    string
 	MemoryLimitMB int
 	CPULimit      float64
+	CPUEnforced   bool
 	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"])
 	User          string   // Run as specific user (e.g., "1001:1001")
 	Binds         []string // Host bind mounts in "host:container:opts" format
@@ -39,7 +40,7 @@ type GameserverStats struct {
 	MemoryLimitMB int
 	CPUPercent    float64
 	VolumeSizeBytes int64
-	MaxStorageMB    *int
+	StorageLimitMB  *int
 }
 
 type ContainerEvent struct {

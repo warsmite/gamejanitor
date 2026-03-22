@@ -43,6 +43,7 @@ func (w *RemoteWorker) CreateContainer(ctx context.Context, opts ContainerOption
 		VolumeName:    opts.VolumeName,
 		MemoryLimitMb: int32(opts.MemoryLimitMB),
 		CpuLimit:      opts.CPULimit,
+		CpuEnforced:   opts.CPUEnforced,
 		Entrypoint:    opts.Entrypoint,
 		User:          opts.User,
 		Binds:         opts.Binds,

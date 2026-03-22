@@ -362,8 +362,8 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 		"memory_limit_mb":   stats.MemoryLimitMB,
 		"volume_size_bytes": stats.VolumeSizeBytes,
 	}
-	if stats.MaxStorageMB != nil {
-		resp["max_storage_mb"] = *stats.MaxStorageMB
+	if stats.StorageLimitMB != nil {
+		resp["storage_limit_mb"] = *stats.StorageLimitMB
 	}
 	respondOK(w, resp)
 }

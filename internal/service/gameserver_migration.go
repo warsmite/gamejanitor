@@ -35,7 +35,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}
 
 	// Check target node limits
-	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
+	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
 		return err
 	}
 

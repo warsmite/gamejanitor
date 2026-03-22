@@ -541,51 +541,36 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		ports = allocatedPorts
 	}
 
-	// Parse resource cap fields (admin-only, service layer strips for non-admins)
-	var maxMemoryMB *int
-	if v := r.FormValue("max_memory_mb"); v != "" {
+	var backupLimit *int
+	if v := r.FormValue("backup_limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			maxMemoryMB = &n
+			backupLimit = &n
 		}
 	}
-	var maxCPU *float64
-	if v := r.FormValue("max_cpu"); v != "" {
-		if n, err := strconv.ParseFloat(v, 64); err == nil {
-			maxCPU = &n
-		}
-	}
-	var maxBackups *int
-	if v := r.FormValue("max_backups"); v != "" {
+	var storageLimitMB *int
+	if v := r.FormValue("storage_limit_mb"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			maxBackups = &n
-		}
-	}
-	var maxStorageMB *int
-	if v := r.FormValue("max_storage_mb"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			maxStorageMB = &n
+			storageLimitMB = &n
 		}
 	}
 
-	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
-		ID:            existing.ID,
-		Name:          name,
-		GameID:        existing.GameID,
-		Ports:         ports,
-		Env:           form.Env,
-		MemoryLimitMB: form.MemoryLimitMB,
-		CPULimit:      form.CPULimit,
-		ContainerID:   existing.ContainerID,
-		VolumeName:    existing.VolumeName,
-		Status:        existing.Status,
-		PortMode:      form.PortMode,
-		MaxMemoryMB:   maxMemoryMB,
-		MaxCPU:        maxCPU,
-		MaxBackups:    maxBackups,
-		MaxStorageMB:  maxStorageMB,
-		AutoRestart:   r.FormValue("auto_restart") == "on",
-		CreatedAt:     existing.CreatedAt,
+		ID:             existing.ID,
+		Name:           name,
+		GameID:         existing.GameID,
+		Ports:          ports,
+		Env:            form.Env,
+		MemoryLimitMB:  form.MemoryLimitMB,
+		CPULimit:       form.CPULimit,
+		CPUEnforced:    r.FormValue("cpu_enforced") == "on",
+		ContainerID:    existing.ContainerID,
+		VolumeName:     existing.VolumeName,
+		Status:         existing.Status,
+		PortMode:       form.PortMode,
+		BackupLimit:    backupLimit,
+		StorageLimitMB: storageLimitMB,
+		AutoRestart:    r.FormValue("auto_restart") == "on",
+		CreatedAt:      existing.CreatedAt,
 	}
 
 	if err := h.gameserverSvc.UpdateGameserver(r.Context(), gs); err != nil {

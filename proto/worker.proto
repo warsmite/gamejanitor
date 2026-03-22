@@ -86,6 +86,7 @@ message CreateContainerRequest {
     repeated string entrypoint = 8;
     string user = 9;
     repeated string binds = 10;
+    bool cpu_enforced = 11;
 }
 message CreateContainerResponse {
     string container_id = 1;
