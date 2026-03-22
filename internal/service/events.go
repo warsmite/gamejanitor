@@ -1,10 +1,23 @@
 package service
 
-import "time"
+import (
+	"context"
+	"time"
+)
+
+// actorTokenID extracts the token ID from context, or nil for system/async actions.
+func actorTokenID(ctx context.Context) *string {
+	token := TokenFromContext(ctx)
+	if token == nil {
+		return nil
+	}
+	return &token.ID
+}
 
 type GameserverEvent struct {
 	Type          string    `json:"type"`
 	Timestamp     time.Time `json:"timestamp"`
+	ActorTokenID  *string   `json:"actor_token_id,omitempty"`
 	GameserverID  string    `json:"gameserver_id"`
 	Name          string    `json:"name"`
 	GameID        string    `json:"game_id"`
@@ -18,6 +31,7 @@ func (e GameserverEvent) EventTimestamp() time.Time { return e.Timestamp }
 type BackupEvent struct {
 	Type         string    `json:"type"`
 	Timestamp    time.Time `json:"timestamp"`
+	ActorTokenID *string   `json:"actor_token_id,omitempty"`
 	GameserverID string    `json:"gameserver_id"`
 	BackupID     string    `json:"backup_id"`
 	BackupName   string    `json:"backup_name,omitempty"`
