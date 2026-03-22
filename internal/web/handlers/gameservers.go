@@ -132,7 +132,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteGameserver(context.Background(), id); err != nil {
+	if err := h.svc.DeleteGameserver(r.Context(), id); err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
@@ -240,9 +240,10 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 		Error  string `json:"error,omitempty"`
 	}
 	var results []result
+	ctx := r.Context()
 	for _, gs := range gameservers {
 		r := result{ID: gs.ID, Name: gs.Name}
-		if err := actionFn(context.Background(), gs.ID); err != nil {
+		if err := actionFn(ctx, gs.ID); err != nil {
 			r.Error = err.Error()
 			r.Status = gs.Status
 		} else {

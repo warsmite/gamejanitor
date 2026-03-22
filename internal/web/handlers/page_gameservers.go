@@ -394,8 +394,13 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 
 func (h *PageGameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	// Use background context — delete must complete even if the HTTP request is cancelled
-	if err := h.gameserverSvc.DeleteGameserver(context.Background(), id); err != nil {
+	// Use background context — delete must complete even if the HTTP request is cancelled.
+	// Preserve token for actor attribution.
+	ctx := context.Background()
+	if token := service.TokenFromContext(r.Context()); token != nil {
+		ctx = service.SetTokenInContext(ctx, token)
+	}
+	if err := h.gameserverSvc.DeleteGameserver(ctx, id); err != nil {
 		h.log.Error("deleting gameserver from web", "id", id, "error", err)
 		http.Error(w, "Failed to delete gameserver: "+err.Error(), http.StatusInternalServerError)
 		return
