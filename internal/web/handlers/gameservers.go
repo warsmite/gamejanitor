@@ -123,11 +123,20 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
-	resp := map[string]any{"gameserver": gs}
-	if migrationTriggered {
-		resp["migration_triggered"] = true
+	// Re-read from DB to get final state
+	updated, err := h.svc.GetGameserver(id)
+	if err != nil || updated == nil {
+		respondOK(w, gs) // fallback to request data
+		return
 	}
-	respondOK(w, resp)
+	if migrationTriggered {
+		respondOK(w, map[string]any{
+			"gameserver":         updated,
+			"migration_triggered": true,
+		})
+		return
+	}
+	respondOK(w, updated)
 }
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {

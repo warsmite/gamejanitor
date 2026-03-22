@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,19 +53,18 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": backup})
+	respondAccepted(w, backup)
 }
 
 func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 	backupID := chi.URLParam(r, "backupId")
-	if err := h.svc.RestoreBackup(context.WithoutCancel(r.Context()), backupID); err != nil {
+	if err := h.svc.RestoreBackup(r.Context(), backupID); err != nil {
 		h.log.Error("restoring backup", "backup_id", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
-	respondOK(w, map[string]string{"status": "restored"})
+	backup, _ := h.svc.GetBackup(backupID)
+	respondOK(w, backup)
 }
 
 func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {

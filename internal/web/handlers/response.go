@@ -26,6 +26,12 @@ func respondCreated(w http.ResponseWriter, data any) {
 	json.NewEncoder(w).Encode(envelope{Status: "ok", Data: data})
 }
 
+func respondAccepted(w http.ResponseWriter, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(envelope{Status: "ok", Data: data})
+}
+
 func respondNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
