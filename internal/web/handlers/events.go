@@ -32,14 +32,10 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse type filter — default to status_changed for backward compatibility
-	typeFilter := []string{service.EventStatusChanged}
-	if types := r.URL.Query().Get("types"); types != "" {
-		if types == "*" {
-			typeFilter = nil // nil = all events
-		} else {
-			typeFilter = strings.Split(types, ",")
-		}
+	// Parse type filter — default to all events
+	var typeFilter []string // nil = all events
+	if types := r.URL.Query().Get("types"); types != "" && types != "*" {
+		typeFilter = strings.Split(types, ",")
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
