@@ -71,73 +71,73 @@ var AllEventTypes = []string{
 // Lifecycle events — published by lifecycle code, consumed by StatusSubscriber to derive status.
 
 type ImagePullingEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ImagePullingEvent) EventType() string        { return EventImagePulling }
 func (e ImagePullingEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ImagePulledEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ImagePulledEvent) EventType() string        { return EventImagePulled }
 func (e ImagePulledEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ContainerCreatingEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ContainerCreatingEvent) EventType() string        { return EventContainerCreating }
 func (e ContainerCreatingEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ContainerStartedEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ContainerStartedEvent) EventType() string        { return EventContainerStarted }
 func (e ContainerStartedEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type GameserverReadyEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e GameserverReadyEvent) EventType() string        { return EventGameserverReady }
 func (e GameserverReadyEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ContainerStoppingEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ContainerStoppingEvent) EventType() string        { return EventContainerStopping }
 func (e ContainerStoppingEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ContainerStoppedEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ContainerStoppedEvent) EventType() string        { return EventContainerStopped }
 func (e ContainerStoppedEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ContainerExitedEvent struct {
-	GameserverID string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e ContainerExitedEvent) EventType() string        { return EventContainerExited }
 func (e ContainerExitedEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type GameserverErrorEvent struct {
-	GameserverID string
-	Reason       string
-	Timestamp    time.Time
+	GameserverID string    `json:"gameserver_id"`
+	Reason       string    `json:"reason"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 func (e GameserverErrorEvent) EventType() string        { return EventGameserverError }

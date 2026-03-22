@@ -2,17 +2,18 @@ package models
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
 
 type Event struct {
-	ID           string    `json:"id"`
-	EventType    string    `json:"event_type"`
-	GameserverID string    `json:"gameserver_id,omitempty"`
-	Actor        string    `json:"actor"`
-	Data         string    `json:"data"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           string          `json:"id"`
+	EventType    string          `json:"event_type"`
+	GameserverID string          `json:"gameserver_id,omitempty"`
+	Actor        json.RawMessage `json:"actor"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 func CreateEvent(db *sql.DB, e *Event) error {

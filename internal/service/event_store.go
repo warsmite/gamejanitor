@@ -68,8 +68,8 @@ func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
 		ID:           uuid.New().String(),
 		EventType:    event.EventType(),
 		GameserverID: gameserverID,
-		Actor:        string(actorJSON),
-		Data:         string(dataJSON),
+		Actor:        actorJSON,
+		Data:         dataJSON,
 		CreatedAt:    event.EventTimestamp(),
 	}
 
