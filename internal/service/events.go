@@ -10,9 +10,12 @@ const (
 	EventGameserverCreate  = "gameserver.create"
 	EventGameserverUpdate  = "gameserver.update"
 	EventGameserverDelete  = "gameserver.delete"
-	EventGameserverStart   = "gameserver.start"
-	EventGameserverStop    = "gameserver.stop"
-	EventGameserverRestart = "gameserver.restart"
+	EventGameserverStart      = "gameserver.start"
+	EventGameserverStop       = "gameserver.stop"
+	EventGameserverRestart    = "gameserver.restart"
+	EventGameserverUpdateGame = "gameserver.update_game"
+	EventGameserverReinstall  = "gameserver.reinstall"
+	EventGameserverMigrate    = "gameserver.migrate"
 	EventBackupCreate      = "backup.create"
 	EventBackupDelete      = "backup.delete"
 	EventBackupRestore     = "backup.restore"
@@ -52,6 +55,7 @@ var AllEventTypes = []string{
 	// Action events
 	EventGameserverCreate, EventGameserverUpdate, EventGameserverDelete,
 	EventGameserverStart, EventGameserverStop, EventGameserverRestart,
+	EventGameserverUpdateGame, EventGameserverReinstall, EventGameserverMigrate,
 	EventBackupCreate, EventBackupDelete, EventBackupRestore,
 	EventScheduleCreate, EventScheduleUpdate, EventScheduleDelete,
 	// Lifecycle outcomes

@@ -261,6 +261,16 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverUpdateGame,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: id,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
+
 	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
@@ -333,6 +343,16 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	}
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
+
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverReinstall,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: id,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
 
 	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
