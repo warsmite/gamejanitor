@@ -68,6 +68,49 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
+	// Enforce retention before creating new backup
+	if err := s.enforceRetention(ctx, gameserverID); err != nil {
+		s.log.Warn("retention enforcement failed, proceeding with backup", "gameserver_id", gameserverID, "error", err)
+	}
+
+	backupID := uuid.New().String()
+	if name == "" {
+		name = time.Now().Format("2006-01-02 15:04:05")
+	}
+
+	// Create backup record immediately with in_progress status
+	backup := &models.Backup{
+		ID:           backupID,
+		GameserverID: gameserverID,
+		Name:         name,
+		Status:       models.BackupStatusInProgress,
+	}
+	if err := models.CreateBackup(s.db, backup); err != nil {
+		return nil, fmt.Errorf("recording backup in database: %w", err)
+	}
+
+	actor := ActorFromContext(ctx)
+	s.broadcaster.Publish(BackupEvent{
+		Type:         EventBackupCreate,
+		Timestamp:    time.Now(),
+		Actor:        actor,
+		GameserverID: gameserverID,
+		BackupID:     backupID,
+		BackupName:   name,
+	})
+
+	s.log.Info("backup initiated", "gameserver_id", gameserverID, "backup_id", backupID)
+
+	// Run the actual backup work in the background
+	go s.runBackup(gameserverID, backupID, name, gs, actor)
+
+	return backup, nil
+}
+
+func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *models.Gameserver, actor Actor) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 
@@ -82,26 +125,14 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		}
 	}
 
-	// Enforce retention before creating new backup
-	if err := s.enforceRetention(ctx, gameserverID); err != nil {
-		s.log.Warn("retention enforcement failed, proceeding with backup", "gameserver_id", gameserverID, "error", err)
-	}
-
-	backupID := uuid.New().String()
-	if name == "" {
-		name = time.Now().Format("2006-01-02 15:04:05")
-	}
-
-	s.log.Info("creating backup", "gameserver_id", gameserverID, "backup_id", backupID)
-
-	// Get tar stream directly from volume (works whether gameserver is running or stopped)
+	// Get tar stream from volume
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		return nil, fmt.Errorf("backing up volume: %w", err)
+		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("backing up volume: %v", err))
+		return
 	}
-	defer tarReader.Close()
 
-	// Pipe gzipped tar through to the store
+	// Pipe gzipped tar to store
 	pr, pw := io.Pipe()
 	var compressErr error
 	go func() {
@@ -110,8 +141,10 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 			compressErr = fmt.Errorf("compressing backup data: %w", err)
 			gzWriter.Close()
 			pw.CloseWithError(compressErr)
+			tarReader.Close()
 			return
 		}
+		tarReader.Close()
 		if err := gzWriter.Close(); err != nil {
 			compressErr = fmt.Errorf("closing gzip writer: %w", err)
 			pw.CloseWithError(compressErr)
@@ -121,11 +154,13 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}()
 
 	if err := s.store.Save(ctx, gameserverID, backupID, pr); err != nil {
-		return nil, fmt.Errorf("saving backup to store: %w", err)
+		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("saving to store: %v", err))
+		return
 	}
 	if compressErr != nil {
 		s.store.Delete(ctx, gameserverID, backupID)
-		return nil, compressErr
+		s.failBackup(ctx, gameserverID, backupID, name, actor, compressErr.Error())
+		return
 	}
 
 	sizeBytes, err := s.store.Size(ctx, gameserverID, backupID)
@@ -133,29 +168,46 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		s.log.Warn("failed to get backup size", "backup_id", backupID, "error", err)
 	}
 
-	backup := &models.Backup{
-		ID:           backupID,
-		GameserverID: gameserverID,
-		Name:         name,
-		SizeBytes:    sizeBytes,
-	}
-	if err := models.CreateBackup(s.db, backup); err != nil {
-		s.store.Delete(ctx, gameserverID, backupID)
-		return nil, fmt.Errorf("recording backup in database: %w", err)
+	// Mark completed
+	if err := models.UpdateBackupStatus(s.db, backupID, models.BackupStatusCompleted, sizeBytes, ""); err != nil {
+		s.log.Error("failed to mark backup completed", "backup_id", backupID, "error", err)
+		return
 	}
 
-	s.log.Info("backup created", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
+	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
 	s.broadcaster.Publish(BackupEvent{
-		Type:         EventBackupCreate,
+		Type:         EventBackupCompleted,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        actor,
 		GameserverID: gameserverID,
 		BackupID:     backupID,
 		BackupName:   name,
 	})
+}
 
-	return backup, nil
+func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, name string, actor Actor, reason string) {
+	s.log.Error("backup failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
+
+	// Clean up partial data
+	if err := s.store.Delete(ctx, gameserverID, backupID); err != nil {
+		s.log.Warn("failed to clean up partial backup data", "backup_id", backupID, "error", err)
+	}
+
+	// Mark failed in DB
+	if err := models.UpdateBackupStatus(s.db, backupID, models.BackupStatusFailed, 0, reason); err != nil {
+		s.log.Error("failed to mark backup as failed", "backup_id", backupID, "error", err)
+	}
+
+	s.broadcaster.Publish(BackupEvent{
+		Type:         EventBackupFailed,
+		Timestamp:    time.Now(),
+		Actor:        actor,
+		GameserverID: gameserverID,
+		BackupID:     backupID,
+		BackupName:   name,
+		Error:        reason,
+	})
 }
 
 func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err error) {

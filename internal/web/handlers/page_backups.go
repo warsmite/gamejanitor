@@ -69,8 +69,7 @@ func (h *PageBackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		name = r.FormValue("name")
 	}
 
-	// Detach from request context so the backup isn't killed when the HTTP response completes
-	if _, err := h.backupSvc.CreateBackup(context.WithoutCancel(r.Context()), id, name); err != nil {
+	if _, err := h.backupSvc.CreateBackup(r.Context(), id, name); err != nil {
 		h.log.Error("creating backup from web", "gameserver_id", id, "error", err)
 		http.Error(w, "Failed to create backup: "+err.Error(), http.StatusBadRequest)
 		return

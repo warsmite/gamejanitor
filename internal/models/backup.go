@@ -6,16 +6,24 @@ import (
 	"time"
 )
 
+const (
+	BackupStatusInProgress = "in_progress"
+	BackupStatusCompleted  = "completed"
+	BackupStatusFailed     = "failed"
+)
+
 type Backup struct {
 	ID           string    `json:"id"`
 	GameserverID string    `json:"gameserver_id"`
 	Name         string    `json:"name"`
 	SizeBytes    int64     `json:"size_bytes"`
+	Status       string    `json:"status"`
+	ErrorReason  string    `json:"error_reason,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
 func ListBackups(db *sql.DB, gameserverID string) ([]Backup, error) {
-	rows, err := db.Query("SELECT id, gameserver_id, name, size_bytes, created_at FROM backups WHERE gameserver_id = ? ORDER BY created_at DESC", gameserverID)
+	rows, err := db.Query("SELECT id, gameserver_id, name, size_bytes, status, error_reason, created_at FROM backups WHERE gameserver_id = ? ORDER BY created_at DESC", gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("listing backups: %w", err)
 	}
@@ -24,7 +32,7 @@ func ListBackups(db *sql.DB, gameserverID string) ([]Backup, error) {
 	var backups []Backup
 	for rows.Next() {
 		var b Backup
-		if err := rows.Scan(&b.ID, &b.GameserverID, &b.Name, &b.SizeBytes, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.GameserverID, &b.Name, &b.SizeBytes, &b.Status, &b.ErrorReason, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning backup row: %w", err)
 		}
 		backups = append(backups, b)
@@ -34,8 +42,8 @@ func ListBackups(db *sql.DB, gameserverID string) ([]Backup, error) {
 
 func GetBackup(db *sql.DB, id string) (*Backup, error) {
 	var b Backup
-	err := db.QueryRow("SELECT id, gameserver_id, name, size_bytes, created_at FROM backups WHERE id = ?", id).
-		Scan(&b.ID, &b.GameserverID, &b.Name, &b.SizeBytes, &b.CreatedAt)
+	err := db.QueryRow("SELECT id, gameserver_id, name, size_bytes, status, error_reason, created_at FROM backups WHERE id = ?", id).
+		Scan(&b.ID, &b.GameserverID, &b.Name, &b.SizeBytes, &b.Status, &b.ErrorReason, &b.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -49,11 +57,22 @@ func CreateBackup(db *sql.DB, b *Backup) error {
 	b.CreatedAt = time.Now()
 
 	_, err := db.Exec(
-		"INSERT INTO backups (id, gameserver_id, name, size_bytes, created_at) VALUES (?, ?, ?, ?, ?)",
-		b.ID, b.GameserverID, b.Name, b.SizeBytes, b.CreatedAt,
+		"INSERT INTO backups (id, gameserver_id, name, size_bytes, status, error_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		b.ID, b.GameserverID, b.Name, b.SizeBytes, b.Status, b.ErrorReason, b.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating backup %s: %w", b.ID, err)
+	}
+	return nil
+}
+
+func UpdateBackupStatus(db *sql.DB, id string, status string, sizeBytes int64, errorReason string) error {
+	_, err := db.Exec(
+		"UPDATE backups SET status = ?, size_bytes = ?, error_reason = ? WHERE id = ?",
+		status, sizeBytes, errorReason, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating backup %s status: %w", id, err)
 	}
 	return nil
 }

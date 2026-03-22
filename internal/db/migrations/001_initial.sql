@@ -42,6 +42,8 @@ CREATE TABLE backups (
     gameserver_id TEXT NOT NULL REFERENCES gameservers(id),
     name TEXT NOT NULL,
     size_bytes INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'completed',
+    error_reason TEXT NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -47,14 +47,16 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	backup, err := h.svc.CreateBackup(context.WithoutCancel(r.Context()), gsID, req.Name)
+	backup, err := h.svc.CreateBackup(r.Context(), gsID, req.Name)
 	if err != nil {
 		h.log.Error("creating backup", "gameserver_id", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
 
-	respondCreated(w, backup)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": backup})
 }
 
 func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
