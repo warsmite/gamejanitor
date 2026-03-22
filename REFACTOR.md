@@ -14,9 +14,9 @@ Organized by refactor task, not by file.
 
 - **F7** `[DONE]` — **Error messages leak internals** [HIGH]: Untyped `fmt.Errorf` errors propagate directly to API responses, exposing Docker errors, port range config, storage backend details, and JSON parse errors. Non-ServiceError types map to 500 with raw message. Files: `gameserver.go`, `gameserver_ports.go:143`, `backup.go:100,124`
 
-- **F8** `[TODO]` — **Multi-node races** [MEDIUM]: Port allocation and worker placement read-then-write without locking. Concurrent creates on same node can allocate same ports or overcommit resources. Docker rejects at runtime but UX is broken. Files: `gameserver.go:84-117`, `gameserver_ports.go:120-160`, `dispatcher.go:101-115`
+- **F8** `[DONE]` — **Multi-node races** [MEDIUM]: Port allocation and worker placement read-then-write without locking. Concurrent creates on same node can allocate same ports or overcommit resources. Docker rejects at runtime but UX is broken. Files: `gameserver.go:84-117`, `gameserver_ports.go:120-160`, `dispatcher.go:101-115`
 
-- **F9** `[TODO]` — **Settings architecture** [LOW]: Flat key-value settings with env override pattern is all-or-nothing global; no per-node settings support (except port range which has a special case). No caching, no schema versioning. Manageable now but design debt for multi-node. Files: `settings.go`, `settings_api.go:143-156`
+- **F9** `[DEFERRED]` — **Settings architecture** [LOW]: Flat key-value settings with env override pattern is all-or-nothing global; no per-node settings support (except port range which has a special case). No caching, no schema versioning. Manageable now but design debt for multi-node. Files: `settings.go`, `settings_api.go:143-156`
 
 ---
 
