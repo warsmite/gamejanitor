@@ -50,7 +50,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	})
 
 	// Game assets (icons) served from the game store
-	r.Handle("/static/games/*", http.StripPrefix("/static/games/", http.FileServer(http.FS(opts.GameStore.AssetsFS()))))
+	r.Handle("/games/*", http.StripPrefix("/games/", http.FileServer(http.FS(opts.GameStore.AssetsFS()))))
 
 	authMiddleware := AuthMiddleware(opts.AuthSvc, opts.SettingsSvc)
 
