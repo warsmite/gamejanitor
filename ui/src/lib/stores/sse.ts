@@ -130,18 +130,13 @@ let autoToastsEnabled = false;
 export function enableAutoToasts() {
   if (autoToastsEnabled) return;
   autoToastsEnabled = true;
-  onEvent('status_changed', (data) => {
-    if (data.new_status === 'running') {
-      toast(`${data.gameserver_id} is now running`, 'success');
-    } else if (data.new_status === 'error') {
-      toast(`${data.gameserver_id} encountered an error`, 'error');
-    } else if (data.new_status === 'stopped') {
-      toast(`${data.gameserver_id} stopped`, 'info');
-    }
+  // Only toast for async outcomes and errors — status changes are visible in the UI
+  onEvent('gameserver.error', (data) => {
+    toast(`Server error: ${data.reason || 'unknown'}`, 'error');
   });
 
-  onEvent('backup.completed', (data) => {
-    toast(`Backup completed`, 'success');
+  onEvent('backup.completed', () => {
+    toast('Backup completed', 'success');
   });
 
   onEvent('backup.failed', (data) => {
