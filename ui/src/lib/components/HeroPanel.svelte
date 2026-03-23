@@ -4,14 +4,14 @@
   import CopyBlock from './CopyBlock.svelte';
   import TelemetryCell from './TelemetryCell.svelte';
 
-  let { gameserver, stats, query, connectionAddress, sftpAddress, gameIcon = '🎮', gameName = '', onaction }:
+  let { gameserver, stats, query, connectionAddress, sftpAddress, iconPath = '', gameName = '', onaction }:
     {
       gameserver: Gameserver;
       stats: GameserverStats | null;
       query: QueryData | null;
       connectionAddress: string;
       sftpAddress: string;
-      gameIcon?: string;
+      iconPath?: string;
       gameName?: string;
       onaction?: (action: string) => void;
     } = $props();
@@ -39,7 +39,7 @@
   <!-- Identity + status -->
   <div class="head">
     <div class="id-left">
-      <div class="icon">{gameIcon}</div>
+      <div class="icon">{#if iconPath}<img src={iconPath} alt="" />{/if}</div>
       <div>
         <div class="name">{gameserver.name}</div>
         <div class="game">{gameName || gameserver.game_id}</div>
@@ -166,9 +166,11 @@
   .icon {
     width: 52px; height: 52px; border-radius: 11px;
     background: var(--bg-inset); border: 1px solid var(--border-dim);
-    display: grid; place-items: center; font-size: 1.5rem;
+    display: grid; place-items: center;
     box-shadow: inset 0 1px 4px rgba(232,114,42,0.04);
+    overflow: hidden;
   }
+  .icon img { width: 100%; height: 100%; object-fit: cover; }
   .name { font-weight: 600; font-size: 1.15rem; letter-spacing: -0.02em; }
   .game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
 

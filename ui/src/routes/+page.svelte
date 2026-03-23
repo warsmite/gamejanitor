@@ -11,15 +11,6 @@
   let search = $state('');
   let loading = $state(true);
 
-  // Game icon map — emoji fallbacks until we have real icons
-  const gameIcons: Record<string, string> = {
-    'minecraft-java': '⛏️', 'minecraft-bedrock': '⛏️',
-    'rust': '🪓', 'counter-strike-2': '🔫', 'valheim': '⚔️',
-    'ark-survival-evolved': '🏝️', '7-days-to-die': '🧟',
-    'satisfactory': '🏭', 'terraria': '🌿', 'garrys-mod': '🎮',
-    'palworld': '🎮',
-  };
-
   const filtered = $derived(
     search
       ? gameservers.filter(gs => gs.name.toLowerCase().includes(search.toLowerCase()))
@@ -167,7 +158,7 @@
           query={queries[gs.id] || null}
           connectionAddress={connectionAddress(gs)}
           sftpAddress={`sftp://${gs.sftp_username}@localhost:2222`}
-          gameIcon={gameIcons[gs.game_id] || '🎮'}
+          iconPath={games[gs.game_id]?.icon_path || ''}
           gameName={games[gs.game_id]?.name || gs.game_id}
           onaction={(action) => handleAction(gs.id, action as any)}
         />
