@@ -2,12 +2,14 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { api, type Schedule } from '$lib/api';
-  import { toast, confirm } from '$lib/stores';
+  import { gameserverStore, toast, confirm } from '$lib/stores';
 
   const gsId = $derived($page.params.id as string);
 
-  let schedules = $state<Schedule[]>([]);
-  let loading = $state(true);
+  // Read schedules from store — SSE keeps them updated
+  const gsState = $derived(gameserverStore.getState(gsId));
+  const schedules = $derived(gsState?.schedules ?? []);
+  const loading = $derived(gsState?.schedules === null);
 
   // Create form
   let showCreate = $state(false);
@@ -182,25 +184,17 @@
     advancedCron = '';
   }
 
-  onMount(async () => {
-    await loadSchedules();
-  });
-
-  async function loadSchedules() {
-    try {
-      schedules = await api.schedules.list(gsId);
-    } catch (e: any) {
-      toast(`Failed to load schedules: ${e.message}`, 'error');
-    } finally {
-      loading = false;
+  onMount(() => {
+    if (gsState?.schedules === null) {
+      gameserverStore.loadSchedules(gsId);
     }
-  }
+  });
 
   async function createSchedule() {
     if (!createName || !activeCron) return;
     creating = true;
     try {
-      const sched = await api.schedules.create(gsId, {
+      await api.schedules.create(gsId, {
         name: createName,
         type: createType,
         cron_expr: activeCron,
@@ -208,7 +202,7 @@
         enabled: true,
         one_shot: createOneShot,
       });
-      schedules = [sched, ...schedules];
+      // SSE will refresh the list via store
       showCreate = false;
       resetForm();
     } catch (e: any) {
@@ -239,7 +233,7 @@
         cron_expr: cron,
         payload: s.type === 'command' ? editPayload : undefined,
       });
-      schedules = schedules.map(sc => sc.id === s.id ? { ...sc, name: editName, cron_expr: cron, payload: editPayload } : sc);
+      // SSE will refresh the list via store
       editingId = '';
     } catch (e: any) {
       toast(`Failed to update: ${e.message}`, 'error');
@@ -249,7 +243,7 @@
   async function toggleEnabled(s: Schedule) {
     try {
       await api.schedules.update(gsId, s.id, { enabled: !s.enabled });
-      schedules = schedules.map(sc => sc.id === s.id ? { ...sc, enabled: !sc.enabled } : sc);
+      // SSE will refresh the list via store
     } catch (e: any) {
       toast(`Failed to toggle: ${e.message}`, 'error');
     }
@@ -259,7 +253,7 @@
     if (!await confirm({ title: 'Delete Schedule', message: `Delete schedule "${s.name}"?`, confirmLabel: 'Delete', danger: true })) return;
     try {
       await api.schedules.delete(gsId, s.id);
-      schedules = schedules.filter(sc => sc.id !== s.id);
+      // SSE will refresh the list via store
     } catch (e: any) {
       toast(`Failed to delete: ${e.message}`, 'error');
     }

@@ -1,7 +1,7 @@
 // Centralized reactive store for all gameserver state.
 // SSE events feed into this store; pages read from it reactively.
 
-import { api, type Gameserver, type GameserverStats, type QueryData, type Game } from '$lib/api';
+import { api, type Gameserver, type GameserverStats, type QueryData, type Game, type Backup, type Schedule } from '$lib/api';
 import { onEvent } from './sse';
 
 export interface GameserverState {
@@ -11,6 +11,8 @@ export interface GameserverState {
   logLines: string[];
   containerStartedAt: string;
   activeOperation: string | null;
+  backups: Backup[] | null;       // null = not loaded yet
+  schedules: Schedule[] | null;   // null = not loaded yet
 }
 
 const operationStartEvents: Record<string, string> = {
@@ -66,6 +68,24 @@ class GameserverStore {
     return this.gameservers[id]?.gameserver.status === 'stopped';
   }
 
+  // ── Data loading (lazy, called by pages on first visit) ──
+
+  async loadBackups(gsId: string) {
+    try {
+      const backups = await api.backups.list(gsId);
+      const state = this.gameservers[gsId];
+      if (state) state.backups = backups || [];
+    } catch { /* non-fatal */ }
+  }
+
+  async loadSchedules(gsId: string) {
+    try {
+      const schedules = await api.schedules.list(gsId);
+      const state = this.gameservers[gsId];
+      if (state) state.schedules = schedules || [];
+    } catch { /* non-fatal */ }
+  }
+
   // ── Lifecycle ──
 
   async init() {
@@ -77,21 +97,12 @@ class GameserverStore {
         api.games.list(),
       ]);
 
-      // Populate games
       for (const g of gameList) {
         this.games[g.id] = g;
       }
 
-      // Populate gameservers
       for (const gs of gsList) {
-        this.gameservers[gs.id] = {
-          gameserver: gs,
-          stats: null,
-          query: null,
-          logLines: [],
-          containerStartedAt: '',
-          activeOperation: null,
-        };
+        this.gameservers[gs.id] = this.newState(gs);
       }
 
       // Fetch live data for active servers
@@ -197,48 +208,80 @@ class GameserverStore {
         state.activeOperation = null;
       }
 
+      // Re-fetch gameserver on update (name/config changed)
+      if (data.type === 'gameserver.update') {
+        api.gameservers.get(data.gameserver_id).then(gs => {
+          if (this.gameservers[gs.id]) {
+            this.gameservers[gs.id].gameserver = gs;
+          }
+        }).catch(() => {});
+      }
+
       // Refresh log tail
       this.fetchLogs(data.gameserver_id);
     }));
 
-    // Backup operation events (not prefixed with gameserver.*)
+    // Backup events — operation badges + list refresh
     this.unsubs.push(onEvent('backup.create', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state) state.activeOperation = 'backup.create';
+      if (!state) return;
+      state.activeOperation = 'backup.create';
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
     }));
     this.unsubs.push(onEvent('backup.completed', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state?.activeOperation === 'backup.create') state.activeOperation = null;
+      if (!state) return;
+      if (state.activeOperation === 'backup.create') state.activeOperation = null;
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
     }));
     this.unsubs.push(onEvent('backup.failed', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state?.activeOperation === 'backup.create') state.activeOperation = null;
+      if (!state) return;
+      if (state.activeOperation === 'backup.create') state.activeOperation = null;
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
+    }));
+    this.unsubs.push(onEvent('backup.delete', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (state?.backups !== null) this.loadBackups(data.gameserver_id);
     }));
     this.unsubs.push(onEvent('backup.restore', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state) state.activeOperation = 'backup.restore';
+      if (!state) return;
+      state.activeOperation = 'backup.restore';
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
     }));
     this.unsubs.push(onEvent('backup.restore.completed', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state?.activeOperation === 'backup.restore') state.activeOperation = null;
+      if (!state) return;
+      if (state.activeOperation === 'backup.restore') state.activeOperation = null;
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
     }));
     this.unsubs.push(onEvent('backup.restore.failed', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
-      if (state?.activeOperation === 'backup.restore') state.activeOperation = null;
+      if (!state) return;
+      if (state.activeOperation === 'backup.restore') state.activeOperation = null;
+      if (state.backups !== null) this.loadBackups(data.gameserver_id);
+    }));
+
+    // Schedule events — list refresh
+    this.unsubs.push(onEvent('schedule.create', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (state?.schedules !== null) this.loadSchedules(data.gameserver_id);
+    }));
+    this.unsubs.push(onEvent('schedule.update', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (state?.schedules !== null) this.loadSchedules(data.gameserver_id);
+    }));
+    this.unsubs.push(onEvent('schedule.delete', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (state?.schedules !== null) this.loadSchedules(data.gameserver_id);
     }));
 
     // Gameserver create/delete
     this.unsubs.push(onEvent('gameserver.create', (data: any) => {
       if (data.gameserver_id && !this.gameservers[data.gameserver_id]) {
         api.gameservers.get(data.gameserver_id).then(gs => {
-          this.gameservers[gs.id] = {
-            gameserver: gs,
-            stats: null,
-            query: null,
-            logLines: [],
-            containerStartedAt: '',
-            activeOperation: null,
-          };
+          this.gameservers[gs.id] = this.newState(gs);
         }).catch(() => {});
       }
     }));
@@ -251,6 +294,19 @@ class GameserverStore {
   }
 
   // ── Internal helpers ──
+
+  private newState(gs: Gameserver): GameserverState {
+    return {
+      gameserver: gs,
+      stats: null,
+      query: null,
+      logLines: [],
+      containerStartedAt: '',
+      activeOperation: null,
+      backups: null,
+      schedules: null,
+    };
+  }
 
   private updateStats(id: string, stats: GameserverStats) {
     const state = this.gameservers[id];
@@ -274,7 +330,6 @@ class GameserverStore {
 
 export const gameserverStore = new GameserverStore();
 
-// Utility: compute uptime display string from a container start timestamp
 export function formatUptime(containerStartedAt: string): string {
   if (!containerStartedAt) return '';
   const started = new Date(containerStartedAt).getTime();
@@ -289,5 +344,4 @@ export function formatUptime(containerStartedAt: string): string {
   return `Up ${mins}m`;
 }
 
-// Expose operation labels for UI
 export const operationLabels: Record<string, string> = operationStartEvents;
