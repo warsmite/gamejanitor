@@ -260,9 +260,9 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
-		if gs.Status == StatusStopping || gs.Status == StatusInstalling {
+		if gs.Status == StatusStopping {
 			m.log.Debug("container event: expected container stop", "id", gsID, "status", gs.Status)
-		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
+		} else if gs.Status == StatusRunning || gs.Status == StatusStarted || gs.Status == StatusInstalling || gs.Status == StatusStarting {
 			m.log.Warn("container event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
 			m.broadcaster.Publish(ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
