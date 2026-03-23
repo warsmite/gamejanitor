@@ -18,11 +18,6 @@
         src = ./.;
         vendorHash = "sha256-gQgVaBuFxSlH3pGDmmKJ/K88Xe40W608yCc/3BiKh5g=";
         env.CGO_ENABLED = "0";
-        nativeBuildInputs = [ pkgs.tailwindcss ];
-        preBuild = ''
-          tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
-        '';
-        subPackages = [ "cmd/gamejanitor" ];
       };
 
       nixosModules.default = import ./nixos/module.nix self;
@@ -30,22 +25,12 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
-            # Build CSS initially
-            tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
-
-            # Watch templates for CSS rebuild in background
-            reflex -s -r '\.html$' -- tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify &
-
-            # Watch Go/template files and restart server
-            reflex -s -r '\.(go|html)$' -r 'internal/games/data' -- go run ./cmd/gamejanitor serve -d /tmp/gamejanitor-data "$@"
+            # Watch Go files and game data, restart server on change
+            reflex -s -r '\.(go|yaml)$' -R 'node_modules' -- go run . serve -d /tmp/gamejanitor-data "$@"
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''
-            exec go run ./cmd/gamejanitor "$@"
-          '';
-
-          build-css = pkgs.writeShellScriptBin "build-css" ''
-            tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
+            exec go run . "$@"
           '';
 
           # TODO: migrate to ghcr.io/gamejanitor when going public
@@ -81,9 +66,9 @@
           # Multi-node test scripts — separate data dirs so they don't conflict
           dev-controller = pkgs.writeShellScriptBin "dev-controller" ''
             echo "Starting controller on :8090 (gRPC :9090)"
-            exec go run ./cmd/gamejanitor serve \
-              --role controller+worker \
-              -p 8090 --grpc-port 9090 --sftp-port 2022 \
+            exec go run . serve \
+              --controller --worker=false \
+              --port 8090 --grpc-port 9090 --sftp-port 2022 \
               -d /tmp/gamejanitor-controller "$@"
           '';
 
@@ -96,10 +81,10 @@
               EXTRA_ARGS+=(--worker-token "$TOKEN")
             fi
             echo "Starting worker agent on gRPC :$PORT, registering with controller at $CTRL"
-            exec go run ./cmd/gamejanitor serve \
-              --role worker \
+            exec go run . serve \
+              --worker --controller=false \
               --grpc-port "$PORT" \
-              --controller "$CTRL" \
+              --controller-address "$CTRL" \
               -d "/tmp/gamejanitor-worker-$PORT" "''${EXTRA_ARGS[@]}" "''${@:4}"
           '';
 
@@ -123,14 +108,12 @@
           buildInputs = [
             pkgs.go
             pkgs.docker-client
-            pkgs.tailwindcss
             pkgs.reflex
             pkgs.protobuf
             pkgs.protoc-gen-go
             pkgs.protoc-gen-go-grpc
             dev
             cli
-            build-css
             build-image
             push-image
             push-all-images
