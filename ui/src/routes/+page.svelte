@@ -170,6 +170,7 @@
           sftpAddress={`sftp://${gs.sftp_username}@localhost:2222`}
           gameIcon={gameIcons[gs.game_id] || '🎮'}
           gameName={games[gs.game_id]?.name || gs.game_id}
+          onaction={(action) => handleAction(gs.id, action as any)}
         />
       {/each}
     </div>

@@ -126,7 +126,10 @@ export function onGameserverEvent(gsId: string, callback: EventCallback): () => 
 }
 
 // Auto-toast for important events
+let autoToastsEnabled = false;
 export function enableAutoToasts() {
+  if (autoToastsEnabled) return;
+  autoToastsEnabled = true;
   onEvent('status_changed', (data) => {
     if (data.new_status === 'running') {
       toast(`${data.gameserver_id} is now running`, 'success');

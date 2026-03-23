@@ -4,7 +4,7 @@
   import CopyBlock from './CopyBlock.svelte';
   import TelemetryCell from './TelemetryCell.svelte';
 
-  let { gameserver, stats, query, connectionAddress, sftpAddress, gameIcon = '🎮', gameName = '' }:
+  let { gameserver, stats, query, connectionAddress, sftpAddress, gameIcon = '🎮', gameName = '', onaction }:
     {
       gameserver: Gameserver;
       stats: GameserverStats | null;
@@ -13,6 +13,7 @@
       sftpAddress: string;
       gameIcon?: string;
       gameName?: string;
+      onaction?: (action: string) => void;
     } = $props();
 
   const isRunning = $derived(gameserver.status === 'running' || gameserver.status === 'started');
@@ -83,16 +84,16 @@
   <div class="actions" onclick={(e) => e.preventDefault()}>
     <div class="actions-left">
       {#if isStopped}
-        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); dispatch('start'); }}>
+        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
           Start
         </button>
       {:else}
-        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); dispatch('stop'); }}>
+        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); onaction?.('stop'); }}>
           <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
           Stop
         </button>
-        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); dispatch('restart'); }}>
+        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); onaction?.('restart'); }}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
           Restart
         </button>
@@ -107,12 +108,6 @@
   </div>
 </div>
 
-<script lang="ts" context="module">
-  // Event dispatcher helper — pages handle the actual API calls
-  function dispatch(action: string) {
-    // This will be replaced with proper Svelte 5 event handling from the page
-  }
-</script>
 
 <style>
   .hero {
