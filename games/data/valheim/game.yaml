@@ -1,5 +1,6 @@
 id: valheim
 name: "Valheim"
+description: "Viking-themed survival and exploration in a procedurally generated world"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 2048
 disabled_capabilities: ["command"]

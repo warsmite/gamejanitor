@@ -51,7 +51,8 @@ func NewRouter(opts RouterOptions) http.Handler {
 
 	authMiddleware := AuthMiddleware(opts.AuthSvc, opts.SettingsSvc)
 
-	gameHandlers := handlers.NewGameHandlers(opts.GameStore, opts.Log)
+	optionsRegistry := games.NewOptionsRegistry(opts.Log)
+	gameHandlers := handlers.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
 	gameserverHandlers := handlers.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.Log)
 	eventHistorySvc := service.NewEventHistoryService(opts.DB)
 	eventHandlers := handlers.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
@@ -96,6 +97,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", gameHandlers.List)
 			r.Get("/{id}", gameHandlers.Get)
+			r.Get("/{id}/options/{key}", gameHandlers.Options)
 		})
 
 		r.Route("/gameservers", func(r chi.Router) {

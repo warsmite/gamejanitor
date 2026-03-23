@@ -1,5 +1,6 @@
 id: minecraft-java
 name: "Minecraft: Java Edition"
+description: "The original Minecraft, supporting vanilla, Paper, Forge, and Fabric servers"
 base_image: ghcr.io/warsmite/gamejanitor/java
 recommended_memory_mb: 2048
 disabled_capabilities: []
@@ -18,39 +19,48 @@ env:
     label: "Accept Minecraft EULA"
     type: boolean
     required: true
-    notice: 'You must agree to the <a href="https://aka.ms/MinecraftEULA" target="_blank" class="underline text-accent-400 hover:text-accent-300">Minecraft EULA</a> to run this server.'
+    notice: "You must agree to the [Minecraft EULA](https://aka.ms/MinecraftEULA) to run this server."
   - key: MINECRAFT_VERSION
     default: "latest"
     label: "Version"
-    type: version-select
+    type: select
+    group: server
+    dynamic_options:
+      source: mojang-versions
     triggers_install: true
   - key: MODLOADER
     default: "vanilla"
     label: "Mod Loader"
     type: select
+    group: server
     options: ["vanilla", "paper", "forge", "fabric"]
     triggers_install: true
   - key: GAMEMODE
     default: "survival"
     label: "Game Mode"
     type: select
+    group: gameplay
     options: ["survival", "creative", "adventure", "spectator"]
   - key: MAX_PLAYERS
     default: "20"
     label: "Max Players"
     type: number
+    group: server
   - key: DIFFICULTY
     default: "normal"
     label: "Difficulty"
     type: select
+    group: gameplay
     options: ["peaceful", "easy", "normal", "hard"]
   - key: MOTD
     default: "A Gamejanitor Server"
     label: "Message of the Day"
+    group: server
   - key: PVP
     default: "true"
     label: "PvP"
     type: boolean
+    group: gameplay
   - key: SERVER_PORT
     default: "25565"
     system: true

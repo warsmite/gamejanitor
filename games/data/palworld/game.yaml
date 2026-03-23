@@ -1,5 +1,6 @@
 id: palworld
 name: "Palworld"
+description: "Open-world survival with creature collecting, base building, and multiplayer"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: ["query"]

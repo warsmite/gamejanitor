@@ -1,5 +1,6 @@
 id: rust
 name: "Rust"
+description: "Hardcore multiplayer survival with building, raiding, and PvP"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 6144
 disabled_capabilities: []

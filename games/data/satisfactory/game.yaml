@@ -1,5 +1,6 @@
 id: satisfactory
 name: "Satisfactory"
+description: "First-person factory building and automation in an alien world"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: ["query", "command", "save"]

@@ -1,5 +1,6 @@
 id: counter-strike-2
 name: "Counter-Strike 2"
+description: "Competitive tactical FPS with community and workshop server support"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 1024
 disabled_capabilities: []

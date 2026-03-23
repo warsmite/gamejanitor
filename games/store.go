@@ -18,16 +18,25 @@ type Port struct {
 }
 
 type EnvVar struct {
-	Key          string   `yaml:"key" json:"key"`
-	Default      string   `yaml:"default" json:"default"`
-	Label        string   `yaml:"label,omitempty" json:"label,omitempty"`
-	Type         string   `yaml:"type,omitempty" json:"type,omitempty"`
-	Options      []string `yaml:"options,omitempty" json:"options,omitempty"`
-	Required     bool     `yaml:"required,omitempty" json:"required,omitempty"`
-	Notice       string   `yaml:"notice,omitempty" json:"notice,omitempty"`
-	Autogenerate    string   `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
-	System          bool     `yaml:"system,omitempty" json:"system,omitempty"`
-	TriggersInstall bool     `yaml:"triggers_install,omitempty" json:"triggers_install,omitempty"`
+	Key             string          `yaml:"key" json:"key"`
+	Default         string          `yaml:"default" json:"default"`
+	Label           string          `yaml:"label,omitempty" json:"label,omitempty"`
+	Type            string          `yaml:"type,omitempty" json:"type,omitempty"`
+	Group           string          `yaml:"group,omitempty" json:"group,omitempty"`
+	Options         []string        `yaml:"options,omitempty" json:"options,omitempty"`
+	DynamicOptions  *DynamicOptions `yaml:"dynamic_options,omitempty" json:"dynamic_options,omitempty"`
+	Required        bool            `yaml:"required,omitempty" json:"required,omitempty"`
+	Notice          string          `yaml:"notice,omitempty" json:"notice,omitempty"`
+	Autogenerate    string          `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
+	System          bool            `yaml:"system,omitempty" json:"system,omitempty"`
+	TriggersInstall bool            `yaml:"triggers_install,omitempty" json:"triggers_install,omitempty"`
+}
+
+// DynamicOptions configures a backend provider that supplies options at runtime.
+// Used for things like Minecraft version lists that change over time.
+type DynamicOptions struct {
+	Source string         `yaml:"source" json:"source"`
+	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
 type Assets struct {
@@ -37,6 +46,7 @@ type Assets struct {
 type GameDefinition struct {
 	ID                   string   `yaml:"id"`
 	Name                 string   `yaml:"name"`
+	Description          string   `yaml:"description,omitempty"`
 	BaseImage            string   `yaml:"base_image"`
 	RecommendedMemoryMB  int      `yaml:"recommended_memory_mb"`
 	GJQSlug              string   `yaml:"gjq_slug,omitempty"`
@@ -51,6 +61,7 @@ type GameDefinition struct {
 type Game struct {
 	ID                   string   `json:"id"`
 	Name                 string   `json:"name"`
+	Description          string   `json:"description,omitempty"`
 	BaseImage            string   `json:"base_image"`
 	IconPath             string   `json:"icon_path"`
 	DefaultPorts         []Port   `json:"default_ports"`
@@ -180,6 +191,7 @@ func definitionToGame(def GameDefinition) *Game {
 	return &Game{
 		ID:                   def.ID,
 		Name:                 def.Name,
+		Description:          def.Description,
 		BaseImage:            def.BaseImage,
 		RecommendedMemoryMB:  def.RecommendedMemoryMB,
 		GJQSlug:              def.GJQSlug,
