@@ -14,20 +14,26 @@
 gamejanitor serve [flags]
 ```
 
-Starts the gamejanitor server. Defaults are newbie-optimized.
+Starts the gamejanitor server. Both controller and worker are enabled by default — a single command runs everything for newbies.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--role` | `standalone` | `standalone`, `controller`, `worker`, `controller+worker` |
+| `--controller` | `true` | Run the API/orchestrator |
+| `--worker` | `true` | Run the local Docker worker |
 | `--port` | `8080` | HTTP API port |
 | `--bind` | `127.0.0.1` | Bind address |
 | `--data-dir` | `/var/lib/gamejanitor` | Data directory |
 | `--sftp-port` | `2222` | SFTP port (0 to disable) |
 | `--grpc-port` | `9090` | gRPC port for multi-node (0 to disable) |
 | `--no-ui` | `false` | Disable web UI, API-only |
-| `--controller` | — | Controller gRPC address (worker mode) |
+| `--connect` | — | Controller gRPC address (worker-only mode) |
 | `--worker-id` | hostname | Worker node ID |
 | `--worker-token` | — | Worker auth token (or `GJ_WORKER_TOKEN`) |
+
+**Deployment modes:**
+- **Newbie/power user:** `gamejanitor serve` — both flags default true, everything runs
+- **Business controller:** `gamejanitor serve --worker=false` — API + orchestration only, no local Docker
+- **Business worker node:** `gamejanitor serve --controller=false --connect controller:9090 --worker-token gj_...` — Docker agent only, registers with controller
 
 ## Setup Commands
 
