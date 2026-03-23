@@ -1,0 +1,272 @@
+/* Gamejanitor Design Tokens
+   Shared across all pages and projects.
+   Import this in every mockup/page. */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* Brand — copper orange, the heat in the system */
+  --accent: #e8722a;
+  --accent-hover: #f08840;
+  --accent-dim: rgba(232, 114, 42, 0.12);
+  --accent-subtle: rgba(232, 114, 42, 0.06);
+  --accent-border: rgba(232, 114, 42, 0.22);
+  --accent-glow: rgba(232, 114, 42, 0.04);
+
+  /* Warm-shifted darks — not gray, cooled iron */
+  --bg-root: #0b0a09;
+  --bg-surface: #0f0e0c;
+  --bg-elevated: #151311;
+  --bg-hover: #1c1915;
+  --bg-inset: #08080a;
+  --bg-warm-glow: rgba(232, 114, 42, 0.02);
+
+  /* Borders carry warmth too */
+  --border: #2a2520;
+  --border-subtle: #1e1b17;
+  --border-dim: #131315;
+  --border-warm: rgba(232, 114, 42, 0.15);
+
+  /* Text — cream-shifted, not blue-white */
+  --text-primary: #f5f0ea;
+  --text-secondary: #a39a8e;
+  --text-tertiary: #6b6258;
+
+  /* Status — the server's voice, not the brand's */
+  --live: #22c55e;
+  --live-dim: rgba(34, 197, 94, 0.07);
+  --live-glow: rgba(34, 197, 94, 0.10);
+  --caution: #f59e0b;
+  --danger: #ef4444;
+  --idle: #52524a;
+
+  /* Typography */
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Radii */
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+html { font-size: 14px; }
+
+body {
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  /* Subtle warm vignette */
+  background-image: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(232,114,42,0.015) 0%, transparent 70%);
+}
+
+/* ═══════════════════════ SHARED NAV ═══════════════════════ */
+nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 54px; padding: 0 24px;
+  background: rgba(11, 10, 9, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-dim);
+}
+.n-left { display: flex; align-items: center; gap: 24px; }
+
+.brand {
+  display: flex; align-items: center; gap: 9px;
+  font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em;
+  color: var(--text-primary); text-decoration: none;
+}
+.brand-mark {
+  width: 26px; height: 26px;
+  background: linear-gradient(135deg, #f08840, var(--accent));
+  border-radius: 7px; display: grid; place-items: center;
+  box-shadow: 0 0 16px rgba(232, 114, 42, 0.25), 0 0 4px rgba(232, 114, 42, 0.15);
+}
+.brand-mark svg { width: 14px; height: 14px; fill: white; }
+
+.n-links { display: flex; gap: 2px; }
+.n-links a {
+  padding: 7px 13px; border-radius: var(--radius-sm);
+  font-size: 0.85rem; font-weight: 450;
+  color: var(--text-tertiary); text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
+}
+.n-links a:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.n-links a.active { color: var(--accent); background: var(--accent-dim); }
+
+.n-right { display: flex; align-items: center; }
+.auth {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 100px;
+  background: var(--bg-elevated); border: 1px solid var(--border-dim);
+  font-size: 0.75rem; color: var(--text-tertiary); font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.auth-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.4; }
+.auth-dot.authenticated { background: var(--live); opacity: 1; }
+
+/* ═══════════════════════ SHARED BUTTONS ═══════════════════════ */
+.btn-accent {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 15px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--accent-border);
+  color: var(--accent); font-family: var(--font-body);
+  font-size: 0.82rem; font-weight: 520; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-accent:hover {
+  background: var(--accent-dim);
+  border-color: rgba(232,114,42,0.35);
+  box-shadow: 0 0 20px rgba(232,114,42,0.06);
+}
+.btn-accent svg { width: 13px; height: 13px; }
+
+.btn-solid {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: var(--radius-sm);
+  background: var(--accent); border: none;
+  color: #fff; font-family: var(--font-body);
+  font-size: 0.84rem; font-weight: 520; cursor: pointer;
+  transition: background 0.15s, box-shadow 0.2s;
+  box-shadow: 0 0 12px rgba(232,114,42,0.2);
+}
+.btn-solid:hover { background: var(--accent-hover); box-shadow: 0 0 20px rgba(232,114,42,0.3); }
+.btn-solid svg { width: 14px; height: 14px; }
+
+.btn-action {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 18px; border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 0.84rem; font-weight: 500;
+  border: 1px solid; cursor: pointer; background: transparent;
+  transition: background 0.15s, border-color 0.2s, box-shadow 0.2s;
+}
+.btn-action svg { width: 14px; height: 14px; }
+.btn-action.stop { border-color: rgba(239,68,68,0.18); color: var(--danger); }
+.btn-action.stop:hover { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.35); }
+.btn-action.restart { border-color: rgba(245,158,11,0.18); color: var(--caution); }
+.btn-action.restart:hover { background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.35); }
+.btn-action.start { border-color: rgba(34,197,94,0.18); color: var(--live); }
+.btn-action.start:hover { background: rgba(34,197,94,0.06); border-color: rgba(34,197,94,0.35); }
+
+/* ═══════════════════════ SHARED STATUS ═══════════════════════ */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 13px 5px 10px; border-radius: 100px;
+  font-size: 0.72rem; font-weight: 500; font-family: var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.status-pill.running { background: var(--live-dim); color: var(--live); border: 1px solid rgba(34,197,94,0.12); }
+.status-pill.stopped { background: rgba(82,82,74,0.08); color: var(--idle); border: 1px solid rgba(82,82,74,0.1); }
+.status-pill.starting { background: rgba(245,158,11,0.08); color: var(--caution); border: 1px solid rgba(245,158,11,0.12); }
+.status-pill.error { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
+
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.status-pill.running .status-dot {
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live);
+  animation: heartbeat 2s ease-in-out infinite;
+}
+.status-pill.stopped .status-dot { background: var(--idle); }
+.status-pill.starting .status-dot {
+  background: var(--caution);
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+.status-pill.error .status-dot { background: var(--danger); }
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.85); opacity: 0.4; }
+}
+
+/* ═══════════════════════ SHARED FORM ELEMENTS ═══════════════════════ */
+.input {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-dim);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input::placeholder { color: var(--text-tertiary); opacity: 0.6; }
+.input:focus { border-color: var(--accent-border); }
+
+.input-mono { font-family: var(--font-mono); }
+
+.label {
+  display: block;
+  font-size: 0.78rem; font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.label-required::after {
+  content: ' *';
+  color: var(--accent);
+}
+
+.select {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-dim);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%236b6258'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+.select:focus { border-color: var(--accent-border); }
+
+.toggle {
+  position: relative;
+  width: 36px; height: 20px;
+  background: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: none;
+}
+.toggle.on { background: var(--accent); }
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transition: transform 0.2s;
+}
+.toggle.on::after { transform: translateX(16px); }
+
+/* ═══════════════════════ SHARED LAYOUT ═══════════════════════ */
+main { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
+
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22px;
+}
+.page-header h1 {
+  font-size: 1.25rem; font-weight: 600; letter-spacing: -0.025em;
+}
+
+/* ═══════════════════════ MOBILE ═══════════════════════ */
+@media (max-width: 620px) {
+  main { padding: 20px 12px 40px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
