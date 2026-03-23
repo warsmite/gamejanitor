@@ -10,7 +10,7 @@
   }
 </script>
 
-<div class="block" class:primary class:copied onclick={copy}>
+<div class="block" class:primary class:copied onclick={copy} onkeydown={(e) => e.key === 'Enter' && copy()} role="button" tabindex="0">
   <div class="info">
     <span class="label">{label}</span>
     <span class="addr">{value}</span>
