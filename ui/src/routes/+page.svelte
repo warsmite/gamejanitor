@@ -8,6 +8,7 @@
   let games = $state<Record<string, Game>>({});
   let stats = $state<Record<string, GameserverStats | null>>({});
   let queries = $state<Record<string, QueryData | null>>({});
+  let logs = $state<Record<string, string[]>>({});
   let search = $state('');
   let loading = $state(true);
 
@@ -46,8 +47,11 @@
       loading = false;
     }
 
-    // Initial stats/query fetch for running servers
+    // Initial stats/query/logs fetch for active servers
     for (const gs of gameservers) {
+      if (gs.status !== 'stopped') {
+        api.gameservers.logs(gs.id, 4).then(r => { if (r?.lines) logs[gs.id] = r.lines.slice(-4); }).catch(() => {});
+      }
       if (gs.status === 'running' || gs.status === 'started') {
         api.gameservers.stats(gs.id).then(s => { if (s) stats[gs.id] = s; }).catch(() => {});
         api.gameservers.query(gs.id).then(q => { if (q) queries[gs.id] = q; }).catch(() => {});
@@ -56,11 +60,26 @@
 
     // SSE: update gameserver status in real-time
     unsubs.push(onEvent('status_changed', (data: any) => {
+      const oldGs = gameservers.find(gs => gs.id === data.gameserver_id);
+      const wasInactive = !oldGs || oldGs.status === 'stopped';
+      const nowActive = data.new_status !== 'stopped';
+
       gameservers = gameservers.map(gs =>
         gs.id === data.gameserver_id
           ? { ...gs, status: data.new_status, error_reason: data.error_reason || '' }
           : gs
       );
+
+      // Fetch logs when a server becomes active
+      if (wasInactive && nowActive) {
+        api.gameservers.logs(data.gameserver_id, 4).then(r => { if (r?.lines) logs[data.gameserver_id] = r.lines.slice(-4); }).catch(() => {});
+      }
+      // Clear data when stopped
+      if (data.new_status === 'stopped') {
+        logs[data.gameserver_id] = [];
+        stats[data.gameserver_id] = null;
+        queries[data.gameserver_id] = null;
+      }
     }));
 
     // SSE: receive stats from server-side polling
@@ -83,6 +102,12 @@
         map: data.map,
         version: data.version,
       };
+    }));
+
+    // SSE: refresh log tail on lifecycle events
+    unsubs.push(onEvent('gameserver.*', (data: any) => {
+      if (!data.gameserver_id || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
+      api.gameservers.logs(data.gameserver_id, 4).then(r => { if (r?.lines) logs[data.gameserver_id] = r.lines.slice(-4); }).catch(() => {});
     }));
   });
 
@@ -163,9 +188,9 @@
           stats={stats[gs.id] || null}
           query={queries[gs.id] || null}
           connectionAddress={connectionAddress(gs)}
-          sftpAddress={`sftp://${gs.sftp_username}@localhost:2222`}
           iconPath={games[gs.game_id]?.icon_path || ''}
           gameName={games[gs.game_id]?.name || gs.game_id}
+          logLines={logs[gs.id] || []}
           onaction={(action) => handleAction(gs.id, action as any)}
         />
       {/each}

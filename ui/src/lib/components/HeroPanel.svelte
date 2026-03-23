@@ -5,15 +5,15 @@
   import CopyBlock from './CopyBlock.svelte';
   import TelemetryCell from './TelemetryCell.svelte';
 
-  let { gameserver, stats, query, connectionAddress, sftpAddress, iconPath = '', gameName = '', onaction }:
+  let { gameserver, stats, query, connectionAddress, iconPath = '', gameName = '', logLines = [], onaction }:
     {
       gameserver: Gameserver;
       stats: GameserverStats | null;
       query: QueryData | null;
       connectionAddress: string;
-      sftpAddress: string;
       iconPath?: string;
       gameName?: string;
+      logLines?: string[];
       onaction?: (action: string) => void;
     } = $props();
 
@@ -52,34 +52,50 @@
   <!-- Connection -->
   <div class="connect-row" onclick={(e) => e.preventDefault()}>
     <CopyBlock label="Connect" value={connectionAddress} primary={true} />
-    <CopyBlock label="SFTP" value={sftpAddress} />
+    {#if isRunning && query}
+      <div class="player-count">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1h8zm-7.978-1A.261.261 0 0 1 7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002a.274.274 0 0 1-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6.936 9.28a5.88 5.88 0 0 0-1.23-.247A7.35 7.35 0 0 0 5 9c-4 0-5 3-5 4 0 .667.333 1 1 1h4.216A2.238 2.238 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816zM4.92 10A5.493 5.493 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+        <span class="player-text">{query.players_online}<span class="player-max">/{query.max_players}</span></span>
+      </div>
+    {/if}
   </div>
 
-  <!-- Telemetry -->
-  <div class="telemetry">
-    <TelemetryCell
-      label="Players"
-      value={playersText}
-      unit={playersMax}
-      percent={playerPercent}
-      color="live"
-    />
-    <TelemetryCell
-      label="Memory"
-      value={stats ? `${(stats.memory_usage_mb / 1024).toFixed(1)}` : '—'}
-      unit={stats ? ' GB' : ''}
-      detail={stats ? `of ${(stats.memory_limit_mb / 1024).toFixed(0)} GB` : ''}
-      percent={memPercent}
-      color="accent"
-    />
-    <TelemetryCell
-      label="CPU"
-      value={stats ? `${cpuPercent}` : '—'}
-      unit={stats ? '%' : ''}
-      percent={cpuPercent}
-      color="accent"
-    />
-  </div>
+  {#if !isStopped}
+    <!-- Telemetry -->
+    <div class="telemetry">
+      <TelemetryCell
+        label="Players"
+        value={playersText}
+        unit={playersMax}
+        percent={playerPercent}
+        color="live"
+      />
+      <TelemetryCell
+        label="Memory"
+        value={stats ? `${(stats.memory_usage_mb / 1024).toFixed(1)}` : '—'}
+        unit={stats ? ' GB' : ''}
+        detail={stats ? `of ${(stats.memory_limit_mb / 1024).toFixed(0)} GB` : ''}
+        percent={memPercent}
+        color="accent"
+      />
+      <TelemetryCell
+        label="CPU"
+        value={stats ? `${cpuPercent}` : '—'}
+        unit={stats ? '%' : ''}
+        percent={cpuPercent}
+        color="accent"
+      />
+    </div>
+
+    <!-- Log preview -->
+    {#if logLines.length > 0}
+      <a href="/gameservers/{gameserver.id}/console" class="log-preview" onclick={(e) => e.stopPropagation()}>
+        {#each logLines as line}
+          <div class="log-line">{line}</div>
+        {/each}
+      </a>
+    {/if}
+  {/if}
 
   <!-- Actions -->
   <div class="actions" onclick={(e) => e.preventDefault()}>
@@ -168,9 +184,25 @@
   .game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
 
   .connect-row {
-    display: flex; gap: 12px;
+    display: flex; gap: 12px; align-items: center;
     padding: 18px 24px 0;
     position: relative; z-index: 1;
+  }
+  .player-count {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 11px;
+    background: var(--live-dim);
+    border: 1px solid rgba(34,197,94,0.12);
+    border-radius: 100px;
+    flex-shrink: 0;
+  }
+  .player-count svg { width: 13px; height: 13px; color: var(--live); opacity: 0.7; }
+  .player-text {
+    font-family: var(--font-mono); font-size: 0.78rem;
+    font-weight: 600; color: var(--live);
+  }
+  .player-max {
+    font-weight: 400; opacity: 0.5;
   }
 
   .telemetry {
@@ -186,6 +218,29 @@
   /* Target TelemetryCell's root div */
   .telemetry > :global(div) { padding: 14px 16px; background: var(--bg-inset); }
   .telemetry > :global(div + div) { border-left: 1px solid var(--border-dim); }
+
+  .log-preview {
+    display: block;
+    margin: 12px 24px 0;
+    padding: 10px 14px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    text-decoration: none;
+    position: relative; z-index: 1;
+    transition: border-color 0.15s;
+  }
+  .log-preview:hover { border-color: var(--border); }
+  .log-line {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .actions {
     display: flex; align-items: center; justify-content: space-between;
