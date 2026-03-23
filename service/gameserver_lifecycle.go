@@ -110,11 +110,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	// Remove old container if exists (stale from prior run/crash).
-	// Always try by name in case the DB lost track of the container ID
-	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
+	// Clear ContainerID first so late Docker "die" events from the old container
+	// are recognized as stale by the StatusManager.
 	containerName := naming.ContainerName(id)
 	if gs.ContainerID != nil {
-		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+		oldID := *gs.ContainerID
+		gs.ContainerID = nil
+		if err := models.UpdateGameserver(s.db, gs); err != nil {
+			s.log.Warn("failed to clear old container ID", "id", id, "error", err)
+		}
+		if err := w.RemoveContainer(ctx, oldID); err != nil {
 			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
 		}
 	}

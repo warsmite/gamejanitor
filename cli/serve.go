@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"io/fs"
+
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/docker"
@@ -21,6 +23,7 @@ import (
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/tlsutil"
 	"github.com/warsmite/gamejanitor/api"
+	"github.com/warsmite/gamejanitor/ui"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/spf13/cobra"
 )
@@ -394,6 +397,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Registry:      registry,
 		DB:            database,
 		Log:           logger,
+		WebUI:         webUIFS(cfg),
 	})
 
 	// Start SFTP server if enabled
@@ -451,4 +455,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 func isLoopback(addr string) bool {
 	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
+}
+
+func webUIFS(cfg config.Config) fs.FS {
+	if !cfg.WebUI {
+		return nil
+	}
+	sub, err := fs.Sub(ui.Dist, "dist")
+	if err != nil {
+		return nil
+	}
+	return sub
 }

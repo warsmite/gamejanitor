@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -33,6 +34,7 @@ type RouterOptions struct {
 	Registry      *worker.Registry
 	DB            *sql.DB
 	Log           *slog.Logger
+	WebUI         fs.FS // embedded UI static files (nil to disable)
 }
 
 func NewRouter(opts RouterOptions) http.Handler {
@@ -209,7 +211,37 @@ func NewRouter(opts RouterOptions) http.Handler {
 		})
 	})
 
+	// Serve embedded web UI (SPA with index.html fallback)
+	if opts.WebUI != nil {
+		r.Get("/*", spaHandler(opts.WebUI))
+	}
+
 	return r
+}
+
+// spaHandler serves static files from the embedded FS, falling back to
+// index.html for any path that doesn't match a file (client-side routing).
+func spaHandler(uiFS fs.FS) http.HandlerFunc {
+	fileServer := http.FileServer(http.FS(uiFS))
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the exact file
+		path := r.URL.Path
+		if path == "/" {
+			path = "index.html"
+		} else if path[0] == '/' {
+			path = path[1:]
+		}
+
+		// Check if file exists
+		if _, err := fs.Stat(uiFS, path); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// Fall back to index.html for SPA routing
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	}
 }
 
 // securityHeaders sets standard protective headers on every response.

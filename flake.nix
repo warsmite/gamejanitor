@@ -18,6 +18,15 @@
         src = ./.;
         vendorHash = "sha256-gQgVaBuFxSlH3pGDmmKJ/K88Xe40W608yCc/3BiKh5g=";
         env.CGO_ENABLED = "0";
+
+        nativeBuildInputs = [ pkgs.nodejs ];
+
+        preBuild = ''
+          cd ui
+          npm ci --ignore-scripts
+          npm run build
+          cd ..
+        '';
       };
 
       nixosModules.default = import ./nixos/module.nix self;
@@ -94,6 +103,16 @@
                    proto/worker.proto
           '';
 
+          build = pkgs.writeShellScriptBin "build" ''
+            set -e
+            echo "Building UI..."
+            cd ui && npm run build && cd ..
+            echo "Building Go binary..."
+            go clean -cache
+            go build -o gamejanitor .
+            echo "Done: ./gamejanitor"
+          '';
+
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             for runtime in docker podman; do
               if ! command -v "$runtime" &>/dev/null; then
@@ -127,8 +146,10 @@
             pkgs.protobuf
             pkgs.protoc-gen-go
             pkgs.protoc-gen-go-grpc
+            pkgs.nodejs
             dev
             cli
+            build
             build-image
             push-image
             push-all-images

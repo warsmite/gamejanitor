@@ -263,6 +263,11 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 			m.log.Debug("container event: ignoring stale event from old container", "id", gsID, "event_container", event.ContainerID[:12], "current_container", (*gs.ContainerID)[:12])
 			return
 		}
+		// If ContainerID was cleared (restart in progress), this is a stale event
+		if gs.ContainerID == nil && gs.Status != StatusStopping {
+			m.log.Debug("container event: ignoring event with no current container", "id", gsID, "status", gs.Status, "action", event.Action)
+			return
+		}
 
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
