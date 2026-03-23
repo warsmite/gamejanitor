@@ -6,8 +6,6 @@ disabled_capabilities: ["query"]
 ready_pattern: 'Setting breakpad minidump AppID'
 assets:
   icon: palworld-icon.ico
-  grid: palworld-grid.png
-  hero: palworld-hero.png
 
 ports:
   - name: game

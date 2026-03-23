@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: 'Lua initialized'
 assets:
   icon: garrys-mod-icon.ico
-  grid: garrys-mod-grid.png
-  hero: garrys-mod-hero.png
 
 ports:
   - name: game

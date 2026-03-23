@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
 assets:
   icon: minecraft-icon.ico
-  grid: minecraft-grid.png
-  hero: minecraft-hero.png
 
 ports:
   - name: game

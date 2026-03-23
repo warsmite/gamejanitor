@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: 'Full Startup:'
 assets:
   icon: ark-survival-evolved-icon.ico
-  grid: ark-survival-evolved-grid.png
-  hero: ark-survival-evolved-hero.png
 
 ports:
   - name: game

@@ -32,8 +32,6 @@ type EnvVar struct {
 
 type Assets struct {
 	Icon string `yaml:"icon,omitempty"`
-	Grid string `yaml:"grid,omitempty"`
-	Hero string `yaml:"hero,omitempty"`
 }
 
 type GameDefinition struct {
@@ -55,8 +53,6 @@ type Game struct {
 	Name                 string   `json:"name"`
 	BaseImage            string   `json:"base_image"`
 	IconPath             string   `json:"icon_path"`
-	GridPath             string   `json:"grid_path"`
-	HeroPath             string   `json:"hero_path"`
 	DefaultPorts         []Port   `json:"default_ports"`
 	DefaultEnv           []EnvVar `json:"default_env"`
 	RecommendedMemoryMB  int      `json:"recommended_memory_mb"`
@@ -150,16 +146,6 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 			game.IconPath = assetPrefix + def.Assets.Icon
 		} else {
 			game.IconPath = defaultAsset + "default-icon.svg"
-		}
-		if def.Assets.Grid != "" {
-			game.GridPath = assetPrefix + def.Assets.Grid
-		} else {
-			game.GridPath = defaultAsset + "default-grid.svg"
-		}
-		if def.Assets.Hero != "" {
-			game.HeroPath = assetPrefix + def.Assets.Hero
-		} else {
-			game.HeroPath = defaultAsset + "default-hero.svg"
 		}
 
 		subFS, err := fs.Sub(root, gameDir)

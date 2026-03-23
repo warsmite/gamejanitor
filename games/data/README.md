@@ -17,8 +17,6 @@ minecraft-java/
     update-server  (optional)
   assets/         # UI images
     icon.ico
-    grid.png
-    hero.png
   defaults/       # Default config files copied on first run (optional)
     server.properties
 ```

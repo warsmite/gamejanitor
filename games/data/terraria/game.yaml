@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: "Type 'help' for a list of commands"
 assets:
   icon: terraria-icon.ico
-  grid: terraria-grid.png
-  hero: terraria-hero.png
 
 ports:
   - name: game

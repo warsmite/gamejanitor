@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: 'GC Connection established'
 assets:
   icon: counter-strike-2-icon.ico
-  grid: counter-strike-2-grid.png
-  hero: counter-strike-2-hero.png
 
 ports:
   - name: game

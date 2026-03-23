@@ -6,8 +6,6 @@ disabled_capabilities: []
 ready_pattern: 'Server startup complete'
 assets:
   icon: rust-icon.ico
-  grid: rust-grid.png
-  hero: rust-hero.png
 
 ports:
   - name: game

@@ -6,8 +6,6 @@ disabled_capabilities: ["query", "command", "save"]
 ready_pattern: 'Server Start Completed'
 assets:
   icon: satisfactory-icon.ico
-  grid: satisfactory-grid.png
-  hero: satisfactory-hero.png
 
 ports:
   - name: game

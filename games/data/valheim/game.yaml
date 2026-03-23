@@ -6,8 +6,6 @@ disabled_capabilities: ["command"]
 ready_pattern: 'Game server connected'
 assets:
   icon: valheim-icon.ico
-  grid: valheim-grid.png
-  hero: valheim-hero.png
 
 ports:
   - name: game
