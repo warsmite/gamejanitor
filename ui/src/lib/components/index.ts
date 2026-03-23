@@ -5,3 +5,6 @@ export { default as TelemetryCell } from './TelemetryCell.svelte';
 export { default as ToastContainer } from './ToastContainer.svelte';
 export { default as HeroPanel } from './HeroPanel.svelte';
 export { default as ConfirmModal } from './ConfirmModal.svelte';
+export { default as EnvEditor } from './EnvEditor.svelte';
+export { default as ResourceSlider } from './ResourceSlider.svelte';
+export { default as GameserverForm } from './GameserverForm.svelte';

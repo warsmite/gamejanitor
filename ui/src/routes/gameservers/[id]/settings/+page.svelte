@@ -2,9 +2,9 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { api, type Gameserver, type Game, type EnvVar, type DynamicOption } from '$lib/api';
+  import { api, type Gameserver, type Game, type DynamicOption } from '$lib/api';
   import { toast, confirm } from '$lib/stores';
-  import { GameIcon } from '$lib/components';
+  import { GameIcon, GameserverForm } from '$lib/components';
 
   const gsId = $derived($page.params.id as string);
 
@@ -13,10 +13,18 @@
   let loading = $state(true);
   let saving = $state(false);
 
-  // Editable fields
+  // Form state — bound to GameserverForm
   let serverName = $state('');
   let env = $state<Record<string, string>>({});
   let memoryLimitMB = $state(2048);
+  let storageLimitMB = $state(0);
+  let cpuLimit = $state(0);
+  let cpuEnforced = $state(false);
+  let backupLimit = $state(0);
+  let portMode = $state('auto');
+  let manualPorts = $state<{ name: string; host_port: number; container_port: number; protocol: string }[]>([]);
+  let autoRestart = $state(true);
+  let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
 
   // SFTP
   let sftpPassword = $state('');
@@ -27,43 +35,42 @@
   let reinstalling = $state(false);
   let deleting = $state(false);
 
-  // Dynamic options cache
-  let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
-
-  // Group env vars (excluding system/autogenerate)
-  const visibleEnvVars = $derived(
-    game?.default_env.filter(e => !e.system && !e.autogenerate) || []
-  );
-
-  const envGroups = $derived(() => {
-    const groups: Record<string, EnvVar[]> = {};
-    for (const e of visibleEnvVars) {
-      const group = e.group || 'General';
-      if (!groups[group]) groups[group] = [];
-      groups[group].push(e);
-    }
-    return groups;
-  });
-
   onMount(async () => {
     try {
       gameserver = await api.gameservers.get(gsId);
       serverName = gameserver.name;
       memoryLimitMB = gameserver.memory_limit_mb;
+      storageLimitMB = gameserver.storage_limit_mb || 0;
+      cpuLimit = gameserver.cpu_limit;
+      cpuEnforced = gameserver.cpu_enforced;
+      backupLimit = gameserver.backup_limit || 0;
+      autoRestart = gameserver.auto_restart;
+      portMode = gameserver.port_mode || 'auto';
 
-      // Parse env from gameserver
       const gsEnv = typeof gameserver.env === 'string' ? JSON.parse(gameserver.env) : gameserver.env;
       if (gsEnv && typeof gsEnv === 'object') {
         env = { ...gsEnv };
       }
 
+      // Parse existing ports for manual mode
+      try {
+        const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
+        if (ports && ports.length > 0) {
+          manualPorts = ports.map((p: any) => ({
+            name: p.name || '',
+            host_port: p.host_port || p.container_port,
+            container_port: p.container_port,
+            protocol: p.protocol || 'tcp',
+          }));
+        }
+      } catch { /* ignore */ }
+
       try {
         game = await api.games.get(gameserver.game_id);
-        // Load dynamic options for env vars that have them
         for (const e of game.default_env) {
           if (e.dynamic_options) {
             try {
-              dynamicOptions[e.key] = await api.games.options(game.id, e.dynamic_options.source);
+              dynamicOptions[e.key] = await api.games.options(game.id, e.key);
             } catch { /* non-fatal */ }
           }
         }
@@ -75,37 +82,23 @@
     }
   });
 
-  async function saveGeneral() {
+  async function saveAll() {
     saving = true;
     try {
-      await api.gameservers.update(gsId, { name: serverName });
-      if (gameserver) gameserver = { ...gameserver, name: serverName };
-      toast('Saved', 'success');
-    } catch (e: any) {
-      toast(`Failed to save: ${e.message}`, 'error');
-    } finally {
-      saving = false;
-    }
-  }
-
-  async function saveEnv() {
-    saving = true;
-    try {
-      await api.gameservers.update(gsId, { env });
-      toast('Environment saved', 'success');
-    } catch (e: any) {
-      toast(`Failed to save: ${e.message}`, 'error');
-    } finally {
-      saving = false;
-    }
-  }
-
-  async function saveResources() {
-    saving = true;
-    try {
-      await api.gameservers.update(gsId, { memory_limit_mb: memoryLimitMB });
-      if (gameserver) gameserver = { ...gameserver, memory_limit_mb: memoryLimitMB };
-      toast('Resources saved', 'success');
+      await api.gameservers.update(gsId, {
+        name: serverName,
+        env,
+        memory_limit_mb: memoryLimitMB,
+        storage_limit_mb: storageLimitMB,
+        cpu_limit: cpuLimit,
+        cpu_enforced: cpuEnforced,
+        backup_limit: backupLimit,
+        auto_restart: autoRestart,
+      });
+      if (gameserver) {
+        gameserver = { ...gameserver, name: serverName, memory_limit_mb: memoryLimitMB, storage_limit_mb: storageLimitMB, cpu_limit: cpuLimit, cpu_enforced: cpuEnforced, backup_limit: backupLimit, auto_restart: autoRestart };
+      }
+      toast('Settings saved', 'success');
     } catch (e: any) {
       toast(`Failed to save: ${e.message}`, 'error');
     } finally {
@@ -166,134 +159,32 @@
       deleting = false;
     }
   }
-
-  function memoryLabel(mb: number): string {
-    if (mb === 0) return 'Unlimited';
-    if (mb < 1024) return `${mb} MB`;
-    return `${(mb / 1024).toFixed(mb % 1024 === 0 ? 0 : 1)} GB`;
-  }
-
-  function updateSliderBackground(e: Event) {
-    const el = e.target as HTMLInputElement;
-    const min = Number(el.min);
-    const max = Number(el.max);
-    const val = Number(el.value);
-    const pct = ((val - min) / (max - min)) * 100;
-    el.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
-  }
-
-  function renderEnvInput(ev: EnvVar): string {
-    return env[ev.key] ?? ev.default ?? '';
-  }
 </script>
 
 {#if loading}
   <p style="color:var(--text-tertiary); text-align:center; padding:40px;">Loading...</p>
-{:else if gameserver}
+{:else if gameserver && game}
   <div class="settings-panel">
+    <GameserverForm
+      {game}
+      bind:serverName={serverName}
+      bind:memoryMb={memoryLimitMB}
+      bind:storageLimitMb={storageLimitMB}
+      bind:cpuLimit={cpuLimit}
+      bind:cpuEnforced={cpuEnforced}
+      bind:backupLimit={backupLimit}
+      bind:portMode={portMode}
+      bind:manualPorts={manualPorts}
+      bind:autoRestart={autoRestart}
+      bind:envValues={env}
+      {dynamicOptions}
+    />
 
-    <!-- General -->
-    <div class="s-section">
-      <div class="s-title">General</div>
-      <div class="s-grid">
-        <div class="s-row">
-          <label class="label">Server Name</label>
-          <input class="input" type="text" bind:value={serverName}>
-        </div>
-        <div class="s-row">
-          <label class="label">Game</label>
-          <div class="s-readonly">
-            {#if game}
-              <GameIcon src={game.icon_path} name={game.name} size={20} />
-              <span style="margin-left:8px;">{game.name}</span>
-            {:else}
-              {gameserver.game_id}
-            {/if}
-          </div>
-        </div>
-      </div>
-      <div class="s-save-row">
-        <button class="btn-solid" onclick={saveGeneral} disabled={saving} style="padding:8px 20px; font-size:0.84rem;">
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-
-    <!-- Environment Variables -->
-    {#if visibleEnvVars.length > 0}
-      <div class="s-section">
-        <div class="s-title">Environment Variables</div>
-        {#each Object.entries(envGroups()) as [groupName, vars]}
-          <div class="env-group">
-            <div class="env-group-label">{groupName}</div>
-            <div class="s-grid">
-              {#each vars as ev}
-                <div class="s-row">
-                  <label class="label">{ev.label || ev.key}</label>
-                  {#if ev.type === 'boolean'}
-                    <div style="display:flex; align-items:center; gap:8px;">
-                      <button class="toggle" class:on={env[ev.key] === 'true' || (!env[ev.key] && ev.default === 'true')} onclick={() => {
-                        const current = env[ev.key] ?? ev.default ?? 'false';
-                        env[ev.key] = current === 'true' ? 'false' : 'true';
-                      }}></button>
-                      <span style="font-size:0.78rem; color:var(--text-tertiary);">
-                        {(env[ev.key] ?? ev.default) === 'true' ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-                  {:else if ev.options && ev.options.length > 0}
-                    <select class="select" value={renderEnvInput(ev)} onchange={(e) => env[ev.key] = (e.target as HTMLSelectElement).value}>
-                      {#each ev.options as opt}
-                        <option value={opt}>{opt}</option>
-                      {/each}
-                    </select>
-                  {:else if dynamicOptions[ev.key]}
-                    <select class="select" value={renderEnvInput(ev)} onchange={(e) => env[ev.key] = (e.target as HTMLSelectElement).value}>
-                      {#each dynamicOptions[ev.key] as opt}
-                        <option value={opt.value}>{opt.label}</option>
-                      {/each}
-                    </select>
-                  {:else}
-                    <input
-                      class="input"
-                      class:input-mono={ev.type === 'number'}
-                      type={ev.type === 'number' ? 'number' : 'text'}
-                      value={renderEnvInput(ev)}
-                      oninput={(e) => env[ev.key] = (e.target as HTMLInputElement).value}
-                    >
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/each}
-        <div class="s-save-row">
-          <button class="btn-solid" onclick={saveEnv} disabled={saving} style="padding:8px 20px; font-size:0.84rem;">
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    {/if}
-
-    <!-- Resources -->
-    <div class="s-section">
-      <div class="s-title">Resources</div>
-      <div class="s-row">
-        <div class="resource-header">
-          <span class="label">Memory</span>
-          <span class="resource-value">{memoryLabel(memoryLimitMB)}</span>
-        </div>
-        <input
-          type="range" class="slider"
-          min="0" max="16384" step="256"
-          bind:value={memoryLimitMB}
-          oninput={updateSliderBackground}
-        >
-      </div>
-      <div class="s-save-row" style="margin-top:14px;">
-        <button class="btn-solid" onclick={saveResources} disabled={saving} style="padding:8px 20px; font-size:0.84rem;">
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
+    <!-- Save -->
+    <div class="save-row">
+      <button class="btn-solid" onclick={saveAll} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
     </div>
 
     <!-- SFTP -->
@@ -351,7 +242,11 @@
         </div>
       </div>
     </div>
-
+  </div>
+{:else if gameserver}
+  <!-- Game definition not found — show minimal settings -->
+  <div class="settings-panel">
+    <p style="color:var(--text-tertiary);">Game definition not found for "{gameserver.game_id}". Settings limited.</p>
   </div>
 {/if}
 
@@ -375,117 +270,45 @@
     pointer-events: none;
   }
 
+  .save-row {
+    display: flex; justify-content: flex-end;
+    position: relative; z-index: 1;
+    margin: 20px 0 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-dim);
+  }
+
   .s-section { position: relative; z-index: 1; margin-bottom: 28px; }
   .s-section:last-child { margin-bottom: 0; }
-
   .s-title {
     font-size: 0.68rem; font-family: var(--font-mono);
     text-transform: uppercase; letter-spacing: 0.1em;
     color: var(--text-tertiary);
-    margin-bottom: 14px;
-    padding-bottom: 8px;
+    margin-bottom: 14px; padding-bottom: 8px;
     border-bottom: 1px solid var(--border-dim);
-  }
-
-  .s-row { margin-bottom: 14px; }
-  .s-row:last-child { margin-bottom: 0; }
-  .s-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-  .s-readonly {
-    display: flex; align-items: center;
-    padding: 9px 14px;
-    background: var(--bg-inset);
-    border: 1px solid var(--border-dim);
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem; color: var(--text-tertiary);
   }
 
   .s-mono-value {
     font-family: var(--font-mono); font-size: 0.85rem;
     color: var(--text-secondary);
     padding: 9px 14px;
-    background: var(--bg-inset);
-    border: 1px solid var(--border-dim);
+    background: var(--bg-inset); border: 1px solid var(--border-dim);
     border-radius: var(--radius-sm);
   }
 
-  .env-group {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-dim);
-    border-left: 2px solid rgba(232, 114, 42, 0.2);
-    border-radius: var(--radius);
-    padding: 18px;
-    margin-bottom: 14px;
-  }
-  .env-group:last-child { margin-bottom: 0; }
-  .env-group-label {
-    font-size: 0.66rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary);
-    margin-bottom: 14px;
-  }
-
-  .s-save-row {
-    display: flex; justify-content: flex-end;
-    margin-top: 16px;
-  }
-
-  /* Resources */
-  .resource-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .resource-header .label { margin-bottom: 0; }
-  .resource-value { font-size: 0.78rem; font-family: var(--font-mono); font-weight: 500; color: var(--text-primary); }
-
-  .slider {
-    -webkit-appearance: none; appearance: none;
-    width: 100%; height: 4px; border-radius: 2px;
-    background: var(--border-dim); outline: none; cursor: pointer;
-  }
-  .slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--accent); cursor: pointer;
-    box-shadow: 0 0 8px rgba(232,114,42,0.25);
-  }
-  .slider::-moz-range-thumb {
-    width: 16px; height: 16px; border-radius: 50%; border: none;
-    background: var(--accent); cursor: pointer;
-    box-shadow: 0 0 8px rgba(232,114,42,0.25);
-  }
-
-  /* SFTP */
-  .sftp-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 14px;
-  }
-  .sftp-warn {
-    font-size: 0.72rem; color: var(--text-tertiary);
-    margin-top: 6px;
-  }
+  .sftp-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .sftp-warn { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 6px; }
   .sftp-pass { margin-top: 10px; }
 
-  /* Danger zone */
-  .danger-zone {
-    background: rgba(239, 68, 68, 0.03);
-    border: 1px solid rgba(239, 68, 68, 0.15);
-    border-radius: var(--radius);
-    padding: 20px;
-  }
-  .danger-zone .s-title {
-    color: var(--danger);
-    border-bottom-color: rgba(239, 68, 68, 0.12);
-  }
-  .danger-item {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 12px 0;
-    gap: 16px;
-  }
+  .danger-zone { background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: var(--radius); padding: 20px; }
+  .danger-zone .s-title { color: var(--danger); border-bottom-color: rgba(239, 68, 68, 0.12); }
+  .danger-item { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 0; gap: 16px; }
   .danger-item + .danger-item { border-top: 1px solid rgba(239, 68, 68, 0.08); }
   .danger-text { flex: 1; }
   .danger-label { font-size: 0.88rem; font-weight: 500; color: var(--text-primary); }
   .danger-desc { font-size: 0.76rem; color: var(--text-tertiary); margin-top: 2px; }
 
   @media (max-width: 700px) {
-    .s-grid { grid-template-columns: 1fr; }
     .settings-panel { padding: 18px; }
     .sftp-row { flex-direction: column; align-items: flex-start; }
     .danger-item { flex-direction: column; }
