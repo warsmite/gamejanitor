@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Gameserver, GameserverStats, QueryData } from '$lib/api';
+  import GameIcon from './GameIcon.svelte';
   import StatusPill from './StatusPill.svelte';
   import CopyBlock from './CopyBlock.svelte';
   import TelemetryCell from './TelemetryCell.svelte';
@@ -39,7 +40,7 @@
   <!-- Identity + status -->
   <div class="head">
     <div class="id-left">
-      <div class="icon">{#if iconPath}<img src={iconPath} alt="" />{/if}</div>
+      <GameIcon src={iconPath} name={gameName} size={52} />
       <div>
         <div class="name">{gameserver.name}</div>
         <div class="game">{gameName || gameserver.game_id}</div>
@@ -163,14 +164,6 @@
     position: relative; z-index: 1;
   }
   .id-left { display: flex; align-items: center; gap: 14px; }
-  .icon {
-    width: 52px; height: 52px; border-radius: 11px;
-    background: var(--bg-inset); border: 1px solid var(--border-dim);
-    display: grid; place-items: center;
-    box-shadow: inset 0 1px 4px rgba(232,114,42,0.04);
-    overflow: hidden;
-  }
-  .icon img { width: 100%; height: 100%; object-fit: cover; }
   .name { font-weight: 600; font-size: 1.15rem; letter-spacing: -0.02em; }
   .game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
 

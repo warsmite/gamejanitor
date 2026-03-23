@@ -1,3 +1,4 @@
+export { default as GameIcon } from './GameIcon.svelte';
 export { default as StatusPill } from './StatusPill.svelte';
 export { default as CopyBlock } from './CopyBlock.svelte';
 export { default as TelemetryCell } from './TelemetryCell.svelte';

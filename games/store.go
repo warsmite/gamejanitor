@@ -150,13 +150,9 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 
 		game := definitionToGame(def)
 
-		// Set asset paths from YAML definition
-		assetPrefix := "/games/" + def.ID + "/"
-		defaultAsset := "/games/default/"
+		// Set asset path from YAML definition (empty if no icon configured)
 		if def.Assets.Icon != "" {
-			game.IconPath = assetPrefix + def.Assets.Icon
-		} else {
-			game.IconPath = defaultAsset + "default-icon.svg"
+			game.IconPath = "/games/" + def.ID + "/" + def.Assets.Icon
 		}
 
 		subFS, err := fs.Sub(root, gameDir)

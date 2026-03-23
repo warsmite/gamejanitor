@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { api, type Game, type EnvVar, type DynamicOption } from '$lib/api';
   import { toast } from '$lib/stores';
+  import { GameIcon } from '$lib/components';
 
   // Popular game IDs for featured section
   const popularIds = ['minecraft-java', 'rust', 'counter-strike-2', 'valheim'];
@@ -164,7 +165,7 @@
       <div class="featured-grid">
         {#each popularGames as game}
           <button class="featured-card" onclick={() => pickGame(game)}>
-            <div class="featured-icon"><img src={game.icon_path} alt="" /></div>
+            <GameIcon src={game.icon_path} name={game.name} size={48} />
             <div class="featured-name">{game.name}</div>
             <div class="featured-desc">{game.description || ''}</div>
           </button>
@@ -183,7 +184,7 @@
     <div class="game-list">
       {#each filteredGames as game}
         <button class="game-row" onclick={() => pickGame(game)}>
-          <div class="game-row-icon"><img src={game.icon_path} alt="" /></div>
+          <GameIcon src={game.icon_path} name={game.name} size={28} />
           <div class="game-row-info">
             <div class="game-row-name">{game.name}</div>
             <div class="game-row-desc">{game.description || ''}</div>
@@ -200,7 +201,7 @@
     <!-- ═══════════ STEP 2: CONFIGURE ═══════════ -->
 
     <div class="selected-game">
-      <div class="selected-icon"><img src={selectedGame.icon_path} alt="" /></div>
+      <GameIcon src={selectedGame.icon_path} name={selectedGame.name} size={42} />
       <div class="selected-info">
         <div class="selected-name">{selectedGame.name}</div>
         <div class="selected-meta">Recommended memory: {selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`}</div>
@@ -292,7 +293,7 @@
       <!-- Submit -->
       <div class="submit-row">
         <button class="btn-solid" disabled={!serverName.trim() || submitting} onclick={createServer}>
-          <img src={selectedGame.icon_path} alt="" class="submit-icon" />
+          <GameIcon src={selectedGame.icon_path} name={selectedGame.name} size={18} />
           {submitting ? 'Creating...' : `Create ${selectedGame.name.split(':')[0]} Server`}
         </button>
       </div>
@@ -328,14 +329,6 @@
     gap: 10px; text-align: center; font-family: var(--font-body); color: var(--text-primary);
   }
   .featured-card:hover { border-color: var(--accent-border); background: var(--bg-elevated); box-shadow: 0 0 24px rgba(232,114,42,0.05); transform: translateY(-2px); }
-  .featured-icon {
-    width: 48px; height: 48px; border-radius: 10px;
-    background: var(--bg-inset); border: 1px solid var(--border-dim);
-    display: grid; place-items: center;
-    box-shadow: inset 0 1px 4px rgba(232,114,42,0.04);
-    overflow: hidden;
-  }
-  .featured-icon img { width: 100%; height: 100%; object-fit: cover; }
   .featured-name { font-weight: 550; font-size: 0.85rem; }
   .featured-desc { font-size: 0.72rem; color: var(--text-tertiary); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
@@ -361,8 +354,6 @@
   }
   .game-row:hover { background: var(--bg-elevated); border-left-color: var(--accent); }
   .game-row + .game-row { border-top: 1px solid var(--border-dim); }
-  .game-row-icon { width: 28px; height: 28px; border-radius: 5px; background: var(--bg-inset); display: grid; place-items: center; flex-shrink: 0; overflow: hidden; }
-  .game-row-icon img { width: 100%; height: 100%; object-fit: cover; }
   .game-row-info { flex: 1; min-width: 0; }
   .game-row-name { font-size: 0.85rem; font-weight: 500; }
   .game-row-desc { font-size: 0.73rem; color: var(--text-tertiary); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -378,9 +369,6 @@
     border-radius: var(--radius); position: relative; overflow: hidden;
   }
   .selected-game::before { content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.3; }
-  .selected-icon { width: 42px; height: 42px; border-radius: 9px; background: var(--bg-inset); border: 1px solid var(--border-dim); display: grid; place-items: center; flex-shrink: 0; overflow: hidden; }
-  .selected-icon img { width: 100%; height: 100%; object-fit: cover; }
-  .submit-icon { width: 18px; height: 18px; object-fit: contain; }
   .selected-info { flex: 1; }
   .selected-name { font-weight: 600; font-size: 1rem; }
   .selected-meta { font-size: 0.76rem; color: var(--text-tertiary); margin-top: 2px; }
