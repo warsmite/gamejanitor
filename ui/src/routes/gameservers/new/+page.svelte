@@ -292,33 +292,30 @@
         <input class="input" type="text" placeholder="e.g. survival-smp" bind:value={serverName}>
       </div>
 
-      <div class="form-grid">
-        <div class="form-row">
-          <div class="resource-header">
-            <span class="label">Memory</span>
-            <span class="resource-value">{memoryDisplay}</span>
-          </div>
-          <input type="range" class="slider" min="0" max="16384" step="256"
-            value={memoryMb}
-            oninput={updateSliderFill}
-          >
-          {#if belowRecommended}
-            <div class="resource-warning">
-              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
-              Below recommended ({selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`})
-            </div>
-          {/if}
+      <div class="form-row">
+        <div class="resource-header">
+          <span class="label">Memory</span>
+          <span class="resource-value">{memoryDisplay}</span>
         </div>
-        <div class="form-row">
-          <div class="resource-header">
-            <span class="label">Storage</span>
-            <span class="resource-value">{storageDisplay}</span>
-          </div>
-          <input type="range" class="slider storage-slider" min="0" max="1048576" step="1024"
-            value={storageLimitMb}
-            oninput={updateStorageSlider}
-          >
+        <input type="range" class="slider" min="0" max="16384" step="256"
+          value={memoryMb}
+          oninput={updateSliderFill}
+        >
+        <div class="resource-warning" class:visible={belowRecommended}>
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+          Below recommended ({selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`})
         </div>
+      </div>
+
+      <div class="form-row">
+        <div class="resource-header">
+          <span class="label">Storage</span>
+          <span class="resource-value">{storageDisplay}</span>
+        </div>
+        <input type="range" class="slider storage-slider" min="0" max="1048576" step="1024"
+          value={storageLimitMb}
+          oninput={updateStorageSlider}
+        >
       </div>
 
       <!-- Required env vars with notices (e.g. EULA) — always visible -->
@@ -611,7 +608,8 @@
   .resource-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .resource-header .label { margin-bottom: 0; }
   .resource-value { font-size: 0.78rem; font-family: var(--font-mono); font-weight: 500; color: var(--text-primary); }
-  .resource-warning { font-size: 0.72rem; color: var(--accent); margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+  .resource-warning { font-size: 0.72rem; color: var(--accent); margin-top: 6px; display: flex; align-items: center; gap: 5px; visibility: hidden; }
+  .resource-warning.visible { visibility: visible; }
   .resource-warning svg { width: 12px; height: 12px; flex-shrink: 0; }
 
   .slider { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px; background: var(--border-dim); outline: none; cursor: pointer; }
