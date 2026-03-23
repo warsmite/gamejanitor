@@ -153,7 +153,7 @@
     if (!await confirm({ title: `Delete ${isDir ? 'Directory' : 'File'}`, message: `Delete "${name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     try {
       await api.files.delete(gsId, apiPath(path));
-      await loadFiles();
+      files = files.filter(f => f.name !== name);
     } catch (e: any) {
       toast(`Failed to delete: ${e.message}`, 'error');
     }
@@ -165,16 +165,17 @@
   }
 
   async function confirmRename(oldName: string) {
-    if (!renameValue || renameValue === oldName) {
+    if (!renamingFile || !renameValue || renameValue === oldName) {
       renamingFile = '';
       return;
     }
+    renamingFile = '';
+    const newName = renameValue;
     const from = filePath(oldName);
-    const to = filePath(renameValue);
+    const to = filePath(newName);
     try {
       await api.files.rename(gsId, apiPath(from), apiPath(to));
-      renamingFile = '';
-      await loadFiles();
+      files = files.map(f => f.name === oldName ? { ...f, name: newName } : f);
     } catch (e: any) {
       toast(`Failed to rename: ${e.message}`, 'error');
     }
@@ -186,7 +187,7 @@
     const path = filePath(name);
     try {
       await api.files.mkdir(gsId, apiPath(path));
-      await loadFiles();
+      files = [...files, { name, is_dir: true, size: 0, mod_time: new Date().toISOString(), permissions: '' }];
     } catch (e: any) {
       toast(`Failed to create directory: ${e.message}`, 'error');
     }
@@ -198,7 +199,7 @@
     const path = filePath(name);
     try {
       await api.files.write(gsId, apiPath(path), '');
-      await loadFiles();
+      files = [...files, { name, is_dir: false, size: 0, mod_time: new Date().toISOString(), permissions: '' }];
       if (isTextFile(name)) {
         openEditor(name);
       }
@@ -214,7 +215,12 @@
     try {
       await api.files.upload(gsId, apiPath(currentPath), file);
       toast('File uploaded', 'success');
-      await loadFiles();
+      const existing = files.find(f => f.name === file.name);
+      if (existing) {
+        files = files.map(f => f.name === file.name ? { ...f, size: file.size, mod_time: new Date().toISOString() } : f);
+      } else {
+        files = [...files, { name: file.name, is_dir: false, size: file.size, mod_time: new Date().toISOString(), permissions: '' }];
+      }
     } catch (e: any) {
       toast(`Upload failed: ${(e as Error).message}`, 'error');
     }
