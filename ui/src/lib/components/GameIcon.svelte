@@ -3,10 +3,11 @@
   let failed = $state(false);
 
   const letter = $derived(name ? name.charAt(0).toUpperCase() : '?');
+  const hasImage = $derived(!!src && !failed);
 </script>
 
-<div class="icon" style="width:{size}px; height:{size}px; font-size:{size * 0.4}px;">
-  {#if src && !failed}
+<div class="icon" class:has-image={hasImage} style="width:{size}px; height:{size}px; font-size:{size * 0.4}px;">
+  {#if hasImage}
     <img {src} alt="" onerror={() => failed = true} />
   {:else}
     <span class="fallback">{letter}</span>
@@ -22,7 +23,12 @@
     overflow: hidden; flex-shrink: 0;
     box-shadow: inset 0 1px 4px rgba(232, 114, 42, 0.04);
   }
-  .icon img { width: 100%; height: 100%; object-fit: cover; }
+  .icon.has-image {
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
+  .icon img { width: 100%; height: 100%; object-fit: contain; }
   .fallback {
     font-family: var(--font-mono);
     font-weight: 600;
