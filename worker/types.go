@@ -50,9 +50,9 @@ type ContainerEvent struct {
 }
 
 type FileEntry struct {
-	Name        string
-	IsDir       bool
-	Size        int64
-	ModTime     time.Time
-	Permissions string
+	Name        string    `json:"name"`
+	IsDir       bool      `json:"is_dir"`
+	Size        int64     `json:"size"`
+	ModTime     time.Time `json:"mod_time"`
+	Permissions string    `json:"permissions"`
 }

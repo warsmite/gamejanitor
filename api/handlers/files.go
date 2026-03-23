@@ -53,8 +53,7 @@ func (h *FileHandlers) Read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(content)
+	respondOK(w, map[string]string{"content": string(content)})
 }
 
 func (h *FileHandlers) Write(w http.ResponseWriter, r *http.Request) {
