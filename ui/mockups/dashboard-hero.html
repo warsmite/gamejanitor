@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gamejanitor — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-root: #0a0a0b;
+    --bg-surface: #0e0e10;
+    --bg-elevated: #141416;
+    --bg-hover: #1a1a1e;
+    --bg-inset: #09090a;
+    --border: #27272a;
+    --border-subtle: #1c1c1f;
+    --border-dim: #151518;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #63636e;
+    --accent: #3b82f6;
+    --status-running: #22c55e;
+    --status-running-dim: rgba(34, 197, 94, 0.06);
+    --status-running-glow: rgba(34, 197, 94, 0.12);
+    --status-starting: #f59e0b;
+    --status-error: #ef4444;
+    --status-stopped: #52525b;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  html { font-size: 14px; }
+  body {
+    background: var(--bg-root);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px; padding: 0 24px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-dim);
+  }
+  .nav-left { display: flex; align-items: center; gap: 28px; }
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 0.93rem; letter-spacing: -0.01em;
+    color: var(--text-primary); text-decoration: none;
+  }
+  .brand-mark {
+    width: 22px; height: 22px; background: var(--accent);
+    border-radius: 5px; display: grid; place-items: center;
+  }
+  .brand-mark svg { width: 13px; height: 13px; fill: white; }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    padding: 6px 12px; border-radius: var(--radius-sm);
+    font-size: 0.87rem; font-weight: 450; color: var(--text-secondary);
+    text-decoration: none; transition: color 0.15s, background 0.15s;
+  }
+  .nav-links a:hover { color: var(--text-primary); background: var(--bg-hover); }
+  .nav-links a.active { color: var(--text-primary); background: var(--bg-elevated); }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .auth-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 100px;
+    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+    font-size: 0.78rem; color: var(--text-tertiary); font-family: var(--font-mono);
+  }
+  .auth-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.5; }
+
+  /* ─── LAYOUT ─── */
+  main { max-width: 680px; margin: 0 auto; padding: 32px 20px 60px; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
+  .btn-new {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 13px; border-radius: var(--radius-sm);
+    background: transparent; border: 1px solid var(--border-subtle);
+    color: var(--text-tertiary); font-family: var(--font-body);
+    font-size: 0.82rem; font-weight: 500; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-new:hover { color: var(--text-secondary); border-color: var(--border); }
+  .btn-new svg { width: 13px; height: 13px; }
+
+  /* ─── HERO PANEL ─── */
+  .hero {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    position: relative;
+    overflow: hidden;
+    animation: hero-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    /* Breathing glow around the border when running */
+    box-shadow:
+      0 0 0 1px var(--border-dim),
+      0 0 40px -10px var(--status-running-glow),
+      0 0 80px -20px var(--status-running-dim);
+    animation: hero-up 0.5s cubic-bezier(0.16, 1, 0.3, 1), breathe 4s ease-in-out 0.5s infinite;
+  }
+
+  @keyframes hero-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      box-shadow:
+        0 0 0 1px var(--border-dim),
+        0 0 30px -10px var(--status-running-glow),
+        0 0 60px -20px var(--status-running-dim);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px var(--border-subtle),
+        0 0 50px -8px var(--status-running-glow),
+        0 0 100px -15px var(--status-running-dim);
+    }
+  }
+
+  /* Top status line */
+  .hero::after {
+    content: '';
+    position: absolute; top: 0; left: 5%; right: 5%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--status-running), transparent);
+    opacity: 0.6;
+  }
+
+  /* ─── HERO HEADER ─── */
+  .hero-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 22px 22px 0;
+  }
+  .hero-identity { display: flex; align-items: center; gap: 14px; }
+  .hero-icon {
+    width: 52px; height: 52px; border-radius: 10px;
+    background: var(--bg-inset); border: 1px solid var(--border-dim);
+    display: grid; place-items: center; font-size: 1.5rem; flex-shrink: 0;
+  }
+  .hero-name {
+    font-weight: 600; font-size: 1.2rem; letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+  .hero-game {
+    font-size: 0.8rem; color: var(--text-tertiary); margin-top: 3px;
+    font-weight: 450;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px 5px 9px; border-radius: 100px;
+    font-size: 0.74rem; font-weight: 500; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    background: var(--status-running-dim); color: var(--status-running);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+  }
+  .hero-badge .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--status-running);
+    box-shadow: 0 0 6px var(--status-running);
+    animation: dot-pulse 2s ease-in-out infinite;
+  }
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--status-running); }
+    50% { opacity: 0.45; box-shadow: 0 0 10px var(--status-running); }
+  }
+
+  /* ─── CONNECTION BLOCK ─── */
+  .hero-connect {
+    margin: 18px 22px 0;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .hero-connect:hover { border-color: var(--border); }
+
+  .connect-left { display: flex; flex-direction: column; gap: 3px; }
+  .connect-label {
+    font-size: 0.68rem; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-tertiary); opacity: 0.7;
+  }
+  .connect-addr {
+    font-size: 1.05rem; font-family: var(--font-mono); font-weight: 500;
+    color: var(--text-primary); letter-spacing: 0.02em;
+  }
+  .connect-copy {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: var(--radius-sm);
+    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+    color: var(--text-tertiary); font-family: var(--font-mono);
+    font-size: 0.72rem; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .connect-copy:hover { color: var(--text-primary); border-color: var(--border); }
+  .connect-copy.copied { color: var(--status-running); border-color: rgba(34,197,94,0.4); }
+  .connect-copy svg { width: 12px; height: 12px; }
+
+  /* ─── TELEMETRY GRID ─── */
+  .hero-telemetry {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    margin: 18px 22px 0;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .tele-cell {
+    padding: 14px 16px;
+    background: var(--bg-inset);
+    display: flex; flex-direction: column; gap: 10px;
+    position: relative;
+  }
+  .tele-cell + .tele-cell { border-left: 1px solid var(--border-dim); }
+
+  .tele-label {
+    font-size: 0.67rem; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-tertiary); opacity: 0.7;
+  }
+  .tele-value {
+    font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em;
+    line-height: 1; font-family: var(--font-mono);
+  }
+  .tele-unit {
+    font-size: 0.7rem; font-weight: 400; color: var(--text-tertiary);
+    margin-left: 1px;
+  }
+  .tele-sub {
+    font-size: 0.72rem; color: var(--text-tertiary); font-family: var(--font-mono);
+    margin-top: -4px;
+  }
+
+  /* Thin bar at bottom of each cell */
+  .tele-bar {
+    height: 3px; border-radius: 1.5px;
+    background: var(--border-dim);
+    overflow: hidden;
+  }
+  .tele-bar-fill {
+    height: 100%; border-radius: 1.5px;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .tele-bar-fill.players { background: var(--status-running); }
+  .tele-bar-fill.mem { background: var(--accent); }
+  .tele-bar-fill.cpu { background: var(--status-starting); }
+
+  /* ─── ACTIONS ─── */
+  .hero-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px 20px;
+    margin-top: 18px;
+    border-top: 1px solid var(--border-dim);
+  }
+  .action-group { display: flex; gap: 6px; }
+
+  .btn-action {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    font-family: var(--font-body); font-size: 0.84rem; font-weight: 500;
+    border: 1px solid; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    background: transparent;
+  }
+  .btn-action svg { width: 14px; height: 14px; }
+
+  .btn-action.stop {
+    border-color: rgba(239, 68, 68, 0.25); color: var(--status-error);
+  }
+  .btn-action.stop:hover {
+    background: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.5);
+  }
+  .btn-action.restart {
+    border-color: rgba(245, 158, 11, 0.25); color: var(--status-starting);
+  }
+  .btn-action.restart:hover {
+    background: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.5);
+  }
+
+  .quick-links { display: flex; gap: 2px; }
+  .qlink {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    font-size: 0.8rem; font-weight: 450;
+    color: var(--text-tertiary); text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+  }
+  .qlink:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .qlink svg { width: 13px; height: 13px; }
+
+  /* ─── MOBILE ─── */
+  @media (max-width: 600px) {
+    main { padding: 20px 12px 40px; }
+    .hero-head { flex-direction: column; gap: 14px; padding: 18px 16px 0; }
+    .hero-connect { margin: 14px 16px 0; }
+    .hero-telemetry { grid-template-columns: 1fr; margin: 14px 16px 0; }
+    .tele-cell + .tele-cell { border-left: none; border-top: 1px solid var(--border-dim); }
+    .hero-actions { flex-direction: column; gap: 12px; padding: 16px; }
+    .action-group { width: 100%; }
+    .btn-action { flex: 1; justify-content: center; }
+    .quick-links { width: 100%; justify-content: center; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <a href="/" class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 16 16"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-11zM6 4h4v1H6V4zm0 3h4v1H6V7zm0 3h3v1H6v-1z"/></svg>
+      </div>
+      Gamejanitor
+    </a>
+    <div class="nav-links">
+      <a href="/" class="active">Dashboard</a>
+      <a href="/settings">Settings</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="auth-pill"><span class="auth-dot"></span>Local</div>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <h1>Gameservers</h1>
+    <button class="btn-new">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+      New
+    </button>
+  </div>
+
+  <div class="hero">
+    <!-- Header: identity + status -->
+    <div class="hero-head">
+      <div class="hero-identity">
+        <div class="hero-icon">⛏️</div>
+        <div>
+          <div class="hero-name">survival-smp</div>
+          <div class="hero-game">Minecraft Java</div>
+        </div>
+      </div>
+      <div class="hero-badge"><span class="dot"></span>Running</div>
+    </div>
+
+    <!-- Connection address — the most important thing on the page -->
+    <div class="hero-connect" onclick="copyConnect(this)">
+      <div class="connect-left">
+        <span class="connect-label">Connect</span>
+        <span class="connect-addr">192.168.1.10:27015</span>
+      </div>
+      <button class="connect-copy">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25v-7.5zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25h-7.5z"/></svg>
+        Copy
+      </button>
+    </div>
+
+    <!-- Telemetry: players, memory, CPU -->
+    <div class="hero-telemetry">
+      <div class="tele-cell">
+        <span class="tele-label">Players</span>
+        <div class="tele-value">12<span class="tele-unit"> / 20</span></div>
+        <div class="tele-bar"><div class="tele-bar-fill players" style="width: 60%"></div></div>
+      </div>
+      <div class="tele-cell">
+        <span class="tele-label">Memory</span>
+        <div class="tele-value">2.1<span class="tele-unit"> GB</span></div>
+        <div class="tele-sub">of 4 GB</div>
+        <div class="tele-bar"><div class="tele-bar-fill mem" style="width: 52%"></div></div>
+      </div>
+      <div class="tele-cell">
+        <span class="tele-label">CPU</span>
+        <div class="tele-value">34<span class="tele-unit">%</span></div>
+        <div class="tele-sub">2.0 cores</div>
+        <div class="tele-bar"><div class="tele-bar-fill cpu" style="width: 34%"></div></div>
+      </div>
+    </div>
+
+    <!-- Actions + quick links -->
+    <div class="hero-actions">
+      <div class="action-group">
+        <button class="btn-action stop">
+          <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
+          Stop
+        </button>
+        <button class="btn-action restart">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
+          Restart
+        </button>
+      </div>
+      <div class="quick-links">
+        <a href="#" class="qlink">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>
+          Console
+        </a>
+        <a href="#" class="qlink">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.414A2 2 0 0 0 13.414 3L11 .586A2 2 0 0 0 9.586 0H4zm5.586 1L13 4.414V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.586z"/></svg>
+          Files
+        </a>
+        <a href="#" class="qlink">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.5 7.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13zM1 3.5a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9z"/></svg>
+          Backups
+        </a>
+        <a href="#" class="qlink">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.421-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.116l.094-.318z"/></svg>
+          Settings
+        </a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function copyConnect(block) {
+  const addr = block.querySelector('.connect-addr').textContent;
+  const btn = block.querySelector('.connect-copy');
+  navigator.clipboard.writeText(addr).then(() => {
+    btn.classList.add('copied');
+    const origText = btn.lastChild;
+    const origLabel = origText.textContent;
+    origText.textContent = 'Copied';
+    setTimeout(() => { btn.classList.remove('copied'); origText.textContent = origLabel; }, 1500);
+  });
+}
+</script>
+
+</body>
+</html>
