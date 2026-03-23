@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gamejanitor — survival-smp · Backups</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .breadcrumb { display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; color: var(--text-tertiary); text-decoration: none; margin-bottom: 20px; transition: color 0.15s; }
+  .breadcrumb:hover { color: var(--accent); }
+  .breadcrumb svg { width: 16px; height: 16px; }
+
+  /* ═══════════ HEADER (same) ═══════════ */
+  .srv-header { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2), 0 0 50px -18px var(--live-glow); animation: enter 0.5s cubic-bezier(0.16,1,0.3,1), breathe 5s ease-in-out 0.5s infinite; }
+  @keyframes enter { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes breathe { 0%,100% { box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2), 0 0 40px -18px var(--live-glow); } 50% { box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2), 0 0 60px -12px var(--live-glow); } }
+  .srv-header::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 50% at 50% 20%, rgba(232,114,42,0.02) 0%, transparent 60%); pointer-events:none; }
+  .srv-header::after { content:''; position:absolute; top:0; left:8%; right:8%; height:1px; background:linear-gradient(90deg, transparent, var(--live), transparent); opacity:0.4; animation: pulse-line 3s ease-in-out infinite; }
+  @keyframes pulse-line { 0%,100% { opacity:0.25; } 50% { opacity:0.5; } }
+  .srv-identity { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; position:relative; z-index:1; }
+  .srv-id-left { display:flex; align-items:center; gap:14px; }
+  .srv-icon { width:50px; height:50px; border-radius:11px; background:var(--bg-inset); border:1px solid var(--border-dim); display:grid; place-items:center; font-size:1.5rem; box-shadow:inset 0 1px 4px rgba(232,114,42,0.04); }
+  .srv-name { font-weight:600; font-size:1.2rem; letter-spacing:-0.02em; }
+  .srv-game { font-size:0.8rem; color:var(--text-tertiary); margin-top:2px; }
+  .srv-id-right { display:flex; align-items:center; gap:10px; }
+  .srv-connect { display:flex; gap:12px; padding:0 24px 16px; position:relative; z-index:1; }
+  .connect-block { flex:1; background:var(--bg-inset); border:1px solid var(--border-dim); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; transition:border-color 0.2s; }
+  .connect-block:first-child { border-color:var(--accent-border); }
+  .connect-block:first-child:hover { border-color:rgba(232,114,42,0.35); }
+  .connect-block:last-child:hover { border-color:var(--border); }
+  .connect-block-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .connect-block-label { font-size:0.6rem; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.1em; color:var(--text-tertiary); }
+  .connect-block:first-child .connect-block-label { color:var(--accent); opacity:0.7; }
+  .connect-block-addr { font-size:0.88rem; font-family:var(--font-mono); font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .connect-block:last-child .connect-block-addr { font-size:0.76rem; color:var(--text-secondary); }
+  .copy-btn { display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:4px; background:var(--accent); border:none; color:#fff; font-family:var(--font-mono); font-size:0.65rem; font-weight:500; cursor:pointer; transition:background 0.15s; flex-shrink:0; box-shadow:0 0 8px rgba(232,114,42,0.15); }
+  .copy-btn:hover { background:var(--accent-hover); }
+  .copy-btn svg { width:11px; height:11px; }
+  .copy-btn-subtle { display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:4px; background:var(--bg-elevated); border:1px solid var(--border-dim); color:var(--text-tertiary); font-family:var(--font-mono); font-size:0.65rem; cursor:pointer; transition:color 0.15s, border-color 0.15s; flex-shrink:0; }
+  .copy-btn-subtle:hover { color:var(--text-secondary); border-color:var(--border); }
+  .copy-btn-subtle svg { width:11px; height:11px; }
+  .srv-actions { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-top:1px solid var(--border-dim); position:relative; z-index:1; }
+  .srv-actions-left { display:flex; gap:6px; }
+  .more-btn { display:flex; align-items:center; gap:5px; padding:7px 12px; border-radius:var(--radius-sm); background:none; border:1px solid var(--border-dim); color:var(--text-tertiary); font-family:var(--font-body); font-size:0.82rem; cursor:pointer; transition:color 0.15s, border-color 0.15s; }
+  .more-btn:hover { color:var(--text-secondary); border-color:var(--border); }
+  .more-btn svg { width:14px; height:14px; }
+  .uptime { font-size:0.74rem; font-family:var(--font-mono); color:var(--text-tertiary); display:flex; align-items:center; gap:5px; }
+  .uptime svg { width:13px; height:13px; }
+  .tabs { display:flex; gap:2px; padding:0; margin-top:12px; margin-bottom:18px; border-bottom:1px solid var(--border-dim); }
+  .tab { padding:10px 16px; font-size:0.84rem; font-weight:450; color:var(--text-tertiary); text-decoration:none; cursor:pointer; border-bottom:2px solid transparent; transition:color 0.15s, border-color 0.2s; margin-bottom:-1px; }
+  .tab:hover { color:var(--text-secondary); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* ═══════════ BACKUPS TAB ═══════════ */
+  @keyframes fade-up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .backups-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .backups-info {
+    font-size: 0.78rem; color: var(--text-tertiary); font-family: var(--font-mono);
+  }
+
+  .backup-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+  }
+
+  .backup-row {
+    display: flex; align-items: center;
+    padding: 14px 18px;
+    gap: 14px;
+    transition: background 0.12s;
+    border-left: 2px solid transparent;
+  }
+  .backup-row:hover { background: var(--bg-elevated); }
+  .backup-row + .backup-row { border-top: 1px solid var(--border-dim); }
+
+  .backup-info { flex: 1; min-width: 0; }
+  .backup-name { font-size: 0.88rem; font-weight: 500; }
+  .backup-meta {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 3px;
+    font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--text-tertiary);
+  }
+  .backup-meta-sep { opacity: 0.3; }
+
+  /* Status badges for backups */
+  .backup-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px 3px 7px; border-radius: 100px;
+    font-size: 0.68rem; font-family: var(--font-mono);
+    font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .backup-status.completed { background: var(--live-dim); color: var(--live); }
+  .backup-status.completed .bs-dot { width:6px; height:6px; border-radius:50%; background:var(--live); }
+  .backup-status.in-progress { background: rgba(232,114,42,0.08); color: var(--accent); }
+  .backup-status.in-progress .bs-dot {
+    width:6px; height:6px; border-radius:50%; background:var(--accent);
+    animation: bp-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes bp-pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .backup-status.failed { background: rgba(239,68,68,0.08); color: var(--danger); }
+  .backup-status.failed .bs-dot { width:6px; height:6px; border-radius:50%; background:var(--danger); }
+
+  .backup-error {
+    font-size: 0.7rem; color: var(--danger);
+    margin-top: 3px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .backup-actions {
+    display: flex; gap: 2px;
+    flex-shrink: 0;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .backup-row:hover .backup-actions { opacity: 1; }
+
+  .bk-act {
+    padding: 5px 10px; border-radius: 4px;
+    font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--text-tertiary); background: none; border: none;
+    cursor: pointer; transition: color 0.15s, background 0.15s;
+  }
+  .bk-act:hover { color: var(--accent); background: var(--accent-subtle); }
+  .bk-act.restore:hover { color: var(--caution); background: rgba(245,158,11,0.06); }
+  .bk-act.danger:hover { color: var(--danger); background: rgba(239,68,68,0.06); }
+
+  /* In-progress row gets subtle left border */
+  .backup-row.in-progress { border-left-color: var(--accent); }
+  .backup-row.failed { border-left-color: var(--danger); }
+
+  @media (max-width: 700px) {
+    .backups-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .backup-actions { opacity: 1; }
+    .srv-connect { flex-direction: column; }
+    .srv-identity { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .srv-actions { flex-direction: column; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="n-left">
+    <a href="/" class="brand"><div class="brand-mark"><svg viewBox="0 0 16 16"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-11zM6 4h4v1H6V4zm0 3h4v1H6V7zm0 3h3v1H6v-1z"/></svg></div>Gamejanitor</a>
+    <div class="n-links"><a href="/">Dashboard</a><a href="/settings">Settings</a></div>
+  </div>
+  <div class="n-right"><div class="auth"><span class="auth-dot"></span>Local</div></div>
+</nav>
+
+<main>
+  <a href="/" class="breadcrumb"><svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>Gameservers</a>
+
+  <div class="srv-header">
+    <div class="srv-identity">
+      <div class="srv-id-left"><div class="srv-icon">⛏️</div><div><div class="srv-name">survival-smp</div><div class="srv-game">Minecraft: Java Edition</div></div></div>
+      <div class="srv-id-right"><div class="status-pill running"><span class="status-dot"></span>Running</div></div>
+    </div>
+    <div class="srv-connect">
+      <div class="connect-block"><div class="connect-block-info"><span class="connect-block-label">Connect</span><span class="connect-block-addr">192.168.1.10:27015</span></div><button class="copy-btn"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25v-7.5zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25h-7.5z"/></svg>Copy</button></div>
+      <div class="connect-block"><div class="connect-block-info"><span class="connect-block-label">SFTP</span><span class="connect-block-addr">sftp://survival-smp-a1b2c3@192.168.1.10:2222</span></div><button class="copy-btn-subtle"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25v-7.5zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25h-7.5z"/></svg>Copy</button></div>
+    </div>
+    <div class="srv-actions">
+      <div class="srv-actions-left">
+        <button class="btn-action stop"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>Stop</button>
+        <button class="btn-action restart"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>Restart</button>
+        <button class="more-btn"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg></button>
+      </div>
+      <div class="uptime"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V8a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 7.71V3.5z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/></svg>Up 3d 14h</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a class="tab" href="#">Overview</a>
+    <a class="tab" href="#">Console</a>
+    <a class="tab" href="#">Files</a>
+    <a class="tab active" href="#">Backups</a>
+    <a class="tab" href="#">Schedules</a>
+    <a class="tab" href="#">Settings</a>
+  </div>
+
+  <!-- ═══════════ BACKUPS CONTENT ═══════════ -->
+  <div class="backups-toolbar">
+    <span class="backups-info">5 backups · 725 MB total</span>
+    <button class="btn-solid" style="font-size:0.82rem; padding:8px 16px;">
+      <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+      Create Backup
+    </button>
+  </div>
+
+  <div class="backup-panel">
+    <div class="backup-row in-progress">
+      <div class="backup-info">
+        <div class="backup-name">Installing mods</div>
+        <div class="backup-meta">
+          <span class="backup-status in-progress"><span class="bs-dot"></span>In Progress</span>
+          <span class="backup-meta-sep">·</span>
+          Mar 23, 2026
+        </div>
+      </div>
+      <div class="backup-actions" style="opacity:1;">
+        <!-- No actions while in progress -->
+      </div>
+    </div>
+
+    <div class="backup-row">
+      <div class="backup-info">
+        <div class="backup-name">pre-update-backup</div>
+        <div class="backup-meta">
+          <span class="backup-status completed"><span class="bs-dot"></span>Completed</span>
+          <span class="backup-meta-sep">·</span>
+          245 MB
+          <span class="backup-meta-sep">·</span>
+          Mar 22, 2026
+        </div>
+      </div>
+      <div class="backup-actions">
+        <button class="bk-act restore">Restore</button>
+        <button class="bk-act">Download</button>
+        <button class="bk-act danger">Delete</button>
+      </div>
+    </div>
+
+    <div class="backup-row">
+      <div class="backup-info">
+        <div class="backup-name">auto-backup-1711108800</div>
+        <div class="backup-meta">
+          <span class="backup-status completed"><span class="bs-dot"></span>Completed</span>
+          <span class="backup-meta-sep">·</span>
+          242 MB
+          <span class="backup-meta-sep">·</span>
+          Mar 22, 2026
+        </div>
+      </div>
+      <div class="backup-actions">
+        <button class="bk-act restore">Restore</button>
+        <button class="bk-act">Download</button>
+        <button class="bk-act danger">Delete</button>
+      </div>
+    </div>
+
+    <div class="backup-row">
+      <div class="backup-info">
+        <div class="backup-name">weekly-backup</div>
+        <div class="backup-meta">
+          <span class="backup-status completed"><span class="bs-dot"></span>Completed</span>
+          <span class="backup-meta-sep">·</span>
+          238 MB
+          <span class="backup-meta-sep">·</span>
+          Mar 15, 2026
+        </div>
+      </div>
+      <div class="backup-actions">
+        <button class="bk-act restore">Restore</button>
+        <button class="bk-act">Download</button>
+        <button class="bk-act danger">Delete</button>
+      </div>
+    </div>
+
+    <div class="backup-row failed">
+      <div class="backup-info">
+        <div class="backup-name">failed-backup</div>
+        <div class="backup-meta">
+          <span class="backup-status failed"><span class="bs-dot"></span>Failed</span>
+          <span class="backup-meta-sep">·</span>
+          Mar 14, 2026
+        </div>
+        <div class="backup-error">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+          disk full
+        </div>
+      </div>
+      <div class="backup-actions">
+        <button class="bk-act danger">Delete</button>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
