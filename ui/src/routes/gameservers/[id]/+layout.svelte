@@ -22,10 +22,27 @@
   const isStopped = $derived(gameserver?.status === 'stopped');
   const isTransitioning = $derived(
     gameserver?.status === 'starting' || gameserver?.status === 'installing' ||
-    gameserver?.status === 'stopping' || gameserver?.status === 'reinstalling' ||
-    gameserver?.status === 'migrating' || gameserver?.status === 'restoring' ||
-    gameserver?.status === 'updating'
+    gameserver?.status === 'stopping'
   );
+
+  // Active operation tracking — shows why the server is changing state
+  let activeOperation = $state<string | null>(null);
+
+  const operationLabels: Record<string, string> = {
+    'backup.create': 'Backing up...',
+    'backup.restore': 'Restoring...',
+    'gameserver.update_game': 'Updating...',
+    'gameserver.reinstall': 'Reinstalling...',
+    'gameserver.migrate': 'Migrating...',
+  };
+  // Events that clear each operation
+  const operationClearEvents: Record<string, string[]> = {
+    'backup.create': ['backup.completed', 'backup.failed'],
+    'backup.restore': ['backup.restore.completed', 'backup.restore.failed', 'gameserver.ready', 'gameserver.error'],
+    'gameserver.update_game': ['gameserver.ready', 'gameserver.error'],
+    'gameserver.reinstall': ['gameserver.ready', 'gameserver.error'],
+    'gameserver.migrate': ['gameserver.ready', 'gameserver.error'],
+  };
 
   const tabs = [
     { label: 'Overview', path: '' },
@@ -82,13 +99,22 @@
       }
     });
 
-    // SSE: update container started time on start events
+    // SSE: update container times + track operations
     gsUnsub = onGameserverEvent(gsId, (data: any) => {
       if (data.type === 'gameserver.container_started' || data.type === 'gameserver.ready') {
         containerStartedAt = new Date().toISOString();
       }
       if (data.type === 'gameserver.container_stopped' || data.type === 'gameserver.container_exited') {
         containerStartedAt = '';
+      }
+
+      // Track active operations
+      if (data.type && data.type in operationLabels) {
+        activeOperation = data.type;
+      }
+      // Clear operation when its completion event fires
+      if (activeOperation && operationClearEvents[activeOperation]?.includes(data.type)) {
+        activeOperation = null;
       }
     });
 
@@ -163,6 +189,12 @@
           </div>
         </div>
         <div class="srv-id-right">
+          {#if activeOperation}
+            <span class="op-badge">
+              <span class="op-dot"></span>
+              {operationLabels[activeOperation]}
+            </span>
+          {/if}
           <StatusPill status={gameserver.status} />
         </div>
       </div>
@@ -170,16 +202,16 @@
       <div class="srv-actions">
         <div class="srv-actions-left">
           {#if isStopped}
-            <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning}>
+            <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning || !!activeOperation}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
               Start
             </button>
           {:else}
-            <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={isTransitioning}>
+            <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={isTransitioning || !!activeOperation}>
               <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
               Stop
             </button>
-            <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={isTransitioning}>
+            <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={isTransitioning || !!activeOperation}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
               Restart
             </button>
@@ -274,7 +306,25 @@
   .srv-id-left { display: flex; align-items: center; gap: 14px; }
   .srv-name { font-weight: 600; font-size: 1.2rem; letter-spacing: -0.02em; }
   .srv-game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
-  .srv-id-right { display: flex; align-items: center; gap: 10px; }
+  .srv-id-right { display: flex; align-items: center; gap: 8px; }
+
+  .op-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 11px 4px 8px; border-radius: 100px;
+    font-size: 0.68rem; font-weight: 500; font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid var(--accent-border);
+    animation: op-in 0.25s ease-out;
+  }
+  .op-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: op-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes op-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  @keyframes op-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
   .srv-actions {
     display: flex; align-items: center; justify-content: space-between;
