@@ -17,8 +17,6 @@
   let uptime = $state('');
   let containerStartedAt = $state('');
 
-  // Overflow menu
-  let showOverflow = $state(false);
 
   const isRunning = $derived(gameserver?.status === 'running' || gameserver?.status === 'started');
   const isStopped = $derived(gameserver?.status === 'stopped');
@@ -129,34 +127,16 @@
 
   async function handleAction(action: string) {
     if (!gameserver) return;
-    showOverflow = false;
-
     try {
       if (action === 'start') await api.gameservers.start(gsId);
       else if (action === 'stop') await api.gameservers.stop(gsId);
       else if (action === 'restart') await api.gameservers.restart(gsId);
-      else if (action === 'update-game') await api.gameservers.updateGame(gsId);
-      else if (action === 'reinstall') {
-        if (!confirm('Reinstall will wipe all server data. Backups are preserved. Continue?')) return;
-        await api.gameservers.reinstall(gsId);
-      }
     } catch (e: any) {
       toast(`Failed to ${action}: ${e.message}`, 'error');
     }
   }
 
-  // Close overflow on outside click
-  function handleWindowClick(e: MouseEvent) {
-    if (showOverflow) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.overflow-wrap')) {
-        showOverflow = false;
-      }
-    }
-  }
 </script>
-
-<svelte:window onclick={handleWindowClick} />
 
 <main>
   <a href="/" class="breadcrumb">
@@ -205,18 +185,6 @@
             </button>
           {/if}
 
-          <!-- Overflow menu -->
-          <div class="overflow-wrap">
-            <button class="more-btn" onclick={() => showOverflow = !showOverflow}>
-              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
-            </button>
-            {#if showOverflow}
-              <div class="overflow-menu">
-                <button class="overflow-item" onclick={() => handleAction('update-game')}>Update Game</button>
-                <button class="overflow-item danger" onclick={() => handleAction('reinstall')}>Reinstall</button>
-              </div>
-            {/if}
-          </div>
         </div>
 
         {#if uptime}
@@ -317,46 +285,6 @@
   .srv-actions-left { display: flex; gap: 6px; align-items: center; }
 
   .btn-action:disabled { opacity: 0.4; pointer-events: none; }
-
-  .more-btn {
-    display: flex; align-items: center; gap: 5px;
-    padding: 7px 12px; border-radius: var(--radius-sm);
-    background: none; border: 1px solid var(--border-dim);
-    color: var(--text-tertiary); font-family: var(--font-body);
-    font-size: 0.82rem; cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .more-btn:hover { color: var(--text-secondary); border-color: var(--border); }
-  .more-btn svg { width: 14px; height: 14px; }
-
-  /* Overflow menu */
-  .overflow-wrap { position: relative; }
-  .overflow-menu {
-    position: absolute; top: 100%; left: 0; margin-top: 6px;
-    min-width: 160px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 4px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    z-index: 20;
-    animation: menu-in 0.15s ease-out;
-  }
-  @keyframes menu-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .overflow-item {
-    display: block; width: 100%;
-    padding: 8px 12px; border: none; background: none;
-    font-family: var(--font-body); font-size: 0.82rem;
-    color: var(--text-secondary); cursor: pointer;
-    border-radius: 4px; text-align: left;
-    transition: background 0.12s, color 0.12s;
-  }
-  .overflow-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .overflow-item.danger { color: var(--danger); }
-  .overflow-item.danger:hover { background: rgba(239,68,68,0.06); }
 
   .uptime {
     font-size: 0.74rem; font-family: var(--font-mono);

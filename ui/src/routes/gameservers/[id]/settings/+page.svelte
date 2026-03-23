@@ -23,6 +23,7 @@
   let regenerating = $state(false);
 
   // Danger
+  let updating = $state(false);
   let reinstalling = $state(false);
   let deleteConfirmName = $state('');
   let deleting = $state(false);
@@ -123,6 +124,19 @@
       toast(`Failed: ${e.message}`, 'error');
     } finally {
       regenerating = false;
+    }
+  }
+
+  async function updateGame() {
+    if (!confirm('Update the game to the latest version? The server will restart.')) return;
+    updating = true;
+    try {
+      await api.gameservers.updateGame(gsId);
+      toast('Game update started', 'info');
+    } catch (e: any) {
+      toast(`Failed: ${e.message}`, 'error');
+    } finally {
+      updating = false;
     }
   }
 
@@ -308,6 +322,15 @@
     <div class="s-section">
       <div class="danger-zone">
         <div class="s-title">Danger Zone</div>
+        <div class="danger-item">
+          <div class="danger-text">
+            <div class="danger-label">Update Game</div>
+            <div class="danger-desc">Re-runs the install script to update to the latest game version. The server will restart.</div>
+          </div>
+          <button class="btn-action restart" onclick={updateGame} disabled={updating} style="flex-shrink:0;">
+            {updating ? 'Updating...' : 'Update'}
+          </button>
+        </div>
         <div class="danger-item">
           <div class="danger-text">
             <div class="danger-label">Reinstall Server</div>
