@@ -33,6 +33,7 @@
   let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
   let submitting = $state(false);
   let advancedOpen = $state(false);
+  let globalMaxBackups = $state(10);
 
   // Post-creation state
   let createdServer = $state<{ id: string; name: string; sftp_password: string; sftp_username: string } | null>(null);
@@ -51,7 +52,7 @@
     storageLimitMb >= 1024 ? `${Math.round(storageLimitMb / 1024)} GB` :
     `${storageLimitMb} MB`
   );
-  const backupDisplay = $derived(backupLimit === 0 ? 'Use global setting' : `${backupLimit} max`);
+  const backupDisplay = $derived(backupLimit === 0 ? `Global (${globalMaxBackups})` : `${backupLimit} max`);
 
   // Group env vars by their group field
   const envGroups = $derived(() => {
@@ -83,7 +84,12 @@
 
   onMount(async () => {
     try {
-      games = await api.games.list();
+      const [gameList, settings] = await Promise.all([
+        api.games.list(),
+        api.settings.get().catch(() => null),
+      ]);
+      games = gameList;
+      if (settings?.max_backups) globalMaxBackups = settings.max_backups;
     } catch (e: any) {
       toast(`Failed to load games: ${e.message}`, 'error');
     } finally {
@@ -452,7 +458,7 @@
                   <span class="resource-value dim">{backupDisplay}</span>
                 </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" placeholder="Use global setting"
+                  <input class="input input-mono" type="number" min="0" placeholder={`Global (${globalMaxBackups})`}
                     value={backupLimit || ''}
                     oninput={(e) => backupLimit = parseInt((e.target as HTMLInputElement).value) || 0}>
                   <span class="input-suffix">max</span>
