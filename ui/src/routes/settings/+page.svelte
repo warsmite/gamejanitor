@@ -218,7 +218,45 @@
           <p class="section-desc">Network, ports, and backup configuration.</p>
         </div>
 
-        <div class="panel">
+        <div class="panel info-panel">
+          <div class="s-title">Server Info</div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Bind</span>
+              <span class="info-value">{settings.bind || '—'}:{settings.port || '—'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">SFTP</span>
+              <span class="info-value">:{settings.sftp_port || '—'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">gRPC</span>
+              <span class="info-value">:{settings.grpc_port || '—'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Data Dir</span>
+              <span class="info-value">{settings.data_dir || '—'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Runtime</span>
+              <span class="info-value">{settings.container_runtime || 'auto'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Backups</span>
+              <span class="info-value">{settings.backup_store_type || 'local'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Mode</span>
+              <span class="info-value">{settings.controller && settings.worker ? 'Standalone' : settings.controller ? 'Controller' : 'Worker'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Web UI</span>
+              <span class="info-value">{settings.web_ui ? 'Enabled' : 'Disabled'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px;">
           <div class="s-title">Network</div>
           <div class="field">
             <label class="label">Connection Address</label>
@@ -678,6 +716,30 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-dim);
     position: relative; z-index: 1;
+  }
+
+  /* ═══════════ INFO PANEL ═══════════ */
+  .info-panel { padding: 18px 22px; }
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0; position: relative; z-index: 1;
+  }
+  .info-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-dim);
+  }
+  .info-item:nth-last-child(-n+2) { border-bottom: none; }
+  .info-item:nth-child(odd) { padding-right: 16px; border-right: 1px solid var(--border-dim); }
+  .info-item:nth-child(even) { padding-left: 16px; }
+  .info-label {
+    font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--text-tertiary); text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .info-value {
+    font-size: 0.78rem; font-family: var(--font-mono);
+    color: var(--text-secondary);
   }
 
   /* ═══════════ FORM FIELDS ═══════════ */

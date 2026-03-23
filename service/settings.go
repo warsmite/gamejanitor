@@ -52,15 +52,17 @@ var Defaults = map[string]any{
 }
 
 type SettingsService struct {
-	mu     sync.RWMutex
-	values map[string]any // live typed values, served from memory
-	db     *sql.DB
-	log    *slog.Logger
+	mu       sync.RWMutex
+	values   map[string]any // live typed values, served from memory
+	readOnly map[string]any // config-derived values, not editable via API
+	db       *sql.DB
+	log      *slog.Logger
 }
 
 func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
 	s := &SettingsService{
-		values: make(map[string]any, len(Defaults)),
+		values:   make(map[string]any, len(Defaults)),
+		readOnly: make(map[string]any),
 		db:     db,
 		log:    log,
 	}
@@ -219,11 +221,24 @@ func (s *SettingsService) Clear(key string) error {
 }
 
 // All returns all settings with their current typed values.
+// SetReadOnly stores infrastructure config values that are visible but not
+// editable via the API. Called once at startup with values from the config file.
+func (s *SettingsService) SetReadOnly(values map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range values {
+		s.readOnly[k] = v
+	}
+}
+
 func (s *SettingsService) All() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make(map[string]any, len(s.values))
+	result := make(map[string]any, len(s.values)+len(s.readOnly))
+	for k, v := range s.readOnly {
+		result[k] = v
+	}
 	for k, v := range s.values {
 		result[k] = v
 	}

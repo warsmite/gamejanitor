@@ -43,6 +43,7 @@ func init() {
 	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
+	serveCmd.Flags().String("runtime", "", "Container runtime: docker, podman, process, auto")
 }
 
 // loadConfig loads config file (if any) and applies CLI flag overrides.
@@ -89,6 +90,9 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 	if cmd.Flags().Changed("worker-token") {
 		cfg.WorkerToken, _ = cmd.Flags().GetString("worker-token")
 	}
+	if cmd.Flags().Changed("runtime") {
+		cfg.ContainerRuntime, _ = cmd.Flags().GetString("runtime")
+	}
 
 	return cfg, nil
 }
@@ -118,6 +122,24 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
+
+	// Expose read-only infrastructure config in the settings API
+	backupStoreType := "local"
+	if cfg.BackupStore != nil {
+		backupStoreType = cfg.BackupStore.Type
+	}
+	settingsSvc.SetReadOnly(map[string]any{
+		"bind":              cfg.Bind,
+		"port":              cfg.Port,
+		"sftp_port":         cfg.SFTPPort,
+		"grpc_port":         cfg.GRPCPort,
+		"data_dir":          cfg.DataDir,
+		"container_runtime": cfg.ContainerRuntime,
+		"backup_store_type": backupStoreType,
+		"web_ui":            cfg.WebUI,
+		"controller":        cfg.Controller,
+		"worker":            cfg.Worker,
+	})
 
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
@@ -243,15 +265,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	// Initialize local worker if this node runs containers
+	// Initialize local worker if this node runs game servers
 	var localWorker worker.Worker
 	if cfg.HasWorker() {
-		dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
-		if err != nil {
-			return fmt.Errorf("failed to connect to container runtime: %w", err)
+		if cfg.ContainerRuntime == "process" {
+			localWorker = worker.NewProcessWorker(gameStore, cfg.DataDir, logger)
+		} else {
+			dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
+			if err != nil {
+				return fmt.Errorf("failed to connect to container runtime: %w", err)
+			}
+			defer dockerClient.Close()
+			localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
 		}
-		defer dockerClient.Close()
-		localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
 	}
 
 	var dispatcher *worker.Dispatcher
