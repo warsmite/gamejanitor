@@ -17,7 +17,6 @@ import (
 	"github.com/warsmite/gamejanitor/internal/docker"
 	"github.com/warsmite/gamejanitor/internal/games"
 	"github.com/warsmite/gamejanitor/internal/models"
-	"github.com/warsmite/gamejanitor/internal/netinfo"
 	"github.com/warsmite/gamejanitor/internal/service"
 	gjsftp "github.com/warsmite/gamejanitor/internal/sftp"
 	"github.com/warsmite/gamejanitor/internal/tlsutil"
@@ -347,9 +346,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		registry.StartReaper(ctx, logger)
 	}
 
-	netInfo := netinfo.Detect(logger)
-
-	router, err := web.NewRouter(web.RouterOptions{
+	router := web.NewRouter(web.RouterOptions{
 		Config:        cfg,
 		Role:          role,
 		LogPath:       logPath,
@@ -363,14 +360,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		SettingsSvc:   svcs.settingsSvc,
 		AuthSvc:       svcs.authSvc,
 		Broadcaster:   svcs.broadcaster,
-		NetInfo:       netInfo,
 		Registry:      registry,
 		DB:            database,
 		Log:           logger,
 	})
-	if err != nil {
-		return fmt.Errorf("failed to initialize router: %w", err)
-	}
 
 	// Start SFTP server if enabled
 	if cfg.SFTPPort > 0 {

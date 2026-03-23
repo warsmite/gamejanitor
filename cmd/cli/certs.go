@@ -41,10 +41,11 @@ func runGenWorkerCert(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Worker cert: %s\n", certPath)
 	fmt.Printf("  Worker key:  %s\n", keyPath)
 	fmt.Println()
-	fmt.Println("On the worker, set:")
-	fmt.Printf("  GJ_GRPC_CA=%s\n", caPath)
-	fmt.Printf("  GJ_GRPC_CERT=%s\n", certPath)
-	fmt.Printf("  GJ_GRPC_KEY=%s\n", keyPath)
+	fmt.Println("On the worker, add to config file:")
+	fmt.Println("  tls:")
+	fmt.Printf("    ca: %s\n", caPath)
+	fmt.Printf("    cert: %s\n", certPath)
+	fmt.Printf("    key: %s\n", keyPath)
 
 	return nil
 }

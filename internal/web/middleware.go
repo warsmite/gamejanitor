@@ -192,24 +192,13 @@ func RequireGameserverAccess(settingsSvc *service.SettingsService) func(http.Han
 }
 
 func handleForbidden(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error":"forbidden"}`))
-		return
-	}
-	http.Error(w, "Forbidden", http.StatusForbidden)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	w.Write([]byte(`{"status":"error","error":"forbidden"}`))
 }
 
 func handleUnauthorized(w http.ResponseWriter, r *http.Request) {
-	// API requests get a JSON 401
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"unauthorized"}`))
-		return
-	}
-
-	// Web UI requests get redirected to login
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte(`{"status":"error","error":"unauthorized"}`))
 }
