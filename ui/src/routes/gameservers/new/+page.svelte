@@ -32,6 +32,7 @@
   let envValues = $state<Record<string, string>>({});
   let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
   let submitting = $state(false);
+  let advancedOpen = $state(false);
 
   // Post-creation state
   let createdServer = $state<{ id: string; name: string; sftp_password: string; sftp_username: string } | null>(null);
@@ -265,13 +266,13 @@
     </div>
 
     <div class="config-panel">
-      <!-- Server name -->
+
+      <!-- ── QUICK CREATE: Name + Memory + Required fields ── -->
       <div class="form-row">
         <label class="label label-required">Server Name</label>
         <input class="input" type="text" placeholder="e.g. survival-smp" bind:value={serverName}>
       </div>
 
-      <!-- Memory slider -->
       <div class="form-row">
         <div class="resource-header">
           <span class="label">Memory</span>
@@ -289,106 +290,24 @@
         {/if}
       </div>
 
-      <!-- Resources -->
-      <div class="env-group">
-        <div class="env-group-label">Resources</div>
-        <div class="form-grid">
-          <div class="form-row">
-            <label class="label">CPU Limit</label>
-            <div class="input-with-suffix">
-              <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0 (unlimited)" bind:value={cpuLimit}>
-              <span class="input-suffix">cores</span>
+      <!-- Required env vars with notices (e.g. EULA) — always visible -->
+      {#each envGroups() as group}
+        {#each group.vars.filter(v => v.required && v.notice) as env}
+          <div class="eula-callout">
+            <div class="eula-left">
+              <div class="eula-title">{env.label || env.key}</div>
+              <div class="eula-notice">{@html env.notice?.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>') || ''}</div>
+              <div class="eula-required">Required</div>
             </div>
+            <button class="toggle" class:on={envValues[env.key] === 'true'} onclick={() => envValues[env.key] = envValues[env.key] === 'true' ? 'false' : 'true'}></button>
           </div>
-          <div class="form-row">
-            <label class="label">Enforce CPU Limit</label>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
-              <span style="font-size:0.78rem; color:var(--text-tertiary);">{cpuEnforced ? 'Hard limit' : 'Soft limit'}</span>
-            </div>
-          </div>
-        </div>
-        <div class="form-grid" style="margin-top:14px;">
-          <div class="form-row">
-            <label class="label">Storage Limit</label>
-            <div class="input-with-suffix">
-              <input class="input input-mono" type="number" min="0" step="1000" placeholder="0 (unlimited)" bind:value={storageLimitMb}>
-              <span class="input-suffix">MB</span>
-            </div>
-          </div>
-          <div class="form-row">
-            <label class="label">Backup Limit</label>
-            <div class="input-with-suffix">
-              <input class="input input-mono" type="number" min="0" placeholder="0 (global default)" bind:value={backupLimit}>
-              <span class="input-suffix">max</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Ports -->
-      <div class="env-group">
-        <div class="env-group-label">Ports</div>
-        <div class="form-row">
-          <label class="label">Port Mode</label>
-          <select class="select" bind:value={portMode}>
-            <option value="auto">Auto (allocated from port range)</option>
-            <option value="manual">Manual (specify ports)</option>
-          </select>
-        </div>
-        {#if portMode === 'manual'}
-          <div class="port-table" style="margin-top:14px;">
-            {#each manualPorts as port, i}
-              <div class="port-row">
-                <span class="port-name">{port.name}</span>
-                <div class="port-field">
-                  <label class="port-label">Host</label>
-                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
-                </div>
-                <div class="port-field">
-                  <label class="port-label">Container</label>
-                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
-                </div>
-                <span class="port-proto">{port.protocol}</span>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-
-      <!-- Placement (multi-node) -->
-      <div class="env-group">
-        <div class="env-group-label">Placement</div>
-        <div class="form-grid">
-          <div class="form-row">
-            <label class="label">Node ID</label>
-            <input class="input input-mono" type="text" placeholder="Auto (best available)" bind:value={nodeId}>
-          </div>
-          <div class="form-row">
-            <label class="label">Node Tags</label>
-            <input class="input input-mono" type="text" placeholder="e.g. ssd, eu-west" bind:value={nodeTags}>
-          </div>
-        </div>
-      </div>
+        {/each}
+      {/each}
 
       <hr class="form-divider">
 
-      <!-- Game-specific env vars -->
+      <!-- ── GAME SETTINGS: env vars grouped ── -->
       {#each envGroups() as group}
-        {#if group.vars.some(v => v.required && v.notice)}
-          <!-- Special callout for required fields with notices (e.g. EULA) -->
-          {#each group.vars.filter(v => v.required && v.notice) as env}
-            <div class="eula-callout">
-              <div class="eula-left">
-                <div class="eula-title">{env.label || env.key}</div>
-                <div class="eula-notice">{@html env.notice?.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>') || ''}</div>
-                <div class="eula-required">Required</div>
-              </div>
-              <button class="toggle" class:on={envValues[env.key] === 'true'} onclick={() => envValues[env.key] = envValues[env.key] === 'true' ? 'false' : 'true'}></button>
-            </div>
-          {/each}
-        {/if}
-
         {#if group.name || group.vars.some(v => !(v.required && v.notice))}
           <div class="env-group">
             {#if group.name}
@@ -427,28 +346,119 @@
         {/if}
       {/each}
 
-      <hr class="form-divider">
+      <!-- ── ADVANCED: collapsed by default ── -->
+      <button class="advanced-toggle" onclick={() => advancedOpen = !advancedOpen}>
+        <svg class="adv-chevron" class:open={advancedOpen} viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+        Advanced
+        {#if !advancedOpen}
+          <span class="adv-hint">Ports, resources, placement...</span>
+        {/if}
+      </button>
 
-      <!-- Options -->
-      <div class="form-grid">
-        <div class="form-row">
-          <label class="label">Auto-Restart on Crash</label>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="toggle" class:on={autoRestart} onclick={() => autoRestart = !autoRestart}></button>
-            <span style="font-size:0.78rem; color:var(--text-tertiary);">{autoRestart ? 'Enabled' : 'Disabled'}</span>
+      {#if advancedOpen}
+        <div class="advanced-content">
+          <!-- Ports -->
+          <div class="env-group">
+            <div class="env-group-label">Ports</div>
+            <div class="form-row">
+              <label class="label">Port Mode</label>
+              <select class="select" bind:value={portMode}>
+                <option value="auto">Auto (allocated from port range)</option>
+                <option value="manual">Manual (specify ports)</option>
+              </select>
+            </div>
+            {#if portMode === 'manual'}
+              <div class="port-table" style="margin-top:14px;">
+                {#each manualPorts as port, i}
+                  <div class="port-row">
+                    <span class="port-name">{port.name}</span>
+                    <div class="port-field">
+                      <label class="port-label">Host</label>
+                      <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
+                    </div>
+                    <div class="port-field">
+                      <label class="port-label">Container</label>
+                      <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
+                    </div>
+                    <span class="port-proto">{port.protocol}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <!-- Resources -->
+          <div class="env-group">
+            <div class="env-group-label">Resources</div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label class="label">CPU Limit</label>
+                <div class="input-with-suffix">
+                  <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0 (unlimited)" bind:value={cpuLimit}>
+                  <span class="input-suffix">cores</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="label">Enforce CPU Limit</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
+                  <span style="font-size:0.78rem; color:var(--text-tertiary);">{cpuEnforced ? 'Hard limit' : 'Soft limit'}</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-grid" style="margin-top:14px;">
+              <div class="form-row">
+                <label class="label">Storage Limit</label>
+                <div class="input-with-suffix">
+                  <input class="input input-mono" type="number" min="0" step="1000" placeholder="0 (unlimited)" bind:value={storageLimitMb}>
+                  <span class="input-suffix">MB</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="label">Backup Limit</label>
+                <div class="input-with-suffix">
+                  <input class="input input-mono" type="number" min="0" placeholder="0 (global default)" bind:value={backupLimit}>
+                  <span class="input-suffix">max</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Placement -->
+          <div class="env-group">
+            <div class="env-group-label">Placement</div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label class="label">Node ID</label>
+                <input class="input input-mono" type="text" placeholder="Auto (best available)" bind:value={nodeId}>
+              </div>
+              <div class="form-row">
+                <label class="label">Node Tags</label>
+                <input class="input input-mono" type="text" placeholder="e.g. ssd, eu-west" bind:value={nodeTags}>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto-restart -->
+          <div class="env-group">
+            <div class="env-group-label">Behavior</div>
+            <div class="form-row">
+              <label class="label">Auto-Restart on Crash</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button class="toggle" class:on={autoRestart} onclick={() => autoRestart = !autoRestart}></button>
+                <span style="font-size:0.78rem; color:var(--text-tertiary);">{autoRestart ? 'Enabled' : 'Disabled'}</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="form-row">
-          <label class="label">Start After Creating</label>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="toggle" class:on={autoStart} onclick={() => autoStart = !autoStart}></button>
-            <span style="font-size:0.78rem; color:var(--text-tertiary);">{autoStart ? 'Yes' : 'No'}</span>
-          </div>
-        </div>
-      </div>
+      {/if}
 
-      <!-- Submit -->
+      <!-- ── SUBMIT ── -->
       <div class="submit-row">
+        <div class="submit-left">
+          <label class="label" style="margin-bottom:0;">Start after creating</label>
+          <button class="toggle" class:on={autoStart} onclick={() => autoStart = !autoStart}></button>
+        </div>
         <button class="btn-solid" disabled={!serverName.trim() || submitting} onclick={createServer}>
           <GameIcon src={selectedGame.icon_path} name={selectedGame.name} size={18} />
           {submitting ? 'Creating...' : `Create ${selectedGame.name.split(':')[0]} Server`}
@@ -608,7 +618,24 @@
   .port-label { font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; }
   .port-proto { font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; }
 
-  .submit-row { display: flex; align-items: center; justify-content: flex-end; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-dim); position: relative; z-index: 1; }
+  /* Advanced toggle */
+  .advanced-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.8rem; color: var(--text-tertiary);
+    cursor: pointer; background: none; border: none;
+    font-family: var(--font-body); padding: 12px 0;
+    transition: color 0.15s; margin-top: 8px;
+  }
+  .advanced-toggle:hover { color: var(--text-secondary); }
+  .adv-chevron { width: 14px; height: 14px; transition: transform 0.2s; }
+  .adv-chevron.open { transform: rotate(90deg); }
+  .adv-hint { font-size: 0.72rem; color: var(--text-tertiary); opacity: 0.5; margin-left: 4px; }
+
+  .advanced-content { animation: slide-down 0.25s ease-out; padding-top: 10px; }
+  @keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .submit-row { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-dim); position: relative; z-index: 1; }
+  .submit-left { display: flex; align-items: center; gap: 8px; }
   .submit-row .btn-solid:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Modal */
