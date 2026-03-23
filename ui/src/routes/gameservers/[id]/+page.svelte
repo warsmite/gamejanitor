@@ -35,8 +35,7 @@
     return '';
   }
 
-  let pollInterval: ReturnType<typeof setInterval>;
-  let unsub: (() => void) | null = null;
+  let unsubs: (() => void)[] = [];
 
   onMount(async () => {
     try {
@@ -46,25 +45,54 @@
       return;
     }
 
-    // Load activity feed
+    // Load activity feed + initial stats/query
     try {
       const allEvents = await api.events.history({ gameserver_id: gsId, limit: 40 });
       events = allEvents.filter(e => e.event_type !== 'status_changed').slice(0, 20);
     } catch { /* non-fatal */ }
 
-    // Initial stats/query fetch
-    refreshData();
-    pollInterval = setInterval(refreshData, 5000);
+    if (isRunning) {
+      const [s, q] = await Promise.all([
+        api.gameservers.stats(gsId).catch(() => null),
+        api.gameservers.query(gsId).catch(() => null),
+      ]);
+      stats = s;
+      query = q;
+    }
 
-    // SSE: prepend new events to feed
-    unsub = onGameserverEvent(gsId, (data: any) => {
-      // Use status_changed to update gameserver state, but don't show in feed
+    // SSE: receive stats + query from server-side polling
+    unsubs.push(onGameserverEvent(gsId, (data: any) => {
       if (data.type === 'status_changed') {
         if (gameserver) {
           gameserver = { ...gameserver, status: data.new_status, error_reason: data.error_reason || '' };
         }
         return;
       }
+
+      if (data.type === 'gameserver.stats') {
+        stats = {
+          cpu_percent: data.cpu_percent,
+          memory_usage_mb: data.memory_usage_mb,
+          memory_limit_mb: data.memory_limit_mb,
+          volume_size_bytes: data.volume_size_bytes,
+          storage_limit_mb: data.storage_limit_mb,
+        };
+        return;
+      }
+
+      if (data.type === 'gameserver.query') {
+        query = {
+          players_online: data.players_online,
+          max_players: data.max_players,
+          players: data.players || [],
+          map: data.map,
+          version: data.version,
+        };
+        return;
+      }
+
+      // Activity feed — skip stats/query noise
+      if (data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
 
       const event: Event = {
         id: crypto.randomUUID(),
@@ -75,29 +103,12 @@
         created_at: new Date().toISOString(),
       };
       events = [event, ...events.slice(0, 19)];
-    });
+    }));
   });
 
   onDestroy(() => {
-    if (pollInterval) clearInterval(pollInterval);
-    unsub?.();
+    for (const unsub of unsubs) unsub();
   });
-
-  async function refreshData() {
-    if (!gameserver) return;
-    const running = gameserver.status === 'running' || gameserver.status === 'started';
-    if (running) {
-      const [s, q] = await Promise.all([
-        api.gameservers.stats(gsId).catch(() => null),
-        api.gameservers.query(gsId).catch(() => null),
-      ]);
-      stats = s;
-      query = q;
-    } else {
-      stats = null;
-      query = null;
-    }
-  }
 
   function eventLabel(type: string, data?: any): string {
     if (type === 'gameserver.error' && data?.reason) {

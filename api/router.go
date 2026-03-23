@@ -26,6 +26,7 @@ type RouterOptions struct {
 	ScheduleSvc   *service.ScheduleService
 	BackupSvc     *service.BackupService
 	QuerySvc      *service.QueryService
+	StatsPoller   *service.StatsPoller
 	SettingsSvc   *service.SettingsService
 	AuthSvc       *service.AuthService
 	Broadcaster   *service.EventBus
@@ -56,7 +57,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handlers.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
-	gameserverHandlers := handlers.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.Log)
+	gameserverHandlers := handlers.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
 	eventHistorySvc := service.NewEventHistoryService(opts.DB)
 	eventHandlers := handlers.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
 	scheduleHandlers := handlers.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)

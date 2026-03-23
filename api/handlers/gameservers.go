@@ -16,14 +16,15 @@ import (
 )
 
 type GameserverHandlers struct {
-	svc        *service.GameserverService
-	consoleSvc *service.ConsoleService
-	querySvc   *service.QueryService
-	log        *slog.Logger
+	svc          *service.GameserverService
+	consoleSvc   *service.ConsoleService
+	querySvc     *service.QueryService
+	statsPoller  *service.StatsPoller
+	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.ConsoleService, querySvc *service.QueryService, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, log: log}
+func NewGameserverHandlers(svc *service.GameserverService, consoleSvc *service.ConsoleService, querySvc *service.QueryService, statsPoller *service.StatsPoller, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -366,6 +367,22 @@ func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// Serve from poller cache if available (instant, no Docker call)
+	if cached := h.statsPoller.GetCachedStats(id); cached != nil {
+		resp := map[string]any{
+			"cpu_percent":       cached.CPUPercent,
+			"memory_usage_mb":   cached.MemoryUsageMB,
+			"memory_limit_mb":   cached.MemoryLimitMB,
+			"volume_size_bytes": cached.VolumeSizeBytes,
+		}
+		if cached.StorageLimitMB != nil {
+			resp["storage_limit_mb"] = *cached.StorageLimitMB
+		}
+		respondOK(w, resp)
+		return
+	}
+
+	// Fallback: live fetch (poller not running yet)
 	stats, err := h.svc.GetGameserverStats(r.Context(), id)
 	if err != nil {
 		h.log.Warn("failed to get gameserver stats", "id", id, "error", err)

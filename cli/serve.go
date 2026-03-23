@@ -98,6 +98,7 @@ type services struct {
 	settingsSvc   *service.SettingsService
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
+	statsPoller   *service.StatsPoller
 	readyWatcher  *service.ReadyWatcher
 	consoleSvc    *service.ConsoleService
 	fileSvc       *service.FileService
@@ -120,8 +121,10 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
+	statsPoller := service.NewStatsPoller(database, dispatcher, broadcaster, logger)
 	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
 	readyWatcher.SetQueryService(querySvc)
+	readyWatcher.SetStatsPoller(statsPoller)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
 	fileSvc := service.NewFileService(database, dispatcher, logger)
@@ -136,7 +139,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
 	authSvc := service.NewAuthService(database, logger)
-	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
 	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
@@ -146,6 +149,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 		settingsSvc:   settingsSvc,
 		gameserverSvc: gameserverSvc,
 		querySvc:      querySvc,
+		statsPoller:   statsPoller,
 		readyWatcher:  readyWatcher,
 		consoleSvc:    consoleSvc,
 		fileSvc:       fileSvc,
@@ -357,6 +361,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ScheduleSvc:   svcs.scheduleSvc,
 		BackupSvc:     svcs.backupSvc,
 		QuerySvc:      svcs.querySvc,
+		StatsPoller:   svcs.statsPoller,
 		SettingsSvc:   svcs.settingsSvc,
 		AuthSvc:       svcs.authSvc,
 		Broadcaster:   svcs.broadcaster,

@@ -20,7 +20,8 @@ type ReadyWatcher struct {
 	log         *slog.Logger
 	broadcaster *EventBus
 	gameStore   *games.GameStore
-	querySvc    *QueryService
+	querySvc     *QueryService
+	statsPoller  *StatsPoller
 
 	mu       sync.Mutex
 	watchers map[string]context.CancelFunc
@@ -40,6 +41,10 @@ func (w *ReadyWatcher) SetQueryService(qs *QueryService) {
 	w.querySvc = qs
 }
 
+func (w *ReadyWatcher) SetStatsPoller(sp *StatsPoller) {
+	w.statsPoller = sp
+}
+
 // Watch starts monitoring container logs for the ready pattern.
 // If the game has no ready_pattern, promotes immediately.
 func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID string) {
@@ -55,10 +60,12 @@ func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID
 		return
 	}
 
-	// Start query polling immediately — the server is running and may
-	// already be queryable. The query service handles failures gracefully.
+	// Start polling immediately — the server is running
 	if w.querySvc != nil {
 		w.querySvc.StartPolling(gameserverID)
+	}
+	if w.statsPoller != nil {
+		w.statsPoller.StartPolling(gameserverID)
 	}
 
 	var pattern *regexp.Regexp
@@ -183,5 +190,8 @@ func (w *ReadyWatcher) promote(gameserverID string) {
 	w.broadcaster.Publish(GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	if w.querySvc != nil {
 		w.querySvc.StartPolling(gameserverID)
+	}
+	if w.statsPoller != nil {
+		w.statsPoller.StartPolling(gameserverID)
 	}
 }

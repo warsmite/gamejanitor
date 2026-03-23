@@ -20,6 +20,7 @@ type StatusManager struct {
 	log          *slog.Logger
 	broadcaster  *EventBus
 	querySvc     *QueryService
+	statsPoller  *StatsPoller
 	readyWatcher *ReadyWatcher
 	dispatcher   *worker.Dispatcher
 	registry     *worker.Registry
@@ -36,12 +37,13 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBus, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
 		localWorker:   localWorker,
 		broadcaster:   broadcaster,
 		querySvc:      querySvc,
+		statsPoller:   statsPoller,
 		readyWatcher:  readyWatcher,
 		dispatcher:    dispatcher,
 		registry:      registry,
@@ -262,6 +264,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	case "die", "stop":
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
+		m.statsPoller.StopPolling(gsID)
 		if gs.Status == StatusStopping || gs.Status == StatusInstalling {
 			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {

@@ -48,6 +48,8 @@ const (
 	EventWorkerDisconnected     = "worker.disconnected"
 	EventScheduleTaskCompleted  = "schedule.task.completed"
 	EventScheduleTaskFailed     = "schedule.task.failed"
+	EventGameserverStats        = "gameserver.stats"
+	EventGameserverQuery        = "gameserver.query"
 )
 
 // AllEventTypes is every event type, used for webhook endpoint validation.
@@ -70,6 +72,7 @@ var AllEventTypes = []string{
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
 	EventWorkerConnected, EventWorkerDisconnected,
 	EventScheduleTaskCompleted, EventScheduleTaskFailed,
+	EventGameserverStats, EventGameserverQuery,
 }
 
 // Lifecycle events — published by lifecycle code, consumed by StatusSubscriber to derive status.
@@ -146,6 +149,32 @@ type GameserverErrorEvent struct {
 
 func (e GameserverErrorEvent) EventType() string        { return EventGameserverError }
 func (e GameserverErrorEvent) EventTimestamp() time.Time { return e.Timestamp }
+
+type GameserverStatsEvent struct {
+	GameserverID    string    `json:"gameserver_id"`
+	CPUPercent      float64   `json:"cpu_percent"`
+	MemoryUsageMB   int       `json:"memory_usage_mb"`
+	MemoryLimitMB   int       `json:"memory_limit_mb"`
+	VolumeSizeBytes int64     `json:"volume_size_bytes"`
+	StorageLimitMB  *int      `json:"storage_limit_mb"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
+func (e GameserverStatsEvent) EventType() string        { return EventGameserverStats }
+func (e GameserverStatsEvent) EventTimestamp() time.Time { return e.Timestamp }
+
+type GameserverQueryEvent struct {
+	GameserverID  string   `json:"gameserver_id"`
+	PlayersOnline int      `json:"players_online"`
+	MaxPlayers    int      `json:"max_players"`
+	Players       []string `json:"players"`
+	Map           string   `json:"map"`
+	Version       string   `json:"version"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
+func (e GameserverQueryEvent) EventType() string        { return EventGameserverQuery }
+func (e GameserverQueryEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 // Actor represents who/what initiated an action.
 type Actor struct {

@@ -172,11 +172,18 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 
 			if changed {
 				s.log.Debug("GJQ data changed", "id", gameserverID, "players", info.Players)
-				s.broadcaster.Publish(StatusEvent{
-					GameserverID: gameserverID,
-					OldStatus:    StatusRunning,
-					NewStatus:    StatusRunning,
-					Timestamp:    time.Now(),
+				playerNames := make([]string, len(data.Players))
+				for i, p := range data.Players {
+					playerNames[i] = p.Name
+				}
+				s.broadcaster.Publish(GameserverQueryEvent{
+					GameserverID:  gameserverID,
+					PlayersOnline: data.PlayersOnline,
+					MaxPlayers:    data.MaxPlayers,
+					Players:       playerNames,
+					Map:           data.Map,
+					Version:       data.Version,
+					Timestamp:     time.Now(),
 				})
 			}
 		}

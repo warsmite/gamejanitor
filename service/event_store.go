@@ -57,6 +57,12 @@ func (s *EventStoreSubscriber) Stop() {
 }
 
 func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
+	// Skip high-frequency telemetry events — served from in-memory cache, not history
+	switch event.EventType() {
+	case EventGameserverStats, EventGameserverQuery:
+		return
+	}
+
 	gameserverID := extractGameserverID(event)
 	actor := extractActor(event)
 	data := extractData(event)

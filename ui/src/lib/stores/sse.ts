@@ -67,6 +67,7 @@ export function connect() {
     'worker.connected', 'worker.disconnected',
     'schedule.create', 'schedule.update', 'schedule.delete',
     'schedule.task.completed', 'schedule.task.failed',
+    'gameserver.stats', 'gameserver.query',
   ];
 
   for (const type of eventTypes) {

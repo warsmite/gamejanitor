@@ -27,8 +27,7 @@
     return counts;
   });
 
-  let pollInterval: ReturnType<typeof setInterval>;
-  let unsub: (() => void) | null = null;
+  let unsubs: (() => void)[] = [];
 
   onMount(async () => {
     try {
@@ -47,42 +46,49 @@
       loading = false;
     }
 
-    // Fetch stats in background — don't block initial render
-    refreshData();
-    pollInterval = setInterval(refreshData, 5000);
+    // Initial stats/query fetch for running servers
+    for (const gs of gameservers) {
+      if (gs.status === 'running' || gs.status === 'started') {
+        api.gameservers.stats(gs.id).then(s => { if (s) stats[gs.id] = s; }).catch(() => {});
+        api.gameservers.query(gs.id).then(q => { if (q) queries[gs.id] = q; }).catch(() => {});
+      }
+    }
 
     // SSE: update gameserver status in real-time
-    unsub = onEvent('status_changed', (data: any) => {
+    unsubs.push(onEvent('status_changed', (data: any) => {
       gameservers = gameservers.map(gs =>
         gs.id === data.gameserver_id
           ? { ...gs, status: data.new_status, error_reason: data.error_reason || '' }
           : gs
       );
-    });
+    }));
+
+    // SSE: receive stats from server-side polling
+    unsubs.push(onEvent('gameserver.stats', (data: any) => {
+      stats[data.gameserver_id] = {
+        cpu_percent: data.cpu_percent,
+        memory_usage_mb: data.memory_usage_mb,
+        memory_limit_mb: data.memory_limit_mb,
+        volume_size_bytes: data.volume_size_bytes,
+        storage_limit_mb: data.storage_limit_mb,
+      };
+    }));
+
+    // SSE: receive query data from server-side polling
+    unsubs.push(onEvent('gameserver.query', (data: any) => {
+      queries[data.gameserver_id] = {
+        players_online: data.players_online,
+        max_players: data.max_players,
+        players: data.players || [],
+        map: data.map,
+        version: data.version,
+      };
+    }));
   });
 
   onDestroy(() => {
-    if (pollInterval) clearInterval(pollInterval);
-    if (unsub) unsub();
+    for (const unsub of unsubs) unsub();
   });
-
-  async function refreshData() {
-    for (const gs of gameservers) {
-      if (gs.status === 'running' || gs.status === 'started') {
-        try {
-          const [s, q] = await Promise.all([
-            api.gameservers.stats(gs.id).catch(() => null),
-            api.gameservers.query(gs.id).catch(() => null),
-          ]);
-          stats[gs.id] = s;
-          queries[gs.id] = q;
-        } catch { /* ignore */ }
-      } else {
-        stats[gs.id] = null;
-        queries[gs.id] = null;
-      }
-    }
-  }
 
   function connectionAddress(gs: Gameserver): string {
     try {
