@@ -20,8 +20,9 @@
   );
   const cpuPercent = $derived(stats ? Math.round(stats.cpu_percent) : 0);
   const storageMB = $derived(stats ? Math.round(stats.volume_size_bytes / (1024 * 1024)) : 0);
+  const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
   const storagePercent = $derived(
-    stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : 0
+    stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : (stats ? 100 : 0)
   );
 
   function connectionAddress(gs: Gameserver): string {
@@ -192,7 +193,7 @@
           unit={stats ? (storageMB < 1024 ? ' MB' : ' GB') : ''}
           detail={stats?.storage_limit_mb ? `of ${(stats.storage_limit_mb / 1024).toFixed(0)} GB` : 'no limit'}
           percent={storagePercent}
-          color="accent"
+          color={hasStorageLimit ? 'accent' : 'live'}
         />
       </div>
     </div>

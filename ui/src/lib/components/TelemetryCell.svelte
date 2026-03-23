@@ -6,9 +6,7 @@
 <div class="cell">
   <span class="label">{label}</span>
   <div class="val">{value}<span class="unit">{unit}</span></div>
-  {#if detail}
-    <div class="detail">{detail}</div>
-  {/if}
+  <div class="detail">{detail || '\u00A0'}</div>
   <div class="bar">
     <div class="fill {color}" style="width:{percent}%"></div>
   </div>
