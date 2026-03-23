@@ -46,7 +46,7 @@
   const belowRecommended = $derived(selectedGame ? memoryMb > 0 && memoryMb < selectedGame.recommended_memory_mb : false);
   const cpuDisplay = $derived(cpuLimit === 0 ? 'Unlimited' : `${cpuLimit} cores`);
   const storageDisplay = $derived(storageLimitMb === 0 ? 'Unlimited' : storageLimitMb >= 1024 ? `${storageLimitMb / 1024} GB` : `${storageLimitMb} MB`);
-  const backupDisplay = $derived(backupLimit === 0 ? 'Global default' : `${backupLimit} max`);
+  const backupDisplay = $derived(backupLimit === 0 ? 'Use global setting' : `${backupLimit} max`);
 
   // Group env vars by their group field
   const envGroups = $derived(() => {
@@ -122,13 +122,13 @@
     step = 'configure';
     window.scrollTo({ top: 0, behavior: 'instant' });
 
-    // Initialize slider fill after DOM updates
+    // Initialize slider fills after DOM updates
     requestAnimationFrame(() => {
-      const slider = document.querySelector('.slider') as HTMLInputElement;
-      if (slider) {
+      document.querySelectorAll('.slider').forEach((el) => {
+        const slider = el as HTMLInputElement;
         const pct = ((parseInt(slider.value) - parseInt(slider.min)) / (parseInt(slider.max) - parseInt(slider.min))) * 100;
         slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
-      }
+      });
     });
   }
 
@@ -210,6 +210,13 @@
     input.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
     memoryMb = parseInt(input.value);
   }
+
+  function updateStorageSlider(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const pct = ((parseInt(input.value) - parseInt(input.min)) / (parseInt(input.max) - parseInt(input.min))) * 100;
+    input.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
+    storageLimitMb = parseInt(input.value);
+  }
 </script>
 
 <main>
@@ -285,21 +292,33 @@
         <input class="input" type="text" placeholder="e.g. survival-smp" bind:value={serverName}>
       </div>
 
-      <div class="form-row">
-        <div class="resource-header">
-          <span class="label">Memory</span>
-          <span class="resource-value">{memoryDisplay}</span>
-        </div>
-        <input type="range" class="slider" min="256" max="16384" step="256"
-          value={memoryMb}
-          oninput={updateSliderFill}
-        >
-        {#if belowRecommended}
-          <div class="resource-warning">
-            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
-            Below recommended ({selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`})
+      <div class="form-grid">
+        <div class="form-row">
+          <div class="resource-header">
+            <span class="label">Memory</span>
+            <span class="resource-value">{memoryDisplay}</span>
           </div>
-        {/if}
+          <input type="range" class="slider" min="0" max="16384" step="256"
+            value={memoryMb}
+            oninput={updateSliderFill}
+          >
+          {#if belowRecommended}
+            <div class="resource-warning">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+              Below recommended ({selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`})
+            </div>
+          {/if}
+        </div>
+        <div class="form-row">
+          <div class="resource-header">
+            <span class="label">Storage</span>
+            <span class="resource-value">{storageDisplay}</span>
+          </div>
+          <input type="range" class="slider storage-slider" min="0" max="1048576" step="1024"
+            value={storageLimitMb}
+            oninput={updateStorageSlider}
+          >
+        </div>
       </div>
 
       <!-- Required env vars with notices (e.g. EULA) — always visible -->
@@ -422,16 +441,6 @@
               </div>
             </div>
             <div class="form-grid" style="margin-top:14px;">
-              <div class="form-row">
-                <div class="resource-header">
-                  <span class="label">Storage Limit</span>
-                  <span class="resource-value dim">{storageDisplay}</span>
-                </div>
-                <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" step="1000" placeholder="0" bind:value={storageLimitMb}>
-                  <span class="input-suffix">MB</span>
-                </div>
-              </div>
               <div class="form-row">
                 <div class="resource-header">
                   <span class="label">Backup Limit</span>
