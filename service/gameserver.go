@@ -335,6 +335,14 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	installTriggered := false
 	if gs.Env != nil {
 		installTriggered = s.installTriggeringEnvChanged(existing, gs)
+
+		// Validate required env vars when env is being updated
+		game := s.gameStore.GetGame(existing.GameID)
+		if game != nil {
+			if err := s.validateRequiredEnv(game, gs); err != nil {
+				return false, err
+			}
+		}
 	}
 
 	// Merge: only overwrite fields that were actually provided
