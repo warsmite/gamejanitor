@@ -431,7 +431,9 @@
                   <span class="resource-value dim">{cpuDisplay}</span>
                 </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0" bind:value={cpuLimit}>
+                  <input class="input input-mono" type="number" min="0" step="0.5" placeholder="Unlimited"
+                    value={cpuLimit || ''}
+                    oninput={(e) => cpuLimit = parseFloat((e.target as HTMLInputElement).value) || 0}>
                   <span class="input-suffix">cores</span>
                 </div>
               </div>
@@ -450,7 +452,9 @@
                   <span class="resource-value dim">{backupDisplay}</span>
                 </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" placeholder="0" bind:value={backupLimit}>
+                  <input class="input input-mono" type="number" min="0" placeholder="Use global setting"
+                    value={backupLimit || ''}
+                    oninput={(e) => backupLimit = parseInt((e.target as HTMLInputElement).value) || 0}>
                   <span class="input-suffix">max</span>
                 </div>
               </div>
