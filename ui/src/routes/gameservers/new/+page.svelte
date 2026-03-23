@@ -312,10 +312,11 @@
           <span class="label">Storage</span>
           <span class="resource-value">{storageDisplay}</span>
         </div>
-        <input type="range" class="slider storage-slider" min="0" max="1048576" step="1024"
+        <input type="range" class="slider storage-slider" min="0" max="1048576" step="10240"
           value={storageLimitMb}
           oninput={updateStorageSlider}
         >
+        <div class="field-hint">Soft limit — not enforced by Docker, used for placement and monitoring</div>
       </div>
 
       <!-- Required env vars with notices (e.g. EULA) — always visible -->
