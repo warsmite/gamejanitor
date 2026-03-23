@@ -43,18 +43,29 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-dim);
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 18px 16px;
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.25s, transform 0.15s;
     display: flex; flex-direction: column; align-items: center;
     gap: 10px; text-align: center;
+    position: relative;
+    animation: card-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+  .featured-card:nth-child(1) { animation-delay: 0ms; }
+  .featured-card:nth-child(2) { animation-delay: 50ms; }
+  .featured-card:nth-child(3) { animation-delay: 100ms; }
+  .featured-card:nth-child(4) { animation-delay: 150ms; }
+
+  @keyframes card-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   .featured-card:hover {
-    border-color: var(--border);
-    background: var(--bg-elevated);
-  }
-  .featured-card:active {
     border-color: var(--accent-border);
+    background: var(--bg-elevated);
+    box-shadow: 0 0 24px rgba(232, 114, 42, 0.05);
+    transform: translateY(-2px);
   }
 
   .featured-icon {
@@ -62,6 +73,11 @@
     background: var(--bg-inset); border: 1px solid var(--border-dim);
     display: grid; place-items: center;
     font-size: 1.4rem;
+    box-shadow: inset 0 1px 4px rgba(232, 114, 42, 0.04);
+    transition: box-shadow 0.2s;
+  }
+  .featured-card:hover .featured-icon {
+    box-shadow: inset 0 1px 6px rgba(232, 114, 42, 0.08);
   }
   .featured-name {
     font-weight: 550; font-size: 0.85rem;
@@ -113,12 +129,16 @@
 
   .game-row {
     display: flex; align-items: center;
-    padding: 10px 16px;
+    padding: 11px 16px;
     cursor: pointer;
-    transition: background 0.12s;
+    transition: background 0.12s, border-color 0.15s;
     gap: 12px;
+    border-left: 2px solid transparent;
   }
-  .game-row:hover { background: var(--bg-elevated); }
+  .game-row:hover {
+    background: var(--bg-elevated);
+    border-left-color: var(--accent);
+  }
   .game-row + .game-row { border-top: 1px solid var(--border-dim); }
 
   .game-row-icon {
@@ -217,8 +237,9 @@
 
   /* Env var group blocks */
   .env-group {
-    background: var(--bg-inset);
+    background: var(--bg-elevated);
     border: 1px solid var(--border-dim);
+    border-left: 2px solid rgba(232, 114, 42, 0.2);
     border-radius: var(--radius);
     padding: 18px;
     margin-bottom: 14px;
@@ -233,7 +254,7 @@
 
   /* EULA callout — stands out from normal fields */
   .eula-callout {
-    background: var(--bg-inset);
+    background: var(--bg-elevated);
     border: 1px solid rgba(232, 114, 42, 0.15);
     border-radius: var(--radius);
     padding: 16px 18px;
@@ -299,7 +320,7 @@
   }
   .resource-value.unlimited { color: var(--text-tertiary); }
 
-  /* Slider styling */
+  /* Slider styling — track fill handled via JS background-image */
   .slider {
     -webkit-appearance: none;
     appearance: none;
@@ -341,7 +362,16 @@
 
   .submit-row {
     display: flex; align-items: center; justify-content: flex-end;
-    margin-top: 24px; position: relative; z-index: 1;
+    margin-top: 28px; padding-top: 20px;
+    border-top: 1px solid var(--border-dim);
+    position: relative; z-index: 1;
+  }
+  .submit-row .btn-solid {
+    transition: background 0.15s, box-shadow 0.25s, transform 0.15s;
+  }
+  .submit-row .btn-solid:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 24px rgba(232, 114, 42, 0.3), 0 4px 12px rgba(0,0,0,0.2);
   }
 
   /* ═══════════════════════ MOBILE ═══════════════════════ */
@@ -608,10 +638,12 @@ function pickGame(id, icon, name, mem) {
   document.getElementById('selName').textContent = name;
   document.getElementById('selMem').textContent = formatMem(mem);
 
-  // Set memory slider to recommended
+  // Set memory slider to recommended and update fill
   const slider = document.getElementById('memSlider');
   slider.value = mem;
   updateMem(mem);
+  // Re-trigger to ensure fill renders
+  requestAnimationFrame(() => updateMem(mem));
 
   // Game-specific submit button
   const shortName = name.split(':')[0].split(' (')[0];
@@ -650,6 +682,11 @@ function updateMem(val) {
   val = parseInt(val);
   document.getElementById('memDisplay').textContent = formatMem(val);
   document.getElementById('memDisplay').classList.toggle('unlimited', false);
+
+  // Fill the slider track up to the thumb
+  const slider = document.getElementById('memSlider');
+  const pct = ((val - slider.min) / (slider.max - slider.min)) * 100;
+  slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
 
   const warn = document.getElementById('memWarning');
   if (val < recommendedMem) {
