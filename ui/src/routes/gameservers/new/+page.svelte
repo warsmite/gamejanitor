@@ -45,7 +45,12 @@
   const memoryDisplay = $derived(memoryMb === 0 ? 'Unlimited' : memoryMb >= 1024 ? `${memoryMb / 1024} GB` : `${memoryMb} MB`);
   const belowRecommended = $derived(selectedGame ? memoryMb > 0 && memoryMb < selectedGame.recommended_memory_mb : false);
   const cpuDisplay = $derived(cpuLimit === 0 ? 'Unlimited' : `${cpuLimit} cores`);
-  const storageDisplay = $derived(storageLimitMb === 0 ? 'Unlimited' : storageLimitMb >= 1024 ? `${storageLimitMb / 1024} GB` : `${storageLimitMb} MB`);
+  const storageDisplay = $derived(
+    storageLimitMb === 0 ? 'Unlimited' :
+    storageLimitMb >= 1024000 ? '1 TB' :
+    storageLimitMb >= 1024 ? `${Math.round(storageLimitMb / 1024)} GB` :
+    `${storageLimitMb} MB`
+  );
   const backupDisplay = $derived(backupLimit === 0 ? 'Use global setting' : `${backupLimit} max`);
 
   // Group env vars by their group field
@@ -312,7 +317,7 @@
           <span class="label">Storage</span>
           <span class="resource-value">{storageDisplay}</span>
         </div>
-        <input type="range" class="slider storage-slider" min="0" max="1048576" step="10240"
+        <input type="range" class="slider storage-slider" min="0" max="1024000" step="10240"
           value={storageLimitMb}
           oninput={updateStorageSlider}
         >
