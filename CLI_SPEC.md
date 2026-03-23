@@ -72,9 +72,11 @@ gamejanitor update
 Self-updates the gamejanitor binary to the latest release.
 
 ```
-gamejanitor token create --type admin|worker [--data-dir /var/lib/gamejanitor]
+gamejanitor token create --name <name> --type admin|worker [--data-dir /var/lib/gamejanitor]
 ```
 Offline token creation — direct DB access, no running server needed. Used to create the first admin token before starting with auth enabled. Also used to create worker tokens for multi-node deployment. Uses `--data-dir` to find the database (defaults to `/var/lib/gamejanitor`).
+
+**Idempotent:** if a token with the given name already exists, exits 0 silently. This makes it safe to use in `ExecStartPre` for systemd/NixOS declarative deployments. The raw token is only printed on first creation.
 
 ```
 gamejanitor gen-worker-cert <worker-id>
