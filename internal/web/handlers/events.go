@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -15,13 +14,13 @@ import (
 )
 
 type EventHandlers struct {
-	bus *service.EventBus
-	db  *sql.DB
-	log *slog.Logger
+	bus        *service.EventBus
+	historySvc *service.EventHistoryService
+	log        *slog.Logger
 }
 
-func NewEventHandlers(bus *service.EventBus, db *sql.DB, log *slog.Logger) *EventHandlers {
-	return &EventHandlers{bus: bus, db: db, log: log}
+func NewEventHandlers(bus *service.EventBus, historySvc *service.EventHistoryService, log *slog.Logger) *EventHandlers {
+	return &EventHandlers{bus: bus, historySvc: historySvc, log: log}
 }
 
 func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
@@ -80,19 +79,15 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 	if p.Limit <= 0 {
 		p.Limit = 50 // events default to 50
 	}
-	filter := models.EventFilter{
+
+	events, err := h.historySvc.List(models.EventFilter{
 		EventType:    r.URL.Query().Get("type"),
 		GameserverID: r.URL.Query().Get("gameserver_id"),
 		Pagination:   p,
-	}
-
-	events, err := models.ListEvents(h.db, filter)
+	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list events")
 		return
-	}
-	if events == nil {
-		events = []models.Event{}
 	}
 	respondOK(w, events)
 }

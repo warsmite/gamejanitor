@@ -1,245 +1,98 @@
 package handlers
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
-	"path"
 	"strconv"
-	"strings"
-	"time"
 
-	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/warsmite/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type WebhookHandlers struct {
-	db  *sql.DB
+	svc *service.WebhookEndpointService
 	log *slog.Logger
 }
 
-func NewWebhookHandlers(db *sql.DB, log *slog.Logger) *WebhookHandlers {
-	return &WebhookHandlers{db: db, log: log}
-}
-
-type webhookEndpointResponse struct {
-	ID          string    `json:"id"`
-	Description string    `json:"description"`
-	URL         string    `json:"url"`
-	SecretSet   bool      `json:"secret_set"`
-	Events      []string  `json:"events"`
-	Enabled     bool      `json:"enabled"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-func toWebhookResponse(e *models.WebhookEndpoint) webhookEndpointResponse {
-	var events []string
-	if err := json.Unmarshal([]byte(e.Events), &events); err != nil {
-		events = []string{}
-	}
-	return webhookEndpointResponse{
-		ID:          e.ID,
-		Description: e.Description,
-		URL:         e.URL,
-		SecretSet:   e.Secret != "",
-		Events:      events,
-		Enabled:     e.Enabled,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
-	}
+func NewWebhookHandlers(svc *service.WebhookEndpointService, log *slog.Logger) *WebhookHandlers {
+	return &WebhookHandlers{svc: svc, log: log}
 }
 
 func (h *WebhookHandlers) List(w http.ResponseWriter, r *http.Request) {
-	endpoints, err := models.ListWebhookEndpoints(h.db)
+	views, err := h.svc.List()
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to list webhook endpoints")
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	result := make([]webhookEndpointResponse, 0, len(endpoints))
-	for _, e := range endpoints {
-		result = append(result, toWebhookResponse(&e))
-	}
-	respondOK(w, result)
+	respondOK(w, views)
 }
 
 func (h *WebhookHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "webhookId")
-	ep, err := models.GetWebhookEndpoint(h.db, id)
+	view, err := h.svc.Get(chi.URLParam(r, "webhookId"))
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get webhook endpoint")
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	if ep == nil {
-		respondError(w, http.StatusNotFound, "webhook endpoint not found")
-		return
-	}
-	respondOK(w, toWebhookResponse(ep))
-}
-
-type createWebhookRequest struct {
-	Description string   `json:"description"`
-	URL         string   `json:"url"`
-	Secret      string   `json:"secret"`
-	Events      []string `json:"events"`
-	Enabled     *bool    `json:"enabled"`
+	respondOK(w, view)
 }
 
 func (h *WebhookHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	var req createWebhookRequest
+	var req struct {
+		Description string   `json:"description"`
+		URL         string   `json:"url"`
+		Secret      string   `json:"secret"`
+		Events      []string `json:"events"`
+		Enabled     *bool    `json:"enabled"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-
-	if req.URL == "" {
-		respondError(w, http.StatusBadRequest, "url is required")
-		return
-	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		respondError(w, http.StatusBadRequest, "url must start with http:// or https://")
-		return
-	}
-
-	events := req.Events
-	if len(events) == 0 {
-		events = []string{"*"}
-	}
-	if err := validateEventFilter(events); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	eventsJSON, _ := json.Marshal(events)
 
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
 
-	ep := &models.WebhookEndpoint{
-		Description: req.Description,
-		URL:         req.URL,
-		Secret:      req.Secret,
-		Events:      string(eventsJSON),
-		Enabled:     enabled,
-	}
-	if err := models.CreateWebhookEndpoint(h.db, ep); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to create webhook endpoint")
+	view, err := h.svc.Create(req.URL, req.Description, req.Secret, req.Events, enabled)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	h.log.Info("webhook endpoint created", "id", ep.ID, "url", ep.URL)
-	respondCreated(w, toWebhookResponse(ep))
-}
-
-type updateWebhookRequest struct {
-	Description *string  `json:"description"`
-	URL         *string  `json:"url"`
-	Secret      *string  `json:"secret"`
-	Events      []string `json:"events"`
-	Enabled     *bool    `json:"enabled"`
+	respondCreated(w, view)
 }
 
 func (h *WebhookHandlers) Update(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "webhookId")
-	ep, err := models.GetWebhookEndpoint(h.db, id)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get webhook endpoint")
-		return
+	var req struct {
+		Description *string  `json:"description"`
+		URL         *string  `json:"url"`
+		Secret      *string  `json:"secret"`
+		Events      []string `json:"events"`
+		Enabled     *bool    `json:"enabled"`
 	}
-	if ep == nil {
-		respondError(w, http.StatusNotFound, "webhook endpoint not found")
-		return
-	}
-
-	var req updateWebhookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 
-	if req.Description != nil {
-		ep.Description = *req.Description
-	}
-	if req.URL != nil {
-		if !strings.HasPrefix(*req.URL, "http://") && !strings.HasPrefix(*req.URL, "https://") {
-			respondError(w, http.StatusBadRequest, "url must start with http:// or https://")
-			return
-		}
-		ep.URL = *req.URL
-	}
-	if req.Secret != nil {
-		ep.Secret = *req.Secret
-	}
-	if req.Events != nil {
-		if err := validateEventFilter(req.Events); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		eventsJSON, _ := json.Marshal(req.Events)
-		ep.Events = string(eventsJSON)
-	}
-	if req.Enabled != nil {
-		ep.Enabled = *req.Enabled
-	}
-
-	if err := models.UpdateWebhookEndpoint(h.db, ep); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to update webhook endpoint")
+	view, err := h.svc.Update(chi.URLParam(r, "webhookId"), req.Description, req.URL, req.Secret, req.Events, req.Enabled)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	h.log.Info("webhook endpoint updated", "id", ep.ID)
-	respondOK(w, toWebhookResponse(ep))
+	respondOK(w, view)
 }
 
 func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "webhookId")
-	if err := models.DeleteWebhookEndpoint(h.db, id); err != nil {
-		if err == sql.ErrNoRows {
-			respondError(w, http.StatusNotFound, "webhook endpoint not found")
-			return
-		}
-		respondError(w, http.StatusInternalServerError, "failed to delete webhook endpoint")
+	if err := h.svc.Delete(chi.URLParam(r, "webhookId")); err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	h.log.Info("webhook endpoint deleted", "id", id)
 	respondNoContent(w)
 }
 
-type deliveryResponse struct {
-	ID            string     `json:"id"`
-	EventType     string     `json:"event_type"`
-	State         string     `json:"state"`
-	Attempts      int        `json:"attempts"`
-	LastAttemptAt *time.Time `json:"last_attempt_at"`
-	NextAttemptAt time.Time  `json:"next_attempt_at"`
-	LastError     string     `json:"last_error,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-}
-
 func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "webhookId")
-	ep, err := models.GetWebhookEndpoint(h.db, id)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get webhook endpoint")
-		return
-	}
-	if ep == nil {
-		respondError(w, http.StatusNotFound, "webhook endpoint not found")
-		return
-	}
-
-	state := r.URL.Query().Get("state")
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
@@ -247,120 +100,19 @@ func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	deliveries, err := models.ListDeliveriesByEndpoint(h.db, id, state, limit)
+	views, err := h.svc.ListDeliveries(chi.URLParam(r, "webhookId"), r.URL.Query().Get("state"), limit)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to list deliveries")
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	result := make([]deliveryResponse, 0, len(deliveries))
-	for _, d := range deliveries {
-		result = append(result, deliveryResponse{
-			ID:            d.ID,
-			EventType:     d.EventType,
-			State:         d.State,
-			Attempts:      d.Attempts,
-			LastAttemptAt: d.LastAttemptAt,
-			NextAttemptAt: d.NextAttemptAt,
-			LastError:     d.LastError,
-			CreatedAt:     d.CreatedAt,
-		})
-	}
-	respondOK(w, result)
+	respondOK(w, views)
 }
 
 func (h *WebhookHandlers) Test(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "webhookId")
-	ep, err := models.GetWebhookEndpoint(h.db, id)
+	result, err := h.svc.Test(chi.URLParam(r, "webhookId"))
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get webhook endpoint")
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	if ep == nil {
-		respondError(w, http.StatusNotFound, "webhook endpoint not found")
-		return
-	}
-
-	payload := service.WebhookPayload{
-		Version:   1,
-		ID:        "test",
-		Timestamp: time.Now().UTC(),
-		EventType: "webhook.test",
-		Data:      map[string]string{},
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to marshal test payload")
-		return
-	}
-
-	statusCode, deliverErr := deliverWebhook(ep.URL, body, ep.Secret)
-	if deliverErr != nil {
-		respondError(w, http.StatusBadGateway, deliverErr.Error())
-		return
-	}
-
-	respondOK(w, map[string]any{
-		"response_status": statusCode,
-		"success":         statusCode >= 200 && statusCode < 300,
-	})
-}
-
-func deliverWebhook(url string, body []byte, secret string) (int, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return 0, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Gamejanitor-Webhook/1.0")
-
-	if secret != "" {
-		mac := hmac.New(sha256.New, []byte(secret))
-		mac.Write(body)
-		sig := hex.EncodeToString(mac.Sum(nil))
-		req.Header.Set("X-Webhook-Signature", "sha256="+sig)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-
-	return resp.StatusCode, nil
-}
-
-// knownEventTypes references the central event type list for webhook validation.
-var knownEventTypes = service.AllEventTypes
-
-func validateEventFilter(events []string) error {
-	if len(events) == 0 {
-		return service.ErrBadRequestf("events must not be empty")
-	}
-	for _, e := range events {
-		if e == "*" {
-			continue
-		}
-		// Check if it matches at least one known event type (literal or glob)
-		matched := false
-		for _, known := range knownEventTypes {
-			if e == known {
-				matched = true
-				break
-			}
-			if m, _ := path.Match(e, known); m {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return service.ErrBadRequestf("event filter %q does not match any known event types", e)
-		}
-	}
-	return nil
+	respondOK(w, result)
 }
