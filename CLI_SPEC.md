@@ -18,6 +18,7 @@ Starts the gamejanitor server. Both controller and worker are enabled by default
 
 | Flag | Default | Description |
 |---|---|---|
+| `--config` | — | Path to YAML config file (see CONFIG_SPEC.md) |
 | `--controller` | `true` | Enable the API server and orchestrator |
 | `--worker` | `true` | Enable the local Docker worker that manages containers on this machine |
 | `--port` | `8080` | Port for the HTTP API and web UI |
@@ -30,10 +31,33 @@ Starts the gamejanitor server. Both controller and worker are enabled by default
 | `--worker-id` | hostname | Unique name for this worker node |
 | `--worker-token` | — | Auth token for this worker to connect to the controller (or `GJ_WORKER_TOKEN`) |
 
+All flags can also be set in the config file. Flags override config file values. Config file is optional — newbies don't need one.
+
+**Startup validation:**
+- If `auth_enabled` is true (via config file settings) but no tokens exist in DB → hard error with message: "auth is enabled but no tokens exist — create one first: `gamejanitor token create --type admin`"
+- If S3 configured but unreachable → hard error
+- If Docker not accessible → hard error with helpful message (suggest `usermod -aG docker` or `sudo`)
+
 **Deployment modes:**
-- **Newbie/power user:** `gamejanitor serve` — both flags default true, everything runs
-- **Business controller:** `gamejanitor serve --worker=false` — API + orchestration only, no local Docker
-- **Business worker node:** `gamejanitor serve --controller=false --controller-address 10.0.0.1:9090 --worker-token gj_...` — Docker agent only, registers with controller
+- **Newbie/power user:** `gamejanitor serve` — no config file, no flags, everything works
+- **Business controller:** `gamejanitor serve --config /etc/gamejanitor/config.yaml --worker=false`
+- **Business worker node:** `gamejanitor serve --config /etc/gamejanitor/config.yaml --controller=false`
+
+**Business deployment flow:**
+```bash
+# 1. Deploy config file via Ansible/Terraform
+# 2. Create admin token (offline, direct DB access)
+gamejanitor token create --type admin --data-dir /var/lib/gamejanitor
+# → outputs gj_abc123... (save this)
+
+# 3. Start the server
+gamejanitor serve --config /etc/gamejanitor/config.yaml
+
+# 4. Configure operational settings via API
+curl -X PATCH http://controller:8080/api/settings \
+  -H "Authorization: Bearer gj_abc123..." \
+  -d '{"max_backups": 5}'
+```
 
 ## Setup Commands
 
@@ -48,9 +72,9 @@ gamejanitor update
 Self-updates the gamejanitor binary to the latest release.
 
 ```
-gamejanitor token create --type admin|worker
+gamejanitor token create --type admin|worker [--data-dir /var/lib/gamejanitor]
 ```
-Offline token creation — direct DB access, no running server needed. Used for initial setup before auth is enabled.
+Offline token creation — direct DB access, no running server needed. Used to create the first admin token before starting with auth enabled. Also used to create worker tokens for multi-node deployment. Uses `--data-dir` to find the database (defaults to `/var/lib/gamejanitor`).
 
 ```
 gamejanitor gen-worker-cert <worker-id>
@@ -73,25 +97,22 @@ Stored in `~/.gamejanitor/clusters.yaml`. Token stored per-cluster. Current clus
 
 If no cluster configured, defaults to `http://localhost:8080` with no token (newbie mode).
 
-## Profiles
+## Config File
 
+Optional YAML config file for infrastructure settings and initial operational state. See `CONFIG_SPEC.md` for full specification.
+
+Newbies don't need one. Power users may use one for S3 config. Businesses deploy one via IaC.
+
+```bash
+# Generate a starter config file
+gamejanitor init [--profile newbie|business]
 ```
-gamejanitor settings apply-profile <profile>
-```
 
-Applies a preset configuration profile:
+Generates a `gamejanitor.yaml` in the current directory with sensible defaults for the profile:
 
-**`newbie`** (default state):
-- Auth disabled
-- Localhost bypass on
-- Require limits off
-- Rate limiting off
+**`newbie`** (default): minimal config, comments explaining each option.
 
-**`business`**:
-- Auth enabled (generates and displays admin token)
-- Require memory/cpu/storage limits on
-- Rate limiting on
-- Prompts for S3 backup config if not set
+**`business`**: auth enabled, require limits on, rate limiting on, S3 section with placeholder values, comments for multi-node setup.
 
 ## Gameservers
 
