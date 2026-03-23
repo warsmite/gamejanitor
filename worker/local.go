@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -22,9 +21,7 @@ type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
-
-	mountMu    sync.RWMutex
-	mountCache map[string]string // volume name → mountpoint
+	resolve   volumeResolver
 
 	// Direct volume access detection (probed once on first file op)
 	directAccessOnce sync.Once
@@ -45,15 +42,16 @@ type volumeSizeEntry struct {
 }
 
 func NewLocalWorker(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
-	return &LocalWorker{
+	w := &LocalWorker{
 		docker:          dockerClient,
 		log:             log,
 		gameStore:       gameStore,
 		dataDir:         dataDir,
-		mountCache:      make(map[string]string),
 		sidecarCache:    make(map[string]string),
 		volumeSizeCache: make(map[string]*volumeSizeEntry),
 	}
+	w.resolve = w.dockerVolumeResolver()
+	return w
 }
 
 func (w *LocalWorker) PullImage(ctx context.Context, image string) error {
@@ -126,10 +124,6 @@ func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 }
 
 func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {
-	w.mountMu.Lock()
-	delete(w.mountCache, name)
-	w.mountMu.Unlock()
-
 	w.volumeSizeMu.Lock()
 	delete(w.volumeSizeCache, name)
 	w.volumeSizeMu.Unlock()
@@ -147,6 +141,17 @@ func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64,
 		return size, nil
 	}
 	w.volumeSizeMu.Unlock()
+
+	// Try direct measurement first, fall back to sidecar
+	if w.hasDirectAccess(ctx, volumeName) {
+		size, err := volumeSizeDirect(w.resolve, ctx, volumeName)
+		if err == nil {
+			w.volumeSizeMu.Lock()
+			w.volumeSizeCache[volumeName] = &volumeSizeEntry{sizeBytes: size, measuredAt: time.Now()}
+			w.volumeSizeMu.Unlock()
+			return size, nil
+		}
+	}
 
 	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, []string{"du", "-sb", "/data"})
 	if err != nil {
@@ -174,42 +179,42 @@ func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64,
 
 func (w *LocalWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.listFilesDirect(ctx, volumeName, path)
+		return listFilesDirect(w.resolve, ctx, volumeName, path)
 	}
 	return w.listFilesSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.readFileDirect(ctx, volumeName, path)
+		return readFileDirect(w.resolve, ctx, volumeName, path)
 	}
 	return w.readFileSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.writeFileDirect(ctx, volumeName, path, content, perm)
+		return writeFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 	}
 	return w.writeFileSidecar(ctx, volumeName, path, content)
 }
 
 func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.deletePathDirect(ctx, volumeName, path)
+		return deletePathDirect(w.resolve, ctx, volumeName, path)
 	}
 	return w.deletePathSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.createDirectoryDirect(ctx, volumeName, path)
+		return createDirectoryDirect(w.resolve, ctx, volumeName, path)
 	}
 	return w.createDirectorySidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
 	if w.hasDirectAccess(ctx, volumeName) {
-		return w.renamePathDirect(ctx, volumeName, from, to)
+		return renamePathDirect(w.resolve, ctx, volumeName, from, to)
 	}
 	return w.renamePathSidecar(ctx, volumeName, from, to)
 }
@@ -255,20 +260,7 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <
 }
 
 func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
-	gsDir := filepath.Join(w.dataDir, "gameservers", gameserverID)
-	if err := w.gameStore.ExtractScripts(gameID, gsDir); err != nil {
-		return "", "", fmt.Errorf("extracting scripts for %s: %w", gameserverID, err)
-	}
-
-	scriptDir := filepath.Join(gsDir, "scripts")
-	defaultsDir := filepath.Join(gsDir, "defaults")
-
-	// Only return defaults dir if it exists
-	if _, err := os.Stat(defaultsDir); err != nil {
-		defaultsDir = ""
-	}
-
-	return scriptDir, defaultsDir, nil
+	return prepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
 func toDockerPorts(ports []PortBinding) []docker.PortBinding {

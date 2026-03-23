@@ -168,6 +168,8 @@ func (c *Config) ResolveContainerSocket() string {
 	}
 
 	switch c.ContainerRuntime {
+	case "process":
+		return ""
 	case "docker":
 		return "/var/run/docker.sock"
 	case "podman":

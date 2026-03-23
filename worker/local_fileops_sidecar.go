@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -214,15 +213,4 @@ func parseStatOutput(output string) []FileEntry {
 
 	sortFileEntries(entries)
 	return entries
-}
-
-// --- Shared helpers ---
-
-func sortFileEntries(entries []FileEntry) {
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].IsDir != entries[j].IsDir {
-			return entries[i].IsDir
-		}
-		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
-	})
 }

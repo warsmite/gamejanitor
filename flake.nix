@@ -96,11 +96,22 @@
 
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             for runtime in docker podman; do
-              if command -v "$runtime" &>/dev/null && $runtime info &>/dev/null; then
+              if ! command -v "$runtime" &>/dev/null; then
+                continue
+              fi
+              # Try rootless first
+              if $runtime info &>/dev/null; then
                 echo "Cleaning up $runtime containers..."
                 $runtime ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r $runtime rm -f
                 echo "Cleaning up $runtime volumes..."
                 $runtime volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r $runtime volume rm -f
+              fi
+              # Try rootful if sudo is available
+              if sudo -n true 2>/dev/null && sudo $runtime info &>/dev/null; then
+                echo "Cleaning up $runtime containers (rootful)..."
+                sudo $runtime ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r sudo $runtime rm -f
+                echo "Cleaning up $runtime volumes (rootful)..."
+                sudo $runtime volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r sudo $runtime volume rm -f
               fi
             done
             echo "Removing /tmp/gamejanitor-*..."

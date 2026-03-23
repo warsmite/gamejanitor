@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -555,6 +557,12 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("removing volume during delete: %w", err)
+	}
+
+	// Clean up extracted scripts/defaults directory
+	gsDir := filepath.Join(s.dataDir, "gameservers", id)
+	if err := os.RemoveAll(gsDir); err != nil {
+		s.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
 	}
 
 	// Cascade delete schedules and backups

@@ -47,5 +47,8 @@ if [ -n "$PASSWORD" ]; then
     ARGS+=(-password "$PASSWORD")
 fi
 
+# .NET needs a writable extraction dir (required for process runtime / bwrap)
+export DOTNET_BUNDLE_EXTRACT_BASE_DIR="${DOTNET_BUNDLE_EXTRACT_BASE_DIR:-/tmp/.dotnet}"
+
 echo "[start-server] starting TShock server"
 exec /data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO")

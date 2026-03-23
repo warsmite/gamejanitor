@@ -35,18 +35,22 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 		grpcPort = 9090
 	}
 
-	dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
-	if err != nil {
-		return fmt.Errorf("failed to connect to container runtime: %w", err)
-	}
-	defer dockerClient.Close()
-
 	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	localWorker := worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
+	var localWorker worker.Worker
+	if cfg.ContainerRuntime == "process" {
+		localWorker = worker.NewProcessWorker(gameStore, cfg.DataDir, logger)
+	} else {
+		dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
+		if err != nil {
+			return fmt.Errorf("failed to connect to container runtime: %w", err)
+		}
+		defer dockerClient.Close()
+		localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
+	}
 
 	// Load worker TLS config from config file
 	var workerTLSConfig *tls.Config
