@@ -22,13 +22,9 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"github.com/warsmite/gamejanitor/naming"
 )
 
-const (
-	ContainerPrefix        = "gamejanitor-"
-	UpdateContainerPrefix  = ContainerPrefix + "update-"
-	FileopsContainerPrefix = ContainerPrefix + "fileops-"
-)
 
 type Client struct {
 	cli *client.Client
@@ -81,10 +77,17 @@ type ContainerEvent struct {
 	Action        string // "start", "stop", "die", "kill", etc.
 }
 
-func New(logger *slog.Logger) (*Client, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+func New(logger *slog.Logger, socketPath string) (*Client, error) {
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if socketPath != "" {
+		opts = append(opts, client.WithHost("unix://"+socketPath))
+	} else {
+		opts = append(opts, client.FromEnv)
+	}
+
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
-		return nil, fmt.Errorf("creating docker client: %w", err)
+		return nil, fmt.Errorf("creating container runtime client: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -93,10 +96,30 @@ func New(logger *slog.Logger) (*Client, error) {
 	ping, err := cli.Ping(ctx)
 	if err != nil {
 		cli.Close()
-		return nil, fmt.Errorf("pinging docker daemon: %w", err)
+		socketDisplay := socketPath
+		if socketDisplay == "" {
+			socketDisplay = "default"
+		}
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "permission denied") {
+			return nil, fmt.Errorf("connecting to container runtime at %s: %w (try running with sudo or add your user to the docker group)", socketDisplay, err)
+		}
+		return nil, fmt.Errorf("connecting to container runtime at %s: %w (is the daemon running?)", socketDisplay, err)
 	}
 
-	logger.Info("connected to docker", "api_version", ping.APIVersion)
+	runtimeName := "docker"
+	version, vErr := cli.ServerVersion(ctx)
+	if vErr == nil {
+		for _, comp := range version.Components {
+			if strings.Contains(strings.ToLower(comp.Name), "podman") {
+				runtimeName = "podman"
+				break
+			}
+		}
+		logger.Info("connected to container runtime", "runtime", runtimeName, "version", version.Version, "api_version", ping.APIVersion)
+	} else {
+		logger.Info("connected to container runtime", "api_version", ping.APIVersion)
+	}
 
 	return &Client{cli: cli, log: logger}, nil
 }
@@ -542,9 +565,9 @@ func (c *Client) CopyTarToContainer(ctx context.Context, containerID string, des
 	return nil
 }
 
-// WatchEvents subscribes to Docker events for gamejanitor containers.
+// WatchEvents subscribes to container runtime events for gamejanitor containers.
 func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error) {
-	c.log.Info("starting docker event watcher")
+	c.log.Info("starting container event watcher")
 
 	eventCh := make(chan ContainerEvent)
 	errCh := make(chan error, 1)
@@ -578,7 +601,7 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 					return
 				}
 				name := msg.Actor.Attributes["name"]
-				if !strings.HasPrefix(name, ContainerPrefix) {
+				if !strings.HasPrefix(name, naming.ContainerPrefix) {
 					continue
 				}
 
@@ -587,7 +610,7 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 					ContainerName: name,
 					Action:        string(msg.Action),
 				}
-				c.log.Debug("docker event", "container", name, "action", event.Action)
+				c.log.Debug("container event", "container", name, "action", event.Action)
 
 				select {
 				case eventCh <- event:

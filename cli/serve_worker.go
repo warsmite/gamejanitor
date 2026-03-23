@@ -35,9 +35,9 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 		grpcPort = 9090
 	}
 
-	dockerClient, err := docker.New(logger)
+	dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
 	if err != nil {
-		return fmt.Errorf("failed to connect to docker: %w", err)
+		return fmt.Errorf("failed to connect to container runtime: %w", err)
 	}
 	defer dockerClient.Close()
 

@@ -33,6 +33,10 @@ type Config struct {
 	// TLS for gRPC
 	TLS *TLSConfig `yaml:"tls"`
 
+	// Container runtime
+	ContainerRuntime string `yaml:"container_runtime"` // "docker", "podman", or "auto" (default)
+	ContainerSocket  string `yaml:"container_socket"`  // explicit socket path; auto-detected if empty
+
 	// Backup storage
 	BackupStore *BackupStoreConfig `yaml:"backup_store"`
 
@@ -154,4 +158,39 @@ func (c *Config) HasWorker() bool {
 // WorkerOnly returns true if this is a worker-only node (no controller, no DB).
 func (c *Config) WorkerOnly() bool {
 	return c.Worker && !c.Controller
+}
+
+// ResolveContainerSocket returns the container runtime socket path.
+// Auto-detects Docker or Podman sockets if not explicitly configured.
+func (c *Config) ResolveContainerSocket() string {
+	if c.ContainerSocket != "" {
+		return c.ContainerSocket
+	}
+
+	switch c.ContainerRuntime {
+	case "docker":
+		return "/var/run/docker.sock"
+	case "podman":
+		return detectPodmanSocket()
+	default:
+		// Auto-detect: Podman first (rootless), then Docker
+		if path := detectPodmanSocket(); path != "" {
+			return path
+		}
+		if _, err := os.Stat("/var/run/docker.sock"); err == nil {
+			return "/var/run/docker.sock"
+		}
+		return "" // fall back to DOCKER_HOST env var
+	}
+}
+
+func detectPodmanSocket() string {
+	if _, err := os.Stat("/run/podman/podman.sock"); err == nil {
+		return "/run/podman/podman.sock"
+	}
+	rootless := fmt.Sprintf("/run/user/%d/podman/podman.sock", os.Getuid())
+	if _, err := os.Stat(rootless); err == nil {
+		return rootless
+	}
+	return ""
 }

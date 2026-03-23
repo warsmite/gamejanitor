@@ -5,12 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -61,7 +60,7 @@ func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventB
 	return sm
 }
 
-// Start begins watching Docker events from the local worker.
+// Start begins watching container events from the local worker.
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 
@@ -215,7 +214,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 	m.log.Info("recovery: status set", "id", gs.ID, "from", oldStatus, "to", newStatus)
 }
 
-// watchWorkerEvents starts a goroutine that watches Docker events from a worker.
+// watchWorkerEvents starts a goroutine that watches container events from a worker.
 func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w worker.Worker) {
 	eventCh, errCh := w.WatchEvents(ctx)
 
@@ -242,39 +241,35 @@ func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w w
 }
 
 func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
-	gsID := strings.TrimPrefix(event.ContainerName, docker.ContainerPrefix)
-	if gsID == event.ContainerName {
-		return
-	}
-	// Skip temp containers (update/reinstall/backup/fileops)
-	if strings.Contains(gsID, "-update-") || strings.Contains(gsID, "-reinstall-") || strings.Contains(gsID, "-backup-") || strings.Contains(gsID, "-fileops-") {
+	gsID, ok := naming.GameserverIDFromContainerName(event.ContainerName)
+	if !ok {
 		return
 	}
 
 	gs, err := models.GetGameserver(m.db, gsID)
 	if err != nil || gs == nil {
-		m.log.Debug("docker event for unknown gameserver", "container_name", event.ContainerName, "action", event.Action)
+		m.log.Debug("container event for unknown gameserver", "container_name", event.ContainerName, "action", event.Action)
 		return
 	}
 
 	switch event.Action {
 	case "start":
-		m.log.Debug("docker event: container started", "id", gsID)
+		m.log.Debug("container event: container started", "id", gsID)
 
 	case "die", "stop":
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
 		if gs.Status == StatusStopping || gs.Status == StatusInstalling {
-			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
+			m.log.Debug("container event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
-			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
+			m.log.Warn("container event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
 			m.broadcaster.Publish(ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		}
 
 	case "kill":
-		m.log.Debug("docker event: container killed", "id", gsID)
+		m.log.Debug("container event: container killed", "id", gsID)
 	}
 }
 

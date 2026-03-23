@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/naming"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -112,7 +112,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// Remove old container if exists (stale from prior run/crash).
 	// Always try by name in case the DB lost track of the container ID
 	// (e.g. Stop cleared ContainerID but RemoveContainer failed).
-	containerName := docker.ContainerPrefix + id
+	containerName := naming.ContainerName(id)
 	if gs.ContainerID != nil {
 		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
@@ -299,7 +299,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	updateBinds := []string{scriptDir + ":/scripts:ro"}
 
 	// Run update-server in temp container
-	tempName := docker.UpdateContainerPrefix + id
+	tempName := naming.UpdateContainerName(id)
 	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,

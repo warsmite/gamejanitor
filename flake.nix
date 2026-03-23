@@ -95,10 +95,14 @@
           '';
 
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
-            echo "Stopping and removing gamejanitor containers..."
-            docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
-            echo "Removing gamejanitor volumes..."
-            docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r docker volume rm -f
+            for runtime in docker podman; do
+              if command -v "$runtime" &>/dev/null && $runtime info &>/dev/null; then
+                echo "Cleaning up $runtime containers..."
+                $runtime ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r $runtime rm -f
+                echo "Cleaning up $runtime volumes..."
+                $runtime volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r $runtime volume rm -f
+              fi
+            done
             echo "Removing /tmp/gamejanitor-*..."
             rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-*
             echo "Cleanup complete."

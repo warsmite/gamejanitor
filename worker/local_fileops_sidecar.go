@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/docker"
+	"github.com/warsmite/gamejanitor/naming"
 )
 
 const fileopsImage = "alpine:latest"
@@ -34,7 +35,7 @@ func (w *LocalWorker) ensureSidecar(ctx context.Context, volumeName string) (str
 	}
 
 	// Also try by name in case a previous run left one behind
-	containerName := docker.FileopsContainerPrefix + volumeName
+	containerName := naming.FileopsContainerName(volumeName)
 	info, err := w.docker.InspectContainer(ctx, containerName)
 	if err == nil {
 		if info.State == "running" {
@@ -86,7 +87,7 @@ func (w *LocalWorker) removeSidecar(ctx context.Context, volumeName string) {
 		}
 	}
 	// Also try by name
-	containerName := docker.FileopsContainerPrefix + volumeName
+	containerName := naming.FileopsContainerName(volumeName)
 	if err := w.docker.RemoveContainer(ctx, containerName); err != nil {
 		w.log.Debug("no sidecar to remove by name", "volume", volumeName)
 	}

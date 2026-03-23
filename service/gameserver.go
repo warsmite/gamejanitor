@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/naming"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/google/uuid"
@@ -61,7 +61,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	defer s.placementMu.Unlock()
 
 	gs.ID = uuid.New().String()
-	gs.VolumeName = docker.ContainerPrefix + gs.ID
+	gs.VolumeName = naming.VolumeName(gs.ID)
 	gs.Status = StatusStopped
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
 
@@ -535,7 +535,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 	// Also try by name in case ContainerID was cleared but container still exists
-	containerName := docker.ContainerPrefix + id
+	containerName := naming.ContainerName(id)
 	if err := w.RemoveContainer(ctx, containerName); err != nil {
 		s.log.Debug("no container to remove by name during delete", "name", containerName)
 	}
