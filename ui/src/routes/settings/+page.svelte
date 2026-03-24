@@ -322,6 +322,13 @@
             </div>
           </div>
 
+          <div class="s-title" style="margin-top:24px;">Integrations</div>
+          <div class="field" style="margin-bottom:12px;">
+            <label class="label">Steam Web API Key</label>
+            <input class="input input-mono" type="password" placeholder="Not configured" bind:value={settings.steam_api_key} autocomplete="off">
+            <span class="field-hint">Enables Steam Workshop mod search for CS2, Garry's Mod, and ARK. <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--accent);">Get a key</a></span>
+          </div>
+
           <div class="save-row">
             <button class="btn-solid" onclick={saveSettings} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}

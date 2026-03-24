@@ -8,4 +8,7 @@ steamcmd-retry \
     +app_update 376030 validate \
     +quit
 
+# Download workshop mods if configured (ARK mods can be very large, do at install time)
+/scripts/install-workshop-mods 346110
+
 echo "[install-server] ARK dedicated server installed"

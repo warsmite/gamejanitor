@@ -29,6 +29,7 @@ type EnvVar struct {
 	Notice          string          `yaml:"notice,omitempty" json:"notice,omitempty"`
 	Autogenerate    string          `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
 	System          bool            `yaml:"system,omitempty" json:"system,omitempty"`
+	Hidden          bool            `yaml:"hidden,omitempty" json:"hidden,omitempty"`
 	TriggersInstall bool            `yaml:"triggers_install,omitempty" json:"triggers_install,omitempty"`
 }
 
@@ -39,37 +40,66 @@ type DynamicOptions struct {
 	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
+type ModSourceConfig struct {
+	Type          string            `yaml:"type" json:"type"`
+	InstallPath   string            `yaml:"install_path,omitempty" json:"install_path,omitempty"`
+	InstallPaths  map[string]string `yaml:"install_paths,omitempty" json:"install_paths,omitempty"`
+	FileExtension string            `yaml:"file_extension,omitempty" json:"file_extension,omitempty"`
+	RequiresEnv   map[string]string `yaml:"requires_env,omitempty" json:"requires_env,omitempty"`
+	Loaders       map[string]string `yaml:"loaders,omitempty" json:"loaders,omitempty"`
+	LoaderEnv     string            `yaml:"loader_env,omitempty" json:"loader_env,omitempty"`
+	VersionEnv    string            `yaml:"version_env,omitempty" json:"version_env,omitempty"`
+	AppID         int               `yaml:"app_id,omitempty" json:"app_id,omitempty"`
+}
+
+// ModLoaderConfig describes the mod loader/framework selector shown at the top of the Mods tab.
+// This replaces the env var in Settings — the Mods tab owns the loader UX.
+type ModLoaderConfig struct {
+	EnvKey  string   `yaml:"env_key" json:"env_key"`   // e.g. MODLOADER, OXIDE_ENABLED
+	Label   string   `yaml:"label" json:"label"`       // e.g. "Mod Loader", "Oxide (uMod)"
+	Type    string   `yaml:"type" json:"type"`          // "select" or "boolean"
+	Options []string `yaml:"options,omitempty" json:"options,omitempty"` // for select type
+	Default string   `yaml:"default" json:"default"`
+}
+
+type ModConfig struct {
+	Loader  *ModLoaderConfig  `yaml:"loader,omitempty" json:"loader,omitempty"`
+	Sources []ModSourceConfig `yaml:"sources,omitempty" json:"sources,omitempty"`
+}
+
 type Assets struct {
 	Icon string `yaml:"icon,omitempty"`
 }
 
 type GameDefinition struct {
-	ID                   string   `yaml:"id"`
-	Name                 string   `yaml:"name"`
-	Description          string   `yaml:"description,omitempty"`
-	BaseImage            string   `yaml:"base_image"`
-	RecommendedMemoryMB  int      `yaml:"recommended_memory_mb"`
-	GJQSlug              string   `yaml:"gjq_slug,omitempty"`
-	ReadyPattern         string   `yaml:"ready_pattern,omitempty"`
-	DisabledCapabilities []string `yaml:"disabled_capabilities"`
-	Assets               Assets   `yaml:"assets,omitempty"`
-	Ports                []Port   `yaml:"ports"`
-	Env                  []EnvVar `yaml:"env"`
+	ID                   string    `yaml:"id"`
+	Name                 string    `yaml:"name"`
+	Description          string    `yaml:"description,omitempty"`
+	BaseImage            string    `yaml:"base_image"`
+	RecommendedMemoryMB  int       `yaml:"recommended_memory_mb"`
+	GJQSlug              string    `yaml:"gjq_slug,omitempty"`
+	ReadyPattern         string    `yaml:"ready_pattern,omitempty"`
+	DisabledCapabilities []string  `yaml:"disabled_capabilities"`
+	Assets               Assets    `yaml:"assets,omitempty"`
+	Ports                []Port    `yaml:"ports"`
+	Env                  []EnvVar  `yaml:"env"`
+	Mods                 ModConfig `yaml:"mods,omitempty"`
 }
 
 // Game is the runtime representation used throughout the application.
 type Game struct {
-	ID                   string   `json:"id"`
-	Name                 string   `json:"name"`
-	Description          string   `json:"description,omitempty"`
-	BaseImage            string   `json:"base_image"`
-	IconPath             string   `json:"icon_path"`
-	DefaultPorts         []Port   `json:"default_ports"`
-	DefaultEnv           []EnvVar `json:"default_env"`
-	RecommendedMemoryMB  int      `json:"recommended_memory_mb"`
-	GJQSlug              string   `json:"gjq_slug,omitempty"`
-	ReadyPattern         string   `json:"ready_pattern,omitempty"`
-	DisabledCapabilities []string `json:"disabled_capabilities"`
+	ID                   string    `json:"id"`
+	Name                 string    `json:"name"`
+	Description          string    `json:"description,omitempty"`
+	BaseImage            string    `json:"base_image"`
+	IconPath             string    `json:"icon_path"`
+	DefaultPorts         []Port    `json:"default_ports"`
+	DefaultEnv           []EnvVar  `json:"default_env"`
+	RecommendedMemoryMB  int       `json:"recommended_memory_mb"`
+	GJQSlug              string    `json:"gjq_slug,omitempty"`
+	ReadyPattern         string    `json:"ready_pattern,omitempty"`
+	DisabledCapabilities []string  `json:"disabled_capabilities"`
+	Mods                 ModConfig `json:"mods,omitempty"`
 }
 
 type GameStore struct {
@@ -184,6 +214,11 @@ func definitionToGame(def GameDefinition) *Game {
 		env = []EnvVar{}
 	}
 
+	mods := def.Mods
+	if mods.Sources == nil {
+		mods.Sources = []ModSourceConfig{}
+	}
+
 	return &Game{
 		ID:                   def.ID,
 		Name:                 def.Name,
@@ -195,6 +230,7 @@ func definitionToGame(def GameDefinition) *Game {
 		DefaultPorts:         ports,
 		DefaultEnv:           env,
 		DisabledCapabilities: caps,
+		Mods:                 mods,
 	}
 }
 

@@ -171,6 +171,68 @@ export interface Game {
   default_env: EnvVar[];
   recommended_memory_mb: number;
   disabled_capabilities: string[];
+  mods?: { loader?: ModLoaderConfig; sources: ModSourceConfig[] };
+}
+
+export interface ModLoaderConfig {
+  env_key: string;
+  label: string;
+  type: string;  // "select" or "boolean"
+  options?: string[];
+  default: string;
+}
+
+export interface ModSourceConfig {
+  type: string;
+  install_path?: string;
+  install_paths?: Record<string, string>;
+  file_extension?: string;
+  requires_env?: Record<string, string>;
+  loaders?: Record<string, string>;
+  loader_env?: string;
+  version_env?: string;
+  app_id?: number;
+}
+
+export interface InstalledMod {
+  id: string;
+  gameserver_id: string;
+  source: string;
+  source_id: string;
+  name: string;
+  version: string;
+  version_id: string;
+  file_path: string;
+  file_name: string;
+  metadata: any;
+  installed_at: string;
+}
+
+export interface ModSearchResult {
+  source_id: string;
+  name: string;
+  slug: string;
+  author: string;
+  description: string;
+  icon_url: string;
+  downloads: number;
+  updated_at: string;
+}
+
+export interface ModVersion {
+  version_id: string;
+  version: string;
+  file_name: string;
+  download_url: string;
+  game_version: string;
+  game_versions?: string[];
+  loader: string;
+}
+
+export interface ModSourceInfo {
+  type: string;
+  search_mode: string;
+  game_version?: string;
 }
 
 export interface EnvVar {
@@ -185,6 +247,7 @@ export interface EnvVar {
   notice?: string;
   autogenerate?: string;
   system?: boolean;
+  hidden?: boolean;
   triggers_install?: boolean;
 }
 
@@ -369,6 +432,18 @@ export const api = {
   workers: {
     list: () => get<WorkerView[]>('/api/workers'),
     get: (id: string) => get<WorkerView>(`/api/workers/${id}`),
+  },
+
+  mods: {
+    list: (gsId: string) => get<InstalledMod[]>(`/api/gameservers/${gsId}/mods`),
+    sources: (gsId: string) => get<ModSourceInfo[]>(`/api/gameservers/${gsId}/mods/sources`),
+    search: (gsId: string, source: string, q: string, offset?: number, limit?: number) =>
+      get<{ results: ModSearchResult[]; total: number }>(`/api/gameservers/${gsId}/mods/search`, { source, q, offset, limit }),
+    versions: (gsId: string, source: string, sourceId: string) =>
+      get<ModVersion[]>(`/api/gameservers/${gsId}/mods/versions`, { source, source_id: sourceId }),
+    install: (gsId: string, data: { source: string; source_id: string; version_id?: string; name?: string }) =>
+      post<InstalledMod>(`/api/gameservers/${gsId}/mods`, data),
+    uninstall: (gsId: string, modId: string) => del(`/api/gameservers/${gsId}/mods/${modId}`),
   },
 
   events: {

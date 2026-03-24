@@ -45,3 +45,9 @@ env:
   - key: SAVE_TIMEOUT_SECONDS
     default: "5"
     system: true
+
+mods:
+  sources:
+    - type: workshop
+      app_id: 4000
+      install_path: /data/server/garrysmod/addons

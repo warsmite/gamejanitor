@@ -11,7 +11,7 @@
 
   // Group env vars by their group field, excluding system/autogenerate
   const groups = $derived(() => {
-    const visible = envDefs.filter(e => !e.system && !e.autogenerate);
+    const visible = envDefs.filter(e => !e.system && !e.autogenerate && !e.hidden);
     const map: Record<string, EnvVar[]> = {};
     for (const e of visible) {
       const group = e.group || 'General';

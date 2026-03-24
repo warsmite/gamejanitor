@@ -128,3 +128,20 @@ CREATE TABLE events (
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_gameserver ON events(gameserver_id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+
+CREATE TABLE installed_mods (
+    id TEXT PRIMARY KEY,
+    gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '',
+    version_id TEXT NOT NULL DEFAULT '',
+    file_path TEXT NOT NULL DEFAULT '',
+    file_name TEXT NOT NULL DEFAULT '',
+    metadata JSON NOT NULL DEFAULT '{}',
+    installed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_installed_mods_gameserver ON installed_mods(gameserver_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_installed_mods_unique ON installed_mods(gameserver_id, source, source_id);

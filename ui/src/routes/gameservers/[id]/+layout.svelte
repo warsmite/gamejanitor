@@ -53,14 +53,19 @@
     if (uptimeInterval) clearInterval(uptimeInterval);
   });
 
-  const tabs = [
+  const hasMods = $derived(
+    (game?.mods?.sources?.length ?? 0) > 0
+  );
+
+  const tabs = $derived([
     { label: 'Overview', path: '' },
     { label: 'Console', path: '/console' },
     { label: 'Files', path: '/files' },
+    ...(hasMods ? [{ label: 'Mods', path: '/mods' }] : []),
     { label: 'Backups', path: '/backups' },
     { label: 'Schedules', path: '/schedules' },
     { label: 'Settings', path: '/settings' },
-  ];
+  ]);
 
   function tabHref(tab: typeof tabs[0]) {
     return `/gameservers/${gsId}${tab.path}`;

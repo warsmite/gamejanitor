@@ -43,6 +43,26 @@ func (r *OptionsRegistry) Get(source string) (OptionsProvider, bool) {
 	return p, ok
 }
 
+// ResolveValue resolves special values like "latest" for a dynamic options source.
+// Returns the input unchanged if the source doesn't exist or the value isn't resolvable.
+func (r *OptionsRegistry) ResolveValue(source string, value string) string {
+	p, ok := r.providers[source]
+	if !ok {
+		return value
+	}
+	if rv, ok := p.(ValueResolver); ok {
+		if resolved := rv.ResolveValue(value); resolved != "" {
+			return resolved
+		}
+	}
+	return value
+}
+
+// ValueResolver is optionally implemented by providers that can resolve alias values.
+type ValueResolver interface {
+	ResolveValue(value string) string
+}
+
 // GetOptionsForEnv resolves dynamic options for an env var, if applicable.
 // Returns nil if the env var uses static options or has no dynamic_options.
 func (r *OptionsRegistry) GetOptionsForEnv(env EnvVar) ([]Option, error) {
@@ -94,6 +114,25 @@ const (
 	mojangManifestURL = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
 	mojangCacheTTL    = 30 * time.Minute
 )
+
+// ResolveValue resolves "latest" to the actual latest release version.
+func (p *mojangVersionsProvider) ResolveValue(value string) string {
+	if value != "latest" {
+		return ""
+	}
+	// Fetch/use cached manifest to get the latest release
+	opts, err := p.Options()
+	if err != nil || len(opts) == 0 {
+		return ""
+	}
+	// The "latest" option's label is "Latest (1.21.11)" — parse from the first release option instead
+	for _, o := range opts {
+		if o.Group == "releases" {
+			return o.Value
+		}
+	}
+	return ""
+}
 
 func (p *mojangVersionsProvider) Options() ([]Option, error) {
 	p.mu.RLock()

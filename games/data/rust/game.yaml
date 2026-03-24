@@ -37,8 +37,7 @@ env:
     autogenerate: password
   - key: OXIDE_ENABLED
     default: "false"
-    label: "Enable Oxide (uMod)"
-    type: boolean
+    hidden: true
   - key: EAC_ENABLED
     default: "true"
     label: "Easy Anti-Cheat (EAC)"
@@ -55,3 +54,16 @@ env:
   - key: SAVE_TIMEOUT_SECONDS
     default: "15"
     system: true
+
+mods:
+  loader:
+    env_key: OXIDE_ENABLED
+    label: "Oxide (uMod)"
+    type: boolean
+    default: "false"
+  sources:
+    - type: umod
+      install_path: /data/server/oxide/plugins
+      file_extension: .cs
+      requires_env:
+        OXIDE_ENABLED: "true"

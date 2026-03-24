@@ -19,6 +19,10 @@ const (
 	PermGameserverEditName = "gameserver.edit.name"
 	PermGameserverEditEnv  = "gameserver.edit.env"
 
+	// Mods
+	PermGameserverModsRead  = "gameserver.mods.read"
+	PermGameserverModsWrite = "gameserver.mods.write"
+
 	// Backups
 	PermBackupCreate   = "backup.create"
 	PermBackupDelete   = "backup.delete"
@@ -49,6 +53,7 @@ var AllPermissions = []string{
 	PermGameserverFilesRead, PermGameserverFilesWrite,
 	PermGameserverLogs, PermGameserverCommand,
 	PermGameserverEditName, PermGameserverEditEnv,
+	PermGameserverModsRead, PermGameserverModsWrite,
 	PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
 	PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
 	PermSettingsView, PermSettingsEdit,

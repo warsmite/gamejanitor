@@ -22,6 +22,8 @@ const (
 	EventScheduleCreate    = "schedule.create"
 	EventScheduleUpdate    = "schedule.update"
 	EventScheduleDelete    = "schedule.delete"
+	EventModInstalled      = "mod.installed"
+	EventModUninstalled    = "mod.uninstalled"
 )
 
 // Lifecycle outcome events — system, drive status changes
@@ -60,6 +62,7 @@ var AllEventTypes = []string{
 	EventGameserverUpdateGame, EventGameserverReinstall, EventGameserverMigrate,
 	EventBackupCreate, EventBackupDelete, EventBackupRestore,
 	EventScheduleCreate, EventScheduleUpdate, EventScheduleDelete,
+	EventModInstalled, EventModUninstalled,
 	// Lifecycle outcomes
 	EventImagePulling, EventImagePulled,
 	EventContainerCreating, EventContainerStarted,
@@ -266,3 +269,16 @@ type ScheduledTaskEvent struct {
 
 func (e ScheduledTaskEvent) EventType() string        { return e.Type }
 func (e ScheduledTaskEvent) EventTimestamp() time.Time { return e.Timestamp }
+
+type ModEvent struct {
+	Type         string    `json:"type"`
+	Timestamp    time.Time `json:"timestamp"`
+	Actor        Actor     `json:"actor"`
+	GameserverID string    `json:"gameserver_id"`
+	ModID        string    `json:"mod_id"`
+	ModName      string    `json:"mod_name"`
+	Source       string    `json:"source"`
+}
+
+func (e ModEvent) EventType() string        { return e.Type }
+func (e ModEvent) EventTimestamp() time.Time { return e.Timestamp }

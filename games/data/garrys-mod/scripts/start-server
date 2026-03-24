@@ -27,6 +27,9 @@ fi
 CONSOLE_LOG="/data/server/garrysmod/console.log"
 rm -f "$CONSOLE_LOG"
 
+# Download workshop mods if configured
+/scripts/install-workshop-mods 4000
+
 echo "[start-server] starting Garry's Mod dedicated server"
 cd /data/server
 

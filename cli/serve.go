@@ -117,6 +117,7 @@ type services struct {
 	statusSub     *service.StatusSubscriber
 	eventStore    *service.EventStoreSubscriber
 	webhookWorker *service.WebhookWorker
+	modSvc        *service.ModService
 }
 
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker worker.Worker, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
@@ -168,6 +169,8 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
 	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
+	optionsRegistry := games.NewOptionsRegistry(logger)
+	modSvc := service.NewModService(database, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
 	return &services{
 		broadcaster:   broadcaster,
@@ -186,6 +189,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 		statusSub:     statusSub,
 		eventStore:    eventStore,
 		webhookWorker: webhookWorker,
+		modSvc:        modSvc,
 	}, nil
 }
 
@@ -396,6 +400,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Broadcaster:   svcs.broadcaster,
 		Registry:      registry,
 		DB:            database,
+		ModSvc:        svcs.modSvc,
 		Log:           logger,
 		WebUI:         webUIFS(cfg),
 	})

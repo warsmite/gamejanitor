@@ -30,6 +30,7 @@ type RouterOptions struct {
 	StatsPoller   *service.StatsPoller
 	SettingsSvc   *service.SettingsService
 	AuthSvc       *service.AuthService
+	ModSvc        *service.ModService
 	Broadcaster   *service.EventBus
 	Registry      *worker.Registry
 	DB            *sql.DB
@@ -73,6 +74,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
 	webhookSvc := service.NewWebhookEndpointService(opts.DB, opts.Log)
 	webhookHandlers := handlers.NewWebhookHandlers(webhookSvc, opts.Log)
+	modHandlers := handlers.NewModHandlers(opts.ModSvc, opts.Log)
 
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
 	requireAccess := RequireGameserverAccess(opts.SettingsSvc)
@@ -92,6 +94,8 @@ func NewRouter(opts RouterOptions) http.Handler {
 	requireScheduleDelete := RequirePermission(opts.SettingsSvc, service.PermScheduleDelete)
 	requireConfigure := RequirePermission(opts.SettingsSvc, service.PermGameserverEditEnv)
 	requireDelete := RequirePermission(opts.SettingsSvc, service.PermGameserverDelete)
+	requireModsRead := RequirePermission(opts.SettingsSvc, service.PermGameserverModsRead)
+	requireModsWrite := RequirePermission(opts.SettingsSvc, service.PermGameserverModsWrite)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -156,6 +160,15 @@ func NewRouter(opts RouterOptions) http.Handler {
 					r.With(requireFilesWrite).Post("/upload", fileHandlers.Upload)
 					r.With(requireFilesWrite).Post("/rename", fileHandlers.Rename)
 					r.With(requireFilesWrite).Post("/mkdir", fileHandlers.CreateDirectory)
+				})
+
+				r.Route("/mods", func(r chi.Router) {
+					r.With(requireModsRead).Get("/", modHandlers.List)
+					r.With(requireModsRead).Get("/sources", modHandlers.Sources)
+					r.With(requireModsRead).Get("/search", modHandlers.Search)
+					r.With(requireModsRead).Get("/versions", modHandlers.Versions)
+					r.With(requireModsWrite).Post("/", modHandlers.Install)
+					r.With(requireModsWrite).Delete("/{modId}", modHandlers.Uninstall)
 				})
 			})
 		})

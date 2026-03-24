@@ -30,10 +30,7 @@ env:
     triggers_install: true
   - key: MODLOADER
     default: "vanilla"
-    label: "Mod Loader"
-    type: select
-    group: server
-    options: ["vanilla", "paper", "forge", "fabric"]
+    hidden: true
     triggers_install: true
   - key: GAMEMODE
     default: "survival"
@@ -67,3 +64,23 @@ env:
   - key: SAVE_TIMEOUT_SECONDS
     default: "5"
     system: true
+
+mods:
+  loader:
+    env_key: MODLOADER
+    label: "Mod Loader"
+    type: select
+    options: ["vanilla", "paper", "forge", "fabric"]
+    default: "vanilla"
+  sources:
+    - type: modrinth
+      install_paths:
+        fabric: /data/mods
+        forge: /data/mods
+        paper: /data/plugins
+      loaders:
+        fabric: fabric
+        forge: forge
+        paper: paper
+      loader_env: MODLOADER
+      version_env: MINECRAFT_VERSION

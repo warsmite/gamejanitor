@@ -51,3 +51,9 @@ env:
   - key: SAVE_TIMEOUT_SECONDS
     default: "30"
     system: true
+
+mods:
+  sources:
+    - type: workshop
+      app_id: 346110
+      install_path: /data/server/ShooterGame/Content/Mods
