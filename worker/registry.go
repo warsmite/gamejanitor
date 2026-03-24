@@ -20,7 +20,6 @@ type WorkerInfo struct {
 	DiskAvailableMB   int64
 	LastSeen          time.Time
 	TokenID           string
-	Local             bool // local workers are never reaped
 }
 
 // Registry tracks all workers (local and remote).
@@ -64,7 +63,7 @@ func (r *Registry) Register(nodeID string, w Worker, info WorkerInfo) {
 
 	info.LastSeen = time.Now()
 	r.workers[nodeID] = &registeredWorker{worker: w, info: info}
-	r.log.Info("worker registered", "worker_id", nodeID, "lan_ip", info.LanIP, "local", info.Local)
+	r.log.Info("worker registered", "worker_id", nodeID, "lan_ip", info.LanIP)
 	r.mu.Unlock()
 
 	if r.onRegister != nil {
@@ -125,7 +124,6 @@ func (r *Registry) UpdateHeartbeat(nodeID string, info WorkerInfo) error {
 	}
 	info.LastSeen = time.Now()
 	info.TokenID = rw.info.TokenID // preserve token from registration
-	info.Local = rw.info.Local     // preserve local flag
 	rw.info = info
 	return nil
 }
@@ -172,9 +170,6 @@ func (r *Registry) reapStale(timeout time.Duration, log *slog.Logger) {
 	r.mu.RLock()
 	var stale []string
 	for id, rw := range r.workers {
-		if rw.info.Local {
-			continue
-		}
 		if time.Since(rw.info.LastSeen) > timeout {
 			stale = append(stale, id)
 		}

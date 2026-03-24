@@ -10,17 +10,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"io/fs"
 
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/db"
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
@@ -29,8 +26,6 @@ import (
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/ui"
 	"github.com/warsmite/gamejanitor/worker"
-	"github.com/shirou/gopsutil/v4/disk"
-	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +41,7 @@ func init() {
 	serveCmd.Flags().String("bind", "", "Bind address for all listeners")
 	serveCmd.Flags().Int("sftp-port", 0, "SFTP server port (0 to disable)")
 	serveCmd.Flags().Int("grpc-port", 0, "gRPC port (0 to disable)")
+	serveCmd.Flags().Int("worker-grpc-port", 0, "Worker gRPC port for dial-back (controller+worker mode)")
 	serveCmd.Flags().Bool("controller", false, "Enable controller role")
 	serveCmd.Flags().Bool("worker", false, "Enable worker role")
 	serveCmd.Flags().StringP("data-dir", "d", "", "Data directory for database and backups")
@@ -76,6 +72,9 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 	}
 	if cmd.Flags().Changed("grpc-port") {
 		cfg.GRPCPort, _ = cmd.Flags().GetInt("grpc-port")
+	}
+	if cmd.Flags().Changed("worker-grpc-port") {
+		cfg.WorkerGRPCPort, _ = cmd.Flags().GetInt("worker-grpc-port")
 	}
 	if cmd.Flags().Changed("sftp-port") {
 		cfg.SFTPPort, _ = cmd.Flags().GetInt("sftp-port")
@@ -252,15 +251,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return runWorkerAgent(cfg, logger)
 	}
 
-	// Determine role string for logging/display
-	role := "standalone"
-	if cfg.HasController() && !cfg.HasWorker() {
-		role = "controller"
-	} else if cfg.HasController() && cfg.HasWorker() {
+	role := "controller"
+	if cfg.HasWorker() {
 		role = "controller+worker"
 	}
 
-	// Controller and standalone modes need a database
 	logger.Info("opening database", "path", cfg.DBPath)
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
@@ -278,29 +273,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	// Initialize local worker if this node runs game servers
-	var localWorker worker.Worker
-	if cfg.HasWorker() {
-		if cfg.ContainerRuntime == "process" {
-			localWorker = worker.NewProcessWorker(gameStore, cfg.DataDir, logger)
-		} else {
-			dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
-			if err != nil {
-				return fmt.Errorf("failed to connect to container runtime: %w", err)
-			}
-			defer dockerClient.Close()
-			localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
-		}
-	}
-
 	registry := worker.NewRegistry(logger)
 	dispatcher := worker.NewDispatcher(registry, database, logger)
-
-	// Determine local node ID for registry
-	localNodeID, _ := os.Hostname()
-	if localNodeID == "" {
-		localNodeID = "local"
-	}
 
 	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
 	if err != nil {
@@ -310,21 +284,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	svcs.statusMgr.Start(ctx)
 	defer svcs.statusMgr.Stop()
-
-	// Register local worker in the registry after StatusManager.Start() so
-	// the onWorkerRegistered callback has a valid context for event watching.
-	if localWorker != nil {
-		info := localWorkerInfo(localNodeID)
-		registry.Register(localNodeID, localWorker, info)
-		if err := models.UpsertWorkerNode(database, &models.WorkerNode{
-			ID: localNodeID, LanIP: info.LanIP, ExternalIP: info.ExternalIP,
-		}); err != nil {
-			logger.Error("failed to persist local worker node", "error", err)
-		}
-		if err := svcs.statusMgr.RecoverOnStartup(ctx); err != nil {
-			return fmt.Errorf("failed to recover gameserver status: %w", err)
-		}
-	}
 
 	svcs.statusSub.Start(ctx)
 	defer svcs.statusSub.Stop()
@@ -366,34 +325,57 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer svcs.readyWatcher.StopAll()
 	defer svcs.querySvc.StopAll()
 
-	// Start gRPC server for controller and/or local worker agent
-	if cfg.GRPCPort > 0 {
-		var serverTLS, dialBackTLS *tls.Config
-		var caCert *x509.Certificate
-		var caKey *ecdsa.PrivateKey
-		if role != "standalone" {
-			var err error
-			caCert, caKey, err = tlsutil.LoadOrCreateCA(cfg.DataDir)
-			if err != nil {
-				return fmt.Errorf("failed to initialize gRPC CA: %w", err)
-			}
-			if _, err := tlsutil.LoadOrCreateServerCert(cfg.DataDir, caCert, caKey); err != nil {
-				return fmt.Errorf("failed to initialize gRPC server cert: %w", err)
-			}
-			serverTLS, err = tlsutil.ServerTLSConfig(cfg.DataDir)
-			if err != nil {
-				return fmt.Errorf("failed to load gRPC server TLS config: %w", err)
-			}
-			if serverTLS != nil {
-				dialBackTLS = &tls.Config{
-					Certificates: serverTLS.Certificates,
-					RootCAs:      serverTLS.ClientCAs,
-				}
+	// Start gRPC server for controller
+	var serverTLS, dialBackTLS *tls.Config
+	var caCert *x509.Certificate
+	var caKey *ecdsa.PrivateKey
+	{
+		var err error
+		caCert, caKey, err = tlsutil.LoadOrCreateCA(cfg.DataDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize gRPC CA: %w", err)
+		}
+		if _, err := tlsutil.LoadOrCreateServerCert(cfg.DataDir, caCert, caKey); err != nil {
+			return fmt.Errorf("failed to initialize gRPC server cert: %w", err)
+		}
+		serverTLS, err = tlsutil.ServerTLSConfig(cfg.DataDir)
+		if err != nil {
+			return fmt.Errorf("failed to load gRPC server TLS config: %w", err)
+		}
+		if serverTLS != nil {
+			dialBackTLS = &tls.Config{
+				Certificates: serverTLS.Certificates,
+				RootCAs:      serverTLS.ClientCAs,
 			}
 		}
+	}
+	go func() {
+		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
+			logger.Error("grpc server stopped", "error", err)
+		}
+	}()
+
+	// Launch local worker agent in controller+worker mode
+	if cfg.HasWorker() {
+		rawToken, _, err := svcs.authSvc.CreateWorkerToken("_local")
+		if err != nil {
+			return fmt.Errorf("failed to create local worker token: %w", err)
+		}
+		workerCfg := config.Config{
+			Bind:              cfg.Bind,
+			Controller:        false,
+			Worker:            true,
+			DataDir:           cfg.DataDir,
+			GRPCPort:          cfg.WorkerGRPCPort,
+			SFTPPort:          0,
+			ControllerAddress: fmt.Sprintf("127.0.0.1:%d", cfg.GRPCPort),
+			WorkerToken:       rawToken,
+			ContainerRuntime:  cfg.ContainerRuntime,
+			ContainerSocket:   cfg.ContainerSocket,
+		}
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
-				logger.Error("grpc server stopped", "error", err)
+			if err := runWorkerAgent(workerCfg, logger); err != nil {
+				logger.Error("local worker agent failed", "error", err)
 			}
 		}()
 	}
@@ -477,35 +459,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 func isLoopback(addr string) bool {
 	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
-}
-
-func localWorkerInfo(nodeID string) worker.WorkerInfo {
-	info := worker.WorkerInfo{
-		ID:       nodeID,
-		CPUCores: int64(runtime.NumCPU()),
-		Local:    true,
-	}
-
-	if v, err := mem.VirtualMemory(); err == nil {
-		info.MemoryTotalMB = int64(v.Total / 1024 / 1024)
-		info.MemoryAvailableMB = int64(v.Available / 1024 / 1024)
-	}
-	if d, err := disk.Usage("/"); err == nil {
-		info.DiskTotalMB = int64(d.Total / 1024 / 1024)
-		info.DiskAvailableMB = int64(d.Free / 1024 / 1024)
-	}
-
-	// Detect LAN IP
-	if addrs, err := net.InterfaceAddrs(); err == nil {
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
-				info.LanIP = ipNet.IP.String()
-				break
-			}
-		}
-	}
-
-	return info
 }
 
 func webUIFS(cfg config.Config) fs.FS {

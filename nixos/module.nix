@@ -20,6 +20,7 @@ let
     // lib.optionalAttrs (cfg.containerRuntime != "auto") { container_runtime = cfg.containerRuntime; }
     // lib.optionalAttrs (cfg.containerSocket != null) { container_socket = cfg.containerSocket; }
     // lib.optionalAttrs (cfg.grpcPort != null) { grpc_port = cfg.grpcPort; }
+    // lib.optionalAttrs (cfg.workerGrpcPort != null) { worker_grpc_port = cfg.workerGrpcPort; }
     // lib.optionalAttrs (cfg.sftpPort != null) { sftp_port = cfg.sftpPort; }
     // lib.optionalAttrs (cfg.controllerAddress != null) { controller_address = cfg.controllerAddress; }
     // lib.optionalAttrs (cfg.workerId != null) { worker_id = cfg.workerId; }
@@ -95,6 +96,12 @@ in {
       type = lib.types.nullOr lib.types.port;
       default = null;
       description = "gRPC port for worker communication. Required for multi-node.";
+    };
+
+    workerGrpcPort = lib.mkOption {
+      type = lib.types.nullOr lib.types.port;
+      default = null;
+      description = "Worker gRPC port for dial-back. Used in controller+worker mode.";
     };
 
     sftpPort = lib.mkOption {
@@ -335,7 +342,8 @@ in {
       allowedTCPPorts =
         lib.optional cfg.controller cfg.port
         ++ lib.optional (cfg.grpcPort != null) cfg.grpcPort
-        ++ lib.optional (cfg.sftpPort != null) cfg.sftpPort;
+        ++ lib.optional (cfg.sftpPort != null) cfg.sftpPort
+        ++ lib.optional (cfg.workerGrpcPort != null) cfg.workerGrpcPort;
       allowedTCPPortRanges = lib.optional hasLocalWorker { from = portRangeStart; to = portRangeEnd; };
       allowedUDPPortRanges = lib.optional hasLocalWorker { from = portRangeStart; to = portRangeEnd; };
     };

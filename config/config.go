@@ -11,8 +11,9 @@ type Config struct {
 	// Network
 	Bind     string `yaml:"bind"`
 	Port     int    `yaml:"port"`
-	GRPCPort int    `yaml:"grpc_port"`
-	SFTPPort int    `yaml:"sftp_port"`
+	GRPCPort       int `yaml:"grpc_port"`
+	WorkerGRPCPort int `yaml:"worker_grpc_port"`
+	SFTPPort       int `yaml:"sftp_port"`
 	WebUI    bool   `yaml:"web_ui"`
 
 	// Components
@@ -76,8 +77,9 @@ func DefaultConfig() Config {
 	return Config{
 		Bind:       "127.0.0.1",
 		Port:       8080,
-		GRPCPort:   9090,
-		SFTPPort:   2222,
+		GRPCPort:       9090,
+		WorkerGRPCPort: 9091,
+		SFTPPort:       2222,
 		WebUI:      true,
 		Controller: true,
 		Worker:     true,
