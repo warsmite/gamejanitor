@@ -186,7 +186,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		body, err := json.Marshal(payload)
 		if err != nil {
 			w.log.Error("webhook: failed to marshal payload", "event_type", eventType, "error", err)
-			return
+			continue
 		}
 
 		now := time.Now()
