@@ -49,10 +49,26 @@ func registerGameserverSubcommands() {
 
 // --- List / Get ---
 
+var lsCmd = &cobra.Command{
+	Use:   "ls",
+	Short: "List gameservers",
+	RunE:  runGameserversList,
+}
+
 var gameserversListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List gameservers",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE:  runGameserversList,
+}
+
+func init() {
+	for _, cmd := range []*cobra.Command{lsCmd, gameserversListCmd} {
+		cmd.Flags().String("game", "", "Filter by game ID")
+		cmd.Flags().String("status", "", "Filter by status")
+	}
+}
+
+func runGameserversList(cmd *cobra.Command, args []string) error {
 		path := "/api/gameservers"
 		params := url.Values{}
 		if v, _ := cmd.Flags().GetString("game"); v != "" {
@@ -100,8 +116,7 @@ var gameserversListCmd = &cobra.Command{
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Status))
 		}
 		w.Flush()
-		return nil
-	},
+	return nil
 }
 
 var gameserversGetCmd = &cobra.Command{
@@ -184,8 +199,6 @@ func init() {
 		cmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 	}
 
-	gameserversListCmd.Flags().String("game", "", "Filter by game ID")
-	gameserversListCmd.Flags().String("status", "", "Filter by status")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -262,8 +275,9 @@ func runCreate(cmd *cobra.Command, args []string) error {
 // --- Delete ---
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete <name-or-id>",
-	Short: "Delete a gameserver",
+	Use:     "delete <name-or-id>",
+	Aliases: []string{"rm"},
+	Short:   "Delete a gameserver",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])

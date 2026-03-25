@@ -151,8 +151,9 @@ func runBulkAction(action, verb string, all bool, nodeID string) error {
 // --- Status ---
 
 var statusCmd = &cobra.Command{
-	Use:   "status [name-or-id]",
-	Short: "Show gameserver or cluster status",
+	Use:     "status [name-or-id]",
+	Aliases: []string{"ps"},
+	Short:   "Show gameserver or cluster status",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No argument: cluster overview (list all gameservers with status)

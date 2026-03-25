@@ -33,6 +33,7 @@ func init() {
 	rootCmd.SetUsageFunc(customUsage)
 
 	// Gameserver commands (top-level shortcuts)
+	rootCmd.AddCommand(lsCmd)
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(startCmd)
@@ -108,12 +109,13 @@ func customHelp(cmd *cobra.Command, args []string) {
 		{
 			name: "Gameserver Commands",
 			commands: []struct{ name, desc string }{
+				{"ls", "List gameservers"},
 				{"create", "Create a new gameserver"},
-				{"delete", "Delete a gameserver"},
+				{"delete", "Delete a gameserver                    (aliases: rm)"},
 				{"start", "Start a gameserver"},
 				{"stop", "Stop a gameserver"},
 				{"restart", "Restart a gameserver"},
-				{"status", "Show gameserver or cluster status"},
+				{"status", "Show gameserver or cluster status      (aliases: ps)"},
 				{"logs", "Show gameserver or service logs"},
 				{"command", "Send a console command to a gameserver"},
 				{"update-game", "Update a gameserver's game version"},
