@@ -58,7 +58,6 @@ func (w *LocalWorker) ensureSidecar(ctx context.Context, volumeName string) (str
 		Env:        []string{},
 		VolumeName: volumeName,
 		Entrypoint: []string{"sleep", "infinity"},
-		User:       "1001:1001",
 	})
 	if err != nil {
 		return "", fmt.Errorf("creating fileops sidecar for volume %s: %w", volumeName, err)
@@ -130,7 +129,12 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 		return err
 	}
 	containerPath := filepath.Join("/data", path)
-	return w.docker.CopyToContainer(ctx, containerID, containerPath, content)
+	if err := w.docker.CopyToContainer(ctx, containerID, containerPath, content); err != nil {
+		return err
+	}
+	// Sidecar runs as root — chown so game server (1001:1001) can access the file
+	w.sidecarExec(ctx, volumeName, []string{"chown", "1001:1001", containerPath})
+	return nil
 }
 
 func (w *LocalWorker) deletePathSidecar(ctx context.Context, volumeName string, path string) error {
@@ -154,6 +158,8 @@ func (w *LocalWorker) createDirectorySidecar(ctx context.Context, volumeName str
 	if exitCode != 0 {
 		return fmt.Errorf("creating directory %s: %s", path, stderr)
 	}
+	// Sidecar runs as root — chown so game server (1001:1001) can access the directory
+	w.sidecarExec(ctx, volumeName, []string{"chown", "1001:1001", containerPath})
 	return nil
 }
 
