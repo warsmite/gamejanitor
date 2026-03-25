@@ -100,6 +100,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	}
 	gs.HashedSFTPPassword = string(hashed)
 
+	// Resolve game aliases to canonical ID before storing
+	gs.GameID = s.gameStore.ResolveGameID(gs.GameID)
+
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return "", ErrNotFoundf("game %s not found", gs.GameID)

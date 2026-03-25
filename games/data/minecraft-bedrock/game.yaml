@@ -1,5 +1,6 @@
 id: minecraft-bedrock
 name: "Minecraft: Bedrock Edition"
+aliases: [bedrock, mcbe]
 description: "Cross-platform Minecraft for mobile, console, and Windows 10 players"
 base_image: ghcr.io/warsmite/gamejanitor/base
 recommended_memory_mb: 1024

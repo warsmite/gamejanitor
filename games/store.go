@@ -75,6 +75,7 @@ type Assets struct {
 type GameDefinition struct {
 	ID                   string    `yaml:"id"`
 	Name                 string    `yaml:"name"`
+	Aliases              []string  `yaml:"aliases,omitempty"`
 	Description          string    `yaml:"description,omitempty"`
 	BaseImage            string    `yaml:"base_image"`
 	RecommendedMemoryMB  int       `yaml:"recommended_memory_mb"`
@@ -91,6 +92,7 @@ type GameDefinition struct {
 type Game struct {
 	ID                   string    `json:"id"`
 	Name                 string    `json:"name"`
+	Aliases              []string  `json:"aliases,omitempty"`
 	Description          string    `json:"description,omitempty"`
 	BaseImage            string    `json:"base_image"`
 	IconPath             string    `json:"icon_path"`
@@ -105,6 +107,7 @@ type Game struct {
 
 type GameStore struct {
 	games    map[string]*Game
+	aliases  map[string]string // alias → game ID
 	gameFS   map[string]fs.FS
 	sorted   []Game
 	log      *slog.Logger
@@ -114,6 +117,7 @@ type GameStore struct {
 func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 	s := &GameStore{
 		games:    make(map[string]*Game),
+		aliases:  make(map[string]string),
 		gameFS:   make(map[string]fs.FS),
 		log:      log,
 		localDir: localGamesDir,
@@ -139,16 +143,23 @@ func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 		}
 	}
 
-	// Build sorted list
+	// Build alias map and sorted list
 	s.sorted = make([]Game, 0, len(s.games))
 	for _, g := range s.games {
 		s.sorted = append(s.sorted, *g)
+		for _, alias := range g.Aliases {
+			if existing, ok := s.aliases[alias]; ok {
+				log.Warn("duplicate game alias, ignoring", "alias", alias, "game", g.ID, "existing_game", existing)
+				continue
+			}
+			s.aliases[alias] = g.ID
+		}
 	}
 	sort.Slice(s.sorted, func(i, j int) bool {
 		return s.sorted[i].Name < s.sorted[j].Name
 	})
 
-	log.Info("game store loaded", "game_count", len(s.games))
+	log.Info("game store loaded", "game_count", len(s.games), "alias_count", len(s.aliases))
 	return s, nil
 }
 
@@ -220,9 +231,15 @@ func definitionToGame(def GameDefinition) *Game {
 		mods.Sources = []ModSourceConfig{}
 	}
 
+	aliases := def.Aliases
+	if aliases == nil {
+		aliases = []string{}
+	}
+
 	return &Game{
 		ID:                   def.ID,
 		Name:                 def.Name,
+		Aliases:              aliases,
 		Description:          def.Description,
 		BaseImage:            def.BaseImage,
 		RecommendedMemoryMB:  def.RecommendedMemoryMB,
@@ -239,13 +256,38 @@ func (s *GameStore) ListGames() []Game {
 	return s.sorted
 }
 
+// ResolveGameID resolves an alias to the canonical game ID.
+// Returns the input unchanged if it's already a canonical ID or not found.
+func (s *GameStore) ResolveGameID(id string) string {
+	if _, ok := s.games[id]; ok {
+		return id
+	}
+	if realID, ok := s.aliases[id]; ok {
+		return realID
+	}
+	return id
+}
+
 func (s *GameStore) GetGame(id string) *Game {
-	return s.games[id]
+	if g, ok := s.games[id]; ok {
+		return g
+	}
+	// Check aliases
+	if realID, ok := s.aliases[id]; ok {
+		return s.games[realID]
+	}
+	return nil
 }
 
 // GetGameFS returns the filesystem for a game's directory (scripts/, assets/, defaults/).
 func (s *GameStore) GetGameFS(id string) fs.FS {
-	return s.gameFS[id]
+	if f, ok := s.gameFS[id]; ok {
+		return f
+	}
+	if realID, ok := s.aliases[id]; ok {
+		return s.gameFS[realID]
+	}
+	return nil
 }
 
 // AssetsFS returns an fs.FS that serves game assets at {gameID}/{filename}

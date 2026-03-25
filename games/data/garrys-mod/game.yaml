@@ -1,5 +1,6 @@
 id: garrys-mod
 name: "Garry's Mod"
+aliases: [gmod]
 description: "Physics sandbox powered by the Source engine with endless game modes"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 1024

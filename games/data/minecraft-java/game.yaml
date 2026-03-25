@@ -1,5 +1,6 @@
 id: minecraft-java
 name: "Minecraft: Java Edition"
+aliases: [minecraft, mc, mcje, java]
 description: "The original Minecraft, supporting vanilla, Paper, Forge, and Fabric servers"
 base_image: ghcr.io/warsmite/gamejanitor/java
 recommended_memory_mb: 2048

@@ -1,5 +1,6 @@
 id: 7-days-to-die
 name: "7 Days to Die"
+aliases: [7dtd, 7d2d]
 description: "Open-world zombie survival with base building and horde nights"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 8192

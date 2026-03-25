@@ -1,5 +1,6 @@
 id: ark-survival-evolved
 name: "ARK: Survival Evolved"
+aliases: [ark]
 description: "Dinosaur survival sandbox with taming, building, and massive maps"
 base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 8192
