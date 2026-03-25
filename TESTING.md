@@ -488,89 +488,90 @@ But there's a class of bugs we can only catch with real containers:
 - SFTP access to real volume data
 - Container event timing (start → ready → die)
 
-### Architecture
+### Three-Tier Strategy
 
-End-to-end tests start a real gamejanitor instance (HTTP + gRPC + SFTP) with a real container runtime. They use a lightweight test game image that starts fast and emits predictable output.
+Real games are too slow and fragile for automated testing (network downloads, large images, version breakage). Instead, three tiers with escalating realism:
 
-```
-┌─────────────────────────────────────────┐
-│ Test process                            │
-│  - Starts gamejanitor as a subprocess   │
-│  - Talks to it via HTTP API             │
-│  - Connects via SFTP                    │
-│  - Asserts on container state via Docker│
-│  - Cleans up all containers/volumes     │
-└─────────────────────────────────────────┘
-         │ HTTP            │ SFTP
-         ▼                 ▼
-┌─────────────────────────────────────────┐
-│ Gamejanitor instance (real binary)      │
-│  - Real SQLite DB (temp dir)            │
-│  - Real Docker/Podman worker            │
-│  - Real gRPC controller↔worker          │
-│  - Real SFTP server                     │
-└─────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────┐
-│ Docker/Podman                           │
-│  - Real containers (test game image)    │
-│  - Real volumes                         │
-│  - Real port bindings                   │
-└─────────────────────────────────────────┘
-```
+**Tier 1: Fake worker (current, 325+ tests, <7s)**
+Tests all orchestration logic with in-memory state. No Docker needed. Run on every commit.
 
-### Test Game Image
+**Tier 2: Test game image (~15 tests, ~60s)**
+A purpose-built image using the **real base image** (`images/base/`) with fake game scripts. Same entrypoint.sh, same user (1001:1001), same volume layout, same log rotation — but the "game" is a shell script that starts in <1s. Tests the real Docker/Podman integration without downloading game binaries.
 
-A minimal Docker image that:
-- Starts in <2 seconds
-- Emits `[gamejanitor:installed]` on first run
-- Emits the ready pattern after a short delay
-- Listens on a configurable port (for query verification)
-- Supports `/scripts/send-command` (echoes input)
-- Exits cleanly on SIGTERM
+**Tier 3: Real game smoke tests (~3 tests, ~5min)**
+Actually starts a real game (Terraria/TShock is fastest: ~3s start, ~300MB image, GitHub download). Verifies the full chain: image pull → install → ready pattern → query response → stop. Run nightly or before releases, not on PRs.
 
-This replaces the real game images (steamcmd + game binaries = 10GB+) with something fast and deterministic. Lives in `testdata/test-game-image/` with its own Dockerfile.
+### Tier 2: Test Game Image
 
-### Test Scenarios
+Lives in `testdata/test-game-image/`. Uses `FROM ghcr.io/warsmite/gamejanitor/base` — the exact same entrypoint that production game containers use. The fake scripts in `testdata/games/test-game/scripts/` are bind-mounted at `/scripts/` by gamejanitor, just like real games.
 
-Build-tagged with `//go:build e2e`. Run with `go test -tags e2e ./e2e/`.
+**install-server:** Writes a marker file to `/data`, prints install output, takes <1s.
+**start-server:** Starts a simple TCP listener on `$GAME_PORT`, prints the ready pattern, handles SIGTERM cleanly.
+**send-command:** Echoes input to stdout (simulates RCON response).
+**save-server:** No-op (simulates world save).
 
-**Lifecycle:**
-- Create gameserver → start → wait for ready → verify "running" status → stop → verify "stopped"
-- Start → verify install marker detected → `installed=true` in API response
-- Restart → verify container ID changes
-- Delete → verify container and volume removed from Docker
+The image itself is just the base — no game binaries, no downloads, no network dependencies. Scripts are mounted from the host, exactly like production.
 
-**File access:**
-- SFTP login with credentials from create response
-- Upload a file via SFTP → read it back via API (or vice versa)
-- API file write → verify file exists in container volume
+**What Tier 2 catches that Tier 1 can't:**
+- Volume ownership and permissions (the sidecar 1001:1001 bug)
+- Real port binding on the host (TCP dial verification)
+- Entrypoint.sh log rotation and install marker emission
+- Container stop timing (SIGTERM → exit)
+- SFTP access to real volume data
+- Backup tar/gzip through real filesystem
+- The ReadyWatcher parsing real log output (not a pre-filled buffer)
 
-**Backup/restore:**
-- Create gameserver → write files → backup → delete files → restore → verify files returned
-- Backup size matches in API response
+**Build-tagged:** `//go:build e2e`. Run with `go test -tags e2e -timeout 5m ./e2e/`.
 
-**Ports:**
-- Create two gameservers of the same game → verify different host ports assigned
-- Verify ports are actually bound on the host (TCP dial succeeds)
+**Test scenarios:**
 
-**Multi-node (if two runtimes available):**
-- Start controller + remote worker → create gameserver → verify placed on worker
-- Migrate gameserver between workers → verify data transferred
+Lifecycle:
+- Create → start → wait for ready pattern in real logs → verify "running" → stop → verify "stopped"
+- First start: verify install marker detected, `installed=true` in API
+- Second start: verify `SKIP_INSTALL=1` passed, install script not re-run
+- Restart: verify container ID changes
+- Delete: verify container and volume gone from Docker
+
+File access:
+- SFTP login with create response credentials → upload file → read via API
+- API file write → verify via SFTP read
+- Path traversal blocked in both directions
+
+Backup/restore:
+- Write files to volume → backup → wipe volume → restore → verify files intact
+- Backup size in API matches actual data
+
+Ports:
+- Two gameservers of same game → different host ports → both TCP-dialable
+
+### Tier 3: Real Game Smoke Tests
+
+Build-tagged with `//go:build smoke`. Run with `go test -tags smoke -timeout 10m ./e2e/`.
+
+Uses Terraria (TShock) as the test game — fastest real game to install and start, smallest image, no Steam dependency (direct GitHub download).
+
+- Install from scratch → verify installed marker
+- Start → wait for ready pattern (`TShock initialized`)
+- Query via GJQ → verify player count response
+- Send command → verify response
+- Stop → verify clean exit
+
+These tests are inherently fragile (network download, version changes) and slow. They exist to catch game definition bugs (wrong ready pattern, missing env var, broken install script) — not orchestration bugs.
 
 ### Prerequisites
 
 - Docker or Podman running
-- Test game image built (`testdata/test-game-image/`)
-- ~30 seconds per test (container start + ready + stop)
-- `test-e2e` script in flake.nix: `go test -tags e2e -timeout 5m ./e2e/`
+- For Tier 2: base image built (`build-image base`)
+- For Tier 3: base image + game-specific image built
+- `test-e2e` and `test-smoke` scripts in flake.nix
 
 ### When to run
 
-- Manually before releases
-- In CI on merge to main (not on every PR — too slow)
-- After changes to: worker/, docker/, container lifecycle, SFTP, backup/restore
+| Tier | Trigger | Time |
+|------|---------|------|
+| 1 (fake worker) | Every commit, every PR | <7s |
+| 2 (test game image) | Every PR, pre-merge | ~60s |
+| 3 (real game smoke) | Nightly, pre-release | ~5min |
 
 ---
 
