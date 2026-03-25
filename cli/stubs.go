@@ -6,16 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- Install (TODO: generate and enable systemd/launchd service) ---
-
-var installCmd = &cobra.Command{
-	Use:   "install",
-	Short: "Install as a system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("install command not yet implemented")
-	},
-}
-
 // --- Update (TODO: self-update binary from GitHub releases) ---
 
 var updateCmd = &cobra.Command{
