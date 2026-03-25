@@ -65,7 +65,66 @@ func (s *Scheduler) Start(ctx context.Context) error {
 
 	s.cron.Start()
 	s.log.Info("scheduler started", "entries", len(s.entries))
+
+	// Check for missed schedules during downtime and catch up where appropriate
+	go s.catchUpMissed()
+
 	return nil
+}
+
+// shouldCatchUp returns true for schedule types that should run immediately
+// when missed (data protection, keeping game current). Disruptive or
+// time-sensitive types (restart, command) are skipped with an event log.
+func shouldCatchUp(schedType string) bool {
+	return schedType == "backup" || schedType == "update"
+}
+
+func (s *Scheduler) catchUpMissed() {
+	now := time.Now()
+
+	gameservers, err := models.ListGameservers(s.db, models.GameserverFilter{})
+	if err != nil {
+		s.log.Error("failed to list gameservers for missed schedule check", "error", err)
+		return
+	}
+
+	for _, gs := range gameservers {
+		schedules, err := models.ListSchedules(s.db, gs.ID)
+		if err != nil {
+			continue
+		}
+		for _, sched := range schedules {
+			if !sched.Enabled || sched.NextRun == nil {
+				continue
+			}
+			if sched.NextRun.After(now) {
+				continue
+			}
+			// next_run is in the past — this schedule was missed
+			if sched.LastRun != nil && sched.LastRun.After(*sched.NextRun) {
+				continue // already ran after the missed time (shouldn't happen, but guard)
+			}
+
+			if shouldCatchUp(sched.Type) {
+				s.log.Warn("catching up missed schedule",
+					"schedule_id", sched.ID, "type", sched.Type,
+					"gameserver_id", sched.GameserverID, "was_due", sched.NextRun)
+				s.executeTask(sched.ID)
+			} else {
+				s.log.Warn("skipping missed schedule (not catch-up eligible)",
+					"schedule_id", sched.ID, "type", sched.Type,
+					"gameserver_id", sched.GameserverID, "was_due", sched.NextRun)
+				s.broadcaster.Publish(ScheduledTaskEvent{
+					Type:         EventScheduleTaskMissed,
+					Timestamp:    now,
+					Actor:        Actor{Type: "schedule", ScheduleID: sched.ID},
+					GameserverID: sched.GameserverID,
+					Schedule:     &sched,
+					TaskType:     sched.Type,
+				})
+			}
+		}
+	}
 }
 
 func (s *Scheduler) Stop() {

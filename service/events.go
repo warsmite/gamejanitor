@@ -53,6 +53,7 @@ const (
 	EventWorkerUpdated          = "worker.updated"
 	EventScheduleTaskCompleted  = "schedule.task.completed"
 	EventScheduleTaskFailed     = "schedule.task.failed"
+	EventScheduleTaskMissed     = "schedule.task.missed"
 	EventGameserverStats        = "gameserver.stats"
 	EventGameserverQuery        = "gameserver.query"
 )
@@ -77,7 +78,7 @@ var AllEventTypes = []string{
 	EventBackupCompleted, EventBackupFailed,
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,
-	EventScheduleTaskCompleted, EventScheduleTaskFailed,
+	EventScheduleTaskCompleted, EventScheduleTaskFailed, EventScheduleTaskMissed,
 	EventGameserverStats, EventGameserverQuery,
 }
 
