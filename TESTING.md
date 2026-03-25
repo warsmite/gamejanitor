@@ -335,87 +335,85 @@ These commands should be added to the nix flake devShell as convenience scripts:
 
 ## Implementation Plan
 
-### Dependency Graph
+### Phase 1: Foundation — DONE
 
-```
-Phase 1: Foundation (sequential)
-    testify dep → testutil/db.go → testdata/test-game.yaml → testutil/fixtures.go
-        → testutil/fake_worker.go → testutil/services.go → testutil/api.go
-    ↓
-Phase 2: Validate (sequential)
-    Write 2-3 service tests exercising the full stack to prove the foundation works:
-        - Lifecycle: create → start → stop → delete with event assertions
-        - Multi-node: placement ranking, tag filtering
-        - Auth: admin vs custom token permission checks
-    ↓
-Phase 3: Fan out (parallel agents)
-    ┌─── Agent A: Model tests (all models, only needs DB)
-    ├─── Agent B: Service — lifecycle, ports, migration
-    ├─── Agent C: Service — auth, permissions, settings, input validation
-    ├─── Agent D: Service — backup, schedule, events, webhooks, mods
-    ├─── Agent E: API handler tests
-    └─── Agent F: Game definition validation, logparse, worker integration
-```
+Built `testutil/` package: test DB, fake Worker, service wiring, API test server, test game definition.
 
-### Phase 1: Foundation
+### Phase 2: Validate — DONE
 
-Sequential. Everything depends on this being solid.
+19 tests proving the foundation works: gameserver CRUD, placement, port allocation, auth token scoping.
 
-1. Add `testify` dependency (`go get github.com/stretchr/testify`)
-2. Create `testutil/db.go` — in-memory SQLite with migrations applied
-3. Create `testdata/test-game.yaml` — minimal stable game definition
-4. Create `testutil/fixtures.go` — game store loader, common helpers
-5. Create `testutil/fake_worker.go` — stateful fake Worker with events and fault injection
-6. Create `testutil/services.go` — wire all services with fake workers
-7. Create `testutil/api.go` — HTTP test server with full router
+### Phase 3: Broad Coverage — DONE
 
-### Phase 2: Validate
+166 tests across all packages:
+- `models/` — 7 files (~80 tests): CRUD, filters, cascades, allocation queries, JSON columns
+- `service/` — 8 files (~45 tests): lifecycle, placement, ports, auth, permissions, settings, events, backups, schedules
+- `api/handlers/` — 3 files (~18 tests): CRUD endpoints, auth middleware, security headers, games API
+- `games/` — 1 file (~10 tests): game definition validation, regex, env types, local overrides
+- `worker/` — 1 file (~10 tests): log parsing, Docker multiplexed format, auto-detection
+- `naming/` — 1 file (~7 tests): naming conventions, 4 skipped bug cases
 
-Sequential. Write a small number of tests that exercise the full stack end-to-end. These prove the foundation works before fanning out. If anything is broken in the fake worker or service wiring, it surfaces here.
+Bugs found: PortMode default, naming rejection, nil worker panics (2 fixed). See `TESTING_BUGS.md`.
 
-Tests:
-- `service/gameserver_test.go` — create → start → stop → delete happy path
-- `service/gameserver_ports_test.go` — multi-node placement and port allocation
-- `service/auth_test.go` — admin bypass, custom token scoping, expired token rejection
+### Phase 4: Multi-Node & Races
 
-### Phase 3: Fan Out
+The multi-node orchestration paths — the highest-risk area.
 
-Parallel. Once the foundation is validated, remaining test files are independent. Each agent gets the full foundation and writes tests for its area.
+**`service/gameserver_migration_test.go`** (new file):
+- TestMigration_HappyPath — migrate worker-1 → worker-2, verify node_id updated, ports reallocated on target
+- TestMigration_TargetNodeMustHaveCapacity — target node full, expect error
+- TestMigration_SourceAndTargetMustBeOnline — target worker not registered, expect error
+- TestMigration_FailureDuringTransfer — FailNext("RestoreVolume"), verify source data preserved
+- TestMigration_AutoTrigger — update resources beyond current node, verify migration fires
 
-**Agent A — Models** (simple, fast, DB-only):
-- `models/gameserver_test.go` — CRUD, allocation queries, JSON columns, cascades
-- `models/token_test.go` — CRUD, prefix lookup, scope filtering
-- `models/backup_test.go`, `models/schedule_test.go`, etc.
+**`service/gameserver_ports_test.go`** (extend):
+- TestPortAllocation_ConcurrentCreates_NoDuplicatePorts — N goroutines creating simultaneously, verify all allocated ports unique
+- TestPortAllocation_PortsFreedOnDelete — create, delete, create again, verify reuse
+- TestPortAllocation_MultipleGameserversFillRange — create several, verify contiguous blocks don't overlap
 
-**Agent B — Service: Lifecycle, Ports, Migration** (the multi-node core):
-- `service/gameserver_lifecycle_test.go` — start/stop/restart, status transitions, error states, auto-restart
-- `service/gameserver_ports_test.go` — extend with exhaustion, concurrent races, per-worker ranges
-- `service/gameserver_migration_test.go` — happy path, failure cases, auto-migration trigger
-- Resource enforcement (memory/CPU/storage limits, zero-means-unlimited bug)
+**`service/resource_enforcement_test.go`** (new file):
+- TestResourceEnforcement_MemoryExceedsNodeLimit
+- TestResourceEnforcement_CPUExceedsNodeLimit
+- TestResourceEnforcement_StorageExceedsNodeLimit
+- TestResourceEnforcement_RequireMemoryLimitSetting — enable setting, create with 0 memory, expect error
+- TestResourceEnforcement_RequireCPULimitSetting
+- TestResourceEnforcement_RequireStorageLimitSetting
+- TestResourceEnforcement_ZeroMemoryMeansUnlimited — known bug from MEMORY.md
 
-**Agent C — Service: Auth, Permissions, Validation** (enforcement correctness):
-- `service/auth_test.go` — extend with prefix lookup, fallback scan, worker tokens
-- `service/permissions_test.go` — per-endpoint permission matrix, gameserver ID scoping
-- Input validation tests (bad game IDs, missing env vars, invalid cron, path traversal)
-- `service/settings_test.go` — defaults, DB persistence, type coercion
+### Phase 5: Webhook Delivery & API Permissions
 
-**Agent D — Service: Async Operations** (backup, schedule, events, webhooks, mods):
-- `service/backup_test.go` — create, restore, retention, status progression
-- `service/schedule_test.go` — CRUD, cron execution, one-shot behavior
-- `service/events_test.go` — publishing, persistence, status derivation, actor tracking
-- `service/webhook_test.go` — delivery, retry backoff, HMAC, event filtering
-- `service/mod_test.go` — install, uninstall, source validation
+**`service/webhook_delivery_test.go`** (new file):
+- TestWebhookDelivery_HMACSignature — verify X-Webhook-Signature header is correct HMAC-SHA256
+- TestWebhookDelivery_RetryBackoff — verify exponential backoff calculation
+- TestWebhookDelivery_MaxAttempts — verify delivery marked failed after max attempts
+- TestWebhookDelivery_EventFiltering — wildcard, namespace glob, specific event type
+- TestWebhookDelivery_DisabledEndpointSkipped
 
-**Agent E — API Handlers** (HTTP contract):
-- `api/handlers/auth_test.go` — middleware chain, 401/403 scenarios, auth disabled mode
-- `api/handlers/gameservers_test.go` — CRUD, input validation, response envelope, status codes
-- Other handler tests (backups, schedules, settings, workers, webhooks)
+**`api/handlers/permissions_test.go`** (new file):
+- TestAPI_PermissionMatrix — for each protected endpoint, verify custom token without the right permission gets 403
+- TestAPI_GameserverScoping — custom token scoped to gs-1 can't access gs-2 via API
+- TestAPI_AdminEndpoints_RejectCustomTokens — POST /api/gameservers, /api/tokens, /api/workers
 
-**Agent F — Misc** (independent, low coupling):
-- `games/store_test.go` — validate all real game YAML definitions
-- `worker/logparse_test.go` — Docker multiplexed + raw log parsing (no Docker needed)
-- `worker/local_test.go` — container lifecycle with real Docker (`//go:build integration`)
-- `worker/fileops_test.go` — file operations, path traversal (`//go:build integration`)
+**`service/gameserver_update_test.go`** (new file):
+- TestUpdate_NameChange
+- TestUpdate_EnvChange
+- TestUpdate_NonAdminBlockedFromResources — non-admin can't change memory/CPU
+- TestUpdate_EnvTriggersReinstall — changing triggers_install env var clears installed flag
+
+### Phase 6: Worker Integration (Docker required)
+
+Build-tagged with `//go:build integration`. Requires Docker daemon.
+
+**`worker/local_test.go`**:
+- TestWorker_ContainerLifecycle — pull Alpine, create, start, inspect, stop, remove
+- TestWorker_VolumeOperations — create, write, read, list, delete
+- TestWorker_DirectAccessDetection — verify probe and caching
+- TestWorker_BackupRestoreRoundTrip — backup volume, restore to new volume, verify data integrity
+- TestWorker_FilePathTraversal — attempt `../../etc/passwd`, verify rejected
+
+### Subagent Note
+
+Subagents are useful for read-only research (codebase exploration, spec review) but cannot write files in this project's permission configuration. All test writing is done directly in the main conversation.
 
 ## What We Explicitly Don't Test
 
