@@ -29,9 +29,6 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, raw := range req {
-		if h.settingsSvc.IsReadOnly(key) {
-			continue
-		}
 		if !h.settingsSvc.IsKnown(key) {
 			respondError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return

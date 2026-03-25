@@ -54,17 +54,15 @@ var Defaults = map[string]any{
 }
 
 type SettingsService struct {
-	mu       sync.RWMutex
-	values   map[string]any // live typed values, served from memory
-	readOnly map[string]any // config-derived values, not editable via API
-	db       *sql.DB
-	log      *slog.Logger
+	mu     sync.RWMutex
+	values map[string]any // live typed values, served from memory
+	db     *sql.DB
+	log    *slog.Logger
 }
 
 func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
 	s := &SettingsService{
-		values:   make(map[string]any, len(Defaults)),
-		readOnly: make(map[string]any),
+		values: make(map[string]any, len(Defaults)),
 		db:     db,
 		log:    log,
 	}
@@ -223,24 +221,11 @@ func (s *SettingsService) Clear(key string) error {
 }
 
 // All returns all settings with their current typed values.
-// SetReadOnly stores infrastructure config values that are visible but not
-// editable via the API. Called once at startup with values from the config file.
-func (s *SettingsService) SetReadOnly(values map[string]any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for k, v := range values {
-		s.readOnly[k] = v
-	}
-}
-
 func (s *SettingsService) All() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make(map[string]any, len(s.values)+len(s.readOnly))
-	for k, v := range s.readOnly {
-		result[k] = v
-	}
+	result := make(map[string]any, len(s.values))
 	for k, v := range s.values {
 		result[k] = v
 	}
@@ -253,13 +238,6 @@ func (s *SettingsService) IsKnown(key string) bool {
 	return ok
 }
 
-// IsReadOnly returns true if the key is a read-only infrastructure setting.
-func (s *SettingsService) IsReadOnly(key string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	_, ok := s.readOnly[key]
-	return ok
-}
 
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.
 // Priority: global override > worker external IP > worker LAN IP > empty (caller falls back to 127.0.0.1).

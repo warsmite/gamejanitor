@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 )
@@ -13,11 +14,12 @@ type StatusHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	workerSvc     *service.WorkerNodeService
+	cfg           config.Config
 	log           *slog.Logger
 }
 
-func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, workerSvc *service.WorkerNodeService, log *slog.Logger) *StatusHandlers {
-	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, workerSvc: workerSvc, log: log}
+func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, workerSvc *service.WorkerNodeService, cfg config.Config, log *slog.Logger) *StatusHandlers {
+	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, workerSvc: workerSvc, cfg: cfg, log: log}
 }
 
 type clusterStatus struct {
@@ -29,6 +31,19 @@ type clusterStatus struct {
 	AllocatedCPU       float64 `json:"allocated_cpu"`
 	TotalStorageMB     int64   `json:"total_storage_mb"`
 	AllocatedStorageMB int     `json:"allocated_storage_mb"`
+}
+
+type configStatus struct {
+	Bind             string `json:"bind"`
+	Port             int    `json:"port"`
+	GRPCPort         int    `json:"grpc_port"`
+	SFTPPort         int    `json:"sftp_port"`
+	DataDir          string `json:"data_dir"`
+	ContainerRuntime string `json:"container_runtime"`
+	BackupStoreType  string `json:"backup_store_type"`
+	WebUI            bool   `json:"web_ui"`
+	Controller       bool   `json:"controller"`
+	Worker           bool   `json:"worker"`
 }
 
 type gameserverStatus struct {
@@ -71,7 +86,24 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 
 	cluster := h.buildClusterStatus()
 
+	backupStoreType := "local"
+	if h.cfg.BackupStore != nil && h.cfg.BackupStore.Type != "" {
+		backupStoreType = h.cfg.BackupStore.Type
+	}
+
 	respondOK(w, map[string]any{
+		"config": configStatus{
+			Bind:             h.cfg.Bind,
+			Port:             h.cfg.Port,
+			GRPCPort:         h.cfg.GRPCPort,
+			SFTPPort:         h.cfg.SFTPPort,
+			DataDir:          h.cfg.DataDir,
+			ContainerRuntime: h.cfg.ContainerRuntime,
+			BackupStoreType:  backupStoreType,
+			WebUI:            h.cfg.WebUI,
+			Controller:       h.cfg.Controller,
+			Worker:           h.cfg.Worker,
+		},
 		"cluster":     cluster,
 		"gameservers": gs,
 	})

@@ -7,8 +7,9 @@
   let saving = $state(false);
   let activeSection = $state('general');
 
-  // Settings state
+  // Settings state (editable only — read-only config comes from status)
   let settings = $state<Record<string, any>>({});
+  let config = $state<Record<string, any>>({});
 
   // Tokens state
   let tokens = $state<Token[]>([]);
@@ -48,7 +49,12 @@
 
   onMount(async () => {
     try {
-      settings = await api.settings.get();
+      const [s, status] = await Promise.all([
+        api.settings.get(),
+        api.clusterStatus.get(),
+      ]);
+      settings = s;
+      config = status.config || {};
     } catch (e: any) {
       toast(`Failed to load settings: ${e.message}`, 'error');
     } finally {
@@ -223,35 +229,35 @@
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Bind</span>
-              <span class="info-value">{settings.bind || '—'}:{settings.port || '—'}</span>
+              <span class="info-value">{config.bind || '—'}:{config.port || '—'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">SFTP</span>
-              <span class="info-value">:{settings.sftp_port || '—'}</span>
+              <span class="info-value">:{config.sftp_port || '—'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">gRPC</span>
-              <span class="info-value">:{settings.grpc_port || '—'}</span>
+              <span class="info-value">:{config.grpc_port || '—'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Data Dir</span>
-              <span class="info-value">{settings.data_dir || '—'}</span>
+              <span class="info-value">{config.data_dir || '—'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Runtime</span>
-              <span class="info-value">{settings.container_runtime || 'auto'}</span>
+              <span class="info-value">{config.container_runtime || 'auto'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Backups</span>
-              <span class="info-value">{settings.backup_store_type || 'local'}</span>
+              <span class="info-value">{config.backup_store_type || 'local'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Mode</span>
-              <span class="info-value">{settings.controller && settings.worker ? 'Standalone' : settings.controller ? 'Controller' : 'Worker'}</span>
+              <span class="info-value">{config.controller && config.worker ? 'Controller + Worker' : config.controller ? 'Controller' : 'Worker'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Web UI</span>
-              <span class="info-value">{settings.web_ui ? 'Enabled' : 'Disabled'}</span>
+              <span class="info-value">{config.web_ui ? 'Enabled' : 'Disabled'}</span>
             </div>
           </div>
         </div>

@@ -128,7 +128,7 @@ export interface Gameserver {
   volume_name: string;
   port_mode: string;
   node_id?: string;
-  node_tags: string;
+  node_tags: Record<string, string>;
   sftp_username: string;
   installed: boolean;
   auto_restart: boolean;
@@ -330,7 +330,7 @@ export interface WorkerView {
   max_cpu?: number;
   max_storage_mb?: number;
   cordoned: boolean;
-  tags: string[];
+  tags: Record<string, string>;
   status: string;
   last_seen?: string;
 }
@@ -406,6 +406,10 @@ export const api = {
     list: () => get<Game[]>('/api/games'),
     get: (id: string) => get<Game>(`/api/games/${id}`),
     options: (gameId: string, key: string) => get<DynamicOption[]>(`/api/games/${gameId}/options/${key}`),
+  },
+
+  clusterStatus: {
+    get: () => get<any>('/api/status'),
   },
 
   settings: {

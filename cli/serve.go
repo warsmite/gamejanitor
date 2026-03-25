@@ -132,24 +132,6 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *wor
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
 
-	// Expose read-only infrastructure config in the settings API
-	backupStoreType := "local"
-	if cfg.BackupStore != nil {
-		backupStoreType = cfg.BackupStore.Type
-	}
-	settingsSvc.SetReadOnly(map[string]any{
-		"bind":              cfg.Bind,
-		"port":              cfg.Port,
-		"sftp_port":         cfg.SFTPPort,
-		"grpc_port":         cfg.GRPCPort,
-		"data_dir":          cfg.DataDir,
-		"container_runtime": cfg.ContainerRuntime,
-		"backup_store_type": backupStoreType,
-		"web_ui":            cfg.WebUI,
-		"controller":        cfg.Controller,
-		"worker":            cfg.Worker,
-	})
-
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	statsPoller := service.NewStatsPoller(database, dispatcher, broadcaster, logger)
