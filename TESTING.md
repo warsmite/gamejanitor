@@ -546,24 +546,74 @@ Ports:
 
 ### Tier 3: Real Game Smoke Tests
 
-Build-tagged with `//go:build smoke`. Run with `go test -tags smoke -timeout 10m ./e2e/`.
+Build-tagged with `//go:build smoke`. Generic — works with any game in the game store.
 
-Uses Terraria (TShock) as the test game — fastest real game to install and start, smallest image, no Steam dependency (direct GitHub download).
+```bash
+# Default: Terraria (fastest to install/start)
+go test -tags smoke -timeout 10m ./e2e/
 
-- Install from scratch → verify installed marker
-- Start → wait for ready pattern (`TShock initialized`)
-- Query via GJQ → verify player count response
-- Send command → verify response
-- Stop → verify clean exit
+# Specific game
+SMOKE_GAME=minecraft-java go test -tags smoke -timeout 15m ./e2e/
 
-These tests are inherently fragile (network download, version changes) and slow. They exist to catch game definition bugs (wrong ready pattern, missing env var, broken install script) — not orchestration bugs.
+# Multiple games (CI nightly)
+SMOKE_GAMES=terraria,minecraft-bedrock,valheim go test -tags smoke -timeout 30m ./e2e/
+
+# All supported games
+SMOKE_GAMES=all go test -tags smoke -timeout 60m ./e2e/
+```
+
+**Design: game-agnostic test function.**
+
+The test is a single `TestSmoke` that reads everything from the game definition — no game-specific code:
+
+```go
+func TestSmoke(t *testing.T) {
+    games := smokeGames() // reads SMOKE_GAME(S) env, defaults to "terraria"
+    for _, gameID := range games {
+        t.Run(gameID, func(t *testing.T) {
+            runSmokeTest(t, gameID)
+        })
+    }
+}
+```
+
+`runSmokeTest` loads the game.yaml, fills env vars from defaults/autogenerate, and runs:
+
+1. **Create** — using game defaults, auto-filling required env vars
+2. **Start** — wait for `ready_pattern` from game.yaml (compiled as regex)
+3. **Verify installed** — check `installed=true` in API response
+4. **Query** (if game has `gjq_slug`) — verify GJQ returns a response
+5. **Send command** (if game has `command` capability) — verify non-error response
+6. **Stop** — verify clean exit within timeout
+7. **Cleanup** — delete gameserver, verify container + volume removed
+
+**Per-game considerations handled automatically:**
+- **Required env vars:** filled from `default` or `autogenerate` in game.yaml. If a var is `required: true` with no default and no autogenerate, the test skips with a message.
+- **Consent-required vars:** auto-accepted (e.g., Minecraft EULA=true).
+- **Install timeout:** scales with game — env var `SMOKE_INSTALL_TIMEOUT` (default 5min).
+- **Ready timeout:** env var `SMOKE_READY_TIMEOUT` (default 2min).
+- **Disabled capabilities:** query and command steps skipped if the game disables them.
+- **Image availability:** test skips if the base image isn't built locally.
+
+**Default game: Terraria.**
+Fastest real game (~3s start, ~30s install, ~300MB image, no Steam dependency). Good default for PR gates and local testing.
+
+**Game compatibility matrix (approximate):**
+
+| Game | Install | Start | Image | Notes |
+|------|---------|-------|-------|-------|
+| Terraria | ~30s | ~3s | base | GitHub download, no Steam |
+| Minecraft Java | ~30s | ~15s | java (~1GB) | Mojang download, needs EULA |
+| Minecraft Bedrock | ~60s | ~5s | base | Direct download |
+| Valheim | ~3min | ~10s | steamcmd | SteamCMD, large |
+| Rust | ~5min | ~30s | steamcmd | SteamCMD, very large, slow |
+| Counter-Strike 2 | ~10min | ~20s | steamcmd | Huge, very slow |
 
 ### Prerequisites
 
 - Docker or Podman running
-- For Tier 2: base image built (`build-image base`)
-- For Tier 3: base image + game-specific image built
-- `test-e2e` and `test-smoke` scripts in flake.nix
+- Base image built (`build-image base`). For SteamCMD games: `build-image steamcmd`. For Java games: `build-image java`.
+- `test-e2e`, `test-smoke` scripts in flake.nix
 
 ### When to run
 
@@ -571,7 +621,8 @@ These tests are inherently fragile (network download, version changes) and slow.
 |------|---------|------|
 | 1 (fake worker) | Every commit, every PR | <7s |
 | 2 (test game image) | Every PR, pre-merge | ~60s |
-| 3 (real game smoke) | Nightly, pre-release | ~5min |
+| 3 (smoke, default game) | Pre-merge, nightly | ~2min |
+| 3 (smoke, all games) | Pre-release | ~30min |
 
 ---
 
