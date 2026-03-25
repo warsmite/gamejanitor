@@ -246,8 +246,7 @@ var logsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		isService, _ := cmd.Flags().GetBool("service")
 		if isService {
-			// TODO: implement service log retrieval (journalctl integration)
-			return exitError(fmt.Errorf("--service flag not yet implemented"))
+			return runServiceLogs(cmd)
 		}
 
 		if len(args) == 0 {
@@ -260,7 +259,13 @@ var logsCmd = &cobra.Command{
 		}
 
 		tail, _ := cmd.Flags().GetInt("tail")
-		// TODO: implement --follow (SSE streaming)
+		follow, _ := cmd.Flags().GetBool("follow")
+
+		if follow {
+			// TODO: --follow needs a streaming API endpoint (not yet implemented server-side)
+			return exitError(fmt.Errorf("--follow is not yet supported (requires streaming API endpoint)"))
+		}
+
 		path := fmt.Sprintf("/api/gameservers/%s/logs?tail=%d", gsID, tail)
 
 		resp, err := apiGet(path)
@@ -285,6 +290,33 @@ var logsCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func runServiceLogs(cmd *cobra.Command) error {
+	tail, _ := cmd.Flags().GetInt("tail")
+	path := fmt.Sprintf("/api/logs?tail=%d", tail)
+
+	resp, err := apiGet(path)
+	if err != nil {
+		return exitError(err)
+	}
+
+	if jsonOutput {
+		printJSONResponse(resp)
+		return nil
+	}
+
+	var data struct {
+		Lines []string `json:"lines"`
+	}
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+
+	for _, line := range data.Lines {
+		fmt.Println(line)
+	}
+	return nil
 }
 
 // --- Command ---
