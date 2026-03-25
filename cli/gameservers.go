@@ -233,7 +233,9 @@ var deleteCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		if !confirmAction(fmt.Sprintf("Delete gameserver %s?", gsID[:8])) {
+		name := gameserverName(gsID)
+
+		if !confirmAction(fmt.Sprintf("Delete gameserver %s?", name)) {
 			fmt.Println("Aborted.")
 			return nil
 		}
@@ -248,7 +250,7 @@ var deleteCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s deleted.\n", gsID[:8])
+		fmt.Printf("Gameserver %s deleted.\n", name)
 		return nil
 	},
 }
@@ -310,7 +312,7 @@ var editCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s updated.\n", gsID[:8])
+		fmt.Printf("Gameserver %s updated.\n", gameserverName(gsID))
 		return nil
 	},
 }

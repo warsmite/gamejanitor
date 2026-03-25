@@ -66,8 +66,10 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 			return exitError(err)
 		}
 
+		name := gameserverName(id)
+
 		if !jsonOutput {
-			fmt.Printf("%s gameserver %s...\n", verb, id[:8])
+			fmt.Printf("%s gameserver %s...\n", verb, name)
 		}
 
 		resp, err := apiPost("/api/gameservers/"+id+"/"+action, nil)
@@ -86,7 +88,7 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Gameserver %s is now %s.\n", id[:8], colorStatus(gs.Status))
+		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
 		return nil
 	}
 }
@@ -367,13 +369,15 @@ var reinstallCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		if !confirmAction(fmt.Sprintf("Reinstall gameserver %s?", id[:8])) {
+		name := gameserverName(id)
+
+		if !confirmAction(fmt.Sprintf("Reinstall gameserver %s?", name)) {
 			fmt.Println("Aborted.")
 			return nil
 		}
 
 		if !jsonOutput {
-			fmt.Printf("Reinstalling gameserver %s...\n", id[:8])
+			fmt.Printf("Reinstalling gameserver %s...\n", name)
 		}
 
 		resp, err := apiPost("/api/gameservers/"+id+"/reinstall", nil)
@@ -392,7 +396,7 @@ var reinstallCmd = &cobra.Command{
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Gameserver %s is now %s.\n", id[:8], colorStatus(gs.Status))
+		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
 		return nil
 	},
 }
@@ -409,18 +413,19 @@ var migrateCmd = &cobra.Command{
 			return exitError(err)
 		}
 
+		name := gameserverName(gsID)
 		nodeID, _ := cmd.Flags().GetString("node")
 		if nodeID == "" {
 			return exitError(fmt.Errorf("--node is required"))
 		}
 
-		if !confirmAction(fmt.Sprintf("Migrate gameserver %s to node %s?", gsID[:8], nodeID)) {
+		if !confirmAction(fmt.Sprintf("Migrate gameserver %s to node %s?", name, nodeID)) {
 			fmt.Println("Aborted.")
 			return nil
 		}
 
 		if !jsonOutput {
-			fmt.Printf("Migrating gameserver %s to node %s...\n", gsID[:8], nodeID)
+			fmt.Printf("Migrating gameserver %s to node %s...\n", name, nodeID)
 		}
 
 		body := map[string]string{"node_id": nodeID}
@@ -434,7 +439,7 @@ var migrateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s migrated to node %s.\n", gsID[:8], nodeID)
+		fmt.Printf("Gameserver %s migrated to node %s.\n", name, nodeID)
 		return nil
 	},
 }

@@ -279,6 +279,19 @@ func resolveGameserverID(identifier string) (string, error) {
 	return resolveID(identifier, "gameserver", entries)
 }
 
+// gameserverName looks up a name from the cached gameserver list. Returns short ID as fallback.
+func gameserverName(id string) string {
+	for _, e := range cachedGameservers {
+		if e.ID == id {
+			return e.Name
+		}
+	}
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
 func resolveBackupID(gsID, identifier string) (string, error) {
 	entries, ok := cachedBackups[gsID]
 	if !ok {
