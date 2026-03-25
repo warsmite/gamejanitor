@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -93,9 +94,9 @@ func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
-	limit := 50
+	limit := constants.PaginationDefaultLimit
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= constants.PaginationMaxLimit {
 			limit = n
 		}
 	}

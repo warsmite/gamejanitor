@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/service"
 )
 
@@ -55,7 +56,7 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	if limit <= 0 {
-		limit = 20
+		limit = constants.PaginationDefaultModLimit
 	}
 
 	results, total, err := h.svc.Search(r.Context(), gsID, source, query, offset, limit)

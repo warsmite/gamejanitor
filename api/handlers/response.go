@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 )
@@ -49,7 +50,7 @@ func parsePagination(r *http.Request) models.Pagination {
 	var p models.Pagination
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			p.Limit = n
+			p.Limit = min(n, constants.PaginationMaxLimit)
 		}
 	}
 	if v := r.URL.Query().Get("offset"); v != "" {

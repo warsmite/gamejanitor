@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -64,7 +65,7 @@ func (h *FileHandlers) Write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := io.ReadAll(io.LimitReader(r.Body, 10*1024*1024))
+	content, err := io.ReadAll(io.LimitReader(r.Body, constants.MaxFileWriteBytes))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "failed to read request body")
 		return
@@ -125,7 +126,7 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		dirPath = "/data"
 	}
 
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
+	if err := r.ParseMultipartForm(constants.MaxFileUploadBytes); err != nil {
 		respondError(w, http.StatusBadRequest, "failed to parse multipart form")
 		return
 	}
@@ -150,7 +151,7 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		content, err := io.ReadAll(io.LimitReader(f, 100<<20))
+		content, err := io.ReadAll(io.LimitReader(f, constants.MaxFileUploadBytes))
 		f.Close()
 		if err != nil {
 			h.log.Error("reading uploaded file", "filename", fh.Filename, "error", err)

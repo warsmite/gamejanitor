@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/worker"
@@ -417,7 +418,7 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	tail := 100
+	tail := constants.PaginationDefaultLogTail
 	if v := r.URL.Query().Get("tail"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			tail = n

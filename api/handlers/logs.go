@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/warsmite/gamejanitor/constants"
 )
 
 type LogHandlers struct {
@@ -18,7 +20,7 @@ func NewLogHandlers(logPath string, log *slog.Logger) *LogHandlers {
 }
 
 func (h *LogHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	tail := 100
+	tail := constants.PaginationDefaultLogTail
 	if v := r.URL.Query().Get("tail"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			tail = n

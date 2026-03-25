@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 )
@@ -77,7 +78,7 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 	p := parsePagination(r)
 	if p.Limit <= 0 {
-		p.Limit = 50 // events default to 50
+		p.Limit = constants.PaginationDefaultLimit
 	}
 
 	events, err := h.historySvc.List(models.EventFilter{

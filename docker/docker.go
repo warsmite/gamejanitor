@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/constants"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -522,10 +524,10 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 	// and game scripts running as gameserver can't modify them.
 	if err := tw.WriteHeader(&tar.Header{
 		Name:    filename,
-		Mode:    0644,
+		Mode:    constants.GameserverPerm,
 		Size:    int64(len(content)),
-		Uid:     1001,
-		Gid:     1001,
+		Uid:     constants.GameserverUID,
+		Gid:     constants.GameserverGID,
 		ModTime: time.Now(),
 	}); err != nil {
 		return fmt.Errorf("writing tar header for %s: %w", path, err)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/naming"
 )
@@ -132,8 +133,8 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 	if err := w.docker.CopyToContainer(ctx, containerID, containerPath, content); err != nil {
 		return err
 	}
-	// Sidecar runs as root — chown so game server (1001:1001) can access the file
-	w.sidecarExec(ctx, volumeName, []string{"chown", "1001:1001", containerPath})
+	// Sidecar runs as root — chown so game server can access the file
+	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", constants.GameserverUID, constants.GameserverGID), containerPath})
 	return nil
 }
 

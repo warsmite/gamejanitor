@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/warsmite/gamejanitor/constants"
 )
 
 type UmodSource struct {
@@ -59,7 +61,7 @@ type umodPluginDetail struct {
 
 func (s *UmodSource) Search(ctx context.Context, query string, gameVersion string, loader string, offset int, limit int) ([]ModSearchResult, int, error) {
 	if limit <= 0 {
-		limit = 20
+		limit = constants.PaginationDefaultModLimit
 	}
 	page := (offset / limit) + 1
 
@@ -155,7 +157,7 @@ func (s *UmodSource) DownloadFromURL(ctx context.Context, downloadURL string) ([
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024)) // 50MB max
+	data, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxUmodDownloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading download body: %w", err)
 	}

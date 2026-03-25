@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/models"
 )
@@ -542,7 +543,7 @@ func (s *ModService) downloadFile(ctx context.Context, downloadURL string) ([]by
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 100*1024*1024)) // 100MB max
+	data, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxModDownloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading download: %w", err)
 	}
