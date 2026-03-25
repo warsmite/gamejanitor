@@ -237,10 +237,15 @@ func (e BackupEvent) EventType() string        { return e.Type }
 func (e BackupEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type WorkerEvent struct {
-	Type      string    `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-	Actor     Actor     `json:"actor"`
-	WorkerID  string    `json:"worker_id"`
+	Type         string    `json:"type"`
+	Timestamp    time.Time `json:"timestamp"`
+	Actor        Actor     `json:"actor"`
+	WorkerID     string    `json:"worker_id"`
+	MaxMemoryMB  *int      `json:"max_memory_mb,omitempty"`
+	MaxCPU       *float64  `json:"max_cpu,omitempty"`
+	MaxStorageMB *int      `json:"max_storage_mb,omitempty"`
+	Cordoned     *bool     `json:"cordoned,omitempty"`
+	Tags         *[]string `json:"tags,omitempty"`
 }
 
 func (e WorkerEvent) EventType() string        { return e.Type }
