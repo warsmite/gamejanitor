@@ -26,7 +26,7 @@ CREATE TABLE gameservers (
 
 CREATE TABLE schedules (
     id TEXT PRIMARY KEY,
-    gameserver_id TEXT NOT NULL REFERENCES gameservers(id),
+    gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     cron_expr TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE schedules (
 
 CREATE TABLE backups (
     id TEXT PRIMARY KEY,
-    gameserver_id TEXT NOT NULL REFERENCES gameservers(id),
+    gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     size_bytes INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'completed',

@@ -564,16 +564,22 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
 	}
 
-	// Cascade delete schedules and backups
-	if err := models.DeleteSchedulesByGameserver(s.db, id); err != nil {
-		s.log.Warn("failed to delete schedules during gameserver delete", "id", id, "error", err)
-	}
-	if err := models.DeleteBackupsByGameserver(s.db, id); err != nil {
-		s.log.Warn("failed to delete backups during gameserver delete", "id", id, "error", err)
+	// List backups before delete — CASCADE will remove DB records,
+	// but we need the IDs to clean up store files afterward.
+	backups, err := models.ListBackups(s.db, id)
+	if err != nil {
+		s.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
 	}
 
 	if err := models.DeleteGameserver(s.db, id); err != nil {
 		return err
+	}
+
+	// Clean up backup store files (DB records already cascaded)
+	for _, b := range backups {
+		if err := s.store.Delete(ctx, id, b.ID); err != nil {
+			s.log.Warn("failed to remove backup store file", "backup_id", b.ID, "error", err)
+		}
 	}
 
 	gs.PopulateNode(s.db)
