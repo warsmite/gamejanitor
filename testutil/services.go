@@ -70,7 +70,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	optionsRegistry := games.NewOptionsRegistry(log)
 	modSvc := service.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
 
-	return &ServiceBundle{
+	svc := &ServiceBundle{
 		DB:            db,
 		GameStore:     gameStore,
 		Registry:      registry,
@@ -90,6 +90,13 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		ModSvc:        modSvc,
 		BackupStore:   backupStore,
 	}
+
+	t.Cleanup(func() {
+		readyWatcher.StopAll()
+		querySvc.StopAll()
+	})
+
+	return svc
 }
 
 // NewTestServicesWithSubscribers is like NewTestServices but also starts the async
@@ -109,6 +116,10 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	eventStore.Start(ctx)
 
 	t.Cleanup(func() {
+		// Stop ReadyWatcher first — its goroutines hold references to
+		// the worker and DB. If we close those first, the watcher panics.
+		svc.ReadyWatcher.StopAll()
+		svc.QuerySvc.StopAll()
 		statusSub.Stop()
 		eventStore.Stop()
 	})

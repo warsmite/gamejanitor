@@ -35,11 +35,11 @@ type FakeWorker struct {
 }
 
 type fakeContainer struct {
-	id      string
-	name    string
-	opts    worker.ContainerOptions
-	state   string // "created", "running", "stopped"
-	logBuf  bytes.Buffer
+	id     string
+	name   string
+	opts   worker.ContainerOptions
+	state  string // "created", "running", "stopped"
+	logBuf bytes.Buffer
 }
 
 // NewFakeWorker creates a FakeWorker. Temp directories are cleaned up when the test finishes.
@@ -238,7 +238,8 @@ func (w *FakeWorker) ContainerLogs(ctx context.Context, containerID string, tail
 		w.mu.Unlock()
 		return nil, fmt.Errorf("container %s not found", containerID)
 	}
-	data := c.logBuf.Bytes()
+	data := make([]byte, c.logBuf.Len())
+	copy(data, c.logBuf.Bytes())
 	w.mu.Unlock()
 
 	return io.NopCloser(bytes.NewReader(data)), nil

@@ -8,6 +8,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/testutil"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 func TestConsole_SendCommand_GameserverNotFound(t *testing.T) {
@@ -38,23 +39,25 @@ func TestConsole_SendCommand_NotRunning(t *testing.T) {
 func TestConsole_SendCommand_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start to get a container
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	// Set up running state directly — avoids triggering ReadyWatcher goroutines
+	// which cause flaky cleanup races under parallel test load.
+	containerID, err := fw.CreateContainer(ctx, worker.ContainerOptions{Name: "test-cmd"})
+	require.NoError(t, err)
+	require.NoError(t, fw.StartContainer(ctx, containerID))
 
-	// Manually set status to running so the check passes
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched.ContainerID = &containerID
 	fetched.Status = "running"
 	models.UpdateGameserver(svc.DB, fetched)
 
-	// SendCommand — fake worker's Exec returns (0, "", "", nil)
 	output, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.NoError(t, err)
-	assert.Empty(t, output) // fake worker returns empty stdout
+	assert.Empty(t, output)
 }
 
 func TestConsole_StreamLogs_NotRunning(t *testing.T) {
