@@ -98,7 +98,7 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 				go func() {
 					sftpAddr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.SFTPPort)
 					if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
-						logger.Error("sftp server stopped", "error", err)
+						logger.Error("sftp server stopped", "error", listenError("sftp", sftpAddr, cfg.SFTPPort, err))
 					}
 				}()
 			}
@@ -413,9 +413,10 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 }
 
 func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindAddress, port))
+	addr := fmt.Sprintf("%s:%d", bindAddress, port)
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("grpc listen: %w", err)
+		return listenError("gRPC", addr, port, err)
 	}
 
 	var opts []grpc.ServerOption

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"io/fs"
@@ -402,7 +403,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		go func() {
 			sftpAddr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.SFTPPort)
 			if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
-				logger.Error("sftp server stopped", "error", err)
+				logger.Error("sftp server stopped", "error", listenError("sftp", sftpAddr, cfg.SFTPPort, err))
 			}
 		}()
 	}
@@ -436,11 +437,22 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	return srv.ListenAndServe()
+	if err := srv.ListenAndServe(); err != nil {
+		return listenError("http", addr, cfg.Port, err)
+	}
+	return nil
 }
 
 func isLoopback(addr string) bool {
 	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
+}
+
+// listenError wraps a listen error with a user-friendly message when the port is already in use.
+func listenError(service, addr string, port int, err error) error {
+	if strings.Contains(err.Error(), "address already in use") {
+		return fmt.Errorf("%s server failed to start: port %d is already in use — another instance of gamejanitor or another program is using this port", service, port)
+	}
+	return fmt.Errorf("%s server failed to start on %s: %w", service, addr, err)
 }
 
 func webUIFS(cfg config.Config) fs.FS {
