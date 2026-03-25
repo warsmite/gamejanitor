@@ -141,6 +141,69 @@ func TestSettings_Validation_RejectsPortRangeEndBelowStart(t *testing.T) {
 	assert.Contains(t, err.Error(), "must be >= port_range_start")
 }
 
+func TestSettings_BusinessMode_Defaults(t *testing.T) {
+	t.Parallel()
+	db := testutil.NewTestDB(t)
+	log := testutil.TestLogger()
+
+	svc := service.NewSettingsServiceWithMode(db, log, service.ModeBusiness)
+
+	assert.True(t, svc.GetBool(service.SettingAuthEnabled))
+	assert.False(t, svc.GetBool(service.SettingLocalhostBypass))
+	assert.True(t, svc.GetBool(service.SettingRateLimitEnabled))
+	assert.True(t, svc.GetBool(service.SettingRequireMemoryLimit))
+	assert.True(t, svc.GetBool(service.SettingRequireCPULimit))
+	assert.True(t, svc.GetBool(service.SettingRequireStorageLimit))
+
+	// Non-overridden settings keep their base defaults
+	assert.Equal(t, 27000, svc.GetInt(service.SettingPortRangeStart))
+	assert.Equal(t, "business", svc.Mode())
+}
+
+func TestSettings_BusinessMode_OverridesStillWork(t *testing.T) {
+	t.Parallel()
+	db := testutil.NewTestDB(t)
+	log := testutil.TestLogger()
+
+	svc := service.NewSettingsServiceWithMode(db, log, service.ModeBusiness)
+
+	// Business defaults auth to true, but operator can override to false
+	err := svc.Set(service.SettingAuthEnabled, false)
+	require.NoError(t, err)
+	assert.False(t, svc.GetBool(service.SettingAuthEnabled))
+}
+
+func TestSettings_BusinessMode_ClearRevertsToBusinessDefault(t *testing.T) {
+	t.Parallel()
+	db := testutil.NewTestDB(t)
+	log := testutil.TestLogger()
+
+	svc := service.NewSettingsServiceWithMode(db, log, service.ModeBusiness)
+
+	// Override auth to false
+	err := svc.Set(service.SettingAuthEnabled, false)
+	require.NoError(t, err)
+
+	// Clear should revert to business default (true), not base default (false)
+	err = svc.Clear(service.SettingAuthEnabled)
+	require.NoError(t, err)
+	assert.True(t, svc.GetBool(service.SettingAuthEnabled))
+}
+
+func TestSettings_DefaultMode_Unchanged(t *testing.T) {
+	t.Parallel()
+	db := testutil.NewTestDB(t)
+	log := testutil.TestLogger()
+
+	svc := service.NewSettingsServiceWithMode(db, log, service.ModeDefault)
+
+	// Default mode should have newbie-friendly defaults
+	assert.False(t, svc.GetBool(service.SettingAuthEnabled))
+	assert.True(t, svc.GetBool(service.SettingLocalhostBypass))
+	assert.False(t, svc.GetBool(service.SettingRateLimitEnabled))
+	assert.Equal(t, "", svc.Mode())
+}
+
 func TestSettings_Validation_RejectsZeroRateLimit(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)

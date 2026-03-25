@@ -32,6 +32,12 @@ const (
 	SettingRequireStorageLimit = "require_storage_limit"
 )
 
+// Mode constants for selecting default profiles.
+const (
+	ModeDefault  = ""
+	ModeBusiness = "business"
+)
+
 // Defaults defines every setting with its default value.
 // The Go type of the default IS the setting's type: bool, int, or string.
 var Defaults = map[string]any{
@@ -52,6 +58,31 @@ var Defaults = map[string]any{
 	SettingRequireMemoryLimit:  false,
 	SettingRequireCPULimit:     false,
 	SettingRequireStorageLimit: false,
+}
+
+// BusinessOverrides are applied on top of Defaults when mode is "business".
+// Only settings that differ from the default profile need to be listed here.
+var BusinessOverrides = map[string]any{
+	SettingAuthEnabled:         true,
+	SettingLocalhostBypass:     false,
+	SettingRateLimitEnabled:    true,
+	SettingRequireMemoryLimit:  true,
+	SettingRequireCPULimit:     true,
+	SettingRequireStorageLimit: true,
+}
+
+// DefaultsForMode returns the full defaults map for a given mode.
+func DefaultsForMode(mode string) map[string]any {
+	result := make(map[string]any, len(Defaults))
+	for k, v := range Defaults {
+		result[k] = v
+	}
+	if mode == ModeBusiness {
+		for k, v := range BusinessOverrides {
+			result[k] = v
+		}
+	}
+	return result
 }
 
 // settingValidators defines per-key validation rules applied after type coercion.
@@ -99,21 +130,31 @@ func validateOneOf(allowed ...string) func(any) error {
 }
 
 type SettingsService struct {
-	mu     sync.RWMutex
-	values map[string]any // live typed values, served from memory
-	db     *sql.DB
-	log    *slog.Logger
+	mu       sync.RWMutex
+	values   map[string]any // live typed values, served from memory
+	defaults map[string]any // the active defaults for this mode
+	mode     string
+	db       *sql.DB
+	log      *slog.Logger
 }
 
 func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
+	return NewSettingsServiceWithMode(db, log, ModeDefault)
+}
+
+func NewSettingsServiceWithMode(db *sql.DB, log *slog.Logger, mode string) *SettingsService {
+	defaults := DefaultsForMode(mode)
+
 	s := &SettingsService{
-		values: make(map[string]any, len(Defaults)),
-		db:     db,
-		log:    log,
+		values:   make(map[string]any, len(defaults)),
+		defaults: defaults,
+		mode:     mode,
+		db:       db,
+		log:      log,
 	}
 
-	// Start with defaults
-	for k, v := range Defaults {
+	// Start with defaults for this mode
+	for k, v := range defaults {
 		s.values[k] = v
 	}
 
@@ -124,13 +165,17 @@ func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
 		return s
 	}
 	for key, strVal := range stored {
-		def, ok := Defaults[key]
+		def, ok := defaults[key]
 		if !ok {
 			continue // ignore unknown keys in DB
 		}
 		if parsed, err := parseAs(strVal, def); err == nil {
 			s.values[key] = parsed
 		}
+	}
+
+	if mode != ModeDefault {
+		log.Info("settings mode active", "mode", mode)
 	}
 
 	return s
@@ -148,7 +193,7 @@ func (s *SettingsService) ApplyConfig(settings map[string]any) {
 
 	applied := 0
 	for key, val := range settings {
-		def, ok := Defaults[key]
+		def, ok := s.defaults[key]
 		if !ok {
 			s.log.Warn("ignoring unknown setting from config", "key", key)
 			continue
@@ -189,7 +234,7 @@ func (s *SettingsService) GetBool(key string) bool {
 	v, ok := s.values[key]
 	s.mu.RUnlock()
 	if !ok {
-		if d, ok := Defaults[key]; ok {
+		if d, ok := s.defaults[key]; ok {
 			if b, ok := d.(bool); ok {
 				return b
 			}
@@ -206,7 +251,7 @@ func (s *SettingsService) GetInt(key string) int {
 	v, ok := s.values[key]
 	s.mu.RUnlock()
 	if !ok {
-		if d, ok := Defaults[key]; ok {
+		if d, ok := s.defaults[key]; ok {
 			if n, ok := d.(int); ok {
 				return n
 			}
@@ -223,7 +268,7 @@ func (s *SettingsService) GetString(key string) string {
 	v, ok := s.values[key]
 	s.mu.RUnlock()
 	if !ok {
-		if d, ok := Defaults[key]; ok {
+		if d, ok := s.defaults[key]; ok {
 			if str, ok := d.(string); ok {
 				return str
 			}
@@ -236,7 +281,7 @@ func (s *SettingsService) GetString(key string) string {
 
 // Set updates a setting in memory and persists to DB.
 func (s *SettingsService) Set(key string, value any) error {
-	def, ok := Defaults[key]
+	def, ok := s.defaults[key]
 	if !ok {
 		return fmt.Errorf("unknown setting: %s", key)
 	}
@@ -300,7 +345,7 @@ func (s *SettingsService) Clear(key string) error {
 	}
 
 	s.mu.Lock()
-	if def, ok := Defaults[key]; ok {
+	if def, ok := s.defaults[key]; ok {
 		s.values[key] = def
 	} else {
 		delete(s.values, key)
@@ -323,8 +368,13 @@ func (s *SettingsService) All() map[string]any {
 
 // IsKnown returns true if the key is a registered setting.
 func (s *SettingsService) IsKnown(key string) bool {
-	_, ok := Defaults[key]
+	_, ok := s.defaults[key]
 	return ok
+}
+
+// Mode returns the active settings mode.
+func (s *SettingsService) Mode() string {
+	return s.mode
 }
 
 

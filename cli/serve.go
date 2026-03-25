@@ -127,7 +127,7 @@ type services struct {
 
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := service.NewEventBus()
-	settingsSvc := service.NewSettingsService(database, logger)
+	settingsSvc := service.NewSettingsServiceWithMode(database, logger, cfg.Mode)
 
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)

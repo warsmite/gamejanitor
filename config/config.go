@@ -8,6 +8,9 @@ import (
 )
 
 type Config struct {
+	// Mode selects a default settings profile: "" (default/newbie) or "business".
+	Mode string `yaml:"mode"`
+
 	// Network
 	Bind     string `yaml:"bind"`
 	Port     int    `yaml:"port"`
