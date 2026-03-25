@@ -146,11 +146,11 @@ func TestWorkerNode_SetTags(t *testing.T) {
 	node := &models.WorkerNode{ID: "worker-tags", GRPCAddress: "127.0.0.1:9090"}
 	require.NoError(t, models.UpsertWorkerNode(db, node))
 
-	require.NoError(t, models.SetWorkerNodeTags(db, "worker-tags", "gpu,ssd"))
+	require.NoError(t, models.SetWorkerNodeTags(db, "worker-tags", models.Labels{"hardware": "gpu", "storage": "ssd"}))
 
 	got, err := models.GetWorkerNode(db, "worker-tags")
 	require.NoError(t, err)
-	assert.Equal(t, "gpu,ssd", got.Tags)
+	assert.Equal(t, models.Labels{"hardware": "gpu", "storage": "ssd"}, got.Tags)
 }
 
 func TestWorkerNode_SetLimits(t *testing.T) {

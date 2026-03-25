@@ -51,14 +51,14 @@ func TestPlacement_TagFiltering(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	ctx := testutil.TestContext()
 
-	testutil.RegisterFakeWorker(t, svc, "worker-gpu", testutil.WithTags([]string{"gpu"}))
+	testutil.RegisterFakeWorker(t, svc, "worker-gpu", testutil.WithTags(models.Labels{"hardware": "gpu"}))
 	testutil.RegisterFakeWorker(t, svc, "worker-plain")
 
-	// Request a gameserver that requires the "gpu" tag
+	// Request a gameserver that requires the "hardware=gpu" label
 	gs := &models.Gameserver{
 		Name:     "GPU Server",
 		GameID:   testutil.TestGameID,
-		NodeTags: `["gpu"]`,
+		NodeTags: models.Labels{"hardware": "gpu"},
 		Env:      []byte(`{"REQUIRED_VAR":"hello"}`),
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)

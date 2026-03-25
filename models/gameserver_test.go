@@ -22,7 +22,7 @@ func newGameserver(id, name, gameID string, nodeID *string) *models.Gameserver {
 		Status:     "stopped",
 		PortMode:   "auto",
 		NodeID:     nodeID,
-		NodeTags:   "[]",
+		NodeTags:   models.Labels{},
 	}
 }
 

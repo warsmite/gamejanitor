@@ -2,10 +2,10 @@ package testutil
 
 import (
 	"database/sql"
-	"encoding/json"
 	"testing"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -136,15 +136,14 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 		opt(&cfg)
 	}
 
-	tagsJSON := "[]"
-	if len(cfg.tags) > 0 {
-		b, _ := json.Marshal(cfg.tags)
-		tagsJSON = string(b)
+	tags := cfg.tags
+	if tags == nil {
+		tags = models.Labels{}
 	}
 
 	// Persist the worker node record in the DB so placement queries find it
 	_, err := svc.DB.Exec(`INSERT INTO worker_nodes (id, max_memory_mb, max_cpu, max_storage_mb, tags) VALUES (?, ?, ?, ?, ?)`,
-		nodeID, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB, tagsJSON)
+		nodeID, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB, tags)
 	if err != nil {
 		t.Fatalf("inserting worker node: %v", err)
 	}
@@ -163,7 +162,7 @@ type fakeWorkerConfig struct {
 	maxMemoryMB  int
 	maxCPU       float64
 	maxStorageMB int
-	tags         []string
+	tags         models.Labels
 }
 
 type FakeWorkerOption func(*fakeWorkerConfig)
@@ -180,7 +179,7 @@ func WithMaxStorageMB(mb int) FakeWorkerOption {
 	return func(c *fakeWorkerConfig) { c.maxStorageMB = mb }
 }
 
-func WithTags(tags []string) FakeWorkerOption {
+func WithTags(tags models.Labels) FakeWorkerOption {
 	return func(c *fakeWorkerConfig) { c.tags = tags }
 }
 

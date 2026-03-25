@@ -18,7 +18,7 @@ CREATE TABLE gameservers (
     installed BOOLEAN NOT NULL DEFAULT 0,
     backup_limit INTEGER,
     storage_limit_mb INTEGER,
-    node_tags TEXT NOT NULL DEFAULT '[]',
+    node_tags TEXT NOT NULL DEFAULT '{}',
     auto_restart BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -76,7 +76,7 @@ CREATE TABLE worker_nodes (
     max_cpu REAL,
     max_storage_mb INTEGER,
     cordoned BOOLEAN NOT NULL DEFAULT 0,
-    tags TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '{}',
     sftp_port INTEGER NOT NULL DEFAULT 0,
     last_seen DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

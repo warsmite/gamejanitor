@@ -15,7 +15,7 @@ type WorkerNode struct {
 	MaxCPU         *float64   `json:"max_cpu"`
 	MaxStorageMB   *int       `json:"max_storage_mb"`
 	Cordoned       bool       `json:"cordoned"`
-	Tags           string     `json:"tags"`
+	Tags           Labels     `json:"tags"`
 	SFTPPort       int        `json:"sftp_port"`
 	LastSeen       *time.Time `json:"last_seen"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -114,7 +114,7 @@ func SetWorkerNodeCordoned(db *sql.DB, id string, cordoned bool) error {
 	return nil
 }
 
-func SetWorkerNodeTags(db *sql.DB, id string, tags string) error {
+func SetWorkerNodeTags(db *sql.DB, id string, tags Labels) error {
 	result, err := db.Exec(
 		"UPDATE worker_nodes SET tags = ?, updated_at = ? WHERE id = ?",
 		tags, time.Now(), id,

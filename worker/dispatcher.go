@@ -2,7 +2,6 @@ package worker
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -10,19 +9,6 @@ import (
 
 	"github.com/warsmite/gamejanitor/models"
 )
-
-func hasAllTags(nodeTags, requiredTags []string) bool {
-	tagSet := make(map[string]bool, len(nodeTags))
-	for _, t := range nodeTags {
-		tagSet[t] = true
-	}
-	for _, req := range requiredTags {
-		if !tagSet[req] {
-			return false
-		}
-	}
-	return true
-}
 
 // PlacementCandidate is a worker ranked for gameserver placement.
 type PlacementCandidate struct {
@@ -73,7 +59,7 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // Scores by minimum headroom percentage across memory and CPU limits.
 // Uses allocated (sum of limits for assigned gameservers), not live usage,
 // to avoid overcommit when stopped servers are started.
-func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementCandidate {
+func (d *Dispatcher) RankWorkersForPlacement(requiredLabels models.Labels) []PlacementCandidate {
 	workers := d.registry.ListWorkers()
 	if len(workers) == 0 {
 		d.log.Error("no workers available for gameserver placement")
@@ -83,16 +69,14 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementC
 	var candidates []PlacementCandidate
 
 	for _, info := range workers {
-		// Tag filtering: skip workers that don't have all required tags
-		if len(requiredTags) > 0 && d.db != nil {
+		// Label filtering: skip workers that don't have all required labels
+		if !requiredLabels.IsEmpty() && d.db != nil {
 			node, err := models.GetWorkerNode(d.db, info.ID)
 			if err != nil || node == nil {
 				continue
 			}
-			var nodeTags []string
-			json.Unmarshal([]byte(node.Tags), &nodeTags)
-			if !hasAllTags(nodeTags, requiredTags) {
-				d.log.Debug("worker skipped: missing required tags", "worker_id", info.ID, "required", requiredTags, "has", nodeTags)
+			if !node.Tags.HasAll(requiredLabels) {
+				d.log.Debug("worker skipped: missing required labels", "worker_id", info.ID, "required", requiredLabels, "has", node.Tags)
 				continue
 			}
 		}

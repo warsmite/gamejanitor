@@ -3,7 +3,6 @@ package service
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -37,26 +36,14 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return ErrUnavailablef("target worker unavailable: %v", err)
 	}
 
-	// Validate target node tags
-	var requiredTags []string
-	if gs.NodeTags != "" && gs.NodeTags != "[]" {
-		json.Unmarshal([]byte(gs.NodeTags), &requiredTags)
-	}
-	if len(requiredTags) > 0 {
+	// Validate target node labels
+	if !gs.NodeTags.IsEmpty() {
 		targetNode, err := models.GetWorkerNode(s.db, targetNodeID)
 		if err != nil || targetNode == nil {
 			return ErrNotFoundf("target node %s not found", targetNodeID)
 		}
-		var nodeTags []string
-		json.Unmarshal([]byte(targetNode.Tags), &nodeTags)
-		tagSet := make(map[string]bool, len(nodeTags))
-		for _, t := range nodeTags {
-			tagSet[t] = true
-		}
-		for _, req := range requiredTags {
-			if !tagSet[req] {
-				return ErrBadRequestf("target node %s missing required tag: %s", targetNodeID, req)
-			}
+		if !targetNode.Tags.HasAll(gs.NodeTags) {
+			return ErrBadRequestf("target node %s missing required labels: %v", targetNodeID, gs.NodeTags)
 		}
 	}
 

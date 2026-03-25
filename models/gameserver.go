@@ -34,7 +34,7 @@ type Gameserver struct {
 	Installed      bool            `json:"installed"`
 	BackupLimit    *int            `json:"backup_limit"`
 	StorageLimitMB *int            `json:"storage_limit_mb"`
-	NodeTags       string          `json:"node_tags"`
+	NodeTags       Labels          `json:"node_tags"`
 	AutoRestart    bool            `json:"auto_restart"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -40,7 +39,7 @@ type WorkerView struct {
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
 	Cordoned          bool     `json:"cordoned"`
-	Tags              []string `json:"tags"`
+	Tags              models.Labels `json:"tags"`
 	Status            string   `json:"status"`
 	LastSeen          *string  `json:"last_seen"`
 }
@@ -84,7 +83,7 @@ type WorkerNodeUpdate struct {
 	MaxCPU       *float64  `json:"max_cpu,omitempty"`
 	MaxStorageMB *int      `json:"max_storage_mb,omitempty"`
 	Cordoned     *bool     `json:"cordoned,omitempty"`
-	Tags         *[]string `json:"tags,omitempty"`
+	Tags         *models.Labels `json:"tags,omitempty"`
 }
 
 func (s *WorkerNodeService) Update(ctx context.Context, id string, update *WorkerNodeUpdate) error {
@@ -99,8 +98,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 		}
 	}
 	if update.Tags != nil {
-		tagsJSON, _ := json.Marshal(*update.Tags)
-		if err := models.SetWorkerNodeTags(s.db, id, string(tagsJSON)); err != nil {
+		if err := models.SetWorkerNodeTags(s.db, id, *update.Tags); err != nil {
 			return err
 		}
 	}
@@ -149,13 +147,10 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 		v.MaxCPU = node.MaxCPU
 		v.MaxStorageMB = node.MaxStorageMB
 		v.Cordoned = node.Cordoned
-		var tags []string
-		if err := json.Unmarshal([]byte(node.Tags), &tags); err == nil {
-			v.Tags = tags
-		}
+		v.Tags = node.Tags
 	}
 	if v.Tags == nil {
-		v.Tags = []string{}
+		v.Tags = models.Labels{}
 	}
 	return v
 }

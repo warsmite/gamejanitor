@@ -117,14 +117,10 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 	} else {
 		// Try candidates in ranked order until one passes limit check + port allocation
-		var requiredTags []string
-		if gs.NodeTags != "" && gs.NodeTags != "[]" {
-			json.Unmarshal([]byte(gs.NodeTags), &requiredTags)
-		}
-		candidates := s.dispatcher.RankWorkersForPlacement(requiredTags)
+		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
 		if len(candidates) == 0 {
-			if len(requiredTags) > 0 {
-				return "", ErrUnavailablef("no workers available with required tags %v", requiredTags)
+			if !gs.NodeTags.IsEmpty() {
+				return "", ErrUnavailablef("no workers available with required labels %v", gs.NodeTags)
 			}
 			return "", ErrUnavailable("no workers available — connect a worker node first")
 		}
@@ -337,7 +333,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	// Field-level permission guard: non-admin tokens can only change name and env
 	token := TokenFromContext(ctx)
 	if token != nil && !IsAdmin(token) {
-		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || (gs.NodeTags != "" && gs.NodeTags != "[]") {
+		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || !gs.NodeTags.IsEmpty() {
 			return false, ErrBadRequestf("insufficient permissions to modify resource/placement fields")
 		}
 	}
@@ -379,7 +375,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	if gs.StorageLimitMB != nil {
 		existing.StorageLimitMB = gs.StorageLimitMB
 	}
-	if gs.NodeTags != "" && gs.NodeTags != "[]" {
+	if !gs.NodeTags.IsEmpty() {
 		existing.NodeTags = gs.NodeTags
 	}
 
@@ -416,11 +412,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		limitErr := s.checkWorkerLimitsExcluding(*existing.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.ID)
 		if limitErr != nil {
 			// Current node can't fit — find a new one
-			var requiredTags []string
-			if existing.NodeTags != "" && existing.NodeTags != "[]" {
-				json.Unmarshal([]byte(existing.NodeTags), &requiredTags)
-			}
-			candidates := s.dispatcher.RankWorkersForPlacement(requiredTags)
+			candidates := s.dispatcher.RankWorkersForPlacement(existing.NodeTags)
 
 			foundNode := ""
 			for _, c := range candidates {

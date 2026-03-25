@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -173,7 +174,15 @@ var workersUpdateCmd = &cobra.Command{
 		}
 		if cmd.Flags().Changed("tags") {
 			v, _ := cmd.Flags().GetStringSlice("tags")
-			body["tags"] = v
+			tags := make(map[string]string, len(v))
+			for _, entry := range v {
+				parts := strings.SplitN(entry, "=", 2)
+				if len(parts) != 2 {
+					return exitError(fmt.Errorf("invalid tag %q: must be key=value", entry))
+				}
+				tags[parts[0]] = parts[1]
+			}
+			body["tags"] = tags
 		}
 
 		if len(body) == 0 {
@@ -200,7 +209,7 @@ func init() {
 	workersUpdateCmd.Flags().Float64("max-cpu", 0, "Max CPU cores (0 to clear)")
 	workersUpdateCmd.Flags().Int("max-storage", 0, "Max storage in MB (0 to clear)")
 	workersUpdateCmd.Flags().Bool("cordoned", false, "Cordon (true) or uncordon (false) the worker")
-	workersUpdateCmd.Flags().StringSlice("tags", nil, "Set worker tags (comma-separated)")
+	workersUpdateCmd.Flags().StringSlice("tags", nil, "Set worker labels (key=value, comma-separated)")
 
 	workersCmd.AddCommand(workersListCmd, workersGetCmd, workersUpdateCmd)
 }
