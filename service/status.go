@@ -115,6 +115,8 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 		return err
 	}
 
+	var withContainer, containerMissing int
+
 	for _, gs := range gameservers {
 		if !needsRecovery(gs.Status) {
 			continue
@@ -127,7 +129,18 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 			continue
 		}
 
-		m.recoverGameserver(ctx, &gs, w)
+		if gs.ContainerID != nil {
+			withContainer++
+		}
+		if m.recoverGameserver(ctx, &gs, w) {
+			containerMissing++
+		}
+	}
+
+	if withContainer > 0 && containerMissing == withContainer {
+		m.log.Warn("all gameserver containers are missing — did you switch container runtimes (Docker ↔ Podman)? Volumes may need manual migration",
+			"expected_containers", withContainer,
+		)
 	}
 
 	return nil
@@ -138,18 +151,20 @@ func (m *StatusManager) workerForGameserver(gs *models.Gameserver) worker.Worker
 	return m.dispatcher.WorkerFor(gs.ID)
 }
 
-func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) {
+// recoverGameserver reconciles a single gameserver's DB status with container reality.
+// Returns true if the gameserver had a container ID but the container was not found.
+func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) bool {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
 		m.setRecoveryStatus(gs.ID, StatusStopped, "")
-		return
+		return false
 	}
 
 	info, err := w.InspectContainer(ctx, *gs.ContainerID)
 	if err != nil {
 		m.log.Warn("container not found, setting stopped", "id", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
-		return
+		return true
 	}
 
 	switch info.State {
@@ -164,6 +179,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
 		m.setRecoveryStatus(gs.ID, StatusError, "Container found in unexpected state.")
 	}
+	return false
 }
 
 // setRecoveryStatus directly writes status to DB without publishing events.
