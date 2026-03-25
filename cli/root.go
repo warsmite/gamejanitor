@@ -67,6 +67,8 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(initConfigCmd)
 	rootCmd.AddCommand(clusterCmd)
+
+	registerCompletions()
 }
 
 func Execute() error {
