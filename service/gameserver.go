@@ -596,7 +596,7 @@ func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *models.Gam
 	}
 
 	for _, def := range game.DefaultEnv {
-		if !def.Required {
+		if !def.Required && !def.ConsentRequired {
 			continue
 		}
 		val, exists := env[def.Key]
@@ -604,6 +604,9 @@ func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *models.Gam
 			label := def.Label
 			if label == "" {
 				label = def.Key
+			}
+			if def.ConsentRequired {
+				return ErrBadRequestf("%s requires explicit consent and must be accepted by the end user", label)
 			}
 			return ErrBadRequestf("%s is required", label)
 		}

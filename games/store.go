@@ -26,6 +26,7 @@ type EnvVar struct {
 	Options         []string        `yaml:"options,omitempty" json:"options,omitempty"`
 	DynamicOptions  *DynamicOptions `yaml:"dynamic_options,omitempty" json:"dynamic_options,omitempty"`
 	Required        bool            `yaml:"required,omitempty" json:"required,omitempty"`
+	ConsentRequired bool            `yaml:"consent_required,omitempty" json:"consent_required,omitempty"`
 	Notice          string          `yaml:"notice,omitempty" json:"notice,omitempty"`
 	Autogenerate    string          `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
 	System          bool            `yaml:"system,omitempty" json:"system,omitempty"`

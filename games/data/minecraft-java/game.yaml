@@ -18,7 +18,7 @@ env:
     default: "false"
     label: "Accept Minecraft EULA"
     type: boolean
-    required: true
+    consent_required: true
     notice: "You must agree to the [Minecraft EULA](https://aka.ms/MinecraftEULA) to run this server."
   - key: MINECRAFT_VERSION
     default: "latest"
