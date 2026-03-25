@@ -17,6 +17,7 @@ let
       data_dir = cfg.dataDir;
       web_ui = cfg.webUI;
     }
+    // lib.optionalAttrs (cfg.mode != "") { mode = cfg.mode; }
     // lib.optionalAttrs (cfg.containerRuntime != "auto") { container_runtime = cfg.containerRuntime; }
     // lib.optionalAttrs (cfg.containerSocket != null) { container_socket = cfg.containerSocket; }
     // lib.optionalAttrs (cfg.grpcPort != null) { grpc_port = cfg.grpcPort; }
@@ -53,6 +54,15 @@ let
 in {
   options.services.gamejanitor = {
     enable = lib.mkEnableOption "Gamejanitor game server manager";
+
+    mode = lib.mkOption {
+      type = lib.types.enum [ "" "business" ];
+      default = "";
+      description = ''
+        Settings profile. "business" enables auth, rate limiting,
+        and resource limit requirements by default.
+      '';
+    };
 
     package = lib.mkOption {
       type = lib.types.package;
