@@ -8,46 +8,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
-// --- Gameservers group ---
-
-var gameserversCmd = &cobra.Command{
-	Use:     "gameservers",
-	Aliases: []string{"gs"},
-	Short:   "Manage gameservers",
-}
-
-func init() {
-	gameserversCmd.AddCommand(
-		gameserversListCmd, gameserversGetCmd, gameserversUpdateCmd,
-	)
-}
-
-// registerGameserverSubcommands clones top-level gameserver commands under the `gameservers` group
-// so `gs create`, `gs start` etc. work. Must be called after all init() functions have run
-// so that flags on the source commands are fully registered.
-func registerGameserverSubcommands() {
-	for _, src := range []*cobra.Command{
-		createCmd, deleteCmd, startCmd, stopCmd, restartCmd,
-		statusCmd, logsCmd, commandCmd, updateGameCmd, reinstallCmd, migrateCmd,
-	} {
-		clone := &cobra.Command{
-			Use:               src.Use,
-			Short:             src.Short,
-			Args:              src.Args,
-			ValidArgsFunction: src.ValidArgsFunction,
-			RunE:              src.RunE,
-		}
-		src.Flags().VisitAll(func(f *pflag.Flag) {
-			clone.Flags().AddFlag(f)
-		})
-		gameserversCmd.AddCommand(clone)
-	}
-}
-
-// --- List / Get ---
+// --- List ---
 
 var lsCmd = &cobra.Command{
 	Use:   "ls",
@@ -55,73 +18,67 @@ var lsCmd = &cobra.Command{
 	RunE:  runGameserversList,
 }
 
-var gameserversListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List gameservers",
-	RunE:  runGameserversList,
-}
-
 func init() {
-	for _, cmd := range []*cobra.Command{lsCmd, gameserversListCmd} {
-		cmd.Flags().String("game", "", "Filter by game ID")
-		cmd.Flags().String("status", "", "Filter by status")
-	}
+	lsCmd.Flags().String("game", "", "Filter by game ID")
+	lsCmd.Flags().String("status", "", "Filter by status")
 }
 
 func runGameserversList(cmd *cobra.Command, args []string) error {
-		path := "/api/gameservers"
-		params := url.Values{}
-		if v, _ := cmd.Flags().GetString("game"); v != "" {
-			params.Set("game", v)
-		}
-		if v, _ := cmd.Flags().GetString("status"); v != "" {
-			params.Set("status", v)
-		}
-		if len(params) > 0 {
-			path += "?" + params.Encode()
-		}
+	path := "/api/gameservers"
+	params := url.Values{}
+	if v, _ := cmd.Flags().GetString("game"); v != "" {
+		params.Set("game", v)
+	}
+	if v, _ := cmd.Flags().GetString("status"); v != "" {
+		params.Set("status", v)
+	}
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
 
-		resp, err := apiGet(path)
-		if err != nil {
-			return exitError(err)
-		}
+	resp, err := apiGet(path)
+	if err != nil {
+		return exitError(err)
+	}
 
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
+	if jsonOutput {
+		printJSONResponse(resp)
+		return nil
+	}
 
-		var gameservers []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			GameID string `json:"game_id"`
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(resp.Data, &gameservers); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
+	var gameservers []struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		GameID string `json:"game_id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(resp.Data, &gameservers); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
 
-		if len(gameservers) == 0 {
-			fmt.Println("No gameservers found.")
-			return nil
-		}
+	if len(gameservers) == 0 {
+		fmt.Println("No gameservers found.")
+		return nil
+	}
 
-		w := newTabWriter()
-		fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
-		for _, gs := range gameservers {
-			id := gs.ID
-			if len(id) > 8 {
-				id = id[:8]
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Status))
+	w := newTabWriter()
+	fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
+	for _, gs := range gameservers {
+		id := gs.ID
+		if len(id) > 8 {
+			id = id[:8]
 		}
-		w.Flush()
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Status))
+	}
+	w.Flush()
 	return nil
 }
 
-var gameserversGetCmd = &cobra.Command{
+// --- Get ---
+
+var getCmd = &cobra.Command{
 	Use:   "get <name-or-id>",
-	Short: "Get a gameserver by name or ID",
+	Short: "Show gameserver details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
@@ -188,17 +145,14 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	for _, cmd := range []*cobra.Command{createCmd} {
-		cmd.Flags().String("name", "", "Gameserver name")
-		cmd.Flags().String("game", "", "Game ID")
-		cmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
-		cmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-		cmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
-		cmd.Flags().Float64("cpu", 0, "CPU limit in cores")
-		cmd.Flags().String("node", "", "Worker node ID for placement")
-		cmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
-	}
-
+	createCmd.Flags().String("name", "", "Gameserver name")
+	createCmd.Flags().String("game", "", "Game ID")
+	createCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
+	createCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
+	createCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
+	createCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
+	createCmd.Flags().String("node", "", "Worker node ID for placement")
+	createCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -278,7 +232,7 @@ var deleteCmd = &cobra.Command{
 	Use:     "delete <name-or-id>",
 	Aliases: []string{"rm"},
 	Short:   "Delete a gameserver",
-	Args:  cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
@@ -305,11 +259,11 @@ var deleteCmd = &cobra.Command{
 	},
 }
 
-// --- Update (gameservers only, not top-level) ---
+// --- Edit ---
 
-var gameserversUpdateCmd = &cobra.Command{
-	Use:   "update <name-or-id>",
-	Short: "Update a gameserver (must be stopped)",
+var editCmd = &cobra.Command{
+	Use:   "edit <name-or-id>",
+	Short: "Edit a gameserver's configuration (must be stopped)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
@@ -368,12 +322,12 @@ var gameserversUpdateCmd = &cobra.Command{
 }
 
 func init() {
-	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
-	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
-	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-	gameserversUpdateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
-	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
-	gameserversUpdateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
+	editCmd.Flags().String("name", "", "Gameserver name")
+	editCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
+	editCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
+	editCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
+	editCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
+	editCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 }
 
 // --- Parsing helpers ---

@@ -103,17 +103,13 @@ func completeClusterName(cmd *cobra.Command, args []string, toComplete string) (
 func registerCompletions() {
 	// Top-level gameserver commands
 	for _, cmd := range []*cobra.Command{
-		deleteCmd, startCmd, stopCmd, restartCmd, logsCmd, commandCmd,
+		getCmd, editCmd, deleteCmd, startCmd, stopCmd, restartCmd, logsCmd, commandCmd,
 		updateGameCmd, reinstallCmd, migrateCmd,
 	} {
 		cmd.ValidArgsFunction = completeGameserverName
 	}
 	// status takes optional gameserver arg
 	statusCmd.ValidArgsFunction = completeGameserverName
-
-	// gameservers subcommands
-	gameserversGetCmd.ValidArgsFunction = completeGameserverName
-	gameserversUpdateCmd.ValidArgsFunction = completeGameserverName
 
 	// Backups/schedules take gameserver as first arg
 	for _, cmd := range backupsCmd.Commands() {

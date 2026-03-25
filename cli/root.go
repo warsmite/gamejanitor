@@ -32,9 +32,11 @@ func init() {
 	rootCmd.SetHelpFunc(customHelp)
 	rootCmd.SetUsageFunc(customUsage)
 
-	// Gameserver commands (top-level shortcuts)
+	// Gameserver commands
 	rootCmd.AddCommand(lsCmd)
+	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(createCmd)
+	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
@@ -47,7 +49,6 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 
 	// Resource management
-	rootCmd.AddCommand(gameserversCmd)
 	rootCmd.AddCommand(backupsCmd)
 	rootCmd.AddCommand(schedulesCmd)
 	rootCmd.AddCommand(gamesCmd)
@@ -72,7 +73,6 @@ func init() {
 }
 
 func Execute() error {
-	registerGameserverSubcommands()
 	return rootCmd.Execute()
 }
 
@@ -110,7 +110,9 @@ func customHelp(cmd *cobra.Command, args []string) {
 			name: "Gameserver Commands",
 			commands: []struct{ name, desc string }{
 				{"ls", "List gameservers"},
+				{"get", "Show gameserver details"},
 				{"create", "Create a new gameserver"},
+				{"edit", "Edit a gameserver's configuration"},
 				{"delete", "Delete a gameserver                    (aliases: rm)"},
 				{"start", "Start a gameserver"},
 				{"stop", "Stop a gameserver"},
@@ -126,7 +128,6 @@ func customHelp(cmd *cobra.Command, args []string) {
 		{
 			name: "Resource Management",
 			commands: []struct{ name, desc string }{
-				{"gameservers", "Manage gameservers                    (aliases: gs)"},
 				{"backups", "Manage backups"},
 				{"schedules", "Manage scheduled tasks"},
 				{"games", "List available games"},
