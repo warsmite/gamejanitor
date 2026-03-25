@@ -30,6 +30,8 @@ type ServiceBundle struct {
 	AuthSvc       *service.AuthService
 	ModSvc        *service.ModService
 	BackupStore   service.BackupStore
+	StatusSub     *service.StatusSubscriber
+	EventStore    *service.EventStoreSubscriber
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.
@@ -88,6 +90,33 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		ModSvc:        modSvc,
 		BackupStore:   backupStore,
 	}
+}
+
+// NewTestServicesWithSubscribers is like NewTestServices but also starts the async
+// event subscribers (StatusSubscriber, EventStoreSubscriber). Use this for tests that
+// need to verify status derivation from lifecycle events or event persistence to the DB.
+// Subscribers are stopped on test cleanup.
+func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
+	t.Helper()
+	svc := NewTestServices(t)
+	log := TestLogger()
+
+	statusSub := service.NewStatusSubscriber(svc.DB, svc.Broadcaster, log)
+	eventStore := service.NewEventStoreSubscriber(svc.DB, svc.Broadcaster, log)
+
+	ctx := TestContext()
+	statusSub.Start(ctx)
+	eventStore.Start(ctx)
+
+	t.Cleanup(func() {
+		statusSub.Stop()
+		eventStore.Stop()
+	})
+
+	svc.StatusSub = statusSub
+	svc.EventStore = eventStore
+
+	return svc
 }
 
 // RegisterFakeWorker creates a FakeWorker, registers it in the registry, and returns it.
