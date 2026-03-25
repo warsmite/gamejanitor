@@ -106,9 +106,10 @@ func tokenPrefix(rawToken string) string {
 	return ""
 }
 
-// Used by the Enable Auth flow for first-time setup.
+// Used by the Enable Auth flow. Rotates the "Admin" token so a fresh raw token
+// is always returned, even if auth was previously enabled.
 func (s *AuthService) GenerateAdminToken() (string, error) {
-	rawToken, _, err := s.CreateAdminToken("Admin")
+	rawToken, _, err := s.RotateAdminToken("Admin")
 	if err != nil {
 		return "", err
 	}
@@ -119,6 +120,15 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 	t := &models.Token{Name: name}
 	if err := t.Validate(); err != nil {
 		return "", nil, err
+	}
+
+	existing, err := models.GetTokenByNameAndScope(s.db, name, ScopeAdmin)
+	if err != nil {
+		return "", nil, fmt.Errorf("checking existing admin token: %w", err)
+	}
+	if existing != nil {
+		s.log.Info("admin token already exists", "id", existing.ID, "name", name)
+		return "", existing, nil
 	}
 
 	rawToken, err := generateSecureToken()
@@ -215,6 +225,15 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, err
 		return "", nil, ErrBadRequest("token name is required")
 	}
 
+	existing, err := models.GetTokenByNameAndScope(s.db, name, ScopeWorker)
+	if err != nil {
+		return "", nil, fmt.Errorf("checking existing worker token: %w", err)
+	}
+	if existing != nil {
+		s.log.Info("worker token already exists", "id", existing.ID, "name", name)
+		return "", existing, nil
+	}
+
 	rawToken, err := generateSecureToken()
 	if err != nil {
 		return "", nil, fmt.Errorf("generating token: %w", err)
@@ -240,6 +259,91 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, err
 	}
 
 	s.log.Info("worker token created", "id", token.ID, "name", name)
+	return rawToken, token, nil
+}
+
+// RotateAdminToken deletes any existing admin token with the given name and creates a new one.
+// Always returns a raw token. Used by GenerateAdminToken and explicit rotation.
+func (s *AuthService) RotateAdminToken(name string) (string, *models.Token, error) {
+	t := &models.Token{Name: name}
+	if err := t.Validate(); err != nil {
+		return "", nil, err
+	}
+
+	if deleted, err := models.DeleteTokenByNameAndScope(s.db, name, ScopeAdmin); err != nil {
+		return "", nil, fmt.Errorf("deleting old admin token: %w", err)
+	} else if deleted {
+		s.log.Info("rotated out old admin token", "name", name)
+	}
+
+	rawToken, err := generateSecureToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("generating token: %w", err)
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", nil, fmt.Errorf("hashing token: %w", err)
+	}
+
+	permsJSON, _ := json.Marshal(AllPermissions)
+
+	token := &models.Token{
+		ID:            uuid.New().String(),
+		Name:          name,
+		HashedToken:   string(hashed),
+		TokenPrefix:   tokenPrefix(rawToken),
+		Scope:         ScopeAdmin,
+		GameserverIDs: json.RawMessage("[]"),
+		Permissions:   permsJSON,
+	}
+
+	if err := models.CreateToken(s.db, token); err != nil {
+		return "", nil, fmt.Errorf("saving admin token: %w", err)
+	}
+
+	s.log.Info("admin token rotated", "id", token.ID, "name", name)
+	return rawToken, token, nil
+}
+
+// RotateWorkerToken deletes any existing worker token with the given name and creates a new one.
+// Always returns a raw token. Used by _local worker and explicit rotation.
+func (s *AuthService) RotateWorkerToken(name string) (string, *models.Token, error) {
+	if name == "" {
+		return "", nil, ErrBadRequest("token name is required")
+	}
+
+	if deleted, err := models.DeleteTokenByNameAndScope(s.db, name, ScopeWorker); err != nil {
+		return "", nil, fmt.Errorf("deleting old worker token: %w", err)
+	} else if deleted {
+		s.log.Info("rotated out old worker token", "name", name)
+	}
+
+	rawToken, err := generateSecureToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("generating token: %w", err)
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", nil, fmt.Errorf("hashing token: %w", err)
+	}
+
+	token := &models.Token{
+		ID:            uuid.New().String(),
+		Name:          name,
+		HashedToken:   string(hashed),
+		TokenPrefix:   tokenPrefix(rawToken),
+		Scope:         ScopeWorker,
+		GameserverIDs: json.RawMessage("[]"),
+		Permissions:   json.RawMessage("[]"),
+	}
+
+	if err := models.CreateToken(s.db, token); err != nil {
+		return "", nil, fmt.Errorf("saving worker token: %w", err)
+	}
+
+	s.log.Info("worker token rotated", "id", token.ID, "name", name)
 	return rawToken, token, nil
 }
 

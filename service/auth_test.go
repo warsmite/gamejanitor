@@ -127,6 +127,97 @@ func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+func TestAuth_CreateWorkerToken_Idempotent(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	rawToken1, token1, err := svc.AuthSvc.CreateWorkerToken("my-worker")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken1, "first create should return raw token")
+
+	// Second create with same name returns existing, no raw token
+	rawToken2, token2, err := svc.AuthSvc.CreateWorkerToken("my-worker")
+	require.NoError(t, err)
+	assert.Empty(t, rawToken2, "second create should not return raw token")
+	assert.Equal(t, token1.ID, token2.ID, "should return same token")
+}
+
+func TestAuth_CreateAdminToken_Idempotent(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	rawToken1, token1, err := svc.AuthSvc.CreateAdminToken("my-admin")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken1)
+
+	rawToken2, token2, err := svc.AuthSvc.CreateAdminToken("my-admin")
+	require.NoError(t, err)
+	assert.Empty(t, rawToken2, "second create should not return raw token")
+	assert.Equal(t, token1.ID, token2.ID)
+}
+
+func TestAuth_RotateWorkerToken(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	// Rotate with no existing token creates a new one
+	rawToken1, token1, err := svc.AuthSvc.RotateWorkerToken("my-worker")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken1)
+
+	// Validate the first token works
+	validated := svc.AuthSvc.ValidateToken(rawToken1)
+	require.NotNil(t, validated)
+	assert.Equal(t, token1.ID, validated.ID)
+
+	// Rotate replaces it
+	rawToken2, token2, err := svc.AuthSvc.RotateWorkerToken("my-worker")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken2)
+	assert.NotEqual(t, token1.ID, token2.ID, "should be a new token")
+	assert.NotEqual(t, rawToken1, rawToken2, "should have new raw token")
+
+	// Old token no longer valid
+	assert.Nil(t, svc.AuthSvc.ValidateToken(rawToken1), "old token should be invalidated")
+
+	// New token works
+	validated2 := svc.AuthSvc.ValidateToken(rawToken2)
+	require.NotNil(t, validated2)
+	assert.Equal(t, token2.ID, validated2.ID)
+}
+
+func TestAuth_RotateAdminToken(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	rawToken1, _, err := svc.AuthSvc.RotateAdminToken("my-admin")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken1)
+
+	rawToken2, _, err := svc.AuthSvc.RotateAdminToken("my-admin")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken2)
+	assert.NotEqual(t, rawToken1, rawToken2)
+
+	// Old invalidated, new works
+	assert.Nil(t, svc.AuthSvc.ValidateToken(rawToken1))
+	assert.NotNil(t, svc.AuthSvc.ValidateToken(rawToken2))
+}
+
+func TestAuth_CreateWorkerToken_DifferentNames(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	rawToken1, _, err := svc.AuthSvc.CreateWorkerToken("worker-a")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken1)
+
+	rawToken2, _, err := svc.AuthSvc.CreateWorkerToken("worker-b")
+	require.NoError(t, err)
+	assert.NotEmpty(t, rawToken2, "different names should both get raw tokens")
+	assert.NotEqual(t, rawToken1, rawToken2)
+}
+
 func TestAuth_CustomToken_WrongPermission(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)

@@ -61,6 +61,14 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 			return
 		}
+		if rawToken == "" {
+			respondOK(w, map[string]any{
+				"token_id": token.ID,
+				"name":     token.Name,
+				"exists":   true,
+			})
+			return
+		}
 		respondCreated(w, map[string]any{
 			"token":    rawToken,
 			"token_id": token.ID,
@@ -140,7 +148,39 @@ func (h *AuthHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if rawToken == "" {
+		respondOK(w, map[string]any{
+			"token_id": token.ID,
+			"name":     token.Name,
+			"exists":   true,
+		})
+		return
+	}
+
 	respondCreated(w, map[string]any{
+		"token":    rawToken,
+		"token_id": token.ID,
+		"name":     token.Name,
+	})
+}
+
+func (h *AuthHandlers) RotateWorkerToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	rawToken, token, err := h.authSvc.RotateWorkerToken(req.Name)
+	if err != nil {
+		h.log.Error("rotating worker token", "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+
+	respondOK(w, map[string]any{
 		"token":    rawToken,
 		"token_id": token.ID,
 		"name":     token.Name,
