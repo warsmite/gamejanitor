@@ -253,6 +253,10 @@ func (s *AuthService) ListTokens() ([]models.Token, error) {
 	return models.ListTokens(s.db)
 }
 
+func (s *AuthService) ListTokensByScope(scope string) ([]models.Token, error) {
+	return models.ListTokensByScope(s.db, scope)
+}
+
 func (s *AuthService) GetToken(id string) (*models.Token, error) {
 	return models.GetToken(s.db, id)
 }

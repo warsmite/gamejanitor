@@ -21,7 +21,15 @@ type Token struct {
 }
 
 func ListTokens(db *sql.DB) ([]Token, error) {
-	rows, err := db.Query("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens ORDER BY created_at DESC")
+	return listTokens(db, "SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens ORDER BY created_at DESC")
+}
+
+func ListTokensByScope(db *sql.DB, scope string) ([]Token, error) {
+	return listTokens(db, "SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE scope = ? ORDER BY created_at DESC", scope)
+}
+
+func listTokens(db *sql.DB, query string, args ...any) ([]Token, error) {
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing tokens: %w", err)
 	}

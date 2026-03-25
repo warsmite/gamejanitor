@@ -105,23 +105,16 @@ func (h *AuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandlers) ListWorkerTokens(w http.ResponseWriter, r *http.Request) {
-	tokens, err := h.authSvc.ListTokens()
+	tokens, err := h.authSvc.ListTokensByScope("worker")
 	if err != nil {
 		h.log.Error("listing worker tokens", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-
-	var workerTokens []models.Token
-	for _, t := range tokens {
-		if t.Scope == "worker" {
-			workerTokens = append(workerTokens, t)
-		}
+	if tokens == nil {
+		tokens = []models.Token{}
 	}
-	if workerTokens == nil {
-		workerTokens = []models.Token{}
-	}
-	respondOK(w, workerTokens)
+	respondOK(w, tokens)
 }
 
 func (h *AuthHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request) {

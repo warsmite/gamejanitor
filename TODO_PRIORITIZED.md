@@ -28,7 +28,7 @@ Even numbers: Agent B
 14. No pagination on backup list — backupHandlers.List doesn't call parsePagination.
 15. No pagination cap — Clients can request ?limit=1000000. Need sane max (100-200).
 16. Health endpoint not structured — GET /health returns plain text, should return JSON envelope.
-17. Worker token listing inefficient — ListWorkerTokens fetches ALL tokens, filters in Go. Should be SQL WHERE.
+17. ~~Worker token listing inefficient — Fixed: added ListTokensByScope with SQL WHERE, handler calls it directly.~~
 18. ~~Cordon uses inconsistent pattern — Resolved: single PATCH /api/workers/:id replaces all one-off endpoints.~~
 19. No batch gameserver query by IDs — Need GET /api/gameservers?ids=a,b,c for customer dashboards.
 20. Webhook create doesn't validate URL reachability — Unreachable URLs silently queue and fail.
