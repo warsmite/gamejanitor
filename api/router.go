@@ -215,6 +215,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermTokensManage))
 			r.Get("/", authHandlers.ListWorkerTokens)
 			r.Post("/", authHandlers.CreateWorkerToken)
+			r.Post("/rotate", authHandlers.RotateWorkerToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteWorkerToken)
 		})
 	})

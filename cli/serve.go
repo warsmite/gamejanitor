@@ -339,7 +339,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Launch local worker agent in controller+worker mode
 	if cfg.HasWorker() {
-		rawToken, _, err := svcs.authSvc.CreateWorkerToken("_local")
+		rawToken, _, err := svcs.authSvc.RotateWorkerToken("_local")
 		if err != nil {
 			return fmt.Errorf("failed to create local worker token: %w", err)
 		}

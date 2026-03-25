@@ -110,6 +110,34 @@ func DeleteToken(db *sql.DB, id string) error {
 	return nil
 }
 
+// GetTokenByNameAndScope finds a token by its (name, scope) pair.
+// Returns nil if no matching token exists.
+func GetTokenByNameAndScope(db *sql.DB, name string, scope string) (*Token, error) {
+	var t Token
+	err := db.QueryRow(
+		"SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE name = ? AND scope = ?",
+		name, scope,
+	).Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting token by name=%s scope=%s: %w", name, scope, err)
+	}
+	return &t, nil
+}
+
+// DeleteTokenByNameAndScope removes a token by its (name, scope) pair.
+// Returns false if no matching token existed.
+func DeleteTokenByNameAndScope(db *sql.DB, name string, scope string) (bool, error) {
+	result, err := db.Exec("DELETE FROM tokens WHERE name = ? AND scope = ?", name, scope)
+	if err != nil {
+		return false, fmt.Errorf("deleting token name=%s scope=%s: %w", name, scope, err)
+	}
+	rows, _ := result.RowsAffected()
+	return rows > 0, nil
+}
+
 // TokenExistsByScope checks if a token with the given ID and scope still exists and is not expired.
 func TokenExistsByScope(db *sql.DB, id string, scope string) bool {
 	var exists int
