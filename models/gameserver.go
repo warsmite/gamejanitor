@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type GameserverNode struct {
+	ExternalIP string `json:"external_ip"`
+	LanIP      string `json:"lan_ip"`
+}
+
 type Gameserver struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
@@ -23,6 +28,7 @@ type Gameserver struct {
 	ErrorReason    string          `json:"error_reason"`
 	PortMode       string          `json:"port_mode"`
 	NodeID         *string         `json:"node_id"`
+	Node           *GameserverNode `json:"node,omitempty"`
 	SFTPUsername   string          `json:"sftp_username"`
 	HashedSFTPPassword string      `json:"-"`
 	Installed      bool            `json:"installed"`
@@ -32,6 +38,46 @@ type Gameserver struct {
 	AutoRestart    bool            `json:"auto_restart"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+// PopulateNode resolves the node data from the worker_nodes table.
+func (gs *Gameserver) PopulateNode(db *sql.DB) {
+	if gs.NodeID == nil || *gs.NodeID == "" {
+		return
+	}
+	node, err := GetWorkerNode(db, *gs.NodeID)
+	if err != nil || node == nil {
+		return
+	}
+	gs.Node = &GameserverNode{
+		ExternalIP: node.ExternalIP,
+		LanIP:      node.LanIP,
+	}
+}
+
+// PopulateNodes resolves node data for a slice of gameservers.
+func PopulateNodes(db *sql.DB, gameservers []Gameserver) {
+	// Batch: collect unique node IDs, query once each
+	seen := make(map[string]*GameserverNode)
+	for i := range gameservers {
+		gs := &gameservers[i]
+		if gs.NodeID == nil || *gs.NodeID == "" {
+			continue
+		}
+		nid := *gs.NodeID
+		if n, ok := seen[nid]; ok {
+			gs.Node = n
+			continue
+		}
+		node, err := GetWorkerNode(db, nid)
+		if err != nil || node == nil {
+			seen[nid] = nil
+			continue
+		}
+		n := &GameserverNode{ExternalIP: node.ExternalIP, LanIP: node.LanIP}
+		seen[nid] = n
+		gs.Node = n
+	}
 }
 
 const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, created_at, updated_at"

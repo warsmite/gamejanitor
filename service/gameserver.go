@@ -49,11 +49,21 @@ func (s *GameserverService) SetBackupStore(store BackupStore) {
 }
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
-	return models.ListGameservers(s.db, filter)
+	gameservers, err := models.ListGameservers(s.db, filter)
+	if err != nil {
+		return nil, err
+	}
+	models.PopulateNodes(s.db, gameservers)
+	return gameservers, nil
 }
 
 func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error) {
-	return models.GetGameserver(s.db, id)
+	gs, err := models.GetGameserver(s.db, id)
+	if err != nil || gs == nil {
+		return gs, err
+	}
+	gs.PopulateNode(s.db)
+	return gs, nil
 }
 
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
@@ -189,6 +199,8 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 		return "", err
 	}
+
+	gs.PopulateNode(s.db)
 
 	s.broadcaster.Publish(GameserverEvent{
 		Type:          EventGameserverCreate,
