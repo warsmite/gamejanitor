@@ -103,6 +103,7 @@ nav {
 .status-pill.stopped { background: rgba(82,82,74,0.08); color: var(--idle); border: 1px solid rgba(82,82,74,0.1); }
 .status-pill.starting { background: rgba(245,158,11,0.08); color: var(--caution); border: 1px solid rgba(245,158,11,0.12); }
 .status-pill.error { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
+.status-pill.unreachable { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
 
 .status-dot {
   width: 7px; height: 7px; border-radius: 50%;

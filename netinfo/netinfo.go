@@ -88,10 +88,19 @@ func detectLANIP(log *slog.Logger) string {
 
 			log.Debug("found LAN candidate", "interface", iface.Name, "ip", ip.String())
 
-			// Prefer 192.168.x.x and 172.16-31.x.x over 10.x.x.x,
-			// since 10.x.x.x is commonly used by VPNs
-			if ip[0] == 192 || ip[0] == 172 {
+			// Prefer 192.168.x.x and 172.16-31.x.x (with /24 or smaller subnets)
+			// over 10.x.x.x, since 10.x.x.x is commonly used by VPNs.
+			// Docker/Podman use large subnets (/16, /20) in the 172.x range,
+			// so we filter those out by checking the subnet mask.
+			if ip[0] == 192 {
 				return ip.String()
+			}
+			if ip[0] == 172 && ip[1] >= 16 && ip[1] <= 31 {
+				ones, _ := ipNet.Mask.Size()
+				if ones >= 24 {
+					return ip.String()
+				}
+				log.Debug("skipping large subnet in 172.x range (likely container network)", "interface", iface.Name, "ip", ip.String(), "mask", ones)
 			}
 			if fallback == "" {
 				fallback = ip.String()

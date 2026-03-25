@@ -50,6 +50,7 @@ func (s *WorkerNodeService) List() ([]WorkerView, error) {
 		return []WorkerView{}, nil
 	}
 
+	// Show all workers (online and offline) from the registry
 	infos := s.registry.ListWorkers()
 	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()
 
@@ -129,15 +130,11 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 }
 
 func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *models.WorkerNode) WorkerView {
-	age := time.Since(info.LastSeen)
-	status := "stale"
-	if age < 15*time.Second {
-		status = "connected"
-	} else if age < 25*time.Second {
-		status = "slow"
+	var lastSeen *string
+	if !info.LastSeen.IsZero() {
+		ls := info.LastSeen.UTC().Format(time.RFC3339)
+		lastSeen = &ls
 	}
-
-	lastSeen := info.LastSeen.UTC().Format(time.RFC3339)
 
 	v := WorkerView{
 		ID:                info.ID,
@@ -152,8 +149,8 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 		AllocatedStorageMB: allocStorage,
 		DiskTotalMB:       info.DiskTotalMB,
 		DiskAvailableMB:   info.DiskAvailableMB,
-		Status:            status,
-		LastSeen:          &lastSeen,
+		Status:            info.Status,
+		LastSeen:          lastSeen,
 	}
 	if node != nil {
 		v.MaxMemoryMB = node.MaxMemoryMB

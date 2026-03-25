@@ -1,3 +1,25 @@
 #!/bin/sh
-echo "Starting test server..."
+set -e
+
+PORT="${GAME_PORT:-27015}"
+echo "[start-server] starting test game on port $PORT"
 echo "Server is ready"
+
+# Keep the process alive — listen for connections on the game port.
+# Use a simple socat TCP listener if available, fall back to sleep loop.
+# The process must handle SIGTERM cleanly for container stop to work.
+cleanup() {
+    echo "[start-server] received shutdown signal"
+    exit 0
+}
+trap cleanup TERM INT
+
+if command -v socat >/dev/null 2>&1; then
+    # Listen and echo back — allows TCP dial verification in tests
+    socat TCP-LISTEN:"$PORT",reuseaddr,fork EXEC:"echo OK" &
+    SOCAT_PID=$!
+    wait $SOCAT_PID
+else
+    # Fallback: just stay alive
+    while true; do sleep 1; done
+fi

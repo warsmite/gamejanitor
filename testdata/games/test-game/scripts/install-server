@@ -1,3 +1,6 @@
 #!/bin/sh
-echo "Installing test server..."
-echo "[gamejanitor:installed]"
+set -e
+echo "[install-server] installing test game..."
+mkdir -p /data/.gamejanitor
+echo "installed" > /data/.gamejanitor/test-marker
+echo "[install-server] done"

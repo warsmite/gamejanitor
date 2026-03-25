@@ -304,8 +304,8 @@ in {
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";
-      after = [ "network.target" ] ++ lib.optional hasLocalWorker "docker.service";
-      wants = lib.optional hasLocalWorker "docker.service";
+      after = [ "network-online.target" ] ++ lib.optional hasLocalWorker "docker.service";
+      wants = [ "network-online.target" ] ++ lib.optional hasLocalWorker "docker.service";
       wantedBy = [ "multi-user.target" ];
 
       environment = cfg.environment;

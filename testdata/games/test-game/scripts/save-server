@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "[save-server] saving world..."
+echo "[save-server] done"

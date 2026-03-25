@@ -453,22 +453,193 @@ The highest-complexity untested area. StatusManager watches container events, ha
 - Stale container event (old ContainerID) → ignored
 - Recovery on startup: DB says "running" but container is gone → status corrected to stopped
 
-### Not planned
+### Archetype Scenario Tests — DONE
+
+End-to-end workflows from each user archetype's perspective, testing the full stack above the Worker interface.
+
+**Newbie/homelab:** zero-config create→start→stop, safe defaults, SFTP credentials, password regeneration
+**Power user:** multi-node placement + migration, scoped tokens, backup + schedule workflow, file management with path traversal
+**Business:** business mode secure defaults, resource limits enforced, webhook setup, capacity planning across a 3-node cluster
+**API-level:** full HTTP workflow (newbie), auth enforcement (business), response envelope consistency
+
+### Not planned (unit tests)
 
 | Area | Reason |
 |------|--------|
-| `worker/process.go` (45 functions at 0%) | Process runtime with bwrap/Box64. Platform-specific, needs manual testing. |
-| `worker/remote.go` (33 functions at 0%) | gRPC client. Tested implicitly by the fake worker abstraction. Real gRPC tests need both sides running. |
-| `worker/agent.go` (28 functions at 0%) | gRPC server. Same as remote — needs real gRPC setup. |
-| `worker/oci.go` (8 functions at 0%) | OCI image pull/extract. Network-dependent, Android DNS hacks. |
-| `service/mod_source_*.go` (18 functions at 0%) | External API clients. Modrinth, uMod, Workshop. Would need HTTP stubs per provider — high effort, low bug density since they're simple HTTP+JSON. |
-| `service/backup_store.go` S3 path (10 functions at 0%) | S3Store needs a real or mocked S3 endpoint. LocalStore is tested via backup tests. |
+| `worker/process.go` | Process runtime with bwrap/Box64. Platform-specific, needs manual testing. |
+| `worker/remote.go` | gRPC client. Tested implicitly by the fake worker abstraction. |
+| `worker/agent.go` | gRPC server. Needs both sides running. |
+| `worker/oci.go` | OCI image pull/extract. Network-dependent. |
+| `service/mod_source_*.go` | External API clients. Simple HTTP+JSON, low bug density. |
+| `service/backup_store.go` S3 path | Needs a real or mocked S3 endpoint. LocalStore tested via backup tests. |
+
+---
+
+## True End-to-End Tests
+
+Everything above tests the orchestration logic with a fake worker. The fake worker returns instantly, has no real containers, no real ports, no real log streams. This is the right approach for fast, reliable unit/integration tests.
+
+But there's a class of bugs we can only catch with real containers:
+- Game ready patterns that don't match actual game output
+- Docker volume permissions (the sidecar bug)
+- Real port binding conflicts
+- Container resource limits actually applied
+- Backup/restore data integrity through real tar/gzip streams
+- SFTP access to real volume data
+- Container event timing (start → ready → die)
+
+### Three-Tier Strategy
+
+Real games are too slow and fragile for automated testing (network downloads, large images, version breakage). Instead, three tiers with escalating realism:
+
+**Tier 1: Fake worker (current, 325+ tests, <7s)**
+Tests all orchestration logic with in-memory state. No Docker needed. Run on every commit.
+
+**Tier 2: Test game image (~15 tests, ~60s)**
+A purpose-built image using the **real base image** (`images/base/`) with fake game scripts. Same entrypoint.sh, same user (1001:1001), same volume layout, same log rotation — but the "game" is a shell script that starts in <1s. Tests the real Docker/Podman integration without downloading game binaries.
+
+**Tier 3: Real game smoke tests (~3 tests, ~5min)**
+Actually starts a real game (Terraria/TShock is fastest: ~3s start, ~300MB image, GitHub download). Verifies the full chain: image pull → install → ready pattern → query response → stop. Run nightly or before releases, not on PRs.
+
+### Tier 2: Test Game Image
+
+Lives in `testdata/test-game-image/`. Uses `FROM ghcr.io/warsmite/gamejanitor/base` — the exact same entrypoint that production game containers use. The fake scripts in `testdata/games/test-game/scripts/` are bind-mounted at `/scripts/` by gamejanitor, just like real games.
+
+**install-server:** Writes a marker file to `/data`, prints install output, takes <1s.
+**start-server:** Starts a simple TCP listener on `$GAME_PORT`, prints the ready pattern, handles SIGTERM cleanly.
+**send-command:** Echoes input to stdout (simulates RCON response).
+**save-server:** No-op (simulates world save).
+
+The image itself is just the base — no game binaries, no downloads, no network dependencies. Scripts are mounted from the host, exactly like production.
+
+**What Tier 2 catches that Tier 1 can't:**
+- Volume ownership and permissions (the sidecar 1001:1001 bug)
+- Real port binding on the host (TCP dial verification)
+- Entrypoint.sh log rotation and install marker emission
+- Container stop timing (SIGTERM → exit)
+- SFTP access to real volume data
+- Backup tar/gzip through real filesystem
+- The ReadyWatcher parsing real log output (not a pre-filled buffer)
+
+**Build-tagged:** `//go:build e2e`. Run with `go test -tags e2e -timeout 5m ./e2e/`.
+
+**Test scenarios:**
+
+Lifecycle:
+- Create → start → wait for ready pattern in real logs → verify "running" → stop → verify "stopped"
+- First start: verify install marker detected, `installed=true` in API
+- Second start: verify `SKIP_INSTALL=1` passed, install script not re-run
+- Restart: verify container ID changes
+- Delete: verify container and volume gone from Docker
+
+File access:
+- SFTP login with create response credentials → upload file → read via API
+- API file write → verify via SFTP read
+- Path traversal blocked in both directions
+
+Backup/restore:
+- Write files to volume → backup → wipe volume → restore → verify files intact
+- Backup size in API matches actual data
+
+Ports:
+- Two gameservers of same game → different host ports → both TCP-dialable
+
+### Tier 3: Real Game Smoke Tests
+
+Build-tagged with `//go:build smoke`. Generic — works with any game in the game store.
+
+```bash
+# Default: Terraria (fastest to install/start)
+go test -tags smoke -timeout 10m ./e2e/
+
+# Specific game
+SMOKE_GAME=minecraft-java go test -tags smoke -timeout 15m ./e2e/
+
+# Multiple games (CI nightly)
+SMOKE_GAMES=terraria,minecraft-bedrock,valheim go test -tags smoke -timeout 30m ./e2e/
+
+# All supported games
+SMOKE_GAMES=all go test -tags smoke -timeout 60m ./e2e/
+```
+
+**Design: game-agnostic test function.**
+
+The test is a single `TestSmoke` that reads everything from the game definition — no game-specific code:
+
+```go
+func TestSmoke(t *testing.T) {
+    games := smokeGames() // reads SMOKE_GAME(S) env, defaults to "terraria"
+    for _, gameID := range games {
+        t.Run(gameID, func(t *testing.T) {
+            runSmokeTest(t, gameID)
+        })
+    }
+}
+```
+
+`runSmokeTest` loads the game.yaml, fills env vars from defaults/autogenerate, and runs:
+
+1. **Create** — using game defaults, auto-filling required env vars
+2. **Start** — wait for `ready_pattern` from game.yaml (compiled as regex)
+3. **Verify installed** — check `installed=true` in API response
+4. **Query** (if game has `gjq_slug`) — verify GJQ returns a response
+5. **Send command** (if game has `command` capability) — verify non-error response
+6. **Stop** — verify clean exit within timeout
+7. **Cleanup** — delete gameserver, verify container + volume removed
+
+**Per-game considerations handled automatically:**
+- **Required env vars:** filled from `default` or `autogenerate` in game.yaml. If a var is `required: true` with no default and no autogenerate, the test skips with a message.
+- **Consent-required vars:** auto-accepted (e.g., Minecraft EULA=true).
+- **Install timeout:** scales with game — env var `SMOKE_INSTALL_TIMEOUT` (default 5min).
+- **Ready timeout:** env var `SMOKE_READY_TIMEOUT` (default 2min).
+- **Disabled capabilities:** query and command steps skipped if the game disables them.
+- **Image availability:** test skips if the base image isn't built locally.
+
+**Default game: Terraria.**
+Fastest real game (~3s start, ~30s install, ~300MB image, no Steam dependency). Good default for PR gates and local testing.
+
+**Game compatibility matrix (approximate):**
+
+| Game | Install | Start | Image | Notes |
+|------|---------|-------|-------|-------|
+| Terraria | ~30s | ~3s | base | GitHub download, no Steam |
+| Minecraft Java | ~30s | ~15s | java (~1GB) | Mojang download, needs EULA |
+| Minecraft Bedrock | ~60s | ~5s | base | Direct download |
+| Valheim | ~3min | ~10s | steamcmd | SteamCMD, large |
+| Rust | ~5min | ~30s | steamcmd | SteamCMD, very large, slow |
+| Counter-Strike 2 | ~10min | ~20s | steamcmd | Huge, very slow |
+
+### Prerequisites
+
+- Docker or Podman running
+- Base image built (`build-image base`). For SteamCMD games: `build-image steamcmd`. For Java games: `build-image java`.
+- `test-e2e`, `test-smoke` scripts in flake.nix
+
+### When to run
+
+| Tier | Trigger | Time |
+|------|---------|------|
+| 1 (fake worker) | Every commit, every PR | <7s |
+| 2 (test game image) | Every PR, pre-merge | ~60s |
+| 3 (smoke, default game) | Pre-merge, nightly | ~2min |
+| 3 (smoke, all games) | Pre-release | ~30min |
+
+---
+
+## Long-Term Testing Vision
+
+The test suite should evolve alongside the three user archetypes:
+
+**Newbie tests** — As the onboarding UX matures, tests should cover the first-run experience: game selection, one-click create, "it just works" verification. These should be the project's smoke tests — if they break, nothing works.
+
+**Power user tests** — As the CLI is rewritten, tests should cover the CLI contract: `gamejanitor gameserver create`, context switching between controllers, `gamejanitor install` for systemd setup. These protect the API contract that power users depend on.
+
+**Business tests** — As multi-node and the hosting service grow, tests should cover scale (100+ gameservers on 10+ nodes), webhook delivery reliability under load, API versioning/backwards compatibility, and the billing integration surface. The business mode defaults should be the hardest-tested path because paying customers have the lowest tolerance for bugs.
 
 ## What We Explicitly Don't Test
 
-- **UI/frontend** — separate concern, not covered by Go test suite (needs its own frontend testing strategy)
-- **CLI commands** — thin wrappers over API client, low bug density
+- **UI/frontend** — separate concern, needs its own frontend testing strategy (Playwright or similar)
 - **Generated protobuf** — generated code, tested implicitly by gRPC usage
 - **OCI image pulling** — network-dependent, tested manually
 - **Box64/bwrap** — platform-specific, tested manually on target hardware
-- **External APIs** — Modrinth, uMod, Steam Workshop (network-dependent, stub at HTTP level if needed later)
+- **External mod APIs** — Modrinth, uMod, Steam Workshop (network-dependent, stub at HTTP level if needed later)

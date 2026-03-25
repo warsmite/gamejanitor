@@ -43,7 +43,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	log := TestLogger()
 	gameStore := NewTestGameStore(t)
 
-	registry := worker.NewRegistry(log)
+	registry := worker.NewRegistry(db, log)
 	dispatcher := worker.NewDispatcher(registry, db, log)
 	broadcaster := service.NewEventBus()
 	settingsSvc := service.NewSettingsService(db, log)

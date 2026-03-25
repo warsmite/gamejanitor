@@ -1,0 +1,3 @@
+#!/bin/sh
+# Echoes the command back — simulates RCON response
+echo "$1"

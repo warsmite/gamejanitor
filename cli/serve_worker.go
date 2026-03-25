@@ -119,27 +119,13 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 			logger.Warn("no worker token provided, controller will likely reject registration")
 		}
 
-		netInfo := netinfo.Detect(logger)
-		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
-		if cfg.AdvertiseAddress != "" {
-			ownAddr = cfg.AdvertiseAddress
-		}
-
-		if isLoopback(cfg.Bind) && cfg.AdvertiseAddress == "" {
-			logger.Warn("worker gRPC is bound to loopback but reporting LAN IP to controller — controller will not be able to dial back, bind to 0.0.0.0 or your LAN IP for multi-node",
-				"bind", cfg.Bind,
-				"reported_address", ownAddr,
-			)
-		}
-
 		logger.Info("connecting to controller",
 			"controller", cfg.ControllerAddress,
 			"worker_id", workerID,
-			"own_grpc_address", ownAddr,
 			"has_token", cfg.WorkerToken != "",
 		)
 
-		runRegistrationLoop(cfg, workerID, ownAddr, workerTLSConfig, netInfo, logger)
+		runRegistrationLoop(cfg, workerID, grpcPort, workerTLSConfig, logger)
 		// runRegistrationLoop blocks forever
 	}
 
@@ -193,9 +179,6 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 		}
 	}
 
-	netInfo := netinfo.Detect(logger)
-	ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
-
 	logger.Info("enrolling with controller for TLS certificates",
 		"controller", cfg.ControllerAddress,
 		"worker_id", workerID,
@@ -205,6 +188,10 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 	maxBackoff := 30 * time.Second
 
 	for {
+		// Re-detect IPs each attempt so we recover if network wasn't ready at startup
+		netInfo := netinfo.Detect(logger)
+		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
+
 		client, conn, err := worker.DialControllerEnrollment(cfg.ControllerAddress, cfg.WorkerToken)
 		if err != nil {
 			logger.Error("failed to connect to controller for enrollment", "error", err, "retry_in", backoff)
@@ -302,11 +289,27 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 
 // runRegistrationLoop connects to the controller, registers, and sends heartbeats.
 // Reconnects with backoff on failure. Blocks forever.
-func runRegistrationLoop(cfg config.Config, workerID, ownAddr string, tlsConfig *tls.Config, netInfo *netinfo.Info, logger *slog.Logger) {
+// Re-detects network info on each registration attempt so that workers recover
+// from boot-time detection failures (e.g. network not ready after power cut).
+func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsConfig *tls.Config, logger *slog.Logger) {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
 	for {
+		// Re-detect IPs each attempt so we recover if network wasn't ready at startup
+		netInfo := netinfo.Detect(logger)
+		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
+		if cfg.AdvertiseAddress != "" {
+			ownAddr = cfg.AdvertiseAddress
+		}
+
+		if isLoopback(cfg.Bind) && cfg.AdvertiseAddress == "" {
+			logger.Warn("worker gRPC is bound to loopback but reporting LAN IP to controller — controller will not be able to dial back, bind to 0.0.0.0 or your LAN IP for multi-node",
+				"bind", cfg.Bind,
+				"reported_address", ownAddr,
+			)
+		}
+
 		client, conn, err := worker.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
