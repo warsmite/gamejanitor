@@ -23,7 +23,10 @@ func NewBackupHandlers(svc *service.BackupService, log *slog.Logger) *BackupHand
 
 func (h *BackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
-	backups, err := h.svc.ListBackups(gsID)
+	backups, err := h.svc.ListBackups(models.BackupFilter{
+		GameserverID: gsID,
+		Pagination:   parsePagination(r),
+	})
 	if err != nil {
 		h.log.Error("listing backups", "gameserver_id", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

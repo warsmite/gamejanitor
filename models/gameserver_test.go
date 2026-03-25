@@ -210,7 +210,7 @@ func TestGameserver_DeleteCascadesBackups(t *testing.T) {
 	require.NoError(t, models.DeleteSchedulesByGameserver(db, "gs-1"))
 	require.NoError(t, models.DeleteGameserver(db, "gs-1"))
 
-	backups, err := models.ListBackups(db, "gs-1")
+	backups, err := models.ListBackups(db, models.BackupFilter{GameserverID: "gs-1"})
 	require.NoError(t, err)
 	assert.Empty(t, backups)
 

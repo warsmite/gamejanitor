@@ -30,8 +30,8 @@ func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
-func (s *BackupService) ListBackups(gameserverID string) ([]models.Backup, error) {
-	return models.ListBackups(s.db, gameserverID)
+func (s *BackupService) ListBackups(filter models.BackupFilter) ([]models.Backup, error) {
+	return models.ListBackups(s.db, filter)
 }
 
 func (s *BackupService) GetBackup(id string) (*models.Backup, error) {
@@ -358,7 +358,7 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 
 // DeleteBackupsByGameserver removes all backups for a gameserver (DB records + store files).
 func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserverID string) error {
-	backups, err := models.ListBackups(s.db, gameserverID)
+	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: gameserverID})
 	if err != nil {
 		return fmt.Errorf("listing backups for cleanup: %w", err)
 	}
@@ -389,7 +389,7 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 		return nil
 	}
 
-	backups, err := models.ListBackups(s.db, gameserverID)
+	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: gameserverID})
 	if err != nil {
 		return fmt.Errorf("listing backups for retention: %w", err)
 	}

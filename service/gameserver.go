@@ -566,7 +566,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	// List backups before delete — CASCADE will remove DB records,
 	// but we need the IDs to clean up store files afterward.
-	backups, err := models.ListBackups(s.db, id)
+	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: id})
 	if err != nil {
 		s.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
 	}

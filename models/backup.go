@@ -22,8 +22,15 @@ type Backup struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func ListBackups(db *sql.DB, gameserverID string) ([]Backup, error) {
-	rows, err := db.Query("SELECT id, gameserver_id, name, size_bytes, status, error_reason, created_at FROM backups WHERE gameserver_id = ? ORDER BY created_at DESC", gameserverID)
+type BackupFilter struct {
+	GameserverID string
+	Pagination
+}
+
+func ListBackups(db *sql.DB, filter BackupFilter) ([]Backup, error) {
+	query := "SELECT id, gameserver_id, name, size_bytes, status, error_reason, created_at FROM backups WHERE gameserver_id = ? ORDER BY created_at DESC"
+	query = filter.Pagination.ApplyToQuery(query, 0)
+	rows, err := db.Query(query, filter.GameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("listing backups: %w", err)
 	}

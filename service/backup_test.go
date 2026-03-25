@@ -74,7 +74,7 @@ func TestBackup_List_ByGameserver(t *testing.T) {
 	waitForBackupCompletion(t, svc, b1.ID)
 	waitForBackupCompletion(t, svc, b2.ID)
 
-	list, err := svc.BackupSvc.ListBackups(gs.ID)
+	list, err := svc.BackupSvc.ListBackups(models.BackupFilter{GameserverID: gs.ID})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 }

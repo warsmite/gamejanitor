@@ -64,7 +64,7 @@ func TestBackup_ListByGameserver(t *testing.T) {
 		require.NoError(t, models.CreateBackup(db, b))
 	}
 
-	list, err := models.ListBackups(db, "gs-list")
+	list, err := models.ListBackups(db, models.BackupFilter{GameserverID: "gs-list"})
 	require.NoError(t, err)
 	assert.Len(t, list, 3)
 }
@@ -73,7 +73,7 @@ func TestBackup_ListByGameserver_Empty(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewTestDB(t)
 
-	list, err := models.ListBackups(db, "gs-nonexistent")
+	list, err := models.ListBackups(db, models.BackupFilter{GameserverID: "gs-nonexistent"})
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
@@ -177,7 +177,7 @@ func TestBackup_DeleteByGameserver(t *testing.T) {
 
 	require.NoError(t, models.DeleteBackupsByGameserver(db, "gs-bulk"))
 
-	list, err := models.ListBackups(db, "gs-bulk")
+	list, err := models.ListBackups(db, models.BackupFilter{GameserverID: "gs-bulk"})
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
