@@ -60,7 +60,7 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // Uses allocated (sum of limits for assigned gameservers), not live usage,
 // to avoid overcommit when stopped servers are started.
 func (d *Dispatcher) RankWorkersForPlacement(requiredLabels models.Labels) []PlacementCandidate {
-	workers := d.registry.ListWorkers()
+	workers := d.registry.ListOnlineWorkers()
 	if len(workers) == 0 {
 		d.log.Error("no workers available for gameserver placement")
 		return nil

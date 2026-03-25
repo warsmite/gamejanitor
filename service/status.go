@@ -50,7 +50,7 @@ func NewStatusManager(db *sql.DB, broadcaster *EventBus, querySvc *QueryService,
 		crashCounts:   make(map[string]int),
 	}
 
-	registry.SetCallbacks(sm.onWorkerRegistered, sm.onWorkerUnregistered)
+	registry.SetCallbacks(sm.onWorkerRegistered, sm.onWorkerOffline)
 
 	return sm
 }
@@ -122,10 +122,13 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 			continue
 		}
 
-		// For multi-node: skip gameservers on remote workers (recovered when worker registers)
 		w := m.workerForGameserver(&gs)
 		if w == nil {
-			m.log.Debug("skipping recovery for gameserver on offline worker", "id", gs.ID, "node_id", gs.NodeID)
+			// Worker is offline — mark gameserver unreachable instead of leaving stale status
+			if gs.NodeID != nil {
+				m.log.Warn("marking gameserver unreachable, worker offline", "id", gs.ID, "node_id", *gs.NodeID)
+				m.setRecoveryStatus(gs.ID, StatusUnreachable, "Worker offline at startup.")
+			}
 			continue
 		}
 
@@ -317,15 +320,20 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	go m.recoverWorkerGameservers(ctx, nodeID, w)
 }
 
-// onWorkerUnregistered is called when a remote worker is unregistered (timeout or explicit).
-func (m *StatusManager) onWorkerUnregistered(nodeID string) {
-	// Log impact before tearing down
+// onWorkerOffline is called when a worker transitions to offline (heartbeat timeout or explicit).
+// Marks affected gameservers as unreachable so the UI doesn't show stale "running" status.
+func (m *StatusManager) onWorkerOffline(nodeID string) {
 	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{NodeID: &nodeID})
 	if err != nil {
 		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
-	} else if len(gameservers) > 0 {
-		m.log.Warn("worker disconnected, gameservers on node are now unreachable",
-			"worker_id", nodeID, "affected_gameservers", len(gameservers))
+	} else {
+		for _, gs := range gameservers {
+			if needsRecovery(gs.Status) {
+				m.log.Warn("marking gameserver unreachable due to worker disconnect",
+					"gameserver_id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
+				m.setRecoveryStatus(gs.ID, StatusUnreachable, "Worker disconnected.")
+			}
+		}
 	}
 
 	m.workerMu.Lock()
@@ -357,10 +365,10 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		if gs.NodeID == nil || *gs.NodeID != nodeID {
 			continue
 		}
-		if !needsRecovery(gs.Status) {
+		if !needsRecoveryOnReconnect(gs.Status) {
 			continue
 		}
-		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID)
+		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
 		m.recoverGameserver(ctx, &gs, w)
 	}
 }

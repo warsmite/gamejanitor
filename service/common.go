@@ -4,13 +4,14 @@ package service
 // Lifecycle: Stopped → Pulling → Starting → Started → Running → Stopping → Stopped
 // Gameserver statuses — reflect current container state, not the operation that triggered it.
 const (
-	StatusStopped    = "stopped"
-	StatusInstalling = "installing"
-	StatusStarting   = "starting"
-	StatusStarted    = "started"
-	StatusRunning    = "running"
-	StatusStopping   = "stopping"
-	StatusError      = "error"
+	StatusStopped     = "stopped"
+	StatusInstalling  = "installing"
+	StatusStarting    = "starting"
+	StatusStarted     = "started"
+	StatusRunning     = "running"
+	StatusStopping    = "stopping"
+	StatusError       = "error"
+	StatusUnreachable = "unreachable" // Worker disconnected — actual container state unknown
 )
 
 // Container contract constants — shared between gamejanitor and game container scripts.
@@ -28,6 +29,12 @@ const CapabilityQuery = "query"
 
 func needsRecovery(status string) bool {
 	return status != StatusStopped && status != StatusError
+}
+
+// needsRecoveryOnReconnect returns true for statuses that should be reconciled
+// when a worker comes back online — includes unreachable gameservers.
+func needsRecoveryOnReconnect(status string) bool {
+	return needsRecovery(status) || status == StatusUnreachable
 }
 
 func isRunningStatus(status string) bool {

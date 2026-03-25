@@ -257,7 +257,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	registry := worker.NewRegistry(logger)
+	registry := worker.NewRegistry(database, logger)
+	if err := registry.LoadFromDB(); err != nil {
+		return fmt.Errorf("failed to load workers from database: %w", err)
+	}
 	dispatcher := worker.NewDispatcher(registry, database, logger)
 
 	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
@@ -379,6 +382,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	registry.StartReaper(ctx, logger)
+
+	// Reconcile gameserver status with Docker reality on startup.
+	// Online workers get checked immediately; offline workers' gameservers
+	// are marked unreachable and recovered when the worker reconnects.
+	if err := svcs.statusMgr.RecoverOnStartup(ctx); err != nil {
+		logger.Error("failed to recover gameserver status on startup", "error", err)
+	}
 
 	router := api.NewRouter(api.RouterOptions{
 		Config:        cfg,

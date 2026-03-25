@@ -72,6 +72,7 @@ CREATE TABLE worker_nodes (
     grpc_address TEXT NOT NULL DEFAULT '',
     lan_ip TEXT NOT NULL DEFAULT '',
     external_ip TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'offline',
     max_memory_mb INTEGER,
     max_cpu REAL,
     max_storage_mb INTEGER,
