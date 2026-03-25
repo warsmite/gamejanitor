@@ -37,6 +37,16 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 		typeFilter = strings.Split(types, ",")
 	}
 
+	// Token scoping — only send events for gameservers the token can access
+	allowedIDs := service.AllowedGameserverIDs(service.TokenFromContext(r.Context()))
+	var allowedSet map[string]bool
+	if len(allowedIDs) > 0 {
+		allowedSet = make(map[string]bool, len(allowedIDs))
+		for _, id := range allowedIDs {
+			allowedSet[id] = true
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -61,6 +71,13 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 			if !matchesTypeFilter(event.EventType(), typeFilter) {
 				continue
 			}
+			// Filter by token scope — cluster events (empty gameserver ID) only for all-access tokens
+			if allowedSet != nil {
+				gsID := event.EventGameserverID()
+				if gsID == "" || !allowedSet[gsID] {
+					continue
+				}
+			}
 			data, err := json.Marshal(event)
 			if err != nil {
 				h.log.Error("marshaling SSE event", "error", err)
@@ -81,10 +98,29 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 		p.Limit = constants.PaginationDefaultLimit
 	}
 
+	allowedIDs := service.AllowedGameserverIDs(service.TokenFromContext(r.Context()))
+
+	// If a specific gameserver_id is requested, verify it's in the allowed set
+	requestedGSID := r.URL.Query().Get("gameserver_id")
+	if requestedGSID != "" && len(allowedIDs) > 0 {
+		found := false
+		for _, id := range allowedIDs {
+			if id == requestedGSID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			respondOK(w, []models.Event{})
+			return
+		}
+	}
+
 	events, err := h.historySvc.List(models.EventFilter{
-		EventType:    r.URL.Query().Get("type"),
-		GameserverID: r.URL.Query().Get("gameserver_id"),
-		Pagination:   p,
+		EventType:            r.URL.Query().Get("type"),
+		GameserverID:         requestedGSID,
+		AllowedGameserverIDs: allowedIDs,
+		Pagination:           p,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list events")

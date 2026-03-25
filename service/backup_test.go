@@ -18,7 +18,7 @@ func waitForBackupCompletion(t *testing.T, svc *testutil.ServiceBundle, backupID
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		b, err := svc.BackupSvc.GetBackup(backupID)
+		b, err := models.GetBackup(svc.DB, backupID)
 		if err == nil && b != nil && b.Status != "in_progress" {
 			return
 		}
@@ -93,10 +93,10 @@ func TestBackup_Delete_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	waitForBackupCompletion(t, svc, backup.ID)
 
-	err = svc.BackupSvc.DeleteBackup(ctx, backup.ID)
+	err = svc.BackupSvc.DeleteBackup(ctx, gs.ID, backup.ID)
 	require.NoError(t, err)
 
-	fetched, err := svc.BackupSvc.GetBackup(backup.ID)
-	require.NoError(t, err)
+	fetched, err := svc.BackupSvc.GetBackup(gs.ID, backup.ID)
+	require.Error(t, err)
 	assert.Nil(t, fetched)
 }

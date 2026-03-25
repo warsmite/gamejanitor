@@ -314,6 +314,45 @@ func HasPermission(token *models.Token, gameserverID string, permission string) 
 	return false
 }
 
+// AllowedGameserverIDs extracts the gameserver IDs a token is scoped to.
+// Returns nil if the token is nil, admin, or all-access (empty list).
+func AllowedGameserverIDs(token *models.Token) []string {
+	if token == nil || token.Scope == ScopeAdmin {
+		return nil
+	}
+	var ids []string
+	if err := json.Unmarshal(token.GameserverIDs, &ids); err != nil {
+		return nil
+	}
+	if len(ids) == 0 {
+		return nil // all-access
+	}
+	return ids
+}
+
+// intersectIDs returns the intersection of requested and allowed ID sets.
+// nil allowed means all-access (returns requested as-is).
+// nil requested means no filter (returns allowed as-is).
+func intersectIDs(requested, allowed []string) []string {
+	if len(allowed) == 0 {
+		return requested
+	}
+	if len(requested) == 0 {
+		return allowed
+	}
+	set := make(map[string]bool, len(allowed))
+	for _, id := range allowed {
+		set[id] = true
+	}
+	result := []string{} // empty slice, not nil — nil means "no filter"
+	for _, id := range requested {
+		if set[id] {
+			result = append(result, id)
+		}
+	}
+	return result
+}
+
 func generateSecureToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

@@ -38,16 +38,16 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if status := r.URL.Query().Get("status"); status != "" {
 		filter.Status = &status
 	}
-
-	// Tokens with specific gameserver IDs only see those gameservers
-	if token := service.TokenFromContext(r.Context()); token != nil {
-		var gsIDs []string
-		if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err == nil && len(gsIDs) > 0 {
-			filter.IDs = gsIDs
+	if ids := r.URL.Query().Get("ids"); ids != "" {
+		for _, id := range strings.Split(ids, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				filter.IDs = append(filter.IDs, id)
+			}
 		}
 	}
 
-	gameservers, err := h.svc.ListGameservers(filter)
+	gameservers, err := h.svc.ListGameservers(r.Context(), filter)
 	if err != nil {
 		h.log.Error("listing gameservers", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -227,14 +227,8 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 	if body.NodeID != "" {
 		filter.NodeID = &body.NodeID
 	}
-	if token := service.TokenFromContext(r.Context()); token != nil {
-		var gsIDs []string
-		if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err == nil && len(gsIDs) > 0 {
-			filter.IDs = gsIDs
-		}
-	}
 
-	gameservers, err := h.svc.ListGameservers(filter)
+	gameservers, err := h.svc.ListGameservers(r.Context(), filter)
 	if err != nil {
 		h.log.Error("listing gameservers for bulk action", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

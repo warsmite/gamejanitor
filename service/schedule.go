@@ -27,8 +27,20 @@ func (s *ScheduleService) ListSchedules(gameserverID string) ([]models.Schedule,
 	return models.ListSchedules(s.db, gameserverID)
 }
 
-func (s *ScheduleService) GetSchedule(id string) (*models.Schedule, error) {
-	return models.GetSchedule(s.db, id)
+func (s *ScheduleService) GetSchedule(gameserverID, scheduleID string) (*models.Schedule, error) {
+	return s.getScheduleForGameserver(gameserverID, scheduleID)
+}
+
+// getScheduleForGameserver fetches a schedule and verifies it belongs to the expected gameserver.
+func (s *ScheduleService) getScheduleForGameserver(gameserverID, scheduleID string) (*models.Schedule, error) {
+	schedule, err := models.GetSchedule(s.db, scheduleID)
+	if err != nil {
+		return nil, fmt.Errorf("getting schedule %s: %w", scheduleID, err)
+	}
+	if schedule == nil || schedule.GameserverID != gameserverID {
+		return nil, ErrNotFoundf("schedule %s not found", scheduleID)
+	}
+	return schedule, nil
 }
 
 func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *models.Schedule) error {
@@ -96,46 +108,39 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *models.S
 	return nil
 }
 
-func (s *ScheduleService) DeleteSchedule(ctx context.Context, id string) error {
-	schedule, err := models.GetSchedule(s.db, id)
+func (s *ScheduleService) DeleteSchedule(ctx context.Context, gameserverID, scheduleID string) error {
+	schedule, err := s.getScheduleForGameserver(gameserverID, scheduleID)
 	if err != nil {
-		return fmt.Errorf("getting schedule for delete: %w", err)
-	}
-
-	s.log.Info("deleting schedule", "id", id)
-
-	s.scheduler.RemoveSchedule(id)
-	if err := models.DeleteSchedule(s.db, id); err != nil {
 		return err
 	}
 
-	gsID := ""
-	if schedule != nil {
-		gsID = schedule.GameserverID
+	s.log.Info("deleting schedule", "id", scheduleID)
+
+	s.scheduler.RemoveSchedule(scheduleID)
+	if err := models.DeleteSchedule(s.db, scheduleID); err != nil {
+		return err
 	}
+
 	s.broadcaster.Publish(ScheduleActionEvent{
 		Type:         EventScheduleDelete,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
-		GameserverID: gsID,
+		GameserverID: schedule.GameserverID,
 		Schedule:     schedule,
 	})
 
 	return nil
 }
 
-func (s *ScheduleService) ToggleSchedule(ctx context.Context, id string) error {
-	schedule, err := models.GetSchedule(s.db, id)
+func (s *ScheduleService) ToggleSchedule(ctx context.Context, gameserverID, scheduleID string) error {
+	schedule, err := s.getScheduleForGameserver(gameserverID, scheduleID)
 	if err != nil {
-		return fmt.Errorf("getting schedule %s: %w", id, err)
-	}
-	if schedule == nil {
-		return ErrNotFoundf("schedule %s not found", id)
+		return err
 	}
 
 	schedule.Enabled = !schedule.Enabled
 
-	s.log.Info("toggling schedule", "id", id, "enabled", schedule.Enabled)
+	s.log.Info("toggling schedule", "id", scheduleID, "enabled", schedule.Enabled)
 
 	if err := models.UpdateSchedule(s.db, schedule); err != nil {
 		return err

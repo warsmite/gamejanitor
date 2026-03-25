@@ -48,7 +48,19 @@ func (s *GameserverService) SetBackupStore(store BackupStore) {
 	s.store = store
 }
 
-func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
+func (s *GameserverService) ListGameservers(ctx context.Context, filter models.GameserverFilter) ([]models.Gameserver, error) {
+	// Apply token scoping — intersect requested IDs with token's allowed IDs
+	if token := TokenFromContext(ctx); token != nil && !IsAdmin(token) {
+		tokenIDs := AllowedGameserverIDs(token)
+		if len(tokenIDs) > 0 {
+			filter.IDs = intersectIDs(filter.IDs, tokenIDs)
+			// Empty intersection means the token has no access to the requested IDs
+			if len(filter.IDs) == 0 {
+				return []models.Gameserver{}, nil
+			}
+		}
+	}
+
 	gameservers, err := models.ListGameservers(s.db, filter)
 	if err != nil {
 		return nil, err

@@ -34,21 +34,31 @@ func (s *BackupService) ListBackups(filter models.BackupFilter) ([]models.Backup
 	return models.ListBackups(s.db, filter)
 }
 
-func (s *BackupService) GetBackup(id string) (*models.Backup, error) {
-	return models.GetBackup(s.db, id)
+func (s *BackupService) GetBackup(gameserverID, backupID string) (*models.Backup, error) {
+	return s.getBackupForGameserver(gameserverID, backupID)
+}
+
+// getBackupForGameserver fetches a backup and verifies it belongs to the expected gameserver.
+// Returns ErrNotFound if the backup doesn't exist or belongs to a different gameserver.
+func (s *BackupService) getBackupForGameserver(gameserverID, backupID string) (*models.Backup, error) {
+	backup, err := models.GetBackup(s.db, backupID)
+	if err != nil {
+		return nil, fmt.Errorf("getting backup %s: %w", backupID, err)
+	}
+	if backup == nil || backup.GameserverID != gameserverID {
+		return nil, ErrNotFoundf("backup %s not found", backupID)
+	}
+	return backup, nil
 }
 
 func (s *BackupService) TotalBackupSize(gameserverID string) (int64, error) {
 	return models.TotalBackupSizeByGameserver(s.db, gameserverID)
 }
 
-func (s *BackupService) DownloadBackup(ctx context.Context, backupID string) (io.ReadCloser, *models.Backup, error) {
-	backup, err := models.GetBackup(s.db, backupID)
+func (s *BackupService) DownloadBackup(ctx context.Context, gameserverID, backupID string) (io.ReadCloser, *models.Backup, error) {
+	backup, err := s.getBackupForGameserver(gameserverID, backupID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting backup %s: %w", backupID, err)
-	}
-	if backup == nil {
-		return nil, nil, ErrNotFoundf("backup %s not found", backupID)
+		return nil, nil, err
 	}
 
 	reader, err := s.store.Load(ctx, backup.GameserverID, backup.ID)
@@ -213,13 +223,10 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 	})
 }
 
-func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) error {
-	backup, err := models.GetBackup(s.db, backupID)
+func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupID string) error {
+	backup, err := s.getBackupForGameserver(gameserverID, backupID)
 	if err != nil {
-		return fmt.Errorf("getting backup %s: %w", backupID, err)
-	}
-	if backup == nil {
-		return ErrNotFoundf("backup %s not found", backupID)
+		return err
 	}
 
 	gs, err := models.GetGameserver(s.db, backup.GameserverID)
@@ -326,13 +333,10 @@ func (s *BackupService) failRestore(gameserverID, backupID, backupName string, a
 	s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
 }
 
-func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error {
-	backup, err := models.GetBackup(s.db, backupID)
+func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID string) error {
+	backup, err := s.getBackupForGameserver(gameserverID, backupID)
 	if err != nil {
-		return fmt.Errorf("getting backup %s: %w", backupID, err)
-	}
-	if backup == nil {
-		return ErrNotFoundf("backup %s not found", backupID)
+		return err
 	}
 
 	s.log.Info("deleting backup", "backup_id", backupID, "gameserver_id", backup.GameserverID)

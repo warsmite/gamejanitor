@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -28,8 +29,9 @@ func CreateEvent(db *sql.DB, e *Event) error {
 }
 
 type EventFilter struct {
-	EventType    string // glob pattern
-	GameserverID string
+	EventType            string   // glob pattern
+	GameserverID         string   // single gameserver filter
+	AllowedGameserverIDs []string // token scope — only return events for these gameservers
 	Pagination
 }
 
@@ -44,6 +46,14 @@ func ListEvents(db *sql.DB, f EventFilter) ([]Event, error) {
 	if f.GameserverID != "" {
 		query += ` AND gameserver_id = ?`
 		args = append(args, f.GameserverID)
+	}
+	if len(f.AllowedGameserverIDs) > 0 {
+		placeholders := strings.Repeat("?,", len(f.AllowedGameserverIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		query += ` AND gameserver_id IN (` + placeholders + `)`
+		for _, id := range f.AllowedGameserverIDs {
+			args = append(args, id)
+		}
 	}
 
 	query += ` ORDER BY created_at DESC`

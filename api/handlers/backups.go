@@ -62,20 +62,22 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
-	if err := h.svc.RestoreBackup(detachedCtx(r), backupID); err != nil {
+	if err := h.svc.RestoreBackup(detachedCtx(r), gsID, backupID); err != nil {
 		h.log.Error("restoring backup", "backup_id", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	backup, _ := h.svc.GetBackup(backupID)
+	backup, _ := h.svc.GetBackup(gsID, backupID)
 	respondAccepted(w, backup)
 }
 
 func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
 
-	reader, backup, err := h.svc.DownloadBackup(r.Context(), backupID)
+	reader, backup, err := h.svc.DownloadBackup(r.Context(), gsID, backupID)
 	if err != nil {
 		h.log.Error("downloading backup", "backup_id", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -96,8 +98,9 @@ func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
-	if err := h.svc.DeleteBackup(r.Context(), backupID); err != nil {
+	if err := h.svc.DeleteBackup(r.Context(), gsID, backupID); err != nil {
 		h.log.Error("deleting backup", "backup_id", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return

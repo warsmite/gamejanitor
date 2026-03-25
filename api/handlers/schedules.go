@@ -34,15 +34,12 @@ func (h *ScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "scheduleId")
-	schedule, err := h.svc.GetSchedule(id)
+	gsID := chi.URLParam(r, "id")
+	scheduleID := chi.URLParam(r, "scheduleId")
+	schedule, err := h.svc.GetSchedule(gsID, scheduleID)
 	if err != nil {
-		h.log.Error("getting schedule", "id", id, "error", err)
+		h.log.Error("getting schedule", "id", scheduleID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	if schedule == nil {
-		respondError(w, http.StatusNotFound, "schedule not found")
 		return
 	}
 	respondOK(w, schedule)
@@ -98,19 +95,15 @@ func (h *ScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
 	id := chi.URLParam(r, "scheduleId")
 
-	existing, err := h.svc.GetSchedule(id)
+	existing, err := h.svc.GetSchedule(gsID, id)
 	if err != nil {
 		h.log.Error("getting schedule for update", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	if existing == nil {
-		respondError(w, http.StatusNotFound, "schedule not found")
-		return
-	}
-
 	var req struct {
 		Name     *string          `json:"name"`
 		Type     *string          `json:"type"`
@@ -153,8 +146,9 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandlers) Delete(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
 	id := chi.URLParam(r, "scheduleId")
-	if err := h.svc.DeleteSchedule(r.Context(), id); err != nil {
+	if err := h.svc.DeleteSchedule(r.Context(), gsID, id); err != nil {
 		h.log.Error("deleting schedule", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return

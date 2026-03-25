@@ -95,11 +95,11 @@ func TestSchedule_Delete_HappyPath(t *testing.T) {
 	}
 	require.NoError(t, svc.ScheduleSvc.CreateSchedule(ctx, sched))
 
-	err = svc.ScheduleSvc.DeleteSchedule(ctx, sched.ID)
+	err = svc.ScheduleSvc.DeleteSchedule(ctx, gs.ID, sched.ID)
 	require.NoError(t, err)
 
-	fetched, err := svc.ScheduleSvc.GetSchedule(sched.ID)
-	require.NoError(t, err)
+	fetched, err := svc.ScheduleSvc.GetSchedule(gs.ID, sched.ID)
+	require.Error(t, err)
 	assert.Nil(t, fetched)
 }
 
