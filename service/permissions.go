@@ -24,12 +24,14 @@ const (
 	PermGameserverModsWrite = "gameserver.mods.write"
 
 	// Backups
+	PermBackupRead     = "backup.read"
 	PermBackupCreate   = "backup.create"
 	PermBackupDelete   = "backup.delete"
 	PermBackupRestore  = "backup.restore"
 	PermBackupDownload = "backup.download"
 
 	// Schedules
+	PermScheduleRead   = "schedule.read"
 	PermScheduleCreate = "schedule.create"
 	PermScheduleUpdate = "schedule.update"
 	PermScheduleDelete = "schedule.delete"
@@ -54,8 +56,8 @@ var AllPermissions = []string{
 	PermGameserverLogs, PermGameserverCommand,
 	PermGameserverEditName, PermGameserverEditEnv,
 	PermGameserverModsRead, PermGameserverModsWrite,
-	PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
-	PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
+	PermBackupRead, PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
+	PermScheduleRead, PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
 	PermSettingsView, PermSettingsEdit,
 	PermTokensManage, PermNodesManage, PermWebhooksManage,
 }

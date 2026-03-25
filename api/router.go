@@ -85,10 +85,12 @@ func NewRouter(opts RouterOptions) http.Handler {
 	requireCommands := RequirePermission(opts.SettingsSvc, service.PermGameserverCommand)
 	requireFilesRead := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesRead)
 	requireFilesWrite := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesWrite)
+	requireBackupRead := RequirePermission(opts.SettingsSvc, service.PermBackupRead)
 	requireBackupCreate := RequirePermission(opts.SettingsSvc, service.PermBackupCreate)
 	requireBackupDelete := RequirePermission(opts.SettingsSvc, service.PermBackupDelete)
 	requireBackupRestore := RequirePermission(opts.SettingsSvc, service.PermBackupRestore)
 	requireBackupDownload := RequirePermission(opts.SettingsSvc, service.PermBackupDownload)
+	requireScheduleRead := RequirePermission(opts.SettingsSvc, service.PermScheduleRead)
 	requireScheduleCreate := RequirePermission(opts.SettingsSvc, service.PermScheduleCreate)
 	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, service.PermScheduleUpdate)
 	requireScheduleDelete := RequirePermission(opts.SettingsSvc, service.PermScheduleDelete)
@@ -132,17 +134,17 @@ func NewRouter(opts RouterOptions) http.Handler {
 				r.With(requireCommands).Post("/command", gameserverHandlers.SendCommand)
 
 				r.Route("/schedules", func(r chi.Router) {
-					r.With(requireScheduleCreate).Get("/", scheduleHandlers.List)
+					r.With(requireScheduleRead).Get("/", scheduleHandlers.List)
 					r.With(requireScheduleCreate).Post("/", scheduleHandlers.Create)
 					r.Route("/{scheduleId}", func(r chi.Router) {
-						r.With(requireScheduleCreate).Get("/", scheduleHandlers.Get)
+						r.With(requireScheduleRead).Get("/", scheduleHandlers.Get)
 						r.With(requireScheduleUpdate).Patch("/", scheduleHandlers.Update)
 						r.With(requireScheduleDelete).Delete("/", scheduleHandlers.Delete)
 					})
 				})
 
 				r.Route("/backups", func(r chi.Router) {
-					r.With(requireBackupCreate).Get("/", backupHandlers.List)
+					r.With(requireBackupRead).Get("/", backupHandlers.List)
 					r.With(requireBackupCreate).Post("/", backupHandlers.Create)
 					r.Route("/{backupId}", func(r chi.Router) {
 						r.With(requireBackupDownload).Get("/download", backupHandlers.Download)
