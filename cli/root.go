@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -219,27 +218,55 @@ func customUsage(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// Build a clean usage string for subcommands
-	var b strings.Builder
-	fmt.Fprintf(&b, "Usage:\n  %s\n", cmd.UseLine())
+	noColor := os.Getenv("NO_COLOR") != ""
+
+	// Usage line
+	usage := fmt.Sprintf("Usage:\n  %s", cmd.UseLine())
+	if !noColor {
+		usage = fmt.Sprintf("%s\n  %s", headerStyle.Render("Usage:"), cmd.UseLine())
+	}
+	fmt.Fprintln(os.Stdout, usage)
 
 	if cmd.HasAvailableSubCommands() {
-		fmt.Fprintln(&b, "\nAvailable Commands:")
+		fmt.Fprintln(os.Stdout)
+		header := "Available Commands:"
+		if !noColor {
+			header = headerStyle.Render(header)
+		}
+		fmt.Fprintln(os.Stdout, header)
 		for _, sub := range cmd.Commands() {
 			if !sub.Hidden {
-				fmt.Fprintf(&b, "  %-14s  %s\n", sub.Name(), sub.Short)
+				name := fmt.Sprintf("  %-14s", sub.Name())
+				desc := sub.Short
+				if !noColor {
+					name = cmdStyle.Render(name)
+					desc = descStyle.Render(desc)
+				}
+				fmt.Fprintf(os.Stdout, "%s  %s\n", name, desc)
 			}
 		}
 	}
 
 	if cmd.HasAvailableLocalFlags() {
-		fmt.Fprintf(&b, "\nFlags:\n%s", cmd.LocalFlags().FlagUsages())
+		fmt.Fprintln(os.Stdout)
+		header := "Flags:"
+		if !noColor {
+			header = headerStyle.Render(header)
+		}
+		fmt.Fprintln(os.Stdout, header)
+		fmt.Fprint(os.Stdout, cmd.LocalFlags().FlagUsages())
 	}
 
 	if cmd.HasAvailableInheritedFlags() {
-		fmt.Fprintf(&b, "\nGlobal Flags:\n%s", cmd.InheritedFlags().FlagUsages())
+		fmt.Fprintln(os.Stdout)
+		header := "Global Flags:"
+		if !noColor {
+			header = headerStyle.Render(header)
+		}
+		fmt.Fprintln(os.Stdout, header)
+		fmt.Fprint(os.Stdout, cmd.InheritedFlags().FlagUsages())
 	}
 
-	fmt.Fprint(os.Stdout, b.String())
+	fmt.Fprintln(os.Stdout)
 	return nil
 }
