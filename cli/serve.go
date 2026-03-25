@@ -355,6 +355,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			WorkerToken:       rawToken,
 			ContainerRuntime:  cfg.ContainerRuntime,
 			ContainerSocket:   cfg.ContainerSocket,
+			AdvertiseAddress:  fmt.Sprintf("%s:%d", cfg.Bind, cfg.WorkerGRPCPort),
 		}
 		go func() {
 			if err := runWorkerAgent(workerCfg, logger); err != nil {

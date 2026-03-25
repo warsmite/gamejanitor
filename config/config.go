@@ -30,6 +30,7 @@ type Config struct {
 	ControllerAddress string `yaml:"controller_address"`
 	WorkerID          string `yaml:"worker_id"`
 	WorkerToken       string `yaml:"worker_token"`
+	AdvertiseAddress  string `yaml:"-"` // override detected LAN IP for dial-back (internal, not user-facing)
 
 	// Worker capacity
 	WorkerLimits *WorkerLimitsConfig `yaml:"worker_limits"`
