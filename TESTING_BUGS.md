@@ -48,6 +48,36 @@ Format:
 - **Severity:** should fix
 - **Notes:** This is the same underlying issue as the "File delete fails (Docker)" bug in MEMORY.md. Affects all sidecar file operations, not just delete. The direct-access path works but is only available when Docker volume mountpoints are accessible on the host (not when gamejanitor runs inside Docker itself).
 
+## Event bus silently drops events under load
+- **Test:** Discovered via flaky `TestReady_BothInstallAndReadyDetectedOnFirstStart` (removed as flaky) and `TestPipeline_StatusDerivedFromLifecycleEvents` (intermittent)
+- **Expected:** All lifecycle events (image_pulling → image_pulled → container_creating → container_started → ready) should be received by all subscribers.
+- **Actual:** `EventBus.Publish()` uses `select/default` — if a subscriber's 64-element channel buffer is full, the event is silently dropped with no logging or metrics. The StatusSubscriber does a DB read+write per event on single-connection SQLite, so it falls behind during rapid event bursts. When it's writing one status change, subsequent events overflow the buffer and are lost.
+- **Severity:** should fix
+- **Notes:** `service/broadcast.go:57-66`. This is a production bug, not just a test issue. A user starting multiple gameservers simultaneously would see missing status transitions. Possible fixes: (1) increase buffer size, (2) log when events are dropped, (3) use a blocking publish with timeout, (4) batch DB writes in the subscriber. At minimum, dropped events should be logged so operators can see the problem.
+
+## ReadyWatcher goroutines have no explicit per-gameserver shutdown
+- **Test:** Discovered via cleanup races in all tests that call `GameserverService.Start`
+- **Expected:** When a gameserver is stopped or deleted, the ReadyWatcher goroutine monitoring its logs should be explicitly stopped.
+- **Actual:** The ReadyWatcher relies on the container log stream ending naturally (EOF from Docker). There's a `Stop(gameserverID)` method, but `GameserverService.Stop` never calls it — it just stops the container and hopes the log stream closes. In practice this works because Docker closes the stream when the container exits, but there's a race window between container stop and log stream close where the goroutine is still running and holding references to the DB and worker.
+- **Severity:** cosmetic (works in practice, but causes test flakiness and is technically a resource leak)
+- **Notes:** `service/ready.go:100-109` has `Stop(gameserverID)` but it's never called from the lifecycle code. `service/gameserver_lifecycle.go` Stop/Delete methods should call `s.readyWatcher.Stop(id)` explicitly. The `StopAll()` is only called on process shutdown.
+
+## Multiple WorkerFor call sites lack nil checks
+- **Test:** Discovered via panics in `TestBackup_Create` and `TestPipeline_*` (2 fixed, others remain)
+- **Expected:** All callers of `dispatcher.WorkerFor(gameserverID)` should handle nil returns gracefully.
+- **Actual:** `WorkerFor` returns nil when the DB lookup fails or the worker isn't registered. Two call sites were fixed (backup.go, stats_poller.go). The remaining unchecked call sites will panic on nil pointer dereference if the worker disconnects at the wrong time:
+  - `service/console.go:60` — StreamLogs
+  - `service/console.go:91` — SendCommand
+  - `service/console.go:113` — ListLogSessions
+  - `service/console.go:156` — ReadHistoricalLogs
+  - `service/file.go:46,61,76,94,109,132` — all file operations
+  - `service/gameserver_inspect.go:23,35,71,85` — inspect, stats, volume size, logs
+  - `service/gameserver.go:546` — DeleteGameserver
+  - `service/gameserver_lifecycle.go:70,198,292,381` — Start, Stop, UpdateServerGame, Reinstall
+  - `service/backup.go:270` — runRestore
+- **Severity:** should fix
+- **Notes:** The synchronous paths (console, file, inspect) are less likely to hit in practice because the worker was just used to start the container. But worker disconnection between operations is possible in multi-node setups. Fix: each call site should check for nil and return a clear "worker unavailable" error instead of panicking.
+
 ---
 
 # API Surface Issues
