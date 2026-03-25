@@ -56,12 +56,12 @@ func (h *WebhookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		enabled = *req.Enabled
 	}
 
-	view, err := h.svc.Create(req.URL, req.Description, req.Secret, req.Events, enabled)
+	result, err := h.svc.Create(req.URL, req.Description, req.Secret, req.Events, enabled)
 	if err != nil {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondCreated(w, view)
+	respondCreated(w, result)
 }
 
 func (h *WebhookHandlers) Update(w http.ResponseWriter, r *http.Request) {
