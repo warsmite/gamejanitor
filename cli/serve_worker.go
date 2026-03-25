@@ -122,6 +122,13 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 		netInfo := netinfo.Detect(logger)
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
 
+		if isLoopback(cfg.Bind) {
+			logger.Warn("worker gRPC is bound to loopback but reporting LAN IP to controller — controller will not be able to dial back, bind to 0.0.0.0 or your LAN IP for multi-node",
+				"bind", cfg.Bind,
+				"reported_address", ownAddr,
+			)
+		}
+
 		logger.Info("connecting to controller",
 			"controller", cfg.ControllerAddress,
 			"worker_id", workerID,
