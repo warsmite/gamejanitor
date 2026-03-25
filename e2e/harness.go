@@ -90,6 +90,7 @@ func Start(t *testing.T) *Harness {
 	})
 
 	h.waitForReady(t)
+	h.waitForWorker(t)
 	return h
 }
 
@@ -173,6 +174,25 @@ func (h *Harness) waitForReady(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("gamejanitor did not become ready within 30s at %s", h.BaseURL)
+}
+
+func (h *Harness) waitForWorker(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(h.BaseURL + "/api/workers")
+		if err != nil {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		var workers []json.RawMessage
+		if err := DecodeData(resp, &workers); err == nil && len(workers) > 0 {
+			t.Logf("worker available (%d online)", len(workers))
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("no workers available within 30s")
 }
 
 func freePort(t *testing.T) int {
