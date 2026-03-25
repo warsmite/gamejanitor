@@ -123,6 +123,18 @@
             echo "Done: ./gamejanitor"
           '';
 
+          test = pkgs.writeShellScriptBin "test" ''
+            exec go test ./... "$@"
+          '';
+
+          test-all = pkgs.writeShellScriptBin "test-all" ''
+            exec go test -tags integration ./... "$@"
+          '';
+
+          test-race = pkgs.writeShellScriptBin "test-race" ''
+            exec go test -race ./... "$@"
+          '';
+
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             for runtime in docker podman; do
               if ! command -v "$runtime" &>/dev/null; then
@@ -167,6 +179,9 @@
             dev-worker
             gen-proto
             cleanup
+            test
+            test-all
+            test-race
           ];
 
           shellHook = ''

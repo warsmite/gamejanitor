@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Installing test server..."
+echo "[gamejanitor:installed]"
