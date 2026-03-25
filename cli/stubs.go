@@ -16,16 +16,6 @@ var webhooksCmd = &cobra.Command{
 	},
 }
 
-// --- Events (TODO: implement event history query + SSE streaming) ---
-
-var eventsCmd = &cobra.Command{
-	Use:   "events",
-	Short: "Query or stream events",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("events command not yet implemented")
-	},
-}
-
 // --- Install (TODO: generate and enable systemd/launchd service) ---
 
 var installCmd = &cobra.Command{
