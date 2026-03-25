@@ -13,9 +13,10 @@ import (
 // --- List ---
 
 var lsCmd = &cobra.Command{
-	Use:   "ls",
-	Short: "List gameservers",
-	RunE:  runGameserversList,
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List gameservers",
+	RunE:    runGameserversList,
 }
 
 func init() {

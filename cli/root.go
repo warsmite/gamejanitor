@@ -109,7 +109,7 @@ func customHelp(cmd *cobra.Command, args []string) {
 		{
 			name: "Gameserver Commands",
 			commands: []struct{ name, desc string }{
-				{"ls", "List gameservers"},
+				{"list", "List gameservers                      (aliases: ls)"},
 				{"get", "Show gameserver details"},
 				{"create", "Create a new gameserver"},
 				{"edit", "Edit a gameserver's configuration"},
