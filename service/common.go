@@ -34,3 +34,11 @@ func isRunningStatus(status string) bool {
 	return status == StatusStarted || status == StatusRunning
 }
 
+// isPollableStatus returns true if a gameserver is in a state where polling should continue.
+// This is more permissive than isRunningStatus — it includes transitional states like
+// "installing" and "starting" because pollers are started early and must survive until
+// the gameserver reaches a terminal state.
+func isPollableStatus(status string) bool {
+	return status != StatusStopped && status != StatusStopping && status != StatusError
+}
+

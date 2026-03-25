@@ -109,8 +109,8 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("gameserver gone, stopping stats poll", "id", gameserverID)
 		return false
 	}
-	if !isRunningStatus(gs.Status) {
-		s.log.Debug("gameserver not running, stopping stats poll", "id", gameserverID, "status", gs.Status)
+	if !isPollableStatus(gs.Status) {
+		s.log.Debug("gameserver not in pollable state, stopping stats poll", "id", gameserverID, "status", gs.Status)
 		return false
 	}
 

@@ -138,7 +138,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
 			return
 		}
-		if !isRunningStatus(gs.Status) {
+		if !isPollableStatus(gs.Status) {
 			s.log.Debug("gameserver not in pollable state, stopping", "id", gameserverID, "status", gs.Status)
 			return
 		}
