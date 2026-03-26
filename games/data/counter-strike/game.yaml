@@ -1,0 +1,13 @@
+id: counter-strike
+name: "Counter-Strike 1.6"
+aliases: [cs16, cs]
+app_id: 10
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

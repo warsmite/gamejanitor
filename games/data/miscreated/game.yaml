@@ -1,0 +1,15 @@
+id: miscreated
+name: "Miscreated"
+app_id: 299740
+
+ports:
+  - name: game
+    port: 64090
+    protocol: udp
+  - name: query
+    port: 64092
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,16 @@
+id: myth-of-empires
+name: "Myth of Empires"
+aliases: [moe]
+app_id: 1371580
+
+ports:
+  - name: game
+    port: 11888
+    protocol: udp
+  - name: query
+    port: 12888
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,11 @@
+id: cod2
+name: "Call of Duty 2"
+
+ports:
+  - name: game
+    port: 28960
+    protocol: udp
+
+query:
+  protocol: quake3
+  supports: [players]

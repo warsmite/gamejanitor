@@ -1,0 +1,13 @@
+id: neotokyo
+name: "NEOTOKYO"
+aliases: [nt]
+app_id: 244630
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

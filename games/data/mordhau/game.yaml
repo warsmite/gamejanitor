@@ -1,0 +1,15 @@
+id: mordhau
+name: "Mordhau"
+app_id: 629760
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

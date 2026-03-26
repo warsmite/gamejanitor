@@ -1,0 +1,15 @@
+id: hurtworld
+name: "Hurtworld"
+app_id: 393420
+
+ports:
+  - name: game
+    port: 12871
+    protocol: udp
+  - name: query
+    port: 12881
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

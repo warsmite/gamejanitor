@@ -1,0 +1,14 @@
+id: counter-strike-go
+name: "Counter-Strike: GO"
+aliases: [csgo]
+app_id: 4465480
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]
+  notes: "Standalone re-release (March 2026) with new AppID, separate from CS2 (730)"

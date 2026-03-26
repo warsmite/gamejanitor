@@ -1,0 +1,13 @@
+id: project-zomboid
+name: "Project Zomboid"
+aliases: [pz]
+app_id: 108600
+
+ports:
+  - name: game
+    port: 16261
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,15 @@
+id: dayz
+name: "DayZ"
+app_id: 221100
+
+ports:
+  - name: game
+    port: 2302
+    protocol: udp
+  - name: query
+    port: 2303
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

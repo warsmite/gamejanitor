@@ -1,0 +1,16 @@
+id: red-orchestra-2
+name: "Red Orchestra 2"
+aliases: [ro2]
+app_id: 35450
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

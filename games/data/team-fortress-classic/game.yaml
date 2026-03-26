@@ -1,0 +1,13 @@
+id: team-fortress-classic
+name: "Team Fortress Classic"
+aliases: [tfc]
+app_id: 20
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

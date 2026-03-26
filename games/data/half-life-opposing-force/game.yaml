@@ -1,0 +1,13 @@
+id: half-life-opposing-force
+name: "Half-Life: Opposing Force"
+aliases: [hlof, opfor]
+app_id: 50
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

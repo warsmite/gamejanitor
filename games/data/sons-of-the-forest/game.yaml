@@ -1,0 +1,16 @@
+id: sons-of-the-forest
+name: "Sons of the Forest"
+aliases: [sotf]
+app_id: 1326470
+
+ports:
+  - name: game
+    port: 8766
+    protocol: udp
+  - name: query
+    port: 27016
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

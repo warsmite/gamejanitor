@@ -1,0 +1,15 @@
+id: pixark
+name: "PixARK"
+app_id: 593600
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+  - name: query
+    port: 27016
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

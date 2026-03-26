@@ -1,10 +1,6 @@
 id: test-game
 name: "Test Game"
 description: "Minimal game definition for automated tests"
-base_image: ghcr.io/warsmite/gamejanitor/base
-recommended_memory_mb: 512
-ready_pattern: 'Server is ready'
-gjq_slug: test
 
 ports:
   - name: game
@@ -14,33 +10,41 @@ ports:
     port: 27016
     protocol: udp
 
-env:
-  - key: SERVER_NAME
-    default: "Test Server"
-    label: "Server Name"
-  - key: SERVER_PASSWORD
-    default: ""
-    label: "Server Password"
-    autogenerate: password
-  - key: MAX_PLAYERS
-    default: "16"
-    label: "Max Players"
-    type: number
-  - key: GAME_MODE
-    default: "survival"
-    label: "Game Mode"
-    type: select
-    options: ["survival", "creative", "adventure"]
-  - key: REQUIRED_VAR
-    label: "Required Variable"
-    required: true
-  - key: INSTALL_TRIGGER
-    default: "stable"
-    label: "Game Version"
-    triggers_install: true
-  - key: GAME_PORT
-    default: "27015"
-    system: true
-  - key: QUERY_PORT
-    default: "27016"
-    system: true
+query:
+  protocol: source
+  supports: [players]
+
+container:
+  image: ghcr.io/warsmite/gamejanitor/base
+  recommended_memory_mb: 512
+  ready_pattern: 'Server is ready'
+  env:
+    - key: SERVER_NAME
+      default: "Test Server"
+      label: "Server Name"
+    - key: SERVER_PASSWORD
+      default: ""
+      label: "Server Password"
+      autogenerate: password
+    - key: MAX_PLAYERS
+      default: "16"
+      label: "Max Players"
+      type: number
+    - key: GAME_MODE
+      default: "survival"
+      label: "Game Mode"
+      type: select
+      options: ["survival", "creative", "adventure"]
+    - key: REQUIRED_VAR
+      label: "Required Variable"
+      required: true
+    - key: INSTALL_TRIGGER
+      default: "stable"
+      label: "Game Version"
+      triggers_install: true
+    - key: GAME_PORT
+      default: "27015"
+      system: true
+    - key: QUERY_PORT
+      default: "27016"
+      system: true

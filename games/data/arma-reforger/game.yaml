@@ -1,0 +1,17 @@
+id: arma-reforger
+name: "Arma Reforger"
+aliases: [reforger]
+app_id: 1874880
+
+ports:
+  - name: game
+    port: 2001
+    protocol: udp
+  - name: query
+    port: 17777
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]
+  notes: "A2S must be enabled in server config (disabled by default)."

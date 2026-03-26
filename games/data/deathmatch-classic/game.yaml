@@ -1,0 +1,13 @@
+id: deathmatch-classic
+name: "Deathmatch Classic"
+aliases: [dmc]
+app_id: 40
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

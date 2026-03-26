@@ -1,0 +1,16 @@
+id: the-isle
+name: "The Isle"
+aliases: [isle]
+app_id: 376210
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

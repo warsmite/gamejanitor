@@ -1,0 +1,16 @@
+id: natural-selection-2
+name: "Natural Selection 2"
+aliases: [ns2]
+app_id: 4920
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+  - name: query
+    port: 27016
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

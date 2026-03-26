@@ -1,0 +1,12 @@
+id: cod-mw2
+name: "Call of Duty: MW2 (IW4x)"
+aliases: [iw4x, mw2]
+
+ports:
+  - name: game
+    port: 28960
+    protocol: udp
+
+query:
+  protocol: quake3
+  supports: [players]

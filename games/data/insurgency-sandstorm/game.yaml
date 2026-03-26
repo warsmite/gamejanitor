@@ -1,0 +1,16 @@
+id: insurgency-sandstorm
+name: "Insurgency: Sandstorm"
+aliases: [inss]
+app_id: 581320
+
+ports:
+  - name: game
+    port: 27102
+    protocol: udp
+  - name: query
+    port: 27131
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

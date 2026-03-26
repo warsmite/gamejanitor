@@ -1,0 +1,23 @@
+id: ark-survival-ascended
+name: "ARK: Survival Ascended"
+aliases: [asa]
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+
+query:
+  protocol: eos
+  supports: [players]
+  notes: "Player names are opaque EOS IDs; may fail on shared IPs (15-session API limit)"
+  eos:
+    client_id: "xyza7891muomRmynIIHaJB9COBKkwj6n"
+    client_secret: "PP5UGxysEieNfSrEicaD1N2Bb3TdXuD7xHYcsdUHZ7s"
+    deployment_id: "ad9a8feffb3b4b2ca315546f038c3ae2"
+    use_wildcard: true
+    attributes:
+      name: CUSTOMSERVERNAME_s
+      map: MAPNAME_s
+      password: SERVERPASSWORD_b
+      version: BUILDID_s

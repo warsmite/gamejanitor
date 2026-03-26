@@ -20,7 +20,7 @@ func TestGameStore_LoadsAllGames(t *testing.T) {
 	require.NoError(t, err)
 
 	games := store.ListGames()
-	assert.GreaterOrEqual(t, len(games), 10, "should load at least 10 embedded games")
+	assert.GreaterOrEqual(t, len(games), 10, "should load at least 10 container games")
 }
 
 func TestGameStore_GetGame_ReturnsCorrectFields(t *testing.T) {
@@ -134,18 +134,19 @@ func TestGameStore_AllGames_SelectEnvHaveOptions(t *testing.T) {
 func TestGameStore_LocalOverride(t *testing.T) {
 	t.Parallel()
 
-	// Create a temp dir with a custom game
+	// Create a temp dir with a custom game using the new format
 	dir := t.TempDir()
 	gameDir := dir + "/custom-game"
 	os.MkdirAll(gameDir, 0755)
 	os.WriteFile(gameDir+"/game.yaml", []byte(`
 id: custom-game
 name: "Custom Game"
-base_image: alpine:latest
 ports:
   - name: game
     port: 9999
     protocol: tcp
+container:
+  image: alpine:latest
 `), 0644)
 
 	store, err := NewGameStore(dir, testLogger())
@@ -155,4 +156,97 @@ ports:
 	require.NotNil(t, game, "custom game should be loaded")
 	assert.Equal(t, "Custom Game", game.Name)
 	assert.Equal(t, "alpine:latest", game.BaseImage)
+}
+
+func TestGameStore_QueryOnlyGamesNotInStore(t *testing.T) {
+	t.Parallel()
+	store, err := NewGameStore("", testLogger())
+	require.NoError(t, err)
+
+	// dayz is query-only (no container section) — should not appear in GameStore
+	game := store.GetGame("dayz")
+	assert.Nil(t, game, "query-only games should not be in GameStore")
+}
+
+func TestRegistry_LoadsAllGames(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	all := registry.List()
+	assert.GreaterOrEqual(t, len(all), 80, "registry should load 80+ games (container + query-only)")
+}
+
+func TestRegistry_WithQuery(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	queryGames := registry.WithQuery()
+	assert.GreaterOrEqual(t, len(queryGames), 70, "should have 70+ queryable games")
+
+	for _, g := range queryGames {
+		assert.True(t, g.HasQuery(), "WithQuery should only return games with query config")
+	}
+}
+
+func TestRegistry_WithContainer(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	containerGames := registry.WithContainer()
+	assert.GreaterOrEqual(t, len(containerGames), 10, "should have 10+ container games")
+
+	for _, g := range containerGames {
+		assert.True(t, g.HasContainer(), "WithContainer should only return games with container config")
+	}
+}
+
+func TestRegistry_Get_ByAlias(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	game := registry.Get("mc")
+	require.NotNil(t, game, "should resolve 'mc' alias")
+	assert.Equal(t, "minecraft-java", game.ID)
+}
+
+func TestRegistry_ByAppID(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	game := registry.ByAppID(252490)
+	require.NotNil(t, game, "should find Rust by AppID")
+	assert.Equal(t, "rust", game.ID)
+}
+
+func TestRegistry_PortIndexes(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	// Rust query port is 28017
+	games := registry.ByQueryPort(28017)
+	assert.NotEmpty(t, games, "should find games with query port 28017")
+}
+
+func TestRegistry_AllGames_ValidYAML(t *testing.T) {
+	t.Parallel()
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	for _, g := range registry.List() {
+		t.Run(g.ID, func(t *testing.T) {
+			assert.NotEmpty(t, g.ID, "game must have an ID")
+			assert.NotEmpty(t, g.Name, "game must have a name")
+			assert.NotEmpty(t, g.Ports, "game must have at least one port")
+
+			// Every game must have either query or container support (or both)
+			assert.True(t, g.HasQuery() || g.HasContainer(),
+				"game must have query and/or container support")
+		})
+	}
 }

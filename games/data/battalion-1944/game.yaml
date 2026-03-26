@@ -1,0 +1,16 @@
+id: battalion-1944
+name: "Battalion 1944"
+aliases: [battalion]
+app_id: 489940
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 7780
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -439,7 +439,6 @@ type Game struct {
 	DefaultPorts         []GamePort      `json:"default_ports"`
 	DefaultEnv           []GameEnvVar    `json:"default_env"`
 	RecommendedMemoryMB  int             `json:"recommended_memory_mb"`
-	GJQSlug              string          `json:"gjq_slug,omitempty"`
 	ReadyPattern         string          `json:"ready_pattern,omitempty"`
 	DisabledCapabilities []string        `json:"disabled_capabilities"`
 	Mods                 json.RawMessage `json:"mods,omitempty"`

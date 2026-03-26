@@ -1,0 +1,13 @@
+id: nuclear-dawn
+name: "Nuclear Dawn"
+aliases: [nd]
+app_id: 17710
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

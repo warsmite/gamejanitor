@@ -11,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ── Shared field types — used in both GameDef (registry) and Game (store) ──
+
 type Port struct {
 	Name     string `yaml:"name" json:"name"`
 	Port     int    `yaml:"port" json:"port"`
@@ -56,10 +58,10 @@ type ModSourceConfig struct {
 // ModLoaderConfig describes the mod loader/framework selector shown at the top of the Mods tab.
 // This replaces the env var in Settings — the Mods tab owns the loader UX.
 type ModLoaderConfig struct {
-	EnvKey  string   `yaml:"env_key" json:"env_key"`   // e.g. MODLOADER, OXIDE_ENABLED
-	Label   string   `yaml:"label" json:"label"`       // e.g. "Mod Loader", "Oxide (uMod)"
-	Type    string   `yaml:"type" json:"type"`          // "select" or "boolean"
-	Options []string `yaml:"options,omitempty" json:"options,omitempty"` // for select type
+	EnvKey  string   `yaml:"env_key" json:"env_key"`
+	Label   string   `yaml:"label" json:"label"`
+	Type    string   `yaml:"type" json:"type"`
+	Options []string `yaml:"options,omitempty" json:"options,omitempty"`
 	Default string   `yaml:"default" json:"default"`
 }
 
@@ -69,40 +71,29 @@ type ModConfig struct {
 }
 
 type Assets struct {
-	Icon string `yaml:"icon,omitempty"`
+	Icon string `yaml:"icon,omitempty" json:"icon,omitempty"`
 }
 
-type GameDefinition struct {
-	ID                   string    `yaml:"id"`
-	Name                 string    `yaml:"name"`
-	Aliases              []string  `yaml:"aliases,omitempty"`
-	Description          string    `yaml:"description,omitempty"`
-	BaseImage            string    `yaml:"base_image"`
-	RecommendedMemoryMB  int       `yaml:"recommended_memory_mb"`
-	GJQSlug              string    `yaml:"gjq_slug,omitempty"`
-	ReadyPattern         string    `yaml:"ready_pattern,omitempty"`
-	DisabledCapabilities []string  `yaml:"disabled_capabilities"`
-	Assets               Assets    `yaml:"assets,omitempty"`
-	Ports                []Port    `yaml:"ports"`
-	Env                  []EnvVar  `yaml:"env"`
-	Mods                 ModConfig `yaml:"mods,omitempty"`
-}
+// ── Game — flattened runtime type used by gamejanitor services ──
 
-// Game is the runtime representation used throughout the application.
+// Game is the runtime representation of a game with container support.
+// Gamejanitor services use this type — fields are flattened from GameDef.Container
+// for ergonomic access (game.BaseImage instead of game.Container.Image).
 type Game struct {
-	ID                   string    `json:"id"`
-	Name                 string    `json:"name"`
-	Aliases              []string  `json:"aliases,omitempty"`
-	Description          string    `json:"description,omitempty"`
-	BaseImage            string    `json:"base_image"`
-	IconPath             string    `json:"icon_path"`
-	DefaultPorts         []Port    `json:"default_ports"`
-	DefaultEnv           []EnvVar  `json:"default_env"`
-	RecommendedMemoryMB  int       `json:"recommended_memory_mb"`
-	GJQSlug              string    `json:"gjq_slug,omitempty"`
-	ReadyPattern         string    `json:"ready_pattern,omitempty"`
-	DisabledCapabilities []string  `json:"disabled_capabilities"`
-	Mods                 ModConfig `json:"mods,omitempty"`
+	ID                   string       `json:"id"`
+	Name                 string       `json:"name"`
+	Aliases              []string     `json:"aliases,omitempty"`
+	Description          string       `json:"description,omitempty"`
+	AppID                uint32       `json:"app_id,omitempty"`
+	BaseImage            string       `json:"base_image"`
+	IconPath             string       `json:"icon_path"`
+	DefaultPorts         []Port       `json:"default_ports"`
+	DefaultEnv           []EnvVar     `json:"default_env"`
+	RecommendedMemoryMB  int          `json:"recommended_memory_mb"`
+	ReadyPattern         string       `json:"ready_pattern,omitempty"`
+	DisabledCapabilities []string     `json:"disabled_capabilities"`
+	Mods                 ModConfig    `json:"mods,omitempty"`
+	Query                *QueryConfig `json:"query,omitempty"`
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
@@ -115,7 +106,13 @@ func (g *Game) HasCapability(capability string) bool {
 	return true
 }
 
+// ── GameStore — gamejanitor-specific, wraps Registry ──
+
+// GameStore provides game data for gamejanitor services. It only exposes games
+// with container support (image, env, etc.) and adds local override loading,
+// script extraction, and asset serving on top of the shared Registry.
 type GameStore struct {
+	registry *Registry
 	games    map[string]*Game
 	aliases  map[string]string // alias → game ID
 	gameFS   map[string]fs.FS
@@ -124,8 +121,21 @@ type GameStore struct {
 	localDir string
 }
 
+// Registry returns the underlying shared registry for query-config lookups.
+// gjq and other consumers use this for protocol/port data on all games,
+// including those without container support.
+func (s *GameStore) Registry() *Registry {
+	return s.registry
+}
+
 func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
+	registry, err := NewRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("loading game registry: %w", err)
+	}
+
 	s := &GameStore{
+		registry: registry,
 		games:    make(map[string]*Game),
 		aliases:  make(map[string]string),
 		gameFS:   make(map[string]fs.FS),
@@ -133,7 +143,7 @@ func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 		localDir: localGamesDir,
 	}
 
-	// Load embedded games first
+	// Load container games from embedded data
 	embeddedRoot, err := fs.Sub(embeddedGames, "data")
 	if err != nil {
 		return nil, fmt.Errorf("accessing embedded game data: %w", err)
@@ -169,7 +179,11 @@ func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 		return s.sorted[i].Name < s.sorted[j].Name
 	})
 
-	log.Info("game store loaded", "game_count", len(s.games), "alias_count", len(s.aliases))
+	log.Info("game store loaded",
+		"container_games", len(s.games),
+		"total_registry", registry.Count(),
+		"alias_count", len(s.aliases),
+	)
 	return s, nil
 }
 
@@ -187,11 +201,10 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 		gameDir := entry.Name()
 		yamlData, err := fs.ReadFile(root, filepath.Join(gameDir, "game.yaml"))
 		if err != nil {
-			s.log.Warn("skipping game directory without game.yaml", "dir", gameDir, "source", source)
-			continue
+			continue // skip directories without game.yaml
 		}
 
-		var def GameDefinition
+		var def GameDef
 		if err := yaml.Unmarshal(yamlData, &def); err != nil {
 			return fmt.Errorf("parsing game.yaml for %s: %w", gameDir, err)
 		}
@@ -200,9 +213,13 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 			def.ID = gameDir
 		}
 
-		game := definitionToGame(def)
+		// Only load games with container support into the GameStore
+		if !def.HasContainer() {
+			continue
+		}
 
-		// Set asset path from YAML definition (empty if no icon configured)
+		game := defToGame(&def)
+
 		if def.Assets.Icon != "" {
 			game.IconPath = "/assets/games/" + def.ID + "/" + def.Assets.Icon
 		}
@@ -220,8 +237,11 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 	return nil
 }
 
-func definitionToGame(def GameDefinition) *Game {
-	caps := def.DisabledCapabilities
+// defToGame flattens a GameDef into the runtime Game type.
+func defToGame(def *GameDef) *Game {
+	c := def.Container
+
+	caps := c.DisabledCapabilities
 	if caps == nil {
 		caps = []string{}
 	}
@@ -231,12 +251,12 @@ func definitionToGame(def GameDefinition) *Game {
 		ports = []Port{}
 	}
 
-	env := def.Env
+	env := c.Env
 	if env == nil {
 		env = []EnvVar{}
 	}
 
-	mods := def.Mods
+	mods := c.Mods
 	if mods.Sources == nil {
 		mods.Sources = []ModSourceConfig{}
 	}
@@ -251,14 +271,15 @@ func definitionToGame(def GameDefinition) *Game {
 		Name:                 def.Name,
 		Aliases:              aliases,
 		Description:          def.Description,
-		BaseImage:            def.BaseImage,
-		RecommendedMemoryMB:  def.RecommendedMemoryMB,
-		GJQSlug:              def.GJQSlug,
-		ReadyPattern:         def.ReadyPattern,
+		AppID:                def.AppID,
+		BaseImage:            c.Image,
+		RecommendedMemoryMB:  c.RecommendedMemoryMB,
+		ReadyPattern:         c.ReadyPattern,
 		DefaultPorts:         ports,
 		DefaultEnv:           env,
 		DisabledCapabilities: caps,
 		Mods:                 mods,
+		Query:                def.Query,
 	}
 }
 
@@ -282,7 +303,6 @@ func (s *GameStore) GetGame(id string) *Game {
 	if g, ok := s.games[id]; ok {
 		return g
 	}
-	// Check aliases
 	if realID, ok := s.aliases[id]; ok {
 		return s.games[realID]
 	}
@@ -306,13 +326,11 @@ func (s *GameStore) AssetsFS() fs.FS {
 	return &gameAssetsFS{store: s}
 }
 
-// gameAssetsFS implements fs.FS for serving game assets.
 type gameAssetsFS struct {
 	store *GameStore
 }
 
 func (f *gameAssetsFS) Open(name string) (fs.File, error) {
-	// name is like "minecraft-java/minecraft-icon.ico" or "_default/default-icon.svg"
 	dir, file := filepath.Split(name)
 	dir = filepath.Clean(dir)
 
@@ -349,7 +367,6 @@ func (s *GameStore) ExtractScripts(gameID, targetDir string) error {
 		return fmt.Errorf("extracting scripts: %w", err)
 	}
 
-	// Extract defaults if they exist
 	if _, err := fs.Stat(gameFS, "defaults"); err == nil {
 		defaultsDir := filepath.Join(targetDir, "defaults")
 		if err := os.MkdirAll(defaultsDir, 0755); err != nil {

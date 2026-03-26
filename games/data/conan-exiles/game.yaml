@@ -1,0 +1,16 @@
+id: conan-exiles
+name: "Conan Exiles"
+aliases: [conan]
+app_id: 440900
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

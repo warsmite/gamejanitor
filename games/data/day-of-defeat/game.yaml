@@ -1,0 +1,13 @@
+id: day-of-defeat
+name: "Day of Defeat"
+aliases: [dod]
+app_id: 30
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,15 @@
+id: barotrauma
+name: "Barotrauma"
+app_id: 602960
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+  - name: query
+    port: 27016
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

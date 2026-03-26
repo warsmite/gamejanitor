@@ -1,0 +1,12 @@
+id: starbound
+name: "Starbound"
+app_id: 211820
+
+ports:
+  - name: game
+    port: 21025
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

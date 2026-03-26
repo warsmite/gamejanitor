@@ -1,0 +1,13 @@
+id: counter-strike-source
+name: "Counter-Strike: Source"
+aliases: [css]
+app_id: 240
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,12 +1,8 @@
 id: rust
 name: "Rust"
+aliases: []
 description: "Hardcore multiplayer survival with building, raiding, and PvP"
-base_image: ghcr.io/warsmite/gamejanitor/steamcmd
-recommended_memory_mb: 6144
-disabled_capabilities: []
-ready_pattern: 'Server startup complete'
-assets:
-  icon: rust-icon.ico
+app_id: 252490
 
 ports:
   - name: game
@@ -19,51 +15,62 @@ ports:
     port: 28016
     protocol: tcp
 
-env:
-  - key: SERVER_MAXPLAYERS
-    default: "50"
-    label: "Max Players"
-    type: number
-  - key: SERVER_HOSTNAME
-    default: "Gamejanitor Rust Server"
-    label: "Server Name"
-  - key: SERVER_WORLDSIZE
-    default: "3000"
-    label: "World Size"
-    type: number
-  - key: RCON_PASSWORD
-    default: ""
-    label: "RCON Password"
-    autogenerate: password
-  - key: OXIDE_ENABLED
-    default: "false"
-    hidden: true
-  - key: EAC_ENABLED
-    default: "true"
-    label: "Easy Anti-Cheat (EAC)"
-    type: boolean
-  - key: SERVER_PORT
-    default: "28015"
-    system: true
-  - key: QUERY_PORT
-    default: "28017"
-    system: true
-  - key: RCON_PORT
-    default: "28016"
-    system: true
-  - key: SAVE_TIMEOUT_SECONDS
-    default: "15"
-    system: true
+query:
+  protocol: source
+  supports: [players, rules, keywords]
 
-mods:
-  loader:
-    env_key: OXIDE_ENABLED
-    label: "Oxide (uMod)"
-    type: boolean
-    default: "false"
-  sources:
-    - type: umod
-      install_path: /data/server/oxide/plugins
-      file_extension: .cs
-      requires_env:
-        OXIDE_ENABLED: "true"
+container:
+  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  recommended_memory_mb: 6144
+  ready_pattern: 'Server startup complete'
+  disabled_capabilities: []
+  env:
+    - key: SERVER_MAXPLAYERS
+      default: "50"
+      label: "Max Players"
+      type: number
+    - key: SERVER_HOSTNAME
+      default: "Gamejanitor Rust Server"
+      label: "Server Name"
+    - key: SERVER_WORLDSIZE
+      default: "3000"
+      label: "World Size"
+      type: number
+    - key: RCON_PASSWORD
+      default: ""
+      label: "RCON Password"
+      autogenerate: password
+    - key: OXIDE_ENABLED
+      default: "false"
+      hidden: true
+    - key: EAC_ENABLED
+      default: "true"
+      label: "Easy Anti-Cheat (EAC)"
+      type: boolean
+    - key: SERVER_PORT
+      default: "28015"
+      system: true
+    - key: QUERY_PORT
+      default: "28017"
+      system: true
+    - key: RCON_PORT
+      default: "28016"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "15"
+      system: true
+  mods:
+    loader:
+      env_key: OXIDE_ENABLED
+      label: "Oxide (uMod)"
+      type: boolean
+      default: "false"
+    sources:
+      - type: umod
+        install_path: /data/server/oxide/plugins
+        file_extension: .cs
+        requires_env:
+          OXIDE_ENABLED: "true"
+
+assets:
+  icon: rust-icon.ico

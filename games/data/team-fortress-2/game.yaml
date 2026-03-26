@@ -1,0 +1,13 @@
+id: team-fortress-2
+name: "Team Fortress 2"
+aliases: [tf2]
+app_id: 440
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

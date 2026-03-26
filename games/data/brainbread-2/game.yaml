@@ -1,0 +1,13 @@
+id: brainbread-2
+name: "BrainBread 2"
+aliases: [bb2]
+app_id: 346330
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,13 @@
+id: fivem
+name: "FiveM (GTA V)"
+aliases: [gta5]
+
+ports:
+  - name: game
+    port: 30120
+    protocol: udp
+
+query:
+  protocol: fivem
+  supports: [players]
+  notes: "Player list may be disabled by server config"

@@ -93,11 +93,7 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	delete(s.cache, gameserverID)
 	s.mu.Unlock()
 
-	slug := game.ID
-	if game.GJQSlug != "" {
-		slug = game.GJQSlug
-	}
-	go s.pollLoop(ctx, gameserverID, slug, hostPort)
+	go s.pollLoop(ctx, gameserverID, game.ID, hostPort)
 }
 
 func (s *QueryService) StopPolling(gameserverID string) {
@@ -196,16 +192,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 }
 
 func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
-	if game.ID == "" {
-		return false
-	}
-
-	for _, c := range game.DisabledCapabilities {
-		if c == controller.CapabilityQuery {
-			return false
-		}
-	}
-	return true
+	return game.Query != nil && game.Query.Protocol != ""
 }
 
 func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {

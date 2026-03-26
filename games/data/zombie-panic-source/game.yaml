@@ -1,0 +1,13 @@
+id: zombie-panic-source
+name: "Zombie Panic Source"
+aliases: [zps]
+app_id: 17500
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

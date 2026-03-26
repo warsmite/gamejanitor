@@ -1,0 +1,13 @@
+id: alien-swarm-reactive-drop
+name: "Alien Swarm: Reactive Drop"
+aliases: [asrd]
+app_id: 563560
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

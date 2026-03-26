@@ -1,0 +1,13 @@
+id: quake-live
+name: "Quake Live"
+aliases: [ql]
+app_id: 282440
+
+ports:
+  - name: game
+    port: 27960
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

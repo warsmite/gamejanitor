@@ -1,0 +1,16 @@
+id: empyrion
+name: "Empyrion: Galactic Survival"
+aliases: [egs]
+app_id: 383120
+
+ports:
+  - name: game
+    port: 30000
+    protocol: udp
+  - name: query
+    port: 30001
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

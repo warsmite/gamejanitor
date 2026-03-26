@@ -1,0 +1,13 @@
+id: insurgency
+name: "Insurgency"
+aliases: [ins]
+app_id: 222880
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

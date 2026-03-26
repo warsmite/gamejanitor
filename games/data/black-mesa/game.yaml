@@ -1,0 +1,13 @@
+id: black-mesa
+name: "Black Mesa"
+aliases: [bm, bms]
+app_id: 362890
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,13 @@
+id: no-more-room-in-hell
+name: "No More Room in Hell"
+aliases: [nmrih]
+app_id: 224260
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

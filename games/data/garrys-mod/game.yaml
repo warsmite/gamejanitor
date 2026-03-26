@@ -2,12 +2,7 @@ id: garrys-mod
 name: "Garry's Mod"
 aliases: [gmod]
 description: "Physics sandbox powered by the Source engine with endless game modes"
-base_image: ghcr.io/warsmite/gamejanitor/steamcmd
-recommended_memory_mb: 1024
-disabled_capabilities: []
-ready_pattern: 'Lua initialized'
-assets:
-  icon: garrys-mod-icon.ico
+app_id: 4000
 
 ports:
   - name: game
@@ -17,38 +12,49 @@ ports:
     port: 27015
     protocol: tcp
 
-env:
-  - key: HOSTNAME
-    default: "Gamejanitor GMod Server"
-    label: "Server Name"
-  - key: MAXPLAYERS
-    default: "16"
-    label: "Max Players"
-    type: number
-  - key: RCON_PASSWORD
-    default: ""
-    label: "RCON Password"
-    autogenerate: password
-  - key: GAMEMODE
-    default: "sandbox"
-    label: "Game Mode"
-    type: select
-    options: ["sandbox", "terrortown", "prop_hunt", "murder", "deathrun"]
-  - key: MAP
-    default: "gm_flatgrass"
-    label: "Starting Map"
-  - key: GAME_PORT
-    default: "27015"
-    system: true
-  - key: RCON_PORT
-    default: "27015"
-    system: true
-  - key: SAVE_TIMEOUT_SECONDS
-    default: "5"
-    system: true
+query:
+  protocol: source
+  supports: [players, rules, keywords]
 
-mods:
-  sources:
-    - type: workshop
-      app_id: 4000
-      install_path: /data/server/garrysmod/addons
+container:
+  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  recommended_memory_mb: 1024
+  ready_pattern: 'Lua initialized'
+  disabled_capabilities: []
+  env:
+    - key: HOSTNAME
+      default: "Gamejanitor GMod Server"
+      label: "Server Name"
+    - key: MAXPLAYERS
+      default: "16"
+      label: "Max Players"
+      type: number
+    - key: RCON_PASSWORD
+      default: ""
+      label: "RCON Password"
+      autogenerate: password
+    - key: GAMEMODE
+      default: "sandbox"
+      label: "Game Mode"
+      type: select
+      options: ["sandbox", "terrortown", "prop_hunt", "murder", "deathrun"]
+    - key: MAP
+      default: "gm_flatgrass"
+      label: "Starting Map"
+    - key: GAME_PORT
+      default: "27015"
+      system: true
+    - key: RCON_PORT
+      default: "27015"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "5"
+      system: true
+  mods:
+    sources:
+      - type: workshop
+        app_id: 4000
+        install_path: /data/server/garrysmod/addons
+
+assets:
+  icon: garrys-mod-icon.ico

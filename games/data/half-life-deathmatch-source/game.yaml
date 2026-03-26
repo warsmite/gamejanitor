@@ -1,0 +1,13 @@
+id: half-life-deathmatch-source
+name: "Half-Life Deathmatch: Source"
+aliases: [hldms]
+app_id: 360
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

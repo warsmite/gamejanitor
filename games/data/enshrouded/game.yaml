@@ -1,0 +1,15 @@
+id: enshrouded
+name: "Enshrouded"
+app_id: 1203620
+
+ports:
+  - name: game
+    port: 15636
+    protocol: udp
+  - name: query
+    port: 15637
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

@@ -1,0 +1,13 @@
+id: half-life-2-deathmatch
+name: "Half-Life 2: Deathmatch"
+aliases: [hl2dm]
+app_id: 320
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

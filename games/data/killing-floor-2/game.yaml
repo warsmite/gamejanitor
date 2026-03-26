@@ -1,0 +1,16 @@
+id: killing-floor-2
+name: "Killing Floor 2"
+aliases: [kf2]
+app_id: 232090
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

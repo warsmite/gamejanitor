@@ -1,0 +1,16 @@
+id: v-rising
+name: "V Rising"
+aliases: [vrising]
+app_id: 1604030
+
+ports:
+  - name: game
+    port: 9876
+    protocol: udp
+  - name: query
+    port: 9877
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

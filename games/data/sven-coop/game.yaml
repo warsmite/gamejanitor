@@ -1,0 +1,13 @@
+id: sven-coop
+name: "Sven Co-op"
+aliases: [svencoop]
+app_id: 225840
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

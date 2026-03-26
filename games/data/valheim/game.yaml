@@ -1,12 +1,8 @@
 id: valheim
 name: "Valheim"
+aliases: []
 description: "Viking-themed survival and exploration in a procedurally generated world"
-base_image: ghcr.io/warsmite/gamejanitor/steamcmd
-recommended_memory_mb: 2048
-disabled_capabilities: ["command"]
-ready_pattern: 'Game server connected'
-assets:
-  icon: valheim-icon.ico
+app_id: 892970
 
 ports:
   - name: game
@@ -16,22 +12,34 @@ ports:
     port: 2457
     protocol: udp
 
-env:
-  - key: SERVER_NAME
-    default: "Gamejanitor Valheim Server"
-    label: "Server Name"
-  - key: WORLD_NAME
-    default: "Gamejanitor"
-    label: "World Name"
-  - key: SERVER_PASSWORD
-    default: ""
-    label: "Server Password"
-  - key: GAME_PORT
-    default: "2456"
-    system: true
-  - key: QUERY_PORT
-    default: "2457"
-    system: true
-  - key: SAVE_TIMEOUT_SECONDS
-    default: "15"
-    system: true
+query:
+  protocol: source
+  supports: [players, rules, keywords]
+
+container:
+  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  recommended_memory_mb: 2048
+  ready_pattern: 'Game server connected'
+  disabled_capabilities: ["command"]
+  env:
+    - key: SERVER_NAME
+      default: "Gamejanitor Valheim Server"
+      label: "Server Name"
+    - key: WORLD_NAME
+      default: "Gamejanitor"
+      label: "World Name"
+    - key: SERVER_PASSWORD
+      default: ""
+      label: "Server Password"
+    - key: GAME_PORT
+      default: "2456"
+      system: true
+    - key: QUERY_PORT
+      default: "2457"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "15"
+      system: true
+
+assets:
+  icon: valheim-icon.ico

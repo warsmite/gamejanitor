@@ -1,0 +1,16 @@
+id: beyond-the-wire
+name: "Beyond the Wire"
+aliases: [btw]
+app_id: 1058650
+
+ports:
+  - name: game
+    port: 7787
+    protocol: udp
+  - name: query
+    port: 27165
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

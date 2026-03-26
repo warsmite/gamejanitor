@@ -1,0 +1,21 @@
+id: squad
+name: "Squad"
+
+ports:
+  - name: game
+    port: 7787
+    protocol: udp
+
+query:
+  protocol: eos
+  supports: [players]
+  notes: "Player names are opaque EOS IDs; may fail on shared IPs (15-session API limit)"
+  eos:
+    client_id: "xyza7891J7d3GU8ZIwCoC5xdBsdoqVWA"
+    client_secret: "4SLVBqAm09q776SIlQRTD6moM/bnGAWhDSqOxJAIS0s"
+    deployment_id: "5dee4062a90b42cd98fcad618b6636c2"
+    use_external_auth: true
+    attributes:
+      name: SERVERNAME_s
+      password: PASSWORD_b
+      version: GAMEVERSION_s

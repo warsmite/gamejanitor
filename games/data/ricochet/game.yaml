@@ -1,0 +1,12 @@
+id: ricochet
+name: "Ricochet"
+app_id: 60
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

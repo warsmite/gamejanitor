@@ -1,0 +1,13 @@
+id: half-life
+name: "Half-Life"
+aliases: [hl, hl1]
+app_id: 70
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

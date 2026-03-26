@@ -1,0 +1,13 @@
+id: fistful-of-frags
+name: "Fistful of Frags"
+aliases: [fof]
+app_id: 265630
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

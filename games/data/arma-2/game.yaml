@@ -1,0 +1,16 @@
+id: arma-2
+name: "Arma 2"
+aliases: [arma2]
+app_id: 33900
+
+ports:
+  - name: game
+    port: 2302
+    protocol: udp
+  - name: query
+    port: 2303
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

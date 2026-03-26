@@ -1,12 +1,8 @@
 id: satisfactory
 name: "Satisfactory"
+aliases: []
 description: "First-person factory building and automation in an alien world"
-base_image: ghcr.io/warsmite/gamejanitor/steamcmd
-recommended_memory_mb: 8192
-disabled_capabilities: ["query", "command", "save"]
-ready_pattern: 'Server Start Completed'
-assets:
-  icon: satisfactory-icon.ico
+app_id: 526870
 
 ports:
   - name: game
@@ -19,20 +15,30 @@ ports:
     port: 8888
     protocol: tcp
 
-env:
-  - key: SERVER_NAME
-    default: "Gamejanitor Satisfactory Server"
-    label: "Server Name"
-  - key: MAX_PLAYERS
-    default: "4"
-    label: "Max Players"
-    type: number
-  - key: GAME_PORT
-    default: "7777"
-    system: true
-  - key: RELIABLE_PORT
-    default: "8888"
-    system: true
-  - key: SAVE_TIMEOUT_SECONDS
-    default: "15"
-    system: true
+# No query section — Satisfactory has no standard query protocol
+
+container:
+  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  recommended_memory_mb: 8192
+  ready_pattern: 'Server Start Completed'
+  disabled_capabilities: ["command", "save"]
+  env:
+    - key: SERVER_NAME
+      default: "Gamejanitor Satisfactory Server"
+      label: "Server Name"
+    - key: MAX_PLAYERS
+      default: "4"
+      label: "Max Players"
+      type: number
+    - key: GAME_PORT
+      default: "7777"
+      system: true
+    - key: RELIABLE_PORT
+      default: "8888"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "15"
+      system: true
+
+assets:
+  icon: satisfactory-icon.ico

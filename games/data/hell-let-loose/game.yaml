@@ -1,0 +1,16 @@
+id: hell-let-loose
+name: "Hell Let Loose"
+aliases: [hll]
+app_id: 686810
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 7778
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

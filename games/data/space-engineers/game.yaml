@@ -1,0 +1,13 @@
+id: space-engineers
+name: "Space Engineers"
+aliases: [se]
+app_id: 244850
+
+ports:
+  - name: game
+    port: 27016
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

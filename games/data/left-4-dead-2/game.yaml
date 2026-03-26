@@ -1,0 +1,13 @@
+id: left-4-dead-2
+name: "Left 4 Dead 2"
+aliases: [l4d2]
+app_id: 550
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

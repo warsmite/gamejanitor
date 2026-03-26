@@ -1,0 +1,16 @@
+id: dark-and-light
+name: "Dark and Light"
+aliases: [dnl]
+app_id: 529180
+
+ports:
+  - name: game
+    port: 7777
+    protocol: udp
+  - name: query
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

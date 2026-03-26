@@ -1,0 +1,12 @@
+id: cod4
+name: "Call of Duty 4: Modern Warfare"
+aliases: [cod4x]
+
+ports:
+  - name: game
+    port: 28960
+    protocol: udp
+
+query:
+  protocol: quake3
+  supports: [players]

@@ -1,0 +1,12 @@
+id: unturned
+name: "Unturned"
+app_id: 304930
+
+ports:
+  - name: game
+    port: 27015
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]

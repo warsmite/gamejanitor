@@ -1,0 +1,16 @@
+id: squad-44
+name: "Squad 44"
+aliases: [s44]
+app_id: 736220
+
+ports:
+  - name: game
+    port: 7787
+    protocol: udp
+  - name: query
+    port: 27165
+    protocol: udp
+
+query:
+  protocol: source
+  supports: [players, rules, keywords]
