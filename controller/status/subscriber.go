@@ -1,21 +1,19 @@
-package service
+package status
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/controller"
 )
 
 // StatusSubscriber listens to lifecycle events on the bus and derives gameserver
 // status from them. This centralizes status logic in one place instead of 25+
 // scattered setGameserverStatus calls.
 type StatusSubscriber struct {
-	db     *sql.DB
+	store  Store
 	log    *slog.Logger
 	bus    *controller.EventBus
 	cancel context.CancelFunc
@@ -26,9 +24,9 @@ type StatusSubscriber struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusSubscriber(db *sql.DB, bus *controller.EventBus, log *slog.Logger) *StatusSubscriber {
+func NewStatusSubscriber(store Store, bus *controller.EventBus, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
-		db:          db,
+		store:       store,
 		bus:         bus,
 		log:         log,
 		crashCounts: make(map[string]int),
@@ -93,7 +91,7 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 }
 
 func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, errorReason string) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("status subscriber: failed to get gameserver", "id", gameserverID, "error", err)
 		return
@@ -111,7 +109,7 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 		gs.ErrorReason = ""
 	}
 
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		s.log.Error("status subscriber: failed to update gameserver status", "id", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}

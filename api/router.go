@@ -16,6 +16,7 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/controller/webhook"
@@ -34,8 +35,8 @@ type RouterOptions struct {
 	FileSvc       *gameserver.FileService
 	ScheduleSvc   *service.ScheduleService
 	BackupSvc     *backup.BackupService
-	QuerySvc      *service.QueryService
-	StatsPoller   *service.StatsPoller
+	QuerySvc      *status.QueryService
+	StatsPoller   *status.StatsPoller
 	SettingsSvc   *settings.SettingsService
 	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService

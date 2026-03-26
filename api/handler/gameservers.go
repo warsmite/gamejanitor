@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/worker/logparse"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,12 +20,12 @@ import (
 type GameserverHandlers struct {
 	svc          *gameserver.GameserverService
 	consoleSvc   *gameserver.ConsoleService
-	querySvc     *service.QueryService
-	statsPoller  *service.StatsPoller
+	querySvc     *status.QueryService
+	statsPoller  *status.StatsPoller
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, consoleSvc *gameserver.ConsoleService, querySvc *service.QueryService, statsPoller *service.StatsPoller, log *slog.Logger) *GameserverHandlers {
+func NewGameserverHandlers(svc *gameserver.GameserverService, consoleSvc *gameserver.ConsoleService, querySvc *status.QueryService, statsPoller *status.StatsPoller, log *slog.Logger) *GameserverHandlers {
 	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, log: log}
 }
 

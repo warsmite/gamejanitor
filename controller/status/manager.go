@@ -1,26 +1,25 @@
-package service
+package status
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
 type StatusManager struct {
-	db  *sql.DB
-	log *slog.Logger
-	broadcaster  *controller.EventBus
-	querySvc     *QueryService
-	statsPoller  *StatsPoller
+	store       Store
+	log         *slog.Logger
+	broadcaster *controller.EventBus
+	querySvc    *QueryService
+	statsPoller *StatsPoller
 	readyWatcher *ReadyWatcher
 	dispatcher   *orchestrator.Dispatcher
 	registry     *orchestrator.Registry
@@ -37,9 +36,9 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
-		db:            db,
+		store:         store,
 		broadcaster:   broadcaster,
 		querySvc:      querySvc,
 		statsPoller:   statsPoller,
@@ -112,7 +111,7 @@ func (m *StatusManager) Stop() {
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	m.log.Info("recovering gameserver status from docker state")
 
-	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{})
+	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		return err
 	}
@@ -190,7 +189,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 // setRecoveryStatus directly writes status to DB without publishing events.
 // Used during startup recovery to reconcile DB with Docker reality.
 func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
-	gs, err := model.GetGameserver(m.db, id)
+	gs, err := m.store.GetGameserver(id)
 	if err != nil || gs == nil {
 		m.log.Error("recovery: failed to get gameserver", "id", id, "error", err)
 		return
@@ -202,7 +201,7 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	} else {
 		gs.ErrorReason = ""
 	}
-	if err := model.UpdateGameserver(m.db, gs); err != nil {
+	if err := m.store.UpdateGameserver(gs); err != nil {
 		m.log.Error("recovery: failed to update status", "id", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -216,7 +215,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStat
 	gs.ContainerID = nil
 	gs.Status = newStatus
 	gs.ErrorReason = ""
-	if err := model.UpdateGameserver(m.db, gs); err != nil {
+	if err := m.store.UpdateGameserver(gs); err != nil {
 		m.log.Error("recovery: failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -255,7 +254,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		return
 	}
 
-	gs, err := model.GetGameserver(m.db, gsID)
+	gs, err := m.store.GetGameserver(gsID)
 	if err != nil || gs == nil {
 		m.log.Debug("container event for unknown gameserver", "container_name", event.ContainerName, "action", event.Action)
 		return
@@ -325,7 +324,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 // onWorkerOffline is called when a worker transitions to offline (heartbeat timeout or explicit).
 // Marks affected gameservers as unreachable so the UI doesn't show stale "running" status.
 func (m *StatusManager) onWorkerOffline(nodeID string) {
-	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{NodeID: &nodeID})
+	gameservers, err := m.store.ListGameservers(model.GameserverFilter{NodeID: &nodeID})
 	if err != nil {
 		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
 	} else {
@@ -357,7 +356,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 
 // recoverWorkerGameservers recovers gameservers assigned to a specific worker node.
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
-	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{})
+	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		m.log.Error("failed to list gameservers for worker recovery", "worker_id", nodeID, "error", err)
 		return

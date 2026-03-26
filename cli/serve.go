@@ -30,6 +30,7 @@ import (
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/controller/webhook"
@@ -120,17 +121,17 @@ type services struct {
 	broadcaster   *controller.EventBus
 	settingsSvc   *settings.SettingsService
 	gameserverSvc *gameserver.GameserverService
-	querySvc      *service.QueryService
-	statsPoller   *service.StatsPoller
-	readyWatcher  *service.ReadyWatcher
+	querySvc      *status.QueryService
+	statsPoller   *status.StatsPoller
+	readyWatcher  *status.ReadyWatcher
 	consoleSvc    *gameserver.ConsoleService
 	fileSvc       *gameserver.FileService
 	backupSvc     *backup.BackupService
 	scheduler     *service.Scheduler
 	scheduleSvc   *service.ScheduleService
 	authSvc       *auth.AuthService
-	statusMgr     *service.StatusManager
-	statusSub     *service.StatusSubscriber
+	statusMgr     *status.StatusManager
+	statusSub     *status.StatusSubscriber
 	eventStore    *event.EventStoreSubscriber
 	webhookWorker *webhook.WebhookWorker
 	modSvc        *service.ModService
@@ -153,11 +154,10 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}{gsStore, wnStore, backupDBStore}
 
 	gameserverSvc := gameserver.NewGameserverService(gameserverStore, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
-	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
-	statsPoller := service.NewStatsPoller(database, dispatcher, broadcaster, logger)
-	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
-	readyWatcher.SetQueryService(querySvc)
-	readyWatcher.SetStatsPoller(statsPoller)
+	statusStore := store.NewGameserverStore(database)
+	querySvc := status.NewQueryService(statusStore, broadcaster, gameStore, logger)
+	statsPoller := status.NewStatsPoller(statusStore, dispatcher, broadcaster, logger)
+	readyWatcher := status.NewReadyWatcher(statusStore, broadcaster, gameStore, querySvc, statsPoller, logger)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, logger)
 	fileSvc := gameserver.NewFileService(gsStore, dispatcher, logger)
@@ -176,8 +176,8 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(database, logger)
-	statusMgr := service.NewStatusManager(database, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
-	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
+	statusMgr := status.NewStatusManager(statusStore, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusSub := status.NewStatusSubscriber(statusStore, broadcaster, logger)
 	eventStoreDB := store.NewEventStore(database)
 	eventStore := event.NewEventStoreSubscriber(eventStoreDB, broadcaster, logger)
 	webhookStore := store.NewWebhookStore(database)

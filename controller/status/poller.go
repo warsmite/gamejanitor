@@ -1,15 +1,13 @@
-package service
+package status
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 )
 
 const statsPollInterval = 5 * time.Second
@@ -18,7 +16,7 @@ const statsPollInterval = 5 * time.Second
 // controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
 // the GET /stats endpoint can serve them instantly without hitting Docker.
 type StatsPoller struct {
-	db          *sql.DB
+	store       Store
 	dispatcher  *orchestrator.Dispatcher
 	broadcaster *controller.EventBus
 	log         *slog.Logger
@@ -27,9 +25,9 @@ type StatsPoller struct {
 	cache       map[string]*controller.GameserverStatsEvent
 }
 
-func NewStatsPoller(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
-		db:          db,
+		store:       store,
 		dispatcher:  dispatcher,
 		broadcaster: broadcaster,
 		log:         log,
@@ -105,7 +103,7 @@ func (s *StatsPoller) pollLoop(ctx context.Context, gameserverID string) {
 
 // pollOnce fetches stats, caches and publishes. Returns false if polling should stop.
 func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		s.log.Debug("gameserver gone, stopping stats poll", "id", gameserverID)
 		return false

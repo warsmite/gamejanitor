@@ -1,15 +1,14 @@
-package service
+package status
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gjq"
@@ -33,7 +32,7 @@ type QueryPlayer struct {
 }
 
 type QueryService struct {
-	db          *sql.DB
+	store       Store
 	log         *slog.Logger
 	broadcaster *controller.EventBus
 	gameStore   *games.GameStore
@@ -42,9 +41,9 @@ type QueryService struct {
 	pollers     map[string]context.CancelFunc
 }
 
-func NewQueryService(db *sql.DB, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
+func NewQueryService(store Store, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
 	return &QueryService{
-		db:          db,
+		store:       store,
 		log:         log,
 		broadcaster: broadcaster,
 		gameStore:   gameStore,
@@ -63,7 +62,7 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 // Only collects player/map/version data — does not promote status.
 // No-op for games without query support.
 func (s *QueryService) StartPolling(gameserverID string) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("failed to load gameserver for polling", "id", gameserverID, "error", err)
 		return
@@ -135,7 +134,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	defer ticker.Stop()
 
 	for {
-		gs, err := model.GetGameserver(s.db, gameserverID)
+		gs, err := s.store.GetGameserver(gameserverID)
 		if err != nil || gs == nil {
 			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
 			return

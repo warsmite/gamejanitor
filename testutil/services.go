@@ -11,6 +11,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
@@ -26,9 +27,9 @@ type ServiceBundle struct {
 	Broadcaster   *controller.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *gameserver.GameserverService
-	QuerySvc      *service.QueryService
-	StatsPoller   *service.StatsPoller
-	ReadyWatcher  *service.ReadyWatcher
+	QuerySvc      *status.QueryService
+	StatsPoller   *status.StatsPoller
+	ReadyWatcher  *status.ReadyWatcher
 	ConsoleSvc    *gameserver.ConsoleService
 	FileSvc       *gameserver.FileService
 	BackupSvc     *backup.BackupService
@@ -37,7 +38,7 @@ type ServiceBundle struct {
 	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService
 	BackupStorage backup.Storage
-	StatusSub     *service.StatusSubscriber
+	StatusSub     *status.StatusSubscriber
 	EventStore    *event.EventStoreSubscriber
 }
 
@@ -68,11 +69,10 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	}{gsStore, wnStore, backupDBStore}
 
 	gameserverSvc := gameserver.NewGameserverService(gsCompositeStore, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
-	querySvc := service.NewQueryService(db, broadcaster, gameStore, log)
-	statsPoller := service.NewStatsPoller(db, dispatcher, broadcaster, log)
-	readyWatcher := service.NewReadyWatcher(db, broadcaster, gameStore, log)
-	readyWatcher.SetQueryService(querySvc)
-	readyWatcher.SetStatsPoller(statsPoller)
+	statusStore := store.NewGameserverStore(db)
+	querySvc := status.NewQueryService(statusStore, broadcaster, gameStore, log)
+	statsPoller := status.NewStatsPoller(statusStore, dispatcher, broadcaster, log)
+	readyWatcher := status.NewReadyWatcher(statusStore, broadcaster, gameStore, querySvc, statsPoller, log)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
 
@@ -128,7 +128,8 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	svc := NewTestServices(t)
 	log := TestLogger()
 
-	statusSub := service.NewStatusSubscriber(svc.DB, svc.Broadcaster, log)
+	statusSubStore := store.NewGameserverStore(svc.DB)
+	statusSub := status.NewStatusSubscriber(statusSubStore, svc.Broadcaster, log)
 	eventStoreDB := store.NewEventStore(svc.DB)
 	eventStore := event.NewEventStoreSubscriber(eventStoreDB, svc.Broadcaster, log)
 

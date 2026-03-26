@@ -1,16 +1,14 @@
-package service
+package status
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"log/slog"
 	"regexp"
 	"sync"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/logparse"
 )
@@ -18,39 +16,33 @@ import (
 // ReadyWatcher monitors container logs for a game's ready pattern
 // to promote gameservers from Started → Running.
 type ReadyWatcher struct {
-	db          *sql.DB
+	store       Store
 	log         *slog.Logger
 	broadcaster *controller.EventBus
 	gameStore   *games.GameStore
-	querySvc     *QueryService
-	statsPoller  *StatsPoller
+	querySvc    *QueryService
+	statsPoller *StatsPoller
 
 	mu       sync.Mutex
 	watchers map[string]context.CancelFunc
 }
 
-func NewReadyWatcher(db *sql.DB, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
+func NewReadyWatcher(store Store, broadcaster *controller.EventBus, gameStore *games.GameStore, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *ReadyWatcher {
 	return &ReadyWatcher{
-		db:          db,
+		store:       store,
 		log:         log,
 		broadcaster: broadcaster,
 		gameStore:   gameStore,
+		querySvc:    querySvc,
+		statsPoller: statsPoller,
 		watchers:    make(map[string]context.CancelFunc),
 	}
-}
-
-func (w *ReadyWatcher) SetQueryService(qs *QueryService) {
-	w.querySvc = qs
-}
-
-func (w *ReadyWatcher) SetStatsPoller(sp *StatsPoller) {
-	w.statsPoller = sp
 }
 
 // Watch starts monitoring container logs for the ready pattern.
 // If the game has no ready_pattern, promotes immediately.
 func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID string) {
-	gs, err := model.GetGameserver(w.db, gameserverID)
+	gs, err := w.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		w.log.Error("failed to load gameserver for ready watch", "id", gameserverID, "error", err)
 		return
@@ -175,13 +167,13 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 }
 
 func (w *ReadyWatcher) markInstalled(gameserverID string) {
-	gs, err := model.GetGameserver(w.db, gameserverID)
+	gs, err := w.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		w.log.Error("failed to load gameserver to mark installed", "id", gameserverID, "error", err)
 		return
 	}
 	gs.Installed = true
-	if err := model.UpdateGameserver(w.db, gs); err != nil {
+	if err := w.store.UpdateGameserver(gs); err != nil {
 		w.log.Error("failed to mark gameserver as installed", "id", gameserverID, "error", err)
 		return
 	}
