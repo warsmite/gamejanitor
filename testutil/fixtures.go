@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"log/slog"
 	"os"
@@ -84,7 +85,7 @@ func TestContext() context.Context {
 
 // WaitForEvent subscribes to the event bus and waits for an event of the given type.
 // Returns the event or fails the test if the timeout (default 2s) expires.
-func WaitForEvent(t *testing.T, bus *service.EventBus, eventType string, timeout ...time.Duration) service.WebhookEvent {
+func WaitForEvent(t *testing.T, bus *controller.EventBus, eventType string, timeout ...time.Duration) controller.WebhookEvent {
 	t.Helper()
 
 	d := 2 * time.Second
@@ -112,11 +113,11 @@ func WaitForEvent(t *testing.T, bus *service.EventBus, eventType string, timeout
 }
 
 // CollectEvents subscribes to the event bus and collects all events for the given duration.
-func CollectEvents(bus *service.EventBus, duration time.Duration) []service.WebhookEvent {
+func CollectEvents(bus *controller.EventBus, duration time.Duration) []controller.WebhookEvent {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	var events []service.WebhookEvent
+	var events []controller.WebhookEvent
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 

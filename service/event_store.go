@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,13 +15,13 @@ import (
 // EventStoreSubscriber persists all events from the bus to the database.
 type EventStoreSubscriber struct {
 	db     *sql.DB
-	bus    *EventBus
+	bus    *controller.EventBus
 	log    *slog.Logger
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
-func NewEventStoreSubscriber(db *sql.DB, bus *EventBus, log *slog.Logger) *EventStoreSubscriber {
+func NewEventStoreSubscriber(db *sql.DB, bus *controller.EventBus, log *slog.Logger) *EventStoreSubscriber {
 	return &EventStoreSubscriber{db: db, bus: bus, log: log}
 }
 
@@ -56,7 +57,7 @@ func (s *EventStoreSubscriber) Stop() {
 	s.log.Info("event store subscriber stopped")
 }
 
-func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
+func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 	// Skip high-frequency telemetry events — served from in-memory cache, not history
 	switch event.EventType() {
 	case EventGameserverStats, EventGameserverQuery:
@@ -84,7 +85,7 @@ func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
 	}
 }
 
-func extractGameserverID(event WebhookEvent) string {
+func extractGameserverID(event controller.WebhookEvent) string {
 	switch e := event.(type) {
 	case GameserverActionEvent:
 		return e.GameserverID
@@ -96,7 +97,7 @@ func extractGameserverID(event WebhookEvent) string {
 		return e.GameserverID
 	case ScheduledTaskEvent:
 		return e.GameserverID
-	case StatusEvent:
+	case controller.StatusEvent:
 		return e.GameserverID
 	case ImagePullingEvent:
 		return e.GameserverID
@@ -118,7 +119,7 @@ func extractGameserverID(event WebhookEvent) string {
 	return ""
 }
 
-func extractActor(event WebhookEvent) Actor {
+func extractActor(event controller.WebhookEvent) Actor {
 	switch e := event.(type) {
 	case GameserverActionEvent:
 		return e.Actor
@@ -136,6 +137,6 @@ func extractActor(event WebhookEvent) Actor {
 	return SystemActor
 }
 
-func extractData(event WebhookEvent) any {
+func extractData(event controller.WebhookEvent) any {
 	return event
 }

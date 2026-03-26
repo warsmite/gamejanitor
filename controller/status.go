@@ -1,4 +1,4 @@
-package service
+package controller
 
 // Gameserver status constants.
 // Lifecycle: Stopped → Pulling → Starting → Started → Running → Stopping → Stopped
@@ -27,25 +27,24 @@ const (
 // Disabled capability names — used in game definitions to opt out of features.
 const CapabilityQuery = "query"
 
-func needsRecovery(status string) bool {
+func NeedsRecovery(status string) bool {
 	return status != StatusStopped && status != StatusError
 }
 
-// needsRecoveryOnReconnect returns true for statuses that should be reconciled
+// NeedsRecoveryOnReconnect returns true for statuses that should be reconciled
 // when a worker comes back online — includes unreachable gameservers.
-func needsRecoveryOnReconnect(status string) bool {
-	return needsRecovery(status) || status == StatusUnreachable
+func NeedsRecoveryOnReconnect(status string) bool {
+	return NeedsRecovery(status) || status == StatusUnreachable
 }
 
-func isRunningStatus(status string) bool {
+func IsRunningStatus(status string) bool {
 	return status == StatusStarted || status == StatusRunning
 }
 
-// isPollableStatus returns true if a gameserver is in a state where polling should continue.
-// This is more permissive than isRunningStatus — it includes transitional states like
+// IsPollableStatus returns true if a gameserver is in a state where polling should continue.
+// This is more permissive than IsRunningStatus — it includes transitional states like
 // "installing" and "starting" because pollers are started early and must survive until
 // the gameserver reaches a terminal state.
-func isPollableStatus(status string) bool {
+func IsPollableStatus(status string) bool {
 	return status != StatusStopped && status != StatusStopping && status != StatusError
 }
-

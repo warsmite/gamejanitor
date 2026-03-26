@@ -1,4 +1,4 @@
-package service
+package controller
 
 import (
 	"sync"
@@ -18,6 +18,8 @@ type StatusEvent struct {
 	ErrorReason  string    `json:"error_reason,omitempty"`
 	Timestamp    time.Time `json:"timestamp"`
 }
+
+const EventStatusChanged = "status_changed"
 
 func (e StatusEvent) EventType() string        { return EventStatusChanged }
 func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }

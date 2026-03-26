@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -40,14 +41,14 @@ type statusChangedData struct {
 
 type WebhookWorker struct {
 	db          *sql.DB
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	client      *http.Client
 	log         *slog.Logger
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 }
 
-func NewWebhookWorker(db *sql.DB, broadcaster *EventBus, log *slog.Logger) *WebhookWorker {
+func NewWebhookWorker(db *sql.DB, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
 	return &WebhookWorker{
 		db:          db,
 		broadcaster: broadcaster,
@@ -93,9 +94,9 @@ func (w *WebhookWorker) subscribeLoop(ctx context.Context) {
 	}
 }
 
-func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
+func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	// Skip non-transition status events (e.g., query data refresh sends running->running)
-	if se, ok := event.(StatusEvent); ok && se.OldStatus == se.NewStatus {
+	if se, ok := event.(controller.StatusEvent); ok && se.OldStatus == se.NewStatus {
 		return
 	}
 
@@ -112,7 +113,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 	// lifecycle events are lightweight with just IDs.
 	var payloadData any
 	switch ev := event.(type) {
-	case StatusEvent:
+	case controller.StatusEvent:
 		gs, _ := model.GetGameserver(w.db, ev.GameserverID)
 		if gs != nil {
 			gs.PopulateNode(w.db)

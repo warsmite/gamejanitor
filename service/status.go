@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"fmt"
@@ -16,7 +17,7 @@ import (
 type StatusManager struct {
 	db  *sql.DB
 	log *slog.Logger
-	broadcaster  *EventBus
+	broadcaster  *controller.EventBus
 	querySvc     *QueryService
 	statsPoller  *StatsPoller
 	readyWatcher *ReadyWatcher
@@ -35,7 +36,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, broadcaster *EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
 		broadcaster:   broadcaster,
@@ -72,11 +73,11 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				statusEv, isStatus := ev.(StatusEvent)
+				statusEv, isStatus := ev.(controller.StatusEvent)
 				if !isStatus {
 					continue
 				}
-				if statusEv.NewStatus == StatusRunning {
+				if statusEv.NewStatus == controller.StatusRunning {
 					m.crashMu.Lock()
 					delete(m.crashCounts, statusEv.GameserverID)
 					m.crashMu.Unlock()
@@ -118,7 +119,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	var withContainer, containerMissing int
 
 	for _, gs := range gameservers {
-		if !needsRecovery(gs.Status) {
+		if !controller.NeedsRecovery(gs.Status) {
 			continue
 		}
 
@@ -127,7 +128,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 			// Worker is offline — mark gameserver unreachable instead of leaving stale status
 			if gs.NodeID != nil {
 				m.log.Warn("marking gameserver unreachable, worker offline", "id", gs.ID, "node_id", *gs.NodeID)
-				m.setRecoveryStatus(gs.ID, StatusUnreachable, "Worker offline at startup.")
+				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker offline at startup.")
 			}
 			continue
 		}
@@ -159,28 +160,28 @@ func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker 
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
-		m.setRecoveryStatus(gs.ID, StatusStopped, "")
+		m.setRecoveryStatus(gs.ID, controller.StatusStopped, "")
 		return false
 	}
 
 	info, err := w.InspectContainer(ctx, *gs.ContainerID)
 	if err != nil {
 		m.log.Warn("container not found, setting stopped", "id", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
-		m.clearContainerAndSetStatus(gs, StatusStopped)
+		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
 		return true
 	}
 
 	switch info.State {
 	case "running":
 		m.log.Info("container running, re-attaching ready watcher", "id", gs.ID)
-		m.setRecoveryStatus(gs.ID, StatusStarted, "")
+		m.setRecoveryStatus(gs.ID, controller.StatusStarted, "")
 		m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
-		m.clearContainerAndSetStatus(gs, StatusStopped)
+		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
 	default:
 		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
-		m.setRecoveryStatus(gs.ID, StatusError, "Container found in unexpected state.")
+		m.setRecoveryStatus(gs.ID, controller.StatusError, "Container found in unexpected state.")
 	}
 	return false
 }
@@ -195,7 +196,7 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	}
 	oldStatus := gs.Status
 	gs.Status = newStatus
-	if newStatus == StatusError {
+	if newStatus == controller.StatusError {
 		gs.ErrorReason = errorReason
 	} else {
 		gs.ErrorReason = ""
@@ -271,7 +272,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 			return
 		}
 		// If ContainerID was cleared (restart in progress), this is a stale event
-		if gs.ContainerID == nil && gs.Status != StatusStopping {
+		if gs.ContainerID == nil && gs.Status != controller.StatusStopping {
 			m.log.Debug("container event: ignoring event with no current container", "id", gsID, "status", gs.Status, "action", event.Action)
 			return
 		}
@@ -279,9 +280,9 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
-		if gs.Status == StatusStopping {
+		if gs.Status == controller.StatusStopping {
 			m.log.Debug("container event: expected container stop", "id", gsID, "status", gs.Status)
-		} else if gs.Status == StatusRunning || gs.Status == StatusStarted || gs.Status == StatusInstalling || gs.Status == StatusStarting {
+		} else if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted || gs.Status == controller.StatusInstalling || gs.Status == controller.StatusStarting {
 			m.log.Warn("container event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
 			m.broadcaster.Publish(ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
@@ -328,10 +329,10 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
 	} else {
 		for _, gs := range gameservers {
-			if needsRecovery(gs.Status) {
+			if controller.NeedsRecovery(gs.Status) {
 				m.log.Warn("marking gameserver unreachable due to worker disconnect",
 					"gameserver_id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
-				m.setRecoveryStatus(gs.ID, StatusUnreachable, "Worker disconnected.")
+				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker disconnected.")
 			}
 		}
 	}
@@ -365,7 +366,7 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		if gs.NodeID == nil || *gs.NodeID != nodeID {
 			continue
 		}
-		if !needsRecoveryOnReconnect(gs.Status) {
+		if !controller.NeedsRecoveryOnReconnect(gs.Status) {
 			continue
 		}
 		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)

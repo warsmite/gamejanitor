@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"log/slog"
@@ -19,14 +20,14 @@ const statsPollInterval = 5 * time.Second
 type StatsPoller struct {
 	db          *sql.DB
 	dispatcher  *worker.Dispatcher
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	log         *slog.Logger
 	mu          sync.RWMutex
 	pollers     map[string]context.CancelFunc
 	cache       map[string]*GameserverStatsEvent
 }
 
-func NewStatsPoller(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
 		db:          db,
 		dispatcher:  dispatcher,
@@ -109,7 +110,7 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("gameserver gone, stopping stats poll", "id", gameserverID)
 		return false
 	}
-	if !isPollableStatus(gs.Status) {
+	if !controller.IsPollableStatus(gs.Status) {
 		s.log.Debug("gameserver not in pollable state, stopping stats poll", "id", gameserverID, "status", gs.Status)
 		return false
 	}

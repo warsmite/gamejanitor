@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"testing"
 	"time"
 
@@ -104,7 +105,7 @@ func TestPipeline_StatusChangedEventPublished(t *testing.T) {
 	for time.Now().Before(deadline) {
 		select {
 		case evt := <-ch:
-			if evt.EventType() == service.EventStatusChanged {
+			if evt.EventType() == controller.EventStatusChanged {
 				found = true
 			}
 		default:

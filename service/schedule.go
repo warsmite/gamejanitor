@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"fmt"
@@ -15,11 +16,11 @@ import (
 type ScheduleService struct {
 	db          *sql.DB
 	scheduler   *Scheduler
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewScheduleService(db *sql.DB, scheduler *Scheduler, broadcaster *EventBus, log *slog.Logger) *ScheduleService {
+func NewScheduleService(db *sql.DB, scheduler *Scheduler, broadcaster *controller.EventBus, log *slog.Logger) *ScheduleService {
 	return &ScheduleService{db: db, scheduler: scheduler, broadcaster: broadcaster, log: log}
 }
 
@@ -38,7 +39,7 @@ func (s *ScheduleService) getScheduleForGameserver(gameserverID, scheduleID stri
 		return nil, fmt.Errorf("getting schedule %s: %w", scheduleID, err)
 	}
 	if schedule == nil || schedule.GameserverID != gameserverID {
-		return nil, ErrNotFoundf("schedule %s not found", scheduleID)
+		return nil, controller.ErrNotFoundf("schedule %s not found", scheduleID)
 	}
 	return schedule, nil
 }
@@ -164,7 +165,7 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, gameserverID, sche
 func validateCronExpr(expr string) error {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	if _, err := parser.Parse(expr); err != nil {
-		return ErrBadRequestf("invalid cron expression %q: %v", expr, err)
+		return controller.ErrBadRequestf("invalid cron expression %q: %v", expr, err)
 	}
 	return nil
 }

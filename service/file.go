@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"fmt"
@@ -82,7 +83,7 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 		return err
 	}
 	if targetPath == "/data" {
-		return ErrBadRequest("cannot delete the root data directory")
+		return controller.ErrBadRequest("cannot delete the root data directory")
 	}
 
 	gs, err := s.getGameserver(gameserverID)
@@ -119,7 +120,7 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 		return err
 	}
 	if oldPath == "/data" || newPath == "/data" {
-		return ErrBadRequest("cannot rename the root data directory")
+		return controller.ErrBadRequest("cannot rename the root data directory")
 	}
 
 	gs, err := s.getGameserver(gameserverID)
@@ -148,7 +149,7 @@ func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, err
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	return gs, nil
 }
@@ -157,7 +158,7 @@ func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, err
 func validatePath(p string) (string, error) {
 	cleaned := path.Clean(p)
 	if !strings.HasPrefix(cleaned, "/data") {
-		return "", ErrBadRequestf("path must be within /data, got: %s", p)
+		return "", controller.ErrBadRequestf("path must be within /data, got: %s", p)
 	}
 	return cleaned, nil
 }

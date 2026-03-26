@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -238,7 +239,7 @@ func (s *ModrinthSource) get(ctx context.Context, path string, out any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return ErrNotFound("not found on modrinth")
+		return controller.ErrNotFound("not found on modrinth")
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))

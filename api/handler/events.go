@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,12 +15,12 @@ import (
 )
 
 type EventHandlers struct {
-	bus        *service.EventBus
+	bus        *controller.EventBus
 	historySvc *service.EventHistoryService
 	log        *slog.Logger
 }
 
-func NewEventHandlers(bus *service.EventBus, historySvc *service.EventHistoryService, log *slog.Logger) *EventHandlers {
+func NewEventHandlers(bus *controller.EventBus, historySvc *service.EventHistoryService, log *slog.Logger) *EventHandlers {
 	return &EventHandlers{bus: bus, historySvc: historySvc, log: log}
 }
 

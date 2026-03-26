@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -83,7 +84,7 @@ func (s *WebhookEndpointService) Get(id string) (*WebhookEndpointView, error) {
 		return nil, err
 	}
 	if ep == nil {
-		return nil, ErrNotFoundf("webhook endpoint %s not found", id)
+		return nil, controller.ErrNotFoundf("webhook endpoint %s not found", id)
 	}
 	v := toEndpointView(ep)
 	return &v, nil
@@ -160,7 +161,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 		return nil, err
 	}
 	if ep == nil {
-		return nil, ErrNotFoundf("webhook endpoint %s not found", id)
+		return nil, controller.ErrNotFoundf("webhook endpoint %s not found", id)
 	}
 
 	if description != nil {
@@ -199,7 +200,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 func (s *WebhookEndpointService) Delete(id string) error {
 	if err := model.DeleteWebhookEndpoint(s.db, id); err != nil {
 		if err == sql.ErrNoRows {
-			return ErrNotFoundf("webhook endpoint %s not found", id)
+			return controller.ErrNotFoundf("webhook endpoint %s not found", id)
 		}
 		return err
 	}
@@ -225,7 +226,7 @@ func (s *WebhookEndpointService) ListDeliveries(endpointID, state string, limit 
 		return nil, err
 	}
 	if ep == nil {
-		return nil, ErrNotFoundf("webhook endpoint %s not found", endpointID)
+		return nil, controller.ErrNotFoundf("webhook endpoint %s not found", endpointID)
 	}
 
 	deliveries, err := model.ListDeliveriesByEndpoint(s.db, endpointID, state, limit)
@@ -260,7 +261,7 @@ func (s *WebhookEndpointService) Test(id string) (*TestResult, error) {
 		return nil, err
 	}
 	if ep == nil {
-		return nil, ErrNotFoundf("webhook endpoint %s not found", id)
+		return nil, controller.ErrNotFoundf("webhook endpoint %s not found", id)
 	}
 
 	payload := WebhookPayload{
@@ -316,7 +317,7 @@ func (s *WebhookEndpointService) deliver(url string, body []byte, secret string)
 // ValidateEventFilter checks that all event filter patterns match at least one known event type.
 func ValidateEventFilter(events []string) error {
 	if len(events) == 0 {
-		return ErrBadRequest("events must not be empty")
+		return controller.ErrBadRequest("events must not be empty")
 	}
 	for _, e := range events {
 		if e == "*" {
@@ -334,7 +335,7 @@ func ValidateEventFilter(events []string) error {
 			}
 		}
 		if !matched {
-			return ErrBadRequestf("event filter %q does not match any known event types", e)
+			return controller.ErrBadRequestf("event filter %q does not match any known event types", e)
 		}
 	}
 	return nil

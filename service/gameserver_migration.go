@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -19,7 +20,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", gameserverID)
+		return controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	currentNodeID := ""
@@ -27,23 +28,23 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		currentNodeID = *gs.NodeID
 	}
 	if currentNodeID == targetNodeID {
-		return ErrBadRequestf("gameserver is already on node %s", targetNodeID)
+		return controller.ErrBadRequestf("gameserver is already on node %s", targetNodeID)
 	}
 
 	// Validate target worker is connected
 	targetWorker, err := s.dispatcher.SelectWorkerByNodeID(targetNodeID)
 	if err != nil {
-		return ErrUnavailablef("target worker unavailable: %v", err)
+		return controller.ErrUnavailablef("target worker unavailable: %v", err)
 	}
 
 	// Validate target node labels
 	if !gs.NodeTags.IsEmpty() {
 		targetNode, err := model.GetWorkerNode(s.db, targetNodeID)
 		if err != nil || targetNode == nil {
-			return ErrNotFoundf("target node %s not found", targetNodeID)
+			return controller.ErrNotFoundf("target node %s not found", targetNodeID)
 		}
 		if !targetNode.Tags.HasAll(gs.NodeTags) {
-			return ErrBadRequestf("target node %s missing required labels: %v", targetNodeID, gs.NodeTags)
+			return controller.ErrBadRequestf("target node %s missing required labels: %v", targetNodeID, gs.NodeTags)
 		}
 	}
 
@@ -55,7 +56,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	// Get source worker (must be online to transfer data)
 	sourceWorker := s.dispatcher.WorkerFor(gameserverID)
 	if sourceWorker == nil {
-		return ErrUnavailable("source worker is offline, cannot migrate (both workers must be online)")
+		return controller.ErrUnavailable("source worker is offline, cannot migrate (both workers must be online)")
 	}
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
@@ -76,7 +77,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}()
 
 	// Stop if running
-	if gs.Status != StatusStopped {
+	if gs.Status != controller.StatusStopped {
 		s.log.Info("stopping gameserver for migration", "id", gameserverID)
 		if err := s.Stop(ctx, gameserverID); err != nil {
 			return fmt.Errorf("stopping gameserver for migration: %w", err)
@@ -157,7 +158,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {
 			s.placementMu.Unlock()
-			return ErrNotFoundf("game %s not found", gs.GameID)
+			return controller.ErrNotFoundf("game %s not found", gs.GameID)
 		}
 		newPorts, err := s.AllocatePorts(game, targetNodeID, "")
 		if err != nil {

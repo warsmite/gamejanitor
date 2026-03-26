@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -33,14 +34,14 @@ type QueryPlayer struct {
 type QueryService struct {
 	db          *sql.DB
 	log         *slog.Logger
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	gameStore   *games.GameStore
 	mu          sync.RWMutex
 	cache       map[string]*QueryData
 	pollers     map[string]context.CancelFunc
 }
 
-func NewQueryService(db *sql.DB, broadcaster *EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
+func NewQueryService(db *sql.DB, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
 	return &QueryService{
 		db:          db,
 		log:         log,
@@ -138,7 +139,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
 			return
 		}
-		if !isPollableStatus(gs.Status) {
+		if !controller.IsPollableStatus(gs.Status) {
 			s.log.Debug("gameserver not in pollable state, stopping", "id", gameserverID, "status", gs.Status)
 			return
 		}
@@ -202,7 +203,7 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 	}
 
 	for _, c := range game.DisabledCapabilities {
-		if c == CapabilityQuery {
+		if c == controller.CapabilityQuery {
 			return false
 		}
 	}
@@ -218,12 +219,12 @@ func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {
 		return 0
 	}
 	for _, p := range ports {
-		if p.Name == PortNameQuery {
+		if p.Name == controller.PortNameQuery {
 			return uint16(p.HostPort)
 		}
 	}
 	for _, p := range ports {
-		if p.Name == PortNameGame {
+		if p.Name == controller.PortNameGame {
 			return uint16(p.HostPort)
 		}
 	}

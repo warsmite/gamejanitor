@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -27,10 +28,10 @@ type ModService struct {
 	sources         map[string]ModSource
 	httpClient      *http.Client
 	log             *slog.Logger
-	broadcaster     *EventBus
+	broadcaster     *controller.EventBus
 }
 
-func NewModService(db *sql.DB, fileSvc *FileService, gameStore *games.GameStore, settingsSvc *SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *EventBus, log *slog.Logger) *ModService {
+func NewModService(db *sql.DB, fileSvc *FileService, gameStore *games.GameStore, settingsSvc *SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	sources := map[string]ModSource{
 		"umod":     NewUmodSource(log.With("source", "umod")),
 		"modrinth": NewModrinthSource(log.With("source", "modrinth")),
@@ -64,7 +65,7 @@ func (s *ModService) GetSources(ctx context.Context, gameserverID string) ([]Mod
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return nil, ErrNotFoundf("game %s not found", gs.GameID)
+		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	var infos []ModSourceInfo
@@ -103,7 +104,7 @@ func (s *ModService) Search(ctx context.Context, gameserverID string, sourceType
 
 	source, ok := s.sources[sourceType]
 	if !ok {
-		return nil, 0, ErrBadRequestf("unsupported mod source: %s", sourceType)
+		return nil, 0, controller.ErrBadRequestf("unsupported mod source: %s", sourceType)
 	}
 
 	gameVersion, loader := s.resolveFilters(gs, srcConfig)
@@ -133,7 +134,7 @@ func (s *ModService) GetVersions(ctx context.Context, gameserverID string, sourc
 
 	source, ok := s.sources[sourceType]
 	if !ok {
-		return nil, ErrBadRequestf("unsupported mod source: %s", sourceType)
+		return nil, controller.ErrBadRequestf("unsupported mod source: %s", sourceType)
 	}
 
 	gameVersion, loader := s.resolveFilters(gs, srcConfig)
@@ -166,12 +167,12 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		return nil, fmt.Errorf("checking existing mod: %w", err)
 	}
 	if existing != nil {
-		return nil, ErrConflictf("mod %q is already installed", existing.Name)
+		return nil, controller.ErrConflictf("mod %q is already installed", existing.Name)
 	}
 
 	source, ok := s.sources[sourceType]
 	if !ok {
-		return nil, ErrBadRequestf("unsupported mod source: %s", sourceType)
+		return nil, controller.ErrBadRequestf("unsupported mod source: %s", sourceType)
 	}
 
 	gameVersion, loader := s.resolveFilters(gs, srcConfig)
@@ -190,7 +191,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 	if versionID == "" {
 		// Install latest
 		if len(versions) == 0 {
-			return nil, ErrBadRequest("no compatible versions found")
+			return nil, controller.ErrBadRequest("no compatible versions found")
 		}
 		targetVersion = &versions[0]
 	} else {
@@ -201,7 +202,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 			}
 		}
 		if targetVersion == nil {
-			return nil, ErrBadRequestf("version %q not found", versionID)
+			return nil, controller.ErrBadRequestf("version %q not found", versionID)
 		}
 	}
 
@@ -215,7 +216,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 	installPath := s.resolveInstallPath(srcConfig, loader)
 	fileName := sanitizeFileName(targetVersion.FileName)
 	if fileName == "" {
-		return nil, ErrBadRequest("mod has no valid filename")
+		return nil, controller.ErrBadRequest("mod has no valid filename")
 	}
 	fullPath := path.Join(installPath, fileName)
 
@@ -275,10 +276,10 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 		return fmt.Errorf("getting installed mod: %w", err)
 	}
 	if mod == nil {
-		return ErrNotFound("mod not found")
+		return controller.ErrNotFound("mod not found")
 	}
 	if mod.GameserverID != gameserverID {
-		return ErrNotFound("mod not found")
+		return controller.ErrNotFound("mod not found")
 	}
 
 	if mod.Source == "workshop" {
@@ -429,7 +430,7 @@ func (s *ModService) getGameserver(gameserverID string) (*model.Gameserver, erro
 		return nil, fmt.Errorf("getting gameserver: %w", err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	return gs, nil
 }
@@ -437,7 +438,7 @@ func (s *ModService) getGameserver(gameserverID string) (*model.Gameserver, erro
 func (s *ModService) getSourceConfig(gameID string, sourceType string) (*games.ModSourceConfig, error) {
 	game := s.gameStore.GetGame(gameID)
 	if game == nil {
-		return nil, ErrNotFoundf("game %s not found", gameID)
+		return nil, controller.ErrNotFoundf("game %s not found", gameID)
 	}
 
 	for i := range game.Mods.Sources {
@@ -445,7 +446,7 @@ func (s *ModService) getSourceConfig(gameID string, sourceType string) (*games.M
 			return &game.Mods.Sources[i], nil
 		}
 	}
-	return nil, ErrBadRequestf("game %s does not support mod source %q", game.Name, sourceType)
+	return nil, controller.ErrBadRequestf("game %s does not support mod source %q", game.Name, sourceType)
 }
 
 func (s *ModService) checkPreconditions(gs *model.Gameserver, srcConfig *games.ModSourceConfig) error {
@@ -459,7 +460,7 @@ func (s *ModService) checkPreconditions(gs *model.Gameserver, srcConfig *games.M
 	for key, required := range srcConfig.RequiresEnv {
 		actual := env[key]
 		if actual != required {
-			return ErrBadRequestf("requires %s to be %q (currently %q)", key, required, actual)
+			return controller.ErrBadRequestf("requires %s to be %q (currently %q)", key, required, actual)
 		}
 	}
 
@@ -471,7 +472,7 @@ func (s *ModService) checkPreconditions(gs *model.Gameserver, srcConfig *games.M
 			for k := range srcConfig.Loaders {
 				validLoaders = append(validLoaders, k)
 			}
-			return ErrBadRequestf("mod loader %q does not support mods (use %s)", loaderValue, strings.Join(validLoaders, ", "))
+			return controller.ErrBadRequestf("mod loader %q does not support mods (use %s)", loaderValue, strings.Join(validLoaders, ", "))
 		}
 	}
 

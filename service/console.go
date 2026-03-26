@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"fmt"
@@ -39,21 +40,21 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
-		return nil, ErrBadRequestf("gameserver %s has no container", gameserverID)
+		return nil, controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
-	if !isRunningStatus(gs.Status) {
-		return nil, ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+	if !controller.IsRunningStatus(gs.Status) {
+		return nil, controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return nil, ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
+		return nil, controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game, "console_read") {
-		return nil, ErrBadRequestf("console_read capability is disabled for game %s", game.Name)
+		return nil, controller.ErrBadRequestf("console_read capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("streaming logs", "gameserver_id", gameserverID, "container_id", (*gs.ContainerID)[:12])
@@ -69,21 +70,21 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return "", ErrNotFoundf("gameserver %s not found", gameserverID)
+		return "", controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
-		return "", ErrBadRequestf("gameserver %s has no container", gameserverID)
+		return "", controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
-	if !isRunningStatus(gs.Status) {
-		return "", ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+	if !controller.IsRunningStatus(gs.Status) {
+		return "", controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return "", ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
+		return "", controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game, "command") {
-		return "", ErrBadRequestf("command capability is disabled for game %s", game.Name)
+		return "", controller.ErrBadRequestf("command capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
@@ -93,7 +94,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}
 	if exitCode != 0 {
-		return "", ErrBadRequestf("command failed (exit %d): %s", exitCode, stderr)
+		return "", controller.ErrBadRequestf("command failed (exit %d): %s", exitCode, stderr)
 	}
 
 	return stdout, nil
@@ -107,7 +108,7 @@ func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID strin
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
@@ -145,7 +146,7 @@ func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID st
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	path := ".gamejanitor/logs/console.log"

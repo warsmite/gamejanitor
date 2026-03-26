@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"fmt"
 	"io"
@@ -15,7 +16,7 @@ func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID s
 		return nil, err
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
@@ -29,7 +30,7 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 		return nil, err
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
@@ -66,7 +67,7 @@ func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID stri
 		return 0, err
 	}
 	if gs == nil {
-		return 0, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return 0, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	return s.dispatcher.WorkerFor(gameserverID).VolumeSize(ctx, gs.VolumeName)
 }
@@ -77,7 +78,7 @@ func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID s
 		return nil, err
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)

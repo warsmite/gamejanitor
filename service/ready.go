@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"log/slog"
@@ -19,7 +20,7 @@ import (
 type ReadyWatcher struct {
 	db          *sql.DB
 	log         *slog.Logger
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	gameStore   *games.GameStore
 	querySvc     *QueryService
 	statsPoller  *StatsPoller
@@ -28,7 +29,7 @@ type ReadyWatcher struct {
 	watchers map[string]context.CancelFunc
 }
 
-func NewReadyWatcher(db *sql.DB, broadcaster *EventBus, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
+func NewReadyWatcher(db *sql.DB, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
 	return &ReadyWatcher{
 		db:          db,
 		log:         log,
@@ -157,7 +158,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 				w.log.Debug("log stream ended", "id", gameserverID)
 				return
 			}
-			if !installDetected && line == InstallMarker {
+			if !installDetected && line == controller.InstallMarker {
 				w.markInstalled(gameserverID)
 				installDetected = true
 				if pattern == nil {

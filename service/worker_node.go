@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"log/slog"
@@ -14,11 +15,11 @@ import (
 type WorkerNodeService struct {
 	db          *sql.DB
 	registry    *worker.Registry
-	broadcaster *EventBus
+	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewWorkerNodeService(db *sql.DB, registry *worker.Registry, broadcaster *EventBus, log *slog.Logger) *WorkerNodeService {
+func NewWorkerNodeService(db *sql.DB, registry *worker.Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
 	return &WorkerNodeService{db: db, registry: registry, broadcaster: broadcaster, log: log}
 }
 
@@ -64,12 +65,12 @@ func (s *WorkerNodeService) List() ([]WorkerView, error) {
 
 func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 	if s.registry == nil {
-		return nil, ErrNotFound("multi-node not enabled")
+		return nil, controller.ErrNotFound("multi-node not enabled")
 	}
 
 	info, ok := s.registry.GetInfo(id)
 	if !ok {
-		return nil, ErrNotFoundf("worker %s not found", id)
+		return nil, controller.ErrNotFoundf("worker %s not found", id)
 	}
 
 	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()

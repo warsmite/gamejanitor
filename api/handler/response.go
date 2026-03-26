@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/pkg/validate"
 )
 
@@ -80,7 +80,7 @@ func serviceErrorStatus(err error) int {
 	if errors.As(err, &valErr) {
 		return http.StatusBadRequest
 	}
-	var svcErr *service.ServiceError
+	var svcErr *controller.ServiceError
 	if errors.As(err, &svcErr) {
 		return svcErr.Code
 	}
@@ -96,7 +96,7 @@ func serviceErrorMessage(err error) string {
 	if errors.As(err, &valErr) {
 		return valErr.Error()
 	}
-	var svcErr *service.ServiceError
+	var svcErr *controller.ServiceError
 	if errors.As(err, &svcErr) {
 		return svcErr.Error()
 	}

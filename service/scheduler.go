@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,13 +20,13 @@ type Scheduler struct {
 	backupSvc     *BackupService
 	gameserverSvc *GameserverService
 	consoleSvc    *ConsoleService
-	broadcaster   *EventBus
+	broadcaster   *controller.EventBus
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc *GameserverService, consoleSvc *ConsoleService, broadcaster *EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc *GameserverService, consoleSvc *ConsoleService, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		db:            db,

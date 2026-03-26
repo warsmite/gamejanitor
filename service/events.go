@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"time"
 
@@ -43,7 +44,6 @@ const (
 
 // Operation outcome events — system
 const (
-	EventStatusChanged          = "status_changed"
 	EventBackupCompleted        = "backup.completed"
 	EventBackupFailed           = "backup.failed"
 	EventBackupRestoreCompleted = "backup.restore.completed"
@@ -74,7 +74,8 @@ var AllEventTypes = []string{
 	EventContainerStopping, EventContainerStopped, EventContainerExited,
 	EventGameserverError,
 	// Operation outcomes
-	EventStatusChanged,
+	controller.EventStatusChanged,
+
 	EventBackupCompleted, EventBackupFailed,
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,

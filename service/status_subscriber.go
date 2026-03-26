@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
 	"log/slog"
@@ -16,7 +17,7 @@ import (
 type StatusSubscriber struct {
 	db     *sql.DB
 	log    *slog.Logger
-	bus    *EventBus
+	bus    *controller.EventBus
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
@@ -25,7 +26,7 @@ type StatusSubscriber struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusSubscriber(db *sql.DB, bus *EventBus, log *slog.Logger) *StatusSubscriber {
+func NewStatusSubscriber(db *sql.DB, bus *controller.EventBus, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
 		db:          db,
 		bus:         bus,
@@ -66,28 +67,28 @@ func (s *StatusSubscriber) Stop() {
 	s.log.Info("status subscriber stopped")
 }
 
-func (s *StatusSubscriber) handleEvent(event WebhookEvent) {
+func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 	switch e := event.(type) {
 	case ImagePullingEvent:
-		s.setStatus(e.GameserverID, StatusInstalling, "")
+		s.setStatus(e.GameserverID, controller.StatusInstalling, "")
 	case ContainerCreatingEvent:
-		s.setStatus(e.GameserverID, StatusStarting, "")
+		s.setStatus(e.GameserverID, controller.StatusStarting, "")
 	case ContainerStartedEvent:
-		s.setStatus(e.GameserverID, StatusStarted, "")
+		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case GameserverReadyEvent:
-		s.setStatus(e.GameserverID, StatusRunning, "")
+		s.setStatus(e.GameserverID, controller.StatusRunning, "")
 		// Reset crash counter on successful run
 		s.crashMu.Lock()
 		delete(s.crashCounts, e.GameserverID)
 		s.crashMu.Unlock()
 	case ContainerStoppingEvent:
-		s.setStatus(e.GameserverID, StatusStopping, "")
+		s.setStatus(e.GameserverID, controller.StatusStopping, "")
 	case ContainerStoppedEvent:
-		s.setStatus(e.GameserverID, StatusStopped, "")
+		s.setStatus(e.GameserverID, controller.StatusStopped, "")
 	case ContainerExitedEvent:
-		s.setStatus(e.GameserverID, StatusError, "Container exited unexpectedly")
+		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
 	case GameserverErrorEvent:
-		s.setStatus(e.GameserverID, StatusError, e.Reason)
+		s.setStatus(e.GameserverID, controller.StatusError, e.Reason)
 	}
 }
 
@@ -104,7 +105,7 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 	}
 
 	gs.Status = newStatus
-	if newStatus == StatusError {
+	if newStatus == controller.StatusError {
 		gs.ErrorReason = errorReason
 	} else {
 		gs.ErrorReason = ""
@@ -118,7 +119,7 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 	s.log.Info("gameserver status changed", "id", gameserverID, "from", oldStatus, "to", newStatus)
 
 	// Publish derived status_changed event for webhook/SSE consumers
-	s.bus.Publish(StatusEvent{
+	s.bus.Publish(controller.StatusEvent{
 		GameserverID: gameserverID,
 		OldStatus:    oldStatus,
 		NewStatus:    newStatus,

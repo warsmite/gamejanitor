@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -43,11 +44,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	switch gs.Status {
-	case StatusInstalling, StatusStarting, StatusStarted, StatusRunning:
+	case controller.StatusInstalling, controller.StatusStarting, controller.StatusStarted, controller.StatusRunning:
 		s.log.Info("gameserver already active, skipping start", "id", id, "status", gs.Status)
 		return nil
 	}
@@ -63,7 +64,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
+		return controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
 	}
 
 	w := s.dispatcher.WorkerFor(id)
@@ -84,7 +85,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	if gs.Installed {
-		env = append(env, EnvSkipInstall)
+		env = append(env, controller.EnvSkipInstall)
 	}
 
 	// Parse port bindings
@@ -173,10 +174,10 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	if gs.Status == StatusStopped {
+	if gs.Status == controller.StatusStopped {
 		s.log.Info("gameserver already stopped, skipping", "id", id)
 		return nil
 	}
@@ -208,7 +209,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found after stop", id)
+		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.ContainerID = nil
 	if err := model.UpdateGameserver(s.db, gs); err != nil {
@@ -226,7 +227,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	gs.PopulateNode(s.db)
@@ -238,7 +239,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		Gameserver:   gs,
 	})
 
-	if gs.Status != StatusStopped && gs.Status != StatusError {
+	if gs.Status != controller.StatusStopped && gs.Status != controller.StatusError {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for restart: %w", err)
 		}
@@ -253,12 +254,12 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return ErrNotFoundf("game %s not found", gs.GameID)
+		return controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
@@ -279,7 +280,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		}
 	}()
 
-	if gs.Status != StatusStopped {
+	if gs.Status != controller.StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for update: %w", err)
 		}
@@ -346,7 +347,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
@@ -367,7 +368,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 		}
 	}()
 
-	if gs.Status != StatusStopped {
+	if gs.Status != controller.StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for reinstall: %w", err)
 		}

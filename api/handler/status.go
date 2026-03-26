@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"log/slog"
 	"net/http"
 
@@ -65,13 +66,13 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	gs := gameserverStatus{Total: len(gameservers)}
 	for _, g := range gameservers {
 		switch g.Status {
-		case service.StatusRunning, service.StatusStarted:
+		case controller.StatusRunning, controller.StatusStarted:
 			gs.Running++
-		case service.StatusStopped:
+		case controller.StatusStopped:
 			gs.Stopped++
-		case service.StatusInstalling:
+		case controller.StatusInstalling:
 			gs.Installing++
-		case service.StatusError:
+		case controller.StatusError:
 			gs.Error++
 		}
 	}

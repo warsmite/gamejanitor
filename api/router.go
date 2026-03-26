@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"database/sql"
 	"fmt"
 	"io/fs"
@@ -31,7 +32,7 @@ type RouterOptions struct {
 	SettingsSvc   *service.SettingsService
 	AuthSvc       *service.AuthService
 	ModSvc        *service.ModService
-	Broadcaster   *service.EventBus
+	Broadcaster   *controller.EventBus
 	Registry      *worker.Registry
 	DB            *sql.DB
 	Log           *slog.Logger

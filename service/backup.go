@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -22,11 +23,11 @@ type BackupService struct {
 	gameStore     *games.GameStore
 	store         BackupStore
 	settingsSvc   *SettingsService
-	broadcaster   *EventBus
+	broadcaster   *controller.EventBus
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *EventBus, log *slog.Logger) *BackupService {
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
@@ -46,7 +47,7 @@ func (s *BackupService) getBackupForGameserver(gameserverID, backupID string) (*
 		return nil, fmt.Errorf("getting backup %s: %w", backupID, err)
 	}
 	if backup == nil || backup.GameserverID != gameserverID {
-		return nil, ErrNotFoundf("backup %s not found", backupID)
+		return nil, controller.ErrNotFoundf("backup %s not found", backupID)
 	}
 	return backup, nil
 }
@@ -75,7 +76,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
+		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	// Enforce retention before creating new backup
@@ -128,7 +129,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}
 
 	// Run save-server if game is running and supports it
-	if isRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && HasCapability(game, "save") {
+	if controller.IsRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && HasCapability(game, "save") {
 		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
 		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {
@@ -234,11 +235,11 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 		return fmt.Errorf("getting gameserver %s: %w", backup.GameserverID, err)
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", backup.GameserverID)
+		return controller.ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
 	actor := ActorFromContext(ctx)
-	wasRunning := isRunningStatus(gs.Status)
+	wasRunning := controller.IsRunningStatus(gs.Status)
 
 	s.log.Info("restore initiated", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
@@ -265,7 +266,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 		s.failRestore(gameserverID, backupID, backupName, actor, "gameserver not found")
 		return
 	}
-	if gs.Status != StatusStopped {
+	if gs.Status != controller.StatusStopped {
 		if err := s.gameserverSvc.Stop(ctx, gameserverID); err != nil {
 			s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("stopping gameserver: %v", err))
 			return

@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 func TestEventBus_PublishSubscribe(t *testing.T) {
 	t.Parallel()
-	bus := service.NewEventBus()
+	bus := controller.NewEventBus()
 
 	ch, unsub := bus.Subscribe()
 	defer unsub()
@@ -30,7 +31,7 @@ func TestEventBus_PublishSubscribe(t *testing.T) {
 
 func TestEventBus_MultipleSubscribers(t *testing.T) {
 	t.Parallel()
-	bus := service.NewEventBus()
+	bus := controller.NewEventBus()
 
 	ch1, unsub1 := bus.Subscribe()
 	defer unsub1()
@@ -53,7 +54,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 
 func TestEventBus_Unsubscribe(t *testing.T) {
 	t.Parallel()
-	bus := service.NewEventBus()
+	bus := controller.NewEventBus()
 
 	ch, unsub := bus.Subscribe()
 	unsub()
@@ -72,7 +73,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 
 func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 	t.Parallel()
-	bus := service.NewEventBus()
+	bus := controller.NewEventBus()
 
 	ch, unsub := bus.Subscribe()
 	defer unsub()
@@ -105,7 +106,7 @@ func TestEventBus_EventTypes(t *testing.T) {
 	require.NotEmpty(t, service.EventGameserverStart)
 	require.NotEmpty(t, service.EventGameserverStop)
 	require.NotEmpty(t, service.EventGameserverDelete)
-	require.NotEmpty(t, service.EventStatusChanged)
+	require.NotEmpty(t, controller.EventStatusChanged)
 	require.NotEmpty(t, service.EventBackupCreate)
 	require.NotEmpty(t, service.EventScheduleCreate)
 }

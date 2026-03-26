@@ -102,14 +102,13 @@ Eliminates current `Set*()` cycle-breaking hacks.
 
 ### Phase 2: Worker sub-packages
 
-- [ ] `docker/` → `worker/runtime/` (absorb as package runtime)
-- [ ] `worker/process.go`, `worker/oci.go`, `worker/box64.go` → `worker/runtime/`
-- [ ] `worker/agent.go`, `worker/controller_grpc.go`, `worker/grpc_auth.go` → `worker/agent/`
-- [ ] `worker/logparse.go` → `worker/logparse/`
-- [ ] `worker/local_fileops_direct.go`, `worker/local_fileops_sidecar.go` → `worker/fileops/`
-- [ ] `worker/local_backup.go` → `worker/backup/`
-- [ ] Update all import paths
-- [ ] Run tests
+Scoped down — most worker files are methods on LocalWorker or use unexported types
+(volumeResolver), so they can't move to sub-packages without major refactoring.
+`controller_grpc.go` moves to orchestrator/ in Phase 4d. docker/ stays until
+the circular dep (worker↔docker) is resolved by a future LocalWorker refactor.
+
+- [x] `worker/logparse.go` → `worker/logparse/` (standalone functions, clean separation)
+- [ ] Remaining worker/ restructuring deferred — tight coupling to LocalWorker internals
 
 ### Phase 3: Controller parent package
 

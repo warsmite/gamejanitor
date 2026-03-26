@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,7 +33,7 @@ func (s *WorkshopSource) apiKey() string {
 func (s *WorkshopSource) Search(ctx context.Context, query string, gameVersion string, loader string, offset int, limit int) ([]ModSearchResult, int, error) {
 	key := s.apiKey()
 	if key == "" {
-		return nil, 0, ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
+		return nil, 0, controller.ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
 	}
 
 	// loader is unused for workshop; gameVersion maps to app_id but we get it from the caller's context
@@ -176,7 +177,7 @@ func (s *WorkshopSource) getItemDetails(ctx context.Context, fileID string) (*wo
 	}
 
 	if len(steamResp.Response.PublishedFileDetails) == 0 || steamResp.Response.PublishedFileDetails[0].Result != 1 {
-		return nil, ErrNotFoundf("workshop item %s not found", fileID)
+		return nil, controller.ErrNotFoundf("workshop item %s not found", fileID)
 	}
 
 	d := steamResp.Response.PublishedFileDetails[0]

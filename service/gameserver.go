@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -26,7 +27,7 @@ type GameserverService struct {
 	db           *sql.DB
 	dispatcher   *worker.Dispatcher
 	log          *slog.Logger
-	broadcaster  *EventBus
+	broadcaster  *controller.EventBus
 	readyWatcher *ReadyWatcher
 	settingsSvc  *SettingsService
 	gameStore    *games.GameStore
@@ -35,7 +36,7 @@ type GameserverService struct {
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
@@ -90,7 +91,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
-	gs.Status = StatusStopped
+	gs.Status = controller.StatusStopped
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
 
 	rawPassword := generateRandomPassword(16)
@@ -105,7 +106,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		return "", ErrNotFoundf("game %s not found", gs.GameID)
+		return "", controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	// Validate required env vars from the game definition
@@ -120,7 +121,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		nodeID = *gs.NodeID
 		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 		if err != nil {
-			return "", ErrUnavailablef("selected worker unavailable: %v", err)
+			return "", controller.ErrUnavailablef("selected worker unavailable: %v", err)
 		}
 		targetWorker = w
 
@@ -130,7 +131,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		if gs.PortMode == "auto" {
 			allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
 			if err != nil {
-				return "", ErrUnavailablef("no available ports for this gameserver")
+				return "", controller.ErrUnavailablef("no available ports for this gameserver")
 			}
 			gs.Ports = allocatedPorts
 		}
@@ -139,9 +140,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
 		if len(candidates) == 0 {
 			if !gs.NodeTags.IsEmpty() {
-				return "", ErrUnavailablef("no workers available with required labels %v", gs.NodeTags)
+				return "", controller.ErrUnavailablef("no workers available with required labels %v", gs.NodeTags)
 			}
-			return "", ErrUnavailable("no workers available — connect a worker node first")
+			return "", controller.ErrUnavailable("no workers available — connect a worker node first")
 		}
 
 		var lastErr error
@@ -167,7 +168,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 			break
 		}
 		if targetWorker == nil {
-			return "", ErrUnavailablef("no worker has capacity for this gameserver: %v", lastErr)
+			return "", controller.ErrUnavailablef("no worker has capacity for this gameserver: %v", lastErr)
 		}
 		if nodeID != "" {
 			gs.NodeID = &nodeID
@@ -180,13 +181,13 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	// Enforce require_* settings
 	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && gs.MemoryLimitMB <= 0 {
-		return "", ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
+		return "", controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(SettingRequireCPULimit) && gs.CPULimit <= 0 {
-		return "", ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
+		return "", controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
-		return "", ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
+		return "", controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 
 	// Warn about unlimited resources in multi-node mode
@@ -234,7 +235,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 		return "", err
 	}
 	if gs == nil {
-		return "", ErrNotFoundf("gameserver %s not found", gameserverID)
+		return "", controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	rawPassword := generateRandomPassword(16)
@@ -341,7 +342,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		return false, err
 	}
 	if existing == nil {
-		return false, ErrNotFoundf("gameserver %s not found", gs.ID)
+		return false, controller.ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
 
 	// Snapshot old resource values for capacity check
@@ -353,7 +354,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	token := TokenFromContext(ctx)
 	if token != nil && !IsAdmin(token) {
 		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || !gs.NodeTags.IsEmpty() {
-			return false, ErrBadRequestf("insufficient permissions to modify resource/placement fields")
+			return false, controller.ErrBadRequestf("insufficient permissions to modify resource/placement fields")
 		}
 	}
 
@@ -400,13 +401,13 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 
 	// Enforce require_* settings
 	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
-		return false, ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
+		return false, controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(SettingRequireCPULimit) && existing.CPULimit <= 0 {
-		return false, ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
+		return false, controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
-		return false, ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
+		return false, controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 
 	// Auto-migration check: if resources changed and gameserver is on a node, check capacity
@@ -528,12 +529,12 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		return err
 	}
 	if gs == nil {
-		return ErrNotFoundf("gameserver %s not found", id)
+		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name)
 
-	if gs.Status != StatusStopped {
+	if gs.Status != controller.StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
 		}
@@ -543,7 +544,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 			return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 		}
 		if gs == nil {
-			return ErrNotFoundf("gameserver %s not found after stop", id)
+			return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 		}
 	}
 
@@ -603,7 +604,7 @@ func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *model.Game
 	var env map[string]string
 	if gs.Env != nil {
 		if err := json.Unmarshal(gs.Env, &env); err != nil {
-			return ErrBadRequestf("invalid env format: %v", err)
+			return controller.ErrBadRequestf("invalid env format: %v", err)
 		}
 	}
 	if env == nil {
@@ -621,9 +622,9 @@ func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *model.Game
 				label = def.Key
 			}
 			if def.ConsentRequired {
-				return ErrBadRequestf("%s requires explicit consent and must be accepted by the end user", label)
+				return controller.ErrBadRequestf("%s requires explicit consent and must be accepted by the end user", label)
 			}
-			return ErrBadRequestf("%s is required", label)
+			return controller.ErrBadRequestf("%s is required", label)
 		}
 	}
 	return nil

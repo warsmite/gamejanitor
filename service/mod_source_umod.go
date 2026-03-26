@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -178,7 +179,7 @@ func (s *UmodSource) fetchPluginDetail(ctx context.Context, pluginName string) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFoundf("umod plugin %q not found", pluginName)
+		return nil, controller.ErrNotFoundf("umod plugin %q not found", pluginName)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("umod detail returned status %d", resp.StatusCode)
