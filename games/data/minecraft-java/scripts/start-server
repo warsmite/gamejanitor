@@ -21,6 +21,9 @@ update_property "max-players"  "${MAX_PLAYERS:-20}"               "$PROPS"
 update_property "difficulty"   "${DIFFICULTY:-normal}"             "$PROPS"
 update_property "motd"         "${MOTD:-A Gamejanitor Server}"    "$PROPS"
 update_property "pvp"          "${PVP:-true}"                     "$PROPS"
+update_property "enable-rcon"  "true"                              "$PROPS"
+update_property "rcon.port"    "${RCON_PORT:-25575}"               "$PROPS"
+update_property "rcon.password" "${RCON_PASSWORD}"                 "$PROPS"
 
 echo "[start-server] updated server.properties and eula.txt"
 

@@ -2,86 +2,102 @@ id: minecraft-java
 name: "Minecraft: Java Edition"
 aliases: [minecraft, mc, mcje, java]
 description: "The original Minecraft, supporting vanilla, Paper, Forge, and Fabric servers"
-base_image: ghcr.io/warsmite/gamejanitor/java
-recommended_memory_mb: 2048
-disabled_capabilities: []
-ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
-assets:
-  icon: minecraft-icon.ico
 
 ports:
   - name: game
     port: 25565
     protocol: tcp
+  - name: rcon
+    port: 25575
+    protocol: tcp
 
-env:
-  - key: EULA
-    default: "false"
-    label: "Accept Minecraft EULA"
-    type: boolean
-    consent_required: true
-    notice: "You must agree to the [Minecraft EULA](https://aka.ms/MinecraftEULA) to run this server."
-  - key: MINECRAFT_VERSION
-    default: "latest"
-    label: "Version"
-    type: select
-    group: server
-    dynamic_options:
-      source: mojang-versions
-    triggers_install: true
-  - key: MODLOADER
-    default: "vanilla"
-    hidden: true
-    triggers_install: true
-  - key: GAMEMODE
-    default: "survival"
-    label: "Game Mode"
-    type: select
-    group: gameplay
-    options: ["survival", "creative", "adventure", "spectator"]
-  - key: MAX_PLAYERS
-    default: "20"
-    label: "Max Players"
-    type: number
-    group: server
-  - key: DIFFICULTY
-    default: "normal"
-    label: "Difficulty"
-    type: select
-    group: gameplay
-    options: ["peaceful", "easy", "normal", "hard"]
-  - key: MOTD
-    default: "A Gamejanitor Server"
-    label: "Message of the Day"
-    group: server
-  - key: PVP
-    default: "true"
-    label: "PvP"
-    type: boolean
-    group: gameplay
-  - key: SERVER_PORT
-    default: "25565"
-    system: true
-  - key: SAVE_TIMEOUT_SECONDS
-    default: "5"
-    system: true
+query:
+  protocol: minecraft
+  supports: [players, mods]
+  notes: "Player list limited to server's sample (usually 12 max)"
 
-mods:
-  loader:
-    env_key: MODLOADER
-    label: "Mod Loader"
-    type: select
-    options: ["vanilla", "paper", "forge", "fabric"]
-    default: "vanilla"
-  sources:
-    - type: modrinth
-      install_paths:
-        fabric: /data/mods
-        forge: /data/mods
-        paper: /data/plugins
-      loaders:
-        fabric: fabric
-        forge: forge
-        paper: paper
-      loader_env: MODLOADER
-      version_env: MINECRAFT_VERSION
+container:
+  image: ghcr.io/warsmite/gamejanitor/java
+  recommended_memory_mb: 2048
+  ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
+  disabled_capabilities: []
+  env:
+    - key: EULA
+      default: "false"
+      label: "Accept Minecraft EULA"
+      type: boolean
+      consent_required: true
+      notice: "You must agree to the [Minecraft EULA](https://aka.ms/MinecraftEULA) to run this server."
+    - key: MINECRAFT_VERSION
+      default: "latest"
+      label: "Version"
+      type: select
+      group: server
+      dynamic_options:
+        source: mojang-versions
+      triggers_install: true
+    - key: MODLOADER
+      default: "vanilla"
+      hidden: true
+      triggers_install: true
+    - key: GAMEMODE
+      default: "survival"
+      label: "Game Mode"
+      type: select
+      group: gameplay
+      options: ["survival", "creative", "adventure", "spectator"]
+    - key: MAX_PLAYERS
+      default: "20"
+      label: "Max Players"
+      type: number
+      group: server
+    - key: DIFFICULTY
+      default: "normal"
+      label: "Difficulty"
+      type: select
+      group: gameplay
+      options: ["peaceful", "easy", "normal", "hard"]
+    - key: MOTD
+      default: "A Gamejanitor Server"
+      label: "Message of the Day"
+      group: server
+    - key: PVP
+      default: "true"
+      label: "PvP"
+      type: boolean
+      group: gameplay
+    - key: RCON_PASSWORD
+      default: ""
+      label: "RCON Password"
+      autogenerate: password
+    - key: RCON_PORT
+      default: "25575"
+      system: true
+    - key: SERVER_PORT
+      default: "25565"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "5"
+      system: true
+  mods:
+    loader:
+      env_key: MODLOADER
+      label: "Mod Loader"
+      type: select
+      options: ["vanilla", "paper", "forge", "fabric"]
+      default: "vanilla"
+    sources:
+      - type: modrinth
+        install_paths:
+          fabric: /data/mods
+          forge: /data/mods
+          paper: /data/plugins
+        loaders:
+          fabric: fabric
+          forge: forge
+          paper: paper
+        loader_env: MODLOADER
+        version_env: MINECRAFT_VERSION
+
+assets:
+  icon: minecraft-icon.ico

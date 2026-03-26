@@ -3,4 +3,8 @@ if [ -z "$1" ]; then
     echo "[send-command] usage: send-command <command>"
     exit 1
 fi
-echo "$1" > /tmp/cmd-input
+
+RCON_PORT="${RCON_PORT:-25575}"
+RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+
+rcon -a "localhost:${RCON_PORT}" -p "$RCON_PASSWORD" "$1"

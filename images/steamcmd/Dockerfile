@@ -23,11 +23,6 @@ ENV PATH="/opt/steamcmd:${PATH}"
 COPY steamcmd-retry /usr/local/bin/steamcmd-retry
 RUN chmod +x /usr/local/bin/steamcmd-retry
 
-# rcon-cli for RCON command support
-RUN curl -fsSL https://github.com/gorcon/rcon-cli/releases/download/v0.10.3/rcon-0.10.3-amd64_linux.tar.gz | tar xz -C /tmp && \
-    mv /tmp/rcon-0.10.3-amd64_linux/rcon /usr/local/bin/rcon && \
-    rm -rf /tmp/rcon-0.10.3-amd64_linux
-
 USER gameserver
 
 # Pre-warm SteamCMD (first run self-updates and may exit non-zero)
