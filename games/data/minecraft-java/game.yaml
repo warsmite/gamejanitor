@@ -144,6 +144,7 @@ container:
       default: ""
       label: "RCON Password"
       autogenerate: password
+      group: server
     - key: RCON_PORT
       default: "25575"
       system: true
