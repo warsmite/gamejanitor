@@ -1,22 +1,20 @@
 package event
 
 import (
-	"database/sql"
-
 	"github.com/warsmite/gamejanitor/model"
 )
 
 // EventHistoryService queries persisted event history from the DB.
 type EventHistoryService struct {
-	db *sql.DB
+	store Store
 }
 
-func NewEventHistoryService(db *sql.DB) *EventHistoryService {
-	return &EventHistoryService{db: db}
+func NewEventHistoryService(store Store) *EventHistoryService {
+	return &EventHistoryService{store: store}
 }
 
 func (s *EventHistoryService) List(filter model.EventFilter) ([]model.Event, error) {
-	events, err := model.ListEvents(s.db, filter)
+	events, err := s.store.ListEvents(filter)
 	if err != nil {
 		return nil, err
 	}

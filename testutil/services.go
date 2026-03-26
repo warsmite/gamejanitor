@@ -8,9 +8,11 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/store"
 )
 
 // ServiceBundle holds all services wired together for testing.
@@ -34,7 +36,7 @@ type ServiceBundle struct {
 	ModSvc        *service.ModService
 	BackupStore   service.BackupStore
 	StatusSub     *service.StatusSubscriber
-	EventStore    *service.EventStoreSubscriber
+	EventStore    *event.EventStoreSubscriber
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.
@@ -112,7 +114,8 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	log := TestLogger()
 
 	statusSub := service.NewStatusSubscriber(svc.DB, svc.Broadcaster, log)
-	eventStore := service.NewEventStoreSubscriber(svc.DB, svc.Broadcaster, log)
+	eventStoreDB := store.NewEventStore(svc.DB)
+	eventStore := event.NewEventStoreSubscriber(eventStoreDB, svc.Broadcaster, log)
 
 	ctx := TestContext()
 	statusSub.Start(ctx)

@@ -1,28 +1,33 @@
-package service
+package event
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"sync"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 )
 
+// Store is the persistence interface for the event subscriber and history service.
+type Store interface {
+	CreateEvent(e *model.Event) error
+	ListEvents(f model.EventFilter) ([]model.Event, error)
+}
+
 // EventStoreSubscriber persists all events from the bus to the database.
 type EventStoreSubscriber struct {
-	db     *sql.DB
+	store  Store
 	bus    *controller.EventBus
 	log    *slog.Logger
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
-func NewEventStoreSubscriber(db *sql.DB, bus *controller.EventBus, log *slog.Logger) *EventStoreSubscriber {
-	return &EventStoreSubscriber{db: db, bus: bus, log: log}
+func NewEventStoreSubscriber(store Store, bus *controller.EventBus, log *slog.Logger) *EventStoreSubscriber {
+	return &EventStoreSubscriber{store: store, bus: bus, log: log}
 }
 
 func (s *EventStoreSubscriber) Start(ctx context.Context) {
@@ -64,7 +69,7 @@ func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 		return
 	}
 
-	gameserverID := extractGameserverID(event)
+	gameserverID := event.EventGameserverID()
 	actor := extractActor(event)
 	data := extractData(event)
 
@@ -80,43 +85,9 @@ func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 		CreatedAt:    event.EventTimestamp(),
 	}
 
-	if err := model.CreateEvent(s.db, e); err != nil {
+	if err := s.store.CreateEvent(e); err != nil {
 		s.log.Error("event store: failed to persist event", "event_type", event.EventType(), "error", err)
 	}
-}
-
-func extractGameserverID(event controller.WebhookEvent) string {
-	switch e := event.(type) {
-	case controller.GameserverActionEvent:
-		return e.GameserverID
-	case controller.BackupActionEvent:
-		return e.GameserverID
-	case controller.ModActionEvent:
-		return e.GameserverID
-	case controller.ScheduleActionEvent:
-		return e.GameserverID
-	case controller.ScheduledTaskEvent:
-		return e.GameserverID
-	case controller.StatusEvent:
-		return e.GameserverID
-	case controller.ImagePullingEvent:
-		return e.GameserverID
-	case controller.ContainerCreatingEvent:
-		return e.GameserverID
-	case controller.ContainerStartedEvent:
-		return e.GameserverID
-	case controller.GameserverReadyEvent:
-		return e.GameserverID
-	case controller.ContainerStoppingEvent:
-		return e.GameserverID
-	case controller.ContainerStoppedEvent:
-		return e.GameserverID
-	case controller.ContainerExitedEvent:
-		return e.GameserverID
-	case controller.GameserverErrorEvent:
-		return e.GameserverID
-	}
-	return ""
 }
 
 func extractActor(event controller.WebhookEvent) controller.Actor {

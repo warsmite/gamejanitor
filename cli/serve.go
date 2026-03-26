@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -128,7 +129,7 @@ type services struct {
 	authSvc       *auth.AuthService
 	statusMgr     *service.StatusManager
 	statusSub     *service.StatusSubscriber
-	eventStore    *service.EventStoreSubscriber
+	eventStore    *event.EventStoreSubscriber
 	webhookWorker *webhook.WebhookWorker
 	modSvc        *service.ModService
 }
@@ -162,7 +163,8 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	authSvc := auth.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
-	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
+	eventStoreDB := store.NewEventStore(database)
+	eventStore := event.NewEventStoreSubscriber(eventStoreDB, broadcaster, logger)
 	webhookStore := store.NewWebhookStore(database)
 	gsLookup := &webhookGameserverLookup{
 		gs: store.NewGameserverStore(database),
