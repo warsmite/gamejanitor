@@ -20,12 +20,14 @@ var tokensOfflineCmd = &cobra.Command{
 }
 
 func init() {
-	tokensOfflineCreateCmd.Flags().StringP("data-dir", "d", config.DefaultConfig().DataDir, "Data directory containing the database")
+	tokensOfflineCreateCmd.Flags().String("config", "", "Path to config file")
+	tokensOfflineCreateCmd.Flags().StringP("data-dir", "d", "", "Data directory (overrides config)")
 	tokensOfflineCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensOfflineCreateCmd.Flags().String("type", "worker", "Token type: worker, admin")
 	tokensOfflineCreateCmd.MarkFlagRequired("name")
 
-	tokensOfflineRotateCmd.Flags().StringP("data-dir", "d", config.DefaultConfig().DataDir, "Data directory containing the database")
+	tokensOfflineRotateCmd.Flags().String("config", "", "Path to config file")
+	tokensOfflineRotateCmd.Flags().StringP("data-dir", "d", "", "Data directory (overrides config)")
 	tokensOfflineRotateCmd.Flags().String("name", "", "Token name (required)")
 	tokensOfflineRotateCmd.Flags().String("type", "worker", "Token type: worker, admin")
 	tokensOfflineRotateCmd.MarkFlagRequired("name")
@@ -47,8 +49,21 @@ var tokensOfflineRotateCmd = &cobra.Command{
 }
 
 func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
+	// Resolve data dir: explicit --data-dir > config file > default
 	dataDir, _ := cmd.Flags().GetString("data-dir")
+	if dataDir == "" {
+		configPath, _ := cmd.Flags().GetString("config")
+		if configPath == "" {
+			configPath = config.Discover()
+		}
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("loading config: %w", err)
+		}
+		dataDir = cfg.DataDir
+	}
 	dbPath := filepath.Join(dataDir, "gamejanitor.db")
+	slog.Info("using database", "path", dbPath)
 
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, nil, fmt.Errorf("creating data directory: %w", err)
