@@ -464,6 +464,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WorkerNodeSvc:   svcs.workerNodeSvc,
 		WebhookSvc:      svcs.webhookSvc,
 		EventHistorySvc: svcs.eventHistorySvc,
+		OperationStore:  db,
 		Broadcaster:     svcs.broadcaster,
 		ModSvc:          svcs.modSvc,
 		Log:             logger,
