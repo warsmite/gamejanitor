@@ -66,6 +66,80 @@ container:
       label: "PvP"
       type: boolean
       group: gameplay
+    - key: HARDCORE
+      default: "false"
+      label: "Hardcore"
+      type: boolean
+      group: gameplay
+    - key: ALLOW_FLIGHT
+      default: "false"
+      label: "Allow Flight"
+      type: boolean
+      group: gameplay
+      notice: "Enable if using mods that trigger flight detection (e.g. movement mods)."
+    - key: SPAWN_PROTECTION
+      default: "16"
+      label: "Spawn Protection Radius"
+      type: number
+      group: gameplay
+    - key: ONLINE_MODE
+      default: "true"
+      label: "Online Mode"
+      type: boolean
+      group: server
+      notice: "Requires Minecraft account authentication. Disable for offline/cracked servers."
+    - key: WHITELIST
+      default: "false"
+      label: "Whitelist"
+      type: boolean
+      group: server
+    - key: PLAYER_IDLE_TIMEOUT
+      default: "0"
+      label: "AFK Kick (minutes)"
+      type: number
+      group: server
+      notice: "Minutes before idle players are kicked. 0 to disable."
+    - key: SEED
+      default: ""
+      label: "World Seed"
+      group: world
+    - key: LEVEL_NAME
+      default: "world"
+      label: "World Name"
+      group: world
+    - key: GENERATE_STRUCTURES
+      default: "true"
+      label: "Generate Structures"
+      type: boolean
+      group: world
+    - key: MAX_WORLD_SIZE
+      default: "29999984"
+      label: "Max World Size"
+      type: number
+      group: world
+      notice: "World border distance from center in blocks."
+    - key: VIEW_DISTANCE
+      default: "10"
+      label: "View Distance"
+      type: number
+      group: performance
+      notice: "Chunk render distance (3-32). Lower values reduce memory and CPU usage."
+    - key: SIMULATION_DISTANCE
+      default: "10"
+      label: "Simulation Distance"
+      type: number
+      group: performance
+      notice: "Entity update range in chunks (3-32). Lower values improve TPS on busy servers."
+    - key: RESOURCE_PACK
+      default: ""
+      label: "Resource Pack URL"
+      group: resource_pack
+    - key: REQUIRE_RESOURCE_PACK
+      default: "false"
+      label: "Require Resource Pack"
+      type: boolean
+      group: resource_pack
+      notice: "Players who decline the resource pack will be disconnected."
     - key: RCON_PASSWORD
       default: ""
       label: "RCON Password"
