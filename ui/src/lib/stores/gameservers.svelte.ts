@@ -34,6 +34,7 @@ const operationClearEvents: Record<string, string[]> = {
 class GameserverStore {
   gameservers = $state<Record<string, GameserverState>>({});
   games = $state<Record<string, Game>>({});
+  permissions = $state<string[]>([]);
   loading = $state(true);
   initialized = $state(false);
 
@@ -68,6 +69,10 @@ class GameserverStore {
     return this.gameservers[id]?.gameserver.status === 'stopped';
   }
 
+  can(permission: string): boolean {
+    return this.permissions.includes(permission);
+  }
+
   // ── Data loading (lazy, called by pages on first visit) ──
 
   async loadBackups(gsId: string) {
@@ -92,21 +97,23 @@ class GameserverStore {
     if (this.initialized) return;
 
     try {
-      const [gsList, gameList] = await Promise.all([
+      const [gsResponse, gameList] = await Promise.all([
         api.gameservers.list(),
         api.games.list(),
       ]);
+
+      this.permissions = gsResponse.permissions || [];
 
       for (const g of gameList) {
         this.games[g.id] = g;
       }
 
-      for (const gs of gsList) {
+      for (const gs of gsResponse.gameservers) {
         this.gameservers[gs.id] = this.newState(gs);
       }
 
       // Fetch live data for active servers
-      for (const gs of gsList) {
+      for (const gs of gsResponse.gameservers) {
         if (gs.status !== 'stopped') {
           this.fetchLogs(gs.id);
         }

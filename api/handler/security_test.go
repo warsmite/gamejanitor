@@ -88,11 +88,13 @@ func TestSecurity_TokenScopedToGameserver_CannotListOthers(t *testing.T) {
 	defer resp.Body.Close()
 
 	var result struct {
-		Data []struct{ ID string } `json:"data"`
+		Data struct {
+			Gameservers []struct{ ID string } `json:"gameservers"`
+		} `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Len(t, result.Data, 1, "scoped token should only see its own gameserver")
-	assert.Equal(t, gsIDs[0], result.Data[0].ID)
+	assert.Len(t, result.Data.Gameservers, 1, "scoped token should only see its own gameserver")
+	assert.Equal(t, gsIDs[0], result.Data.Gameservers[0].ID)
 }
 
 func TestSecurity_ExpiredToken_Rejected(t *testing.T) {

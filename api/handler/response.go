@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -101,4 +102,14 @@ func serviceErrorMessage(err error) string {
 		return svcErr.Error()
 	}
 	return "internal server error"
+}
+
+// effectivePermissions returns the current token's permissions.
+// Admin tokens get all permissions. No token (auth disabled) gets all permissions.
+func effectivePermissions(r *http.Request) []string {
+	token := auth.TokenFromContext(r.Context())
+	if token == nil || auth.IsAdmin(token) {
+		return auth.AllPermissions
+	}
+	return []string(token.Permissions)
 }

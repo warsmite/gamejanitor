@@ -357,7 +357,7 @@ export interface Event {
 
 export const api = {
   gameservers: {
-    list: () => get<Gameserver[]>('/api/gameservers'),
+    list: () => get<{ gameservers: Gameserver[]; permissions: string[] }>('/api/gameservers'),
     get: (id: string) => get<Gameserver>(`/api/gameservers/${id}`),
     create: (data: any) => post<Gameserver>('/api/gameservers', data),
     update: (id: string, data: any) => patch<Gameserver>(`/api/gameservers/${id}`, data),

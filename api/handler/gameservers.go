@@ -57,7 +57,13 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if gameservers == nil {
 		gameservers = []model.Gameserver{}
 	}
-	respondOK(w, gameservers)
+
+	// Include the token's effective permissions so the UI can show/hide controls
+	permissions := effectivePermissions(r)
+	respondOK(w, map[string]any{
+		"gameservers": gameservers,
+		"permissions": permissions,
+	})
 }
 
 func (h *GameserverHandlers) Get(w http.ResponseWriter, r *http.Request) {
