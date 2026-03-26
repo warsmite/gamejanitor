@@ -140,32 +140,20 @@ type services struct {
 
 func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := controller.NewEventBus()
-	gsStore := store.NewGameserverStore(database)
-	wnStore := store.NewWorkerNodeStore(database)
+	db := store.New(database)
 
-	settingsStore := struct {
-		*store.SettingStore
-		*store.WorkerNodeStore
-	}{store.NewSettingStore(database), wnStore}
-	settingsSvc := settings.NewSettingsServiceWithMode(settingsStore, logger, cfg.Mode)
+	settingsSvc := settings.NewSettingsServiceWithMode(db, logger, cfg.Mode)
 
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
-	backupDBStore := store.NewBackupStore(database)
-	gameserverStore := struct {
-		*store.GameserverStore
-		*store.WorkerNodeStore
-		*store.BackupStore
-	}{gsStore, wnStore, backupDBStore}
 
-	gameserverSvc := gameserver.NewGameserverService(gameserverStore, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
-	statusStore := store.NewGameserverStore(database)
-	querySvc := status.NewQueryService(statusStore, broadcaster, gameStore, logger)
-	statsPoller := status.NewStatsPoller(statusStore, dispatcher, broadcaster, logger)
-	readyWatcher := status.NewReadyWatcher(statusStore, broadcaster, gameStore, querySvc, statsPoller, logger)
+	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
+	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, logger)
+	readyWatcher := status.NewReadyWatcher(db, broadcaster, gameStore, querySvc, statsPoller, logger)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
-	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, logger)
-	fileSvc := gameserver.NewFileService(gsStore, dispatcher, logger)
+	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
+	fileSvc := gameserver.NewFileService(db, dispatcher, logger)
 
 	backupStorage, err := initBackupStorage(cfg, logger)
 	if err != nil {
@@ -173,38 +161,16 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}
 
 	gameserverSvc.SetBackupStore(backupStorage)
-	backupCompositeStore := struct {
-		*store.BackupStore
-		*store.GameserverStore
-	}{backupDBStore, gsStore}
-	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
-	scheduleStore := struct {
-		*store.ScheduleStore
-		*store.GameserverStore
-	}{store.NewScheduleStore(database), gsStore}
-	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
-	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, logger)
-	authStore := struct {
-		*store.TokenStore
-		*store.GameserverStore
-	}{store.NewTokenStore(database), gsStore}
-	authSvc := auth.NewAuthService(authStore, logger)
-	statusMgr := status.NewStatusManager(statusStore, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
-	statusSub := status.NewStatusSubscriber(statusStore, broadcaster, logger)
-	eventStoreDB := store.NewEventStore(database)
-	eventStore := event.NewEventStoreSubscriber(eventStoreDB, broadcaster, logger)
-	webhookStore := store.NewWebhookStore(database)
-	gsLookup := &webhookGameserverLookup{
-		gs: store.NewGameserverStore(database),
-		wn: store.NewWorkerNodeStore(database),
-	}
-	webhookWorker := webhook.NewWebhookWorker(webhookStore, gsLookup, broadcaster, logger)
+	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
+	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
+	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
+	authSvc := auth.NewAuthService(db, logger)
+	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusSub := status.NewStatusSubscriber(db, broadcaster, logger)
+	eventStore := event.NewEventStoreSubscriber(db, broadcaster, logger)
+	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
-	modStore := struct {
-		*store.ModStore
-		*store.GameserverStore
-	}{store.NewModStore(database), gsStore}
-	modSvc := mod.NewModService(modStore, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
+	modSvc := mod.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
 	return &services{
 		broadcaster:   broadcaster,
@@ -302,16 +268,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	wnStoreForOrchestrator := store.NewWorkerNodeStore(database)
-	registry := orchestrator.NewRegistry(wnStoreForOrchestrator, logger)
+	db := store.New(database)
+	registry := orchestrator.NewRegistry(db, logger)
 	if err := registry.LoadFromDB(); err != nil {
 		return fmt.Errorf("failed to load workers from database: %w", err)
 	}
-	dispatcherStore := struct {
-		*store.GameserverStore
-		*store.WorkerNodeStore
-	}{store.NewGameserverStore(database), wnStoreForOrchestrator}
-	dispatcher := orchestrator.NewDispatcher(registry, dispatcherStore, logger)
+	dispatcher := orchestrator.NewDispatcher(registry, db, logger)
 
 	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
 	if err != nil {
@@ -386,12 +348,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-	grpcStore := struct {
-		*store.WorkerNodeStore
-		*store.GameserverStore
-	}{wnStoreForOrchestrator, store.NewGameserverStore(database)}
 	go func() {
-		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, grpcStore, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
+		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, db, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
 			logger.Error("grpc server stopped", "error", err)
 		}
 	}()
@@ -565,21 +523,6 @@ func openBrowser(url string) {
 		return
 	}
 	cmd.Start()
-}
-
-// webhookGameserverLookup combines gameserver and worker node stores
-// to satisfy webhook.GameserverLookup.
-type webhookGameserverLookup struct {
-	gs *store.GameserverStore
-	wn *store.WorkerNodeStore
-}
-
-func (l *webhookGameserverLookup) GetGameserver(id string) (*model.Gameserver, error) {
-	return l.gs.GetGameserver(id)
-}
-
-func (l *webhookGameserverLookup) GetWorkerNode(id string) (*model.WorkerNode, error) {
-	return l.wn.GetWorkerNode(id)
 }
 
 func webUIFS(cfg config.Config) fs.FS {

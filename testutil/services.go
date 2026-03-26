@@ -51,67 +51,33 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	db := NewTestDB(t)
 	log := TestLogger()
 	gameStore := NewTestGameStore(t)
+	s := store.New(db)
 
-	gsStore := store.NewGameserverStore(db)
-	wnStore := store.NewWorkerNodeStore(db)
-
-	registry := orchestrator.NewRegistry(wnStore, log)
-	dispatcherStore := struct {
-		*store.GameserverStore
-		*store.WorkerNodeStore
-	}{gsStore, wnStore}
-	dispatcher := orchestrator.NewDispatcher(registry, dispatcherStore, log)
+	registry := orchestrator.NewRegistry(s, log)
+	dispatcher := orchestrator.NewDispatcher(registry, s, log)
 	broadcaster := controller.NewEventBus()
 
-	settingsStore := struct {
-		*store.SettingStore
-		*store.WorkerNodeStore
-	}{store.NewSettingStore(db), wnStore}
-	settingsSvc := settings.NewSettingsService(settingsStore, log)
+	settingsSvc := settings.NewSettingsService(s, log)
 
 	dataDir := t.TempDir()
 	backupStorage := backup.NewLocalStorage(dataDir)
 
-	backupDBStore := store.NewBackupStore(db)
-	gsCompositeStore := struct {
-		*store.GameserverStore
-		*store.WorkerNodeStore
-		*store.BackupStore
-	}{gsStore, wnStore, backupDBStore}
-
-	gameserverSvc := gameserver.NewGameserverService(gsCompositeStore, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
-	statusStore := store.NewGameserverStore(db)
-	querySvc := status.NewQueryService(statusStore, broadcaster, gameStore, log)
-	statsPoller := status.NewStatsPoller(statusStore, dispatcher, broadcaster, log)
-	readyWatcher := status.NewReadyWatcher(statusStore, broadcaster, gameStore, querySvc, statsPoller, log)
+	gameserverSvc := gameserver.NewGameserverService(s, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
+	querySvc := status.NewQueryService(s, broadcaster, gameStore, log)
+	statsPoller := status.NewStatsPoller(s, dispatcher, broadcaster, log)
+	readyWatcher := status.NewReadyWatcher(s, broadcaster, gameStore, querySvc, statsPoller, log)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
 
-	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, log)
-	fileSvc := gameserver.NewFileService(gsStore, dispatcher, log)
-	backupCompositeStore := struct {
-		*store.BackupStore
-		*store.GameserverStore
-	}{backupDBStore, gsStore}
-	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
-	scheduleStore := struct {
-		*store.ScheduleStore
-		*store.GameserverStore
-	}{store.NewScheduleStore(db), gsStore}
-	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
-	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, log)
-	authStore := struct {
-		*store.TokenStore
-		*store.GameserverStore
-	}{store.NewTokenStore(db), gsStore}
-	authSvc := auth.NewAuthService(authStore, log)
+	consoleSvc := gameserver.NewConsoleService(s, dispatcher, gameStore, log)
+	fileSvc := gameserver.NewFileService(s, dispatcher, log)
+	backupSvc := backup.NewBackupService(s, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
+	scheduler := schedule.NewScheduler(s, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
+	scheduleSvc := schedule.NewScheduleService(s, scheduler, broadcaster, log)
+	authSvc := auth.NewAuthService(s, log)
 
 	optionsRegistry := games.NewOptionsRegistry(log)
-	modStore := struct {
-		*store.ModStore
-		*store.GameserverStore
-	}{store.NewModStore(db), gsStore}
-	modSvc := mod.NewModService(modStore, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
+	modSvc := mod.NewModService(s, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
 
 	svc := &ServiceBundle{
 		DB:            db,
@@ -150,11 +116,10 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	t.Helper()
 	svc := NewTestServices(t)
 	log := TestLogger()
+	s := store.New(svc.DB)
 
-	statusSubStore := store.NewGameserverStore(svc.DB)
-	statusSub := status.NewStatusSubscriber(statusSubStore, svc.Broadcaster, log)
-	eventStoreDB := store.NewEventStore(svc.DB)
-	eventStore := event.NewEventStoreSubscriber(eventStoreDB, svc.Broadcaster, log)
+	statusSub := status.NewStatusSubscriber(s, svc.Broadcaster, log)
+	eventStore := event.NewEventStoreSubscriber(s, svc.Broadcaster, log)
 
 	ctx := TestContext()
 	statusSub.Start(ctx)
@@ -262,8 +227,5 @@ func MustCreateCustomToken(t *testing.T, svc *ServiceBundle, perms []string, gam
 // NewSettingsStore builds a settings.Store from a *sql.DB for tests that create
 // SettingsService directly instead of using the full ServiceBundle.
 func NewSettingsStore(db *sql.DB) settings.Store {
-	return struct {
-		*store.SettingStore
-		*store.WorkerNodeStore
-	}{store.NewSettingStore(db), store.NewWorkerNodeStore(db)}
+	return store.New(db)
 }
