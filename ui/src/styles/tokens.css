@@ -1,7 +1,7 @@
 /* Gamejanitor Web UI Styles
    Imports shared design tokens, then adds UI-specific component styles. */
 
-@import '../../design/tokens.css';
+@import './design-tokens.css';
 
 /* ═══════════════════════ SHARED NAV ═══════════════════════ */
 nav {

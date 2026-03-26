@@ -17,10 +17,6 @@
           pname = "gamejanitor-ui";
           version = "0.1.0";
           src = ./ui;
-          postPatch = ''
-            rm -f design
-            cp -r ${./design} design
-          '';
           npmDepsHash = "sha256-b09AEsgcy52kcGj7rMuriVJcSimjZRzxTB0BOSvqY+w=";
           installPhase = ''
             cp -r dist $out
