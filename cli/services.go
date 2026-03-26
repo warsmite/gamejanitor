@@ -21,36 +21,56 @@ import (
 	"github.com/warsmite/gamejanitor/store"
 )
 
-type services struct {
-	broadcaster     *controller.EventBus
-	settingsSvc     *settings.SettingsService
-	gameserverSvc   *gameserver.GameserverService
-	querySvc        *status.QueryService
-	statsPoller     *status.StatsPoller
-	readyWatcher    *status.ReadyWatcher
-	consoleSvc      *gameserver.ConsoleService
-	fileSvc         *gameserver.FileService
-	backupSvc       *backup.BackupService
-	scheduler       *schedule.Scheduler
-	scheduleSvc     *schedule.ScheduleService
-	authSvc         *auth.AuthService
-	statusMgr       *status.StatusManager
-	statusSub       *status.StatusSubscriber
-	eventHistorySvc *event.EventHistoryService
-	webhookWorker   *webhook.WebhookWorker
-	webhookSvc      *webhook.WebhookEndpointService
-	workerNodeSvc   *orchestrator.WorkerNodeService
-	modSvc          *mod.ModService
+// Services holds all wired services. Exported so testutil can use the same wiring.
+type Services struct {
+	Broadcaster     *controller.EventBus
+	SettingsSvc     *settings.SettingsService
+	GameserverSvc   *gameserver.GameserverService
+	QuerySvc        *status.QueryService
+	StatsPoller     *status.StatsPoller
+	ReadyWatcher    *status.ReadyWatcher
+	ConsoleSvc      *gameserver.ConsoleService
+	FileSvc         *gameserver.FileService
+	BackupSvc       *backup.BackupService
+	Scheduler       *schedule.Scheduler
+	ScheduleSvc     *schedule.ScheduleService
+	AuthSvc         *auth.AuthService
+	StatusMgr       *status.StatusManager
+	StatusSub       *status.StatusSubscriber
+	EventHistorySvc *event.EventHistoryService
+	WebhookWorker   *webhook.WebhookWorker
+	WebhookSvc      *webhook.WebhookEndpointService
+	WorkerNodeSvc   *orchestrator.WorkerNodeService
+	ModSvc          *mod.ModService
+	BackupStorage   backup.Storage
+	ActivityTracker *gameserver.ActivityTracker
 }
 
-func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
+// InitServicesOpts configures optional overrides for service initialization.
+type InitServicesOpts struct {
+	// PortProbe overrides the port availability check. Tests set this to always return true.
+	PortProbe func(int) bool
+	// BackupStorage overrides the backup storage backend. Nil uses config-based detection.
+	BackupStorage backup.Storage
+	// SkipConfigApply skips applying config file settings to DB. Used in tests.
+	SkipConfigApply bool
+}
+
+// InitServices wires all services together. This is the single composition root
+// used by both production (cli/serve.go) and tests (testutil/services.go).
+func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger, opts *InitServicesOpts) (*Services, error) {
+	if opts == nil {
+		opts = &InitServicesOpts{}
+	}
+
 	broadcaster := controller.NewEventBus()
 	db := store.New(database)
 
 	settingsSvc := settings.NewSettingsServiceWithMode(db, logger, cfg.Mode)
 
-	// Apply config file runtime settings to DB on every startup
-	settingsSvc.ApplyConfig(cfg.Settings)
+	if !opts.SkipConfigApply {
+		settingsSvc.ApplyConfig(cfg.Settings)
+	}
 
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
@@ -60,14 +80,26 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
 	fileSvc := gameserver.NewFileService(db, dispatcher, logger)
 
-	backupStorage, err := initBackupStorage(cfg, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Activity tracking for long-running worker dispatches and CRUD events
+	// Activity tracking
 	activityTracker := gameserver.NewActivityTracker(db, logger)
 	gameserverSvc.SetActivityTracker(activityTracker)
+
+	// Port probe override (tests skip host port checking)
+	if opts.PortProbe != nil {
+		gameserverSvc.SetPortProbe(opts.PortProbe)
+	}
+
+	// Backup storage
+	var backupStorage backup.Storage
+	if opts.BackupStorage != nil {
+		backupStorage = opts.BackupStorage
+	} else {
+		var err error
+		backupStorage, err = initBackupStorage(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	gameserverSvc.SetBackupStore(backupStorage)
 	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
@@ -84,26 +116,28 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	optionsRegistry := games.NewOptionsRegistry(logger)
 	modSvc := mod.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
-	return &services{
-		broadcaster:     broadcaster,
-		settingsSvc:     settingsSvc,
-		gameserverSvc:   gameserverSvc,
-		querySvc:        querySvc,
-		statsPoller:     statsPoller,
-		readyWatcher:    readyWatcher,
-		consoleSvc:      consoleSvc,
-		fileSvc:         fileSvc,
-		backupSvc:       backupSvc,
-		scheduler:       scheduler,
-		scheduleSvc:     scheduleSvc,
-		authSvc:         authSvc,
-		statusMgr:       statusMgr,
-		statusSub:       statusSub,
-		eventHistorySvc: eventHistorySvc,
-		webhookWorker:   webhookWorker,
-		webhookSvc:      webhookSvc,
-		workerNodeSvc:   workerNodeSvc,
-		modSvc:          modSvc,
+	return &Services{
+		Broadcaster:     broadcaster,
+		SettingsSvc:     settingsSvc,
+		GameserverSvc:   gameserverSvc,
+		QuerySvc:        querySvc,
+		StatsPoller:     statsPoller,
+		ReadyWatcher:    readyWatcher,
+		ConsoleSvc:      consoleSvc,
+		FileSvc:         fileSvc,
+		BackupSvc:       backupSvc,
+		Scheduler:       scheduler,
+		ScheduleSvc:     scheduleSvc,
+		AuthSvc:         authSvc,
+		StatusMgr:       statusMgr,
+		StatusSub:       statusSub,
+		EventHistorySvc: eventHistorySvc,
+		WebhookWorker:   webhookWorker,
+		WebhookSvc:      webhookSvc,
+		WorkerNodeSvc:   workerNodeSvc,
+		ModSvc:          modSvc,
+		BackupStorage:   backupStorage,
+		ActivityTracker: activityTracker,
 	}, nil
 }
 

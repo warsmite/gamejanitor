@@ -178,24 +178,24 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	dispatcher := orchestrator.NewDispatcher(registry, db, logger)
 
-	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
+	svcs, err := InitServices(database, dispatcher, registry, gameStore, cfg, logger, nil)
 	if err != nil {
 		return err
 	}
 
 	ctx := context.Background()
-	svcs.statusMgr.Start(ctx)
-	defer svcs.statusMgr.Stop()
+	svcs.StatusMgr.Start(ctx)
+	defer svcs.StatusMgr.Stop()
 
-	svcs.statusSub.Start(ctx)
-	defer svcs.statusSub.Stop()
+	svcs.StatusSub.Start(ctx)
+	defer svcs.StatusSub.Stop()
 
-	svcs.webhookWorker.Start(ctx)
-	defer svcs.webhookWorker.Stop()
+	svcs.WebhookWorker.Start(ctx)
+	defer svcs.WebhookWorker.Stop()
 
 	// Prune old activities on startup, then hourly
 	go func() {
-		retDays := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
+		retDays := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
 			if pruned, err := db.PruneActivities(retDays); err != nil {
 				logger.Error("failed to prune activities on startup", "error", err)
@@ -206,7 +206,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			days := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
+			days := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
 			if days > 0 {
 				if pruned, err := db.PruneActivities(days); err != nil {
 					logger.Error("failed to prune activities", "error", err)
@@ -217,12 +217,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	if err := svcs.scheduler.Start(ctx); err != nil {
+	if err := svcs.Scheduler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start scheduler: %w", err)
 	}
-	defer svcs.scheduler.Stop()
-	defer svcs.readyWatcher.StopAll()
-	defer svcs.querySvc.StopAll()
+	defer svcs.Scheduler.Stop()
+	defer svcs.ReadyWatcher.StopAll()
+	defer svcs.QuerySvc.StopAll()
 
 	// Start gRPC server for controller
 	var serverTLS, dialBackTLS *tls.Config
@@ -249,14 +249,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 	go func() {
-		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, db, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
+		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.AuthSvc, db, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
 			logger.Error("grpc server stopped", "error", err)
 		}
 	}()
 
 	// Launch local worker agent in controller+worker mode
 	if cfg.HasWorker() {
-		rawToken, _, err := svcs.authSvc.RotateWorkerToken("_local")
+		rawToken, _, err := svcs.AuthSvc.RotateWorkerToken("_local")
 		if err != nil {
 			return fmt.Errorf("failed to create local worker token: %w", err)
 		}
@@ -311,7 +311,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Reconcile gameserver status with Docker reality on startup.
 	// Online workers get checked immediately; offline workers' gameservers
 	// are marked unreachable and recovered when the worker reconnects.
-	if err := svcs.statusMgr.RecoverOnStartup(ctx); err != nil {
+	if err := svcs.StatusMgr.RecoverOnStartup(ctx); err != nil {
 		logger.Error("failed to recover gameserver status on startup", "error", err)
 	}
 
@@ -327,21 +327,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Role:            role,
 		LogPath:         logPath,
 		GameStore:       gameStore,
-		GameserverSvc:   svcs.gameserverSvc,
-		ConsoleSvc:      svcs.consoleSvc,
-		FileSvc:         svcs.fileSvc,
-		ScheduleSvc:     svcs.scheduleSvc,
-		BackupSvc:       svcs.backupSvc,
-		QuerySvc:        svcs.querySvc,
-		StatsPoller:     svcs.statsPoller,
-		SettingsSvc:     svcs.settingsSvc,
-		AuthSvc:         svcs.authSvc,
-		WorkerNodeSvc:   svcs.workerNodeSvc,
-		WebhookSvc:      svcs.webhookSvc,
-		EventHistorySvc: svcs.eventHistorySvc,
+		GameserverSvc:   svcs.GameserverSvc,
+		ConsoleSvc:      svcs.ConsoleSvc,
+		FileSvc:         svcs.FileSvc,
+		ScheduleSvc:     svcs.ScheduleSvc,
+		BackupSvc:       svcs.BackupSvc,
+		QuerySvc:        svcs.QuerySvc,
+		StatsPoller:     svcs.StatsPoller,
+		SettingsSvc:     svcs.SettingsSvc,
+		AuthSvc:         svcs.AuthSvc,
+		WorkerNodeSvc:   svcs.WorkerNodeSvc,
+		WebhookSvc:      svcs.WebhookSvc,
+		EventHistorySvc: svcs.EventHistorySvc,
 		ActivityStore:   db,
-		Broadcaster:     svcs.broadcaster,
-		ModSvc:          svcs.modSvc,
+		Broadcaster:     svcs.Broadcaster,
+		ModSvc:          svcs.ModSvc,
 		Log:             logger,
 		WebUI:           webUIFS(cfg),
 	})
@@ -367,7 +367,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	if !isLoopback(cfg.Bind) && !svcs.settingsSvc.GetBool(settings.SettingAuthEnabled) {
+	if !isLoopback(cfg.Bind) && !svcs.SettingsSvc.GetBool(settings.SettingAuthEnabled) {
 		logger.Warn("listening on public address with auth disabled — anyone on your network can manage your gameservers",
 			"bind_address", cfg.Bind, "port", cfg.Port)
 	}

@@ -1,24 +1,28 @@
 package testutil
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller"
 	"database/sql"
 	"testing"
 
+	"github.com/warsmite/gamejanitor/cli"
+	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
+	"github.com/stretchr/testify/require"
 )
 
 // ServiceBundle holds all services wired together for testing.
+// Uses the same InitServices as production to prevent wiring drift.
 type ServiceBundle struct {
 	DB            *sql.DB
 	GameStore     *games.GameStore
@@ -39,10 +43,11 @@ type ServiceBundle struct {
 	ModSvc        *mod.ModService
 	BackupStorage backup.Storage
 	StatusSub     *status.StatusSubscriber
+	StatusMgr     *status.StatusManager
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.
-// Mirrors the production initServices in cli/serve.go.
+// Uses the SAME InitServices as production — no wiring drift possible.
 func NewTestServices(t *testing.T) *ServiceBundle {
 	t.Helper()
 
@@ -53,58 +58,44 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 
 	registry := orchestrator.NewRegistry(s, log)
 	dispatcher := orchestrator.NewDispatcher(registry, s, log)
-	broadcaster := controller.NewEventBus()
-
-	settingsSvc := settings.NewSettingsService(s, log)
 
 	dataDir := t.TempDir()
-	backupStorage := backup.NewLocalStorage(dataDir)
+	cfg := config.DefaultConfig()
+	cfg.DataDir = dataDir
 
-	gameserverSvc := gameserver.NewGameserverService(s, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
-	querySvc := status.NewQueryService(s, broadcaster, gameStore, log)
-	statsPoller := status.NewStatsPoller(s, dispatcher, broadcaster, log)
-	readyWatcher := status.NewReadyWatcher(s, broadcaster, gameStore, log)
-	gameserverSvc.SetReadyWatcher(readyWatcher)
-	gameserverSvc.SetBackupStore(backupStorage)
-	gameserverSvc.SetPortProbe(func(int) bool { return true }) // skip host probe in tests
-	activityTracker := gameserver.NewActivityTracker(s, log)
-	gameserverSvc.SetActivityTracker(activityTracker)
-
-	consoleSvc := gameserver.NewConsoleService(s, dispatcher, gameStore, log)
-	fileSvc := gameserver.NewFileService(s, dispatcher, log)
-	backupSvc := backup.NewBackupService(s, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
-	backupSvc.SetActivityTracker(activityTracker)
-	scheduler := schedule.NewScheduler(s, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
-	scheduleSvc := schedule.NewScheduleService(s, scheduler, broadcaster, log)
-	authSvc := auth.NewAuthService(s, log)
-
-	optionsRegistry := games.NewOptionsRegistry(log)
-	modSvc := mod.NewModService(s, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
+	svcs, err := cli.InitServices(db, dispatcher, registry, gameStore, cfg, log, &cli.InitServicesOpts{
+		PortProbe:       func(int) bool { return true },
+		BackupStorage:   backup.NewLocalStorage(dataDir),
+		SkipConfigApply: true,
+	})
+	require.NoError(t, err)
 
 	svc := &ServiceBundle{
 		DB:            db,
 		GameStore:     gameStore,
 		Registry:      registry,
 		Dispatcher:    dispatcher,
-		Broadcaster:   broadcaster,
-		SettingsSvc:   settingsSvc,
-		GameserverSvc: gameserverSvc,
-		QuerySvc:      querySvc,
-		StatsPoller:   statsPoller,
-		ReadyWatcher:  readyWatcher,
-		ConsoleSvc:    consoleSvc,
-		FileSvc:       fileSvc,
-		BackupSvc:     backupSvc,
-		Scheduler:     scheduler,
-		ScheduleSvc:   scheduleSvc,
-		AuthSvc:       authSvc,
-		ModSvc:        modSvc,
-		BackupStorage: backupStorage,
+		Broadcaster:   svcs.Broadcaster,
+		SettingsSvc:   svcs.SettingsSvc,
+		GameserverSvc: svcs.GameserverSvc,
+		QuerySvc:      svcs.QuerySvc,
+		StatsPoller:   svcs.StatsPoller,
+		ReadyWatcher:  svcs.ReadyWatcher,
+		ConsoleSvc:    svcs.ConsoleSvc,
+		FileSvc:       svcs.FileSvc,
+		BackupSvc:     svcs.BackupSvc,
+		Scheduler:     svcs.Scheduler,
+		ScheduleSvc:   svcs.ScheduleSvc,
+		AuthSvc:       svcs.AuthSvc,
+		ModSvc:        svcs.ModSvc,
+		BackupStorage: svcs.BackupStorage,
+		StatusSub:     svcs.StatusSub,
+		StatusMgr:     svcs.StatusMgr,
 	}
 
 	t.Cleanup(func() {
-		readyWatcher.StopAll()
-		querySvc.StopAll()
+		svcs.ReadyWatcher.StopAll()
+		svcs.QuerySvc.StopAll()
 	})
 
 	return svc
@@ -117,23 +108,15 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	t.Helper()
 	svc := NewTestServices(t)
-	log := TestLogger()
-	s := store.New(svc.DB)
-
-	statusSub := status.NewStatusSubscriber(s, svc.Broadcaster, svc.QuerySvc, svc.StatsPoller, log)
 
 	ctx := TestContext()
-	statusSub.Start(ctx)
+	svc.StatusSub.Start(ctx)
 
 	t.Cleanup(func() {
-		// Stop ReadyWatcher first — its goroutines hold references to
-		// the worker and DB. If we close those first, the watcher panics.
 		svc.ReadyWatcher.StopAll()
 		svc.QuerySvc.StopAll()
-		statusSub.Stop()
+		svc.StatusSub.Stop()
 	})
-
-	svc.StatusSub = statusSub
 
 	return svc
 }
