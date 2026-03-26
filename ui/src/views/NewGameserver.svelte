@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { navigate } from '$lib/router';
+  import { navigate, getRoute } from '$lib/router';
   import { api, type Game, type DynamicOption } from '$lib/api';
   import { toast } from '$lib/stores';
   import { GameIcon, GameserverForm } from '$lib/components';
@@ -46,6 +46,15 @@
       ]);
       games = gameList;
       if (settings?.max_backups) globalMaxBackups = settings.max_backups;
+
+      // Auto-select game from URL: /gameservers/new/minecraft
+      const route = getRoute();
+      if (route.params.game) {
+        const match = gameList.find(g =>
+          g.id === route.params.game || g.aliases?.includes(route.params.game)
+        );
+        if (match) pickGame(match);
+      }
     } catch (e: any) {
       toast(`Failed to load games: ${e.message}`, 'error');
     } finally {

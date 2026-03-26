@@ -18,6 +18,7 @@ const standardPatterns: { name: string; pattern: RegExp; paramNames: string[] }[
   { name: 'cluster', pattern: /^\/cluster$/, paramNames: [] },
   { name: 'settings', pattern: /^\/settings$/, paramNames: [] },
   { name: 'newGameserver', pattern: /^\/gameservers\/new$/, paramNames: [] },
+  { name: 'newGameserver', pattern: /^\/gameservers\/new\/([^/]+)$/, paramNames: ['game'] },
   { name: 'gameserverConsole', pattern: /^\/gameservers\/([^/]+)\/console$/, paramNames: ['id'] },
   { name: 'gameserverFiles', pattern: /^\/gameservers\/([^/]+)\/files$/, paramNames: ['id'] },
   { name: 'gameserverBackups', pattern: /^\/gameservers\/([^/]+)\/backups$/, paramNames: ['id'] },
