@@ -17,12 +17,14 @@ var tokensCmd = &cobra.Command{
 
 func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
-	tokensCreateCmd.Flags().String("scope", "custom", "Token scope: admin or custom")
+	tokensCreateCmd.Flags().String("scope", "custom", "Token scope: admin, custom, or worker")
 	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Scope to gameserver (repeatable, name or ID)")
 	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable). Examples: gameserver.start, gameserver.stop, gameserver.configure.name, backup.read, schedule.read. Run 'gamejanitor tokens permissions' to list all.")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
 
-	tokensCmd.AddCommand(tokensListCmd, tokensCreateCmd, tokensDeleteCmd, tokensPermissionsCmd)
+	tokensRotateCmd.Flags().String("name", "", "Worker token name to rotate (required)")
+
+	tokensCmd.AddCommand(tokensListCmd, tokensCreateCmd, tokensDeleteCmd, tokensRotateCmd, tokensPermissionsCmd)
 }
 
 var tokensListCmd = &cobra.Command{
@@ -85,6 +87,36 @@ var tokensCreateCmd = &cobra.Command{
 		}
 
 		scope, _ := cmd.Flags().GetString("scope")
+
+		// Worker tokens use a separate API endpoint
+		if scope == "worker" {
+			resp, err := apiPost("/api/worker-tokens", map[string]any{"name": name})
+			if err != nil {
+				return exitError(err)
+			}
+			if jsonOutput {
+				printJSONResponse(resp)
+				return nil
+			}
+			var result struct {
+				Token   string `json:"token"`
+				TokenID string `json:"token_id"`
+				Name    string `json:"name"`
+				Exists  bool   `json:"exists"`
+			}
+			if err := json.Unmarshal(resp.Data, &result); err != nil {
+				return fmt.Errorf("parsing response: %w", err)
+			}
+			if result.Exists {
+				fmt.Fprintf(os.Stderr, "Worker token %q already exists (id: %s)\n", result.Name, result.TokenID)
+				return nil
+			}
+			fmt.Fprintf(os.Stderr, "Worker token %q created (id: %s)\n", result.Name, result.TokenID)
+			fmt.Fprintf(os.Stderr, "Store this token — it cannot be retrieved later.\n")
+			fmt.Println(result.Token)
+			return nil
+		}
+
 		gameserverNames, _ := cmd.Flags().GetStringSlice("gameserver")
 		permissions, _ := cmd.Flags().GetStringSlice("permission")
 		expiresIn, _ := cmd.Flags().GetString("expires-in")
@@ -146,6 +178,41 @@ var tokensPermissionsCmd = &cobra.Command{
 		for _, p := range auth.AllPermissions {
 			fmt.Println(p)
 		}
+	},
+}
+
+var tokensRotateCmd = &cobra.Command{
+	Use:   "rotate",
+	Short: "Rotate a worker token (invalidates old, creates new with same name)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, _ := cmd.Flags().GetString("name")
+		if name == "" {
+			return exitError(fmt.Errorf("--name is required"))
+		}
+
+		resp, err := apiPost("/api/worker-tokens/rotate", map[string]any{"name": name})
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		var result struct {
+			Token   string `json:"token"`
+			TokenID string `json:"token_id"`
+			Name    string `json:"name"`
+		}
+		if err := json.Unmarshal(resp.Data, &result); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "Worker token %q rotated (new id: %s)\n", result.Name, result.TokenID)
+		fmt.Fprintf(os.Stderr, "Update the worker's config with the new token. The old token is now invalid.\n")
+		fmt.Println(result.Token)
+		return nil
 	},
 }
 

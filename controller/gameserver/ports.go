@@ -2,6 +2,7 @@ package gameserver
 
 import (
 	"fmt"
+	"net"
 	"sort"
 
 	"github.com/warsmite/gamejanitor/controller"
@@ -162,12 +163,19 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 		return nil, err
 	}
 
-	// Find first contiguous block of blockSize free ports
+	// Find first contiguous block of blockSize free ports.
+	// Checks both DB (gamejanitor-managed) and host (net.Listen probe) to avoid
+	// conflicts with other Docker containers or services on the host.
+	probe := isPortAvailable
+	if s.portProbe != nil {
+		probe = s.portProbe
+	}
 	base := -1
 	for candidate := rangeStart; candidate+blockSize-1 <= rangeEnd; candidate++ {
 		free := true
 		for offset := 0; offset < blockSize; offset++ {
-			if used[candidate+offset] {
+			port := candidate + offset
+			if used[port] || !probe(port) {
 				free = false
 				candidate = candidate + offset // skip ahead
 				break
@@ -198,4 +206,14 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 	s.log.Info("auto-allocated ports", "game", game.ID, "base", base, "block_size", blockSize)
 
 	return result, nil
+}
+
+// isPortAvailable checks if a port is free on the host by attempting to bind it.
+func isPortAvailable(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
 }

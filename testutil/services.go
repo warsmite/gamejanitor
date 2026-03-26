@@ -68,6 +68,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	readyWatcher := status.NewReadyWatcher(s, broadcaster, gameStore, querySvc, statsPoller, log)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
+	gameserverSvc.SetPortProbe(func(int) bool { return true }) // skip host probe in tests
 
 	consoleSvc := gameserver.NewConsoleService(s, dispatcher, gameStore, log)
 	fileSvc := gameserver.NewFileService(s, dispatcher, log)

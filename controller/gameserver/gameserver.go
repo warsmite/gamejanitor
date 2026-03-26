@@ -69,6 +69,13 @@ type GameserverService struct {
 	backupStore  BackupStore
 	dataDir      string
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
+	portProbe func(int) bool // nil uses default net.Listen probe
+}
+
+// SetPortProbe overrides the host port availability check. Used in tests
+// where net.Listen probes would interfere with port allocation.
+func (s *GameserverService) SetPortProbe(fn func(int) bool) {
+	s.portProbe = fn
 }
 
 func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
