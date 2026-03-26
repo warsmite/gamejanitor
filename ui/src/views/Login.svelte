@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { setToken } from '$lib/stores';
+  import { setToken, clearToken } from '$lib/stores';
   import { embedded } from '$lib/base';
+  import { basePath } from '$lib/base';
 
   let tokenInput = $state('');
   let error = $state('');
@@ -16,11 +17,9 @@
     submitting = true;
     error = '';
 
-    // Validate by setting the token and making a test request
-    setToken(raw);
-
     try {
-      const resp = await fetch('/api/gameservers', {
+      // Validate token before saving — don't set cookie until we know it works
+      const resp = await fetch(basePath + '/api/gameservers', {
         headers: { 'Authorization': `Bearer ${raw}` },
       });
       if (resp.status === 401) {
@@ -28,7 +27,8 @@
         submitting = false;
         return;
       }
-      // Token works — reload to initialize with auth
+      // Token works — save to cookie and reload
+      setToken(raw);
       window.location.reload();
     } catch {
       error = 'Could not reach the server';
