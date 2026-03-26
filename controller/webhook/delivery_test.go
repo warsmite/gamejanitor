@@ -28,8 +28,8 @@ func (l *testWebhookLookup) GetGameserver(id string) (*model.Gameserver, error) 
 	return l.gs.GetGameserver(id)
 }
 
-func (l *testWebhookLookup) GetWorkerNode(id string) (*model.WorkerNode, error) {
-	return l.wn.GetWorkerNode(id)
+func (l *testWebhookLookup) PopulateNode(gs *model.Gameserver) {
+	l.gs.PopulateNode(gs)
 }
 
 func TestWebhookDelivery_CreateAndListPending(t *testing.T) {

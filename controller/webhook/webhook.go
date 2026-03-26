@@ -40,7 +40,7 @@ type Store interface {
 // GameserverLookup resolves gameserver data for webhook payloads.
 type GameserverLookup interface {
 	GetGameserver(id string) (*model.Gameserver, error)
-	GetWorkerNode(id string) (*model.WorkerNode, error)
+	PopulateNode(gs *model.Gameserver)
 }
 
 type WebhookPayload struct {
@@ -140,7 +140,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	case controller.StatusEvent:
 		gs, _ := w.gsLookup.GetGameserver(ev.GameserverID)
 		if gs != nil {
-			populateNode(w.gsLookup, gs)
+			w.gsLookup.PopulateNode(gs)
 		}
 		payloadData = statusChangedData{
 			GameserverID: ev.GameserverID,
@@ -220,21 +220,6 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		if err := w.store.CreateWebhookDelivery(delivery); err != nil {
 			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
 		}
-	}
-}
-
-// populateNode resolves node data for a gameserver using the GameserverLookup interface.
-func populateNode(lookup GameserverLookup, gs *model.Gameserver) {
-	if gs.NodeID == nil || *gs.NodeID == "" {
-		return
-	}
-	node, err := lookup.GetWorkerNode(*gs.NodeID)
-	if err != nil || node == nil {
-		return
-	}
-	gs.Node = &model.GameserverNode{
-		ExternalIP: node.ExternalIP,
-		LanIP:      node.LanIP,
 	}
 }
 
