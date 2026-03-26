@@ -30,6 +30,9 @@
           vendorHash = "sha256-c/VVrjSyFV9HbdtdmCQPR/x5vk/Xdc/rCJOAFX50qqs=";
           env.CGO_ENABLED = "0";
 
+          # sdk/ is a separate Go module with its own go.mod — exclude from main build
+          excludedPackages = [ "sdk" ];
+
           preBuild = ''
             rm -rf ui/dist
             cp -r ${ui} ui/dist
