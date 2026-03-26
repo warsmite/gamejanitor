@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Gameserver, GameserverStats, QueryData } from '$lib/api';
+  import { navigate } from '$lib/router';
   import GameIcon from './GameIcon.svelte';
   import StatusPill from './StatusPill.svelte';
   import CopyBlock from './CopyBlock.svelte';
@@ -36,7 +37,7 @@
   );
 </script>
 
-<div class="hero" class:running={isRunning} class:stopped={isStopped} onclick={() => window.location.hash = `/gameservers/${gameserver.id}`} onkeydown={(e) => e.key === 'Enter' && (window.location.hash = `/gameservers/${gameserver.id}`)} role="link" tabindex="0">
+<div class="hero" class:running={isRunning} class:stopped={isStopped} onclick={() => navigate(`/gameservers/${gameserver.id}`)} onkeydown={(e) => e.key === 'Enter' && navigate(`/gameservers/${gameserver.id}`)} role="link" tabindex="0">
   <!-- Identity + status -->
   <div class="head">
     <div class="id-left">

@@ -70,7 +70,7 @@
   ]);
 
   function tabHref(tab: typeof tabs[0]) {
-    return `#/gameservers/${id}${tab.path}`;
+    return `/gameservers/${id}${tab.path}`;
   }
 
   function isActiveTab(tab: typeof tabs[0]) {
