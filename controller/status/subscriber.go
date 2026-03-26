@@ -16,18 +16,22 @@ import (
 // status from them. This centralizes status logic in one place instead of 25+
 // scattered setGameserverStatus calls.
 type StatusSubscriber struct {
-	store  Store
-	log    *slog.Logger
-	bus    *controller.EventBus
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	store       Store
+	log         *slog.Logger
+	bus         *controller.EventBus
+	querySvc    *QueryService
+	statsPoller *StatsPoller
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
 }
 
-func NewStatusSubscriber(store Store, bus *controller.EventBus, log *slog.Logger) *StatusSubscriber {
+func NewStatusSubscriber(store Store, bus *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
-		store: store,
-		bus:   bus,
-		log:   log,
+		store:       store,
+		bus:         bus,
+		querySvc:    querySvc,
+		statsPoller: statsPoller,
+		log:         log,
 	}
 }
 
@@ -73,14 +77,18 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case controller.GameserverReadyEvent:
 		s.setStatus(e.GameserverID, controller.StatusRunning, "")
+		s.startPolling(e.GameserverID)
 	case controller.ContainerStoppingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopping, "")
 	case controller.ContainerStoppedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopped, "")
+		s.stopPolling(e.GameserverID)
 	case controller.ContainerExitedEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
+		s.stopPolling(e.GameserverID)
 	case controller.GameserverErrorEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, e.Reason)
+		s.stopPolling(e.GameserverID)
 	}
 }
 
@@ -116,6 +124,24 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 		ErrorReason:  errorReason,
 		Timestamp:    time.Now(),
 	})
+}
+
+func (s *StatusSubscriber) startPolling(gameserverID string) {
+	if s.querySvc != nil {
+		s.querySvc.StartPolling(gameserverID)
+	}
+	if s.statsPoller != nil {
+		s.statsPoller.StartPolling(gameserverID)
+	}
+}
+
+func (s *StatusSubscriber) stopPolling(gameserverID string) {
+	if s.querySvc != nil {
+		s.querySvc.StopPolling(gameserverID)
+	}
+	if s.statsPoller != nil {
+		s.statsPoller.StopPolling(gameserverID)
+	}
 }
 
 // recordStatusActivity writes a status_changed activity to the activity table.

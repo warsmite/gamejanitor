@@ -63,7 +63,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	gameserverSvc := gameserver.NewGameserverService(s, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
 	querySvc := status.NewQueryService(s, broadcaster, gameStore, log)
 	statsPoller := status.NewStatsPoller(s, dispatcher, broadcaster, log)
-	readyWatcher := status.NewReadyWatcher(s, broadcaster, gameStore, querySvc, statsPoller, log)
+	readyWatcher := status.NewReadyWatcher(s, broadcaster, gameStore, log)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
 	gameserverSvc.SetPortProbe(func(int) bool { return true }) // skip host probe in tests
@@ -120,7 +120,7 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	log := TestLogger()
 	s := store.New(svc.DB)
 
-	statusSub := status.NewStatusSubscriber(s, svc.Broadcaster, log)
+	statusSub := status.NewStatusSubscriber(s, svc.Broadcaster, svc.QuerySvc, svc.StatsPoller, log)
 
 	ctx := TestContext()
 	statusSub.Start(ctx)

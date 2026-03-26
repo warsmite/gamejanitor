@@ -20,21 +20,17 @@ type ReadyWatcher struct {
 	log         *slog.Logger
 	broadcaster *controller.EventBus
 	gameStore   *games.GameStore
-	querySvc    *QueryService
-	statsPoller *StatsPoller
 
 	mu       sync.Mutex
 	watchers map[string]context.CancelFunc
 }
 
-func NewReadyWatcher(store Store, broadcaster *controller.EventBus, gameStore *games.GameStore, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *ReadyWatcher {
+func NewReadyWatcher(store Store, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
 	return &ReadyWatcher{
 		store:       store,
 		log:         log,
 		broadcaster: broadcaster,
 		gameStore:   gameStore,
-		querySvc:    querySvc,
-		statsPoller: statsPoller,
 		watchers:    make(map[string]context.CancelFunc),
 	}
 }
@@ -52,14 +48,6 @@ func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID
 	if game == nil {
 		w.log.Error("game not found for ready watch", "id", gameserverID, "game_id", gs.GameID)
 		return
-	}
-
-	// Start polling immediately — the server is running
-	if w.querySvc != nil {
-		w.querySvc.StartPolling(gameserverID)
-	}
-	if w.statsPoller != nil {
-		w.statsPoller.StartPolling(gameserverID)
 	}
 
 	var pattern *regexp.Regexp
@@ -182,10 +170,4 @@ func (w *ReadyWatcher) markInstalled(gameserverID string) {
 
 func (w *ReadyWatcher) promote(gameserverID string) {
 	w.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
-	if w.querySvc != nil {
-		w.querySvc.StartPolling(gameserverID)
-	}
-	if w.statsPoller != nil {
-		w.statsPoller.StartPolling(gameserverID)
-	}
 }
