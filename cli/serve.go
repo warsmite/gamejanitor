@@ -28,6 +28,8 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/store"
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/warsmite/gamejanitor/api"
@@ -127,7 +129,7 @@ type services struct {
 	statusMgr     *service.StatusManager
 	statusSub     *service.StatusSubscriber
 	eventStore    *service.EventStoreSubscriber
-	webhookWorker *service.WebhookWorker
+	webhookWorker *webhook.WebhookWorker
 	modSvc        *service.ModService
 }
 
@@ -161,7 +163,12 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	statusMgr := service.NewStatusManager(database, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
-	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
+	webhookStore := store.NewWebhookStore(database)
+	gsLookup := &webhookGameserverLookup{
+		gs: store.NewGameserverStore(database),
+		wn: store.NewWorkerNodeStore(database),
+	}
+	webhookWorker := webhook.NewWebhookWorker(webhookStore, gsLookup, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
 	modSvc := service.NewModService(database, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
@@ -515,6 +522,21 @@ func openBrowser(url string) {
 		return
 	}
 	cmd.Start()
+}
+
+// webhookGameserverLookup combines gameserver and worker node stores
+// to satisfy webhook.GameserverLookup.
+type webhookGameserverLookup struct {
+	gs *store.GameserverStore
+	wn *store.WorkerNodeStore
+}
+
+func (l *webhookGameserverLookup) GetGameserver(id string) (*model.Gameserver, error) {
+	return l.gs.GetGameserver(id)
+}
+
+func (l *webhookGameserverLookup) GetWorkerNode(id string) (*model.WorkerNode, error) {
+	return l.wn.GetWorkerNode(id)
 }
 
 func webUIFS(cfg config.Config) fs.FS {

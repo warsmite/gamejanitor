@@ -1,7 +1,6 @@
-package service
+package webhook
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -17,27 +16,28 @@ import (
 	"path"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 )
 
 // WebhookEndpointService manages webhook endpoint CRUD and test delivery.
-// Separate from WebhookWorker which handles async event→delivery.
+// Separate from WebhookWorker which handles async event->delivery.
 type WebhookEndpointService struct {
-	db     *sql.DB
+	store  Store
 	client *http.Client
 	log    *slog.Logger
 }
 
-func NewWebhookEndpointService(db *sql.DB, log *slog.Logger) *WebhookEndpointService {
+func NewWebhookEndpointService(store Store, log *slog.Logger) *WebhookEndpointService {
 	return &WebhookEndpointService{
-		db:     db,
+		store:  store,
 		client: &http.Client{Timeout: 10 * time.Second},
 		log:    log,
 	}
 }
 
 // WebhookEndpointView is the API representation of a webhook endpoint.
-// Hides the raw secret — only indicates whether one is set.
+// Hides the raw secret -- only indicates whether one is set.
 type WebhookEndpointView struct {
 	ID          string    `json:"id"`
 	Description string    `json:"description"`
@@ -67,7 +67,7 @@ func toEndpointView(e *model.WebhookEndpoint) WebhookEndpointView {
 }
 
 func (s *WebhookEndpointService) List() ([]WebhookEndpointView, error) {
-	endpoints, err := model.ListWebhookEndpoints(s.db)
+	endpoints, err := s.store.ListWebhookEndpoints()
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s *WebhookEndpointService) List() ([]WebhookEndpointView, error) {
 }
 
 func (s *WebhookEndpointService) Get(id string) (*WebhookEndpointView, error) {
-	ep, err := model.GetWebhookEndpoint(s.db, id)
+	ep, err := s.store.GetWebhookEndpoint(id)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (s *WebhookEndpointService) Create(rawURL, description, secret string, even
 
 	eventsJSON, _ := json.Marshal(events)
 	ep.Events = string(eventsJSON)
-	if err := model.CreateWebhookEndpoint(s.db, ep); err != nil {
+	if err := s.store.CreateWebhookEndpoint(ep); err != nil {
 		return nil, err
 	}
 
@@ -156,7 +156,7 @@ func checkURLReachability(rawURL string) string {
 }
 
 func (s *WebhookEndpointService) Update(id string, description, url, secret *string, events []string, enabled *bool) (*WebhookEndpointView, error) {
-	ep, err := model.GetWebhookEndpoint(s.db, id)
+	ep, err := s.store.GetWebhookEndpoint(id)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 		return nil, err
 	}
 
-	if err := model.UpdateWebhookEndpoint(s.db, ep); err != nil {
+	if err := s.store.UpdateWebhookEndpoint(ep); err != nil {
 		return nil, err
 	}
 
@@ -198,7 +198,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 }
 
 func (s *WebhookEndpointService) Delete(id string) error {
-	if err := model.DeleteWebhookEndpoint(s.db, id); err != nil {
+	if err := s.store.DeleteWebhookEndpoint(id); err != nil {
 		if err == sql.ErrNoRows {
 			return controller.ErrNotFoundf("webhook endpoint %s not found", id)
 		}
@@ -221,7 +221,7 @@ type DeliveryView struct {
 
 func (s *WebhookEndpointService) ListDeliveries(endpointID, state string, limit int) ([]DeliveryView, error) {
 	// Verify endpoint exists
-	ep, err := model.GetWebhookEndpoint(s.db, endpointID)
+	ep, err := s.store.GetWebhookEndpoint(endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (s *WebhookEndpointService) ListDeliveries(endpointID, state string, limit 
 		return nil, controller.ErrNotFoundf("webhook endpoint %s not found", endpointID)
 	}
 
-	deliveries, err := model.ListDeliveriesByEndpoint(s.db, endpointID, state, limit)
+	deliveries, err := s.store.ListDeliveriesByEndpoint(endpointID, state, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ type TestResult struct {
 }
 
 func (s *WebhookEndpointService) Test(id string) (*TestResult, error) {
-	ep, err := model.GetWebhookEndpoint(s.db, id)
+	ep, err := s.store.GetWebhookEndpoint(id)
 	if err != nil {
 		return nil, err
 	}

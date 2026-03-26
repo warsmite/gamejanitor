@@ -1,12 +1,10 @@
-package service
+package webhook
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,9 +15,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/model"
 )
+
+// Store defines the persistence operations needed by the webhook worker.
+type Store interface {
+	ListEnabledWebhookEndpoints() ([]model.WebhookEndpoint, error)
+	GetWebhookEndpoint(id string) (*model.WebhookEndpoint, error)
+	ListWebhookEndpoints() ([]model.WebhookEndpoint, error)
+	CreateWebhookEndpoint(e *model.WebhookEndpoint) error
+	UpdateWebhookEndpoint(e *model.WebhookEndpoint) error
+	DeleteWebhookEndpoint(id string) error
+	CreateWebhookDelivery(d *model.WebhookDelivery) error
+	ListDeliveriesByEndpoint(endpointID string, state string, limit int) ([]model.WebhookDelivery, error)
+	GetPendingDeliveries(limit int) ([]model.WebhookDelivery, error)
+	MarkDeliverySuccess(id string) error
+	MarkDeliveryRetry(id string, nextAttemptAt time.Time, lastError string) error
+	MarkDeliveryFailed(id string, lastError string) error
+	PruneWebhookDeliveries() (int64, error)
+}
+
+// GameserverLookup resolves gameserver data for webhook payloads.
+type GameserverLookup interface {
+	GetGameserver(id string) (*model.Gameserver, error)
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+}
 
 type WebhookPayload struct {
 	Version   int       `json:"version"`
@@ -29,18 +51,19 @@ type WebhookPayload struct {
 	Data      any       `json:"data"`
 }
 
-// Payload data types — one per event category.
+// Payload data types -- one per event category.
 
 type statusChangedData struct {
-	GameserverID string             `json:"gameserver_id"`
-	OldStatus    string             `json:"old_status"`
-	NewStatus    string             `json:"new_status"`
-	ErrorReason  string             `json:"error_reason,omitempty"`
+	GameserverID string           `json:"gameserver_id"`
+	OldStatus    string           `json:"old_status"`
+	NewStatus    string           `json:"new_status"`
+	ErrorReason  string           `json:"error_reason,omitempty"`
 	Gameserver   *model.Gameserver `json:"gameserver,omitempty"`
 }
 
 type WebhookWorker struct {
-	db          *sql.DB
+	store       Store
+	gsLookup    GameserverLookup
 	broadcaster *controller.EventBus
 	client      *http.Client
 	log         *slog.Logger
@@ -48,9 +71,10 @@ type WebhookWorker struct {
 	wg          sync.WaitGroup
 }
 
-func NewWebhookWorker(db *sql.DB, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
+func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
 	return &WebhookWorker{
-		db:          db,
+		store:       store,
+		gsLookup:    gsLookup,
 		broadcaster: broadcaster,
 		client:      &http.Client{Timeout: 10 * time.Second},
 		log:         log,
@@ -100,7 +124,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		return
 	}
 
-	endpoints, err := model.ListEnabledWebhookEndpoints(w.db)
+	endpoints, err := w.store.ListEnabledWebhookEndpoints()
 	if err != nil {
 		w.log.Error("webhook: failed to list enabled endpoints", "error", err)
 		return
@@ -109,14 +133,14 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		return
 	}
 
-	// Build payload data — action events carry their own resource state,
+	// Build payload data -- action events carry their own resource state,
 	// lifecycle events are lightweight with just IDs.
 	var payloadData any
 	switch ev := event.(type) {
 	case controller.StatusEvent:
-		gs, _ := model.GetGameserver(w.db, ev.GameserverID)
+		gs, _ := w.gsLookup.GetGameserver(ev.GameserverID)
 		if gs != nil {
-			gs.PopulateNode(w.db)
+			populateNode(w.gsLookup, gs)
 		}
 		payloadData = statusChangedData{
 			GameserverID: ev.GameserverID,
@@ -126,7 +150,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 			Gameserver:   gs,
 		}
 
-	// Action events — self-contained with full resource state
+	// Action events -- self-contained with full resource state
 	case controller.GameserverActionEvent:
 		payloadData = ev
 	case controller.BackupActionEvent:
@@ -140,7 +164,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	case controller.ModActionEvent:
 		payloadData = ev
 
-	// Lifecycle events — lightweight, just IDs
+	// Lifecycle events -- lightweight, just IDs
 	case controller.ImagePullingEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
 	case controller.ContainerCreatingEvent:
@@ -199,9 +223,24 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 			NextAttemptAt:     now,
 			CreatedAt:         now,
 		}
-		if err := model.CreateWebhookDelivery(w.db, delivery); err != nil {
+		if err := w.store.CreateWebhookDelivery(delivery); err != nil {
 			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
 		}
+	}
+}
+
+// populateNode resolves node data for a gameserver using the GameserverLookup interface.
+func populateNode(lookup GameserverLookup, gs *model.Gameserver) {
+	if gs.NodeID == nil || *gs.NodeID == "" {
+		return
+	}
+	node, err := lookup.GetWorkerNode(*gs.NodeID)
+	if err != nil || node == nil {
+		return
+	}
+	gs.Node = &model.GameserverNode{
+		ExternalIP: node.ExternalIP,
+		LanIP:      node.LanIP,
 	}
 }
 
@@ -241,7 +280,7 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 			w.processPendingDeliveries()
 
 			if time.Since(lastCleanup) > time.Hour {
-				if pruned, err := model.PruneWebhookDeliveries(w.db); err != nil {
+				if pruned, err := w.store.PruneWebhookDeliveries(); err != nil {
 					w.log.Error("webhook: failed to prune deliveries", "error", err)
 				} else if pruned > 0 {
 					w.log.Info("webhook: pruned old deliveries", "count", pruned)
@@ -253,7 +292,7 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 }
 
 func (w *WebhookWorker) processPendingDeliveries() {
-	deliveries, err := model.GetPendingDeliveries(w.db, 10)
+	deliveries, err := w.store.GetPendingDeliveries(10)
 	if err != nil {
 		w.log.Error("webhook: failed to fetch pending deliveries", "error", err)
 		return
@@ -265,7 +304,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 	for _, d := range deliveries {
 		ep, cached := endpointCache[d.WebhookEndpointID]
 		if !cached {
-			ep, err = model.GetWebhookEndpoint(w.db, d.WebhookEndpointID)
+			ep, err = w.store.GetWebhookEndpoint(d.WebhookEndpointID)
 			if err != nil {
 				w.log.Error("webhook: failed to fetch endpoint for delivery", "id", d.ID, "endpoint_id", d.WebhookEndpointID, "error", err)
 				continue
@@ -275,7 +314,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 
 		if ep == nil {
 			// Endpoint was deleted but CASCADE didn't clean up (shouldn't happen)
-			if err := model.MarkDeliveryFailed(w.db, d.ID, "endpoint deleted"); err != nil {
+			if err := w.store.MarkDeliveryFailed(d.ID, "endpoint deleted"); err != nil {
 				w.log.Error("webhook: failed to mark orphan delivery failed", "id", d.ID, "error", err)
 			}
 			continue
@@ -284,7 +323,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		statusCode, deliverErr := w.deliver(ep.URL, []byte(d.Payload), ep.Secret)
 
 		if deliverErr == nil && statusCode >= 200 && statusCode < 300 {
-			if err := model.MarkDeliverySuccess(w.db, d.ID); err != nil {
+			if err := w.store.MarkDeliverySuccess(d.ID); err != nil {
 				w.log.Error("webhook: failed to mark delivery success", "id", d.ID, "error", err)
 			} else {
 				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "response_status", statusCode)
@@ -301,7 +340,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 
 		newAttempts := d.Attempts + 1
 		if newAttempts >= maxDeliveryAttempts {
-			if err := model.MarkDeliveryFailed(w.db, d.ID, errMsg); err != nil {
+			if err := w.store.MarkDeliveryFailed(d.ID, errMsg); err != nil {
 				w.log.Error("webhook: failed to mark delivery failed", "id", d.ID, "error", err)
 			}
 			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempts", newAttempts, "last_error", errMsg)
@@ -314,7 +353,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		}
 		nextAttempt := time.Now().Add(time.Duration(backoffSec) * time.Second)
 
-		if err := model.MarkDeliveryRetry(w.db, d.ID, nextAttempt, errMsg); err != nil {
+		if err := w.store.MarkDeliveryRetry(d.ID, nextAttempt, errMsg); err != nil {
 			w.log.Error("webhook: failed to mark delivery for retry", "id", d.ID, "error", err)
 		}
 		w.log.Warn("webhook: delivery failed, will retry",

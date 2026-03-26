@@ -15,6 +15,8 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/store"
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/api/handler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -76,7 +78,8 @@ func NewRouter(opts RouterOptions) http.Handler {
 	workerHandlers := handler.NewWorkerHandlers(workerNodeSvc, opts.Log)
 	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, workerNodeSvc, opts.Config, opts.Log)
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
-	webhookSvc := service.NewWebhookEndpointService(opts.DB, opts.Log)
+	webhookStore := store.NewWebhookStore(opts.DB)
+	webhookSvc := webhook.NewWebhookEndpointService(webhookStore, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(webhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 

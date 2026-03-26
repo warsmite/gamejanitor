@@ -6,16 +6,16 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/go-chi/chi/v5"
 )
 
 type WebhookHandlers struct {
-	svc *service.WebhookEndpointService
+	svc *webhook.WebhookEndpointService
 	log *slog.Logger
 }
 
-func NewWebhookHandlers(svc *service.WebhookEndpointService, log *slog.Logger) *WebhookHandlers {
+func NewWebhookHandlers(svc *webhook.WebhookEndpointService, log *slog.Logger) *WebhookHandlers {
 	return &WebhookHandlers{svc: svc, log: log}
 }
 

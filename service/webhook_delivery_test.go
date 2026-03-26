@@ -12,10 +12,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
+
+// testWebhookLookup satisfies webhook.GameserverLookup for tests.
+type testWebhookLookup struct {
+	gs *store.GameserverStore
+	wn *store.WorkerNodeStore
+}
+
+func (l *testWebhookLookup) GetGameserver(id string) (*model.Gameserver, error) {
+	return l.gs.GetGameserver(id)
+}
+
+func (l *testWebhookLookup) GetWorkerNode(id string) (*model.WorkerNode, error) {
+	return l.wn.GetWorkerNode(id)
+}
 
 func TestWebhookDelivery_CreateAndListPending(t *testing.T) {
 	t.Parallel()
@@ -83,7 +98,9 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 	require.NoError(t, model.CreateWebhookDelivery(svc.DB, delivery))
 
 	// Start webhook worker, let it process
-	ww := service.NewWebhookWorker(svc.DB, svc.Broadcaster, testutil.TestLogger())
+	whStore := store.NewWebhookStore(svc.DB)
+	gsLookup := &testWebhookLookup{gs: store.NewGameserverStore(svc.DB), wn: store.NewWorkerNodeStore(svc.DB)}
+	ww := webhook.NewWebhookWorker(whStore, gsLookup, svc.Broadcaster, testutil.TestLogger())
 	ctx := testutil.TestContext()
 	ww.Start(ctx)
 	time.Sleep(6 * time.Second) // delivery poll interval is 5s

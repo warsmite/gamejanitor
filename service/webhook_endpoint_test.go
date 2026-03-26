@@ -6,7 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/controller/webhook"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -14,7 +15,7 @@ func TestWebhookEndpoint_Create_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	log := testutil.TestLogger()
-	whSvc := service.NewWebhookEndpointService(svc.DB, log)
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), log)
 
 	result, err := whSvc.Create("https://example.com/hook", "my hook", "secret", []string{"*"}, true)
 	require.NoError(t, err)
@@ -28,7 +29,7 @@ func TestWebhookEndpoint_Create_HappyPath(t *testing.T) {
 func TestWebhookEndpoint_Create_EmptyEvents_DefaultsToWildcard(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	result, err := whSvc.Create("https://example.com/hook", "", "", nil, true)
 	require.NoError(t, err)
@@ -38,7 +39,7 @@ func TestWebhookEndpoint_Create_EmptyEvents_DefaultsToWildcard(t *testing.T) {
 func TestWebhookEndpoint_Create_InvalidURL_Rejected(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	_, err := whSvc.Create("not-a-url", "", "", nil, true)
 	require.Error(t, err)
@@ -47,7 +48,7 @@ func TestWebhookEndpoint_Create_InvalidURL_Rejected(t *testing.T) {
 func TestWebhookEndpoint_Create_EmptyURL_Rejected(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	_, err := whSvc.Create("", "", "", nil, true)
 	require.Error(t, err)
@@ -56,7 +57,7 @@ func TestWebhookEndpoint_Create_EmptyURL_Rejected(t *testing.T) {
 func TestWebhookEndpoint_Create_InvalidEventFilter_Rejected(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	// Invalid glob pattern
 	_, err := whSvc.Create("https://example.com/hook", "", "", []string{"[invalid"}, true)
@@ -66,7 +67,7 @@ func TestWebhookEndpoint_Create_InvalidEventFilter_Rejected(t *testing.T) {
 func TestWebhookEndpoint_SecretHidden_InView(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	result, err := whSvc.Create("https://example.com/hook", "", "my-secret", nil, true)
 	require.NoError(t, err)
@@ -83,7 +84,7 @@ func TestWebhookEndpoint_SecretHidden_InView(t *testing.T) {
 func TestWebhookEndpoint_Update(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	result, err := whSvc.Create("https://example.com/hook", "original", "", nil, true)
 	require.NoError(t, err)
@@ -98,7 +99,7 @@ func TestWebhookEndpoint_Update(t *testing.T) {
 func TestWebhookEndpoint_Delete(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	result, err := whSvc.Create("https://example.com/hook", "", "", nil, true)
 	require.NoError(t, err)
@@ -113,7 +114,7 @@ func TestWebhookEndpoint_Delete(t *testing.T) {
 func TestWebhookEndpoint_Delete_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	err := whSvc.Delete("nonexistent")
 	require.Error(t, err)
@@ -122,7 +123,7 @@ func TestWebhookEndpoint_Delete_NotFound(t *testing.T) {
 func TestWebhookEndpoint_List(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	whSvc.Create("https://a.com/hook", "", "", nil, true)
 	whSvc.Create("https://b.com/hook", "", "", nil, true)
@@ -135,7 +136,7 @@ func TestWebhookEndpoint_List(t *testing.T) {
 func TestWebhookEndpoint_Get_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	whSvc := service.NewWebhookEndpointService(svc.DB, testutil.TestLogger())
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), testutil.TestLogger())
 
 	_, err := whSvc.Get("nonexistent")
 	require.Error(t, err)

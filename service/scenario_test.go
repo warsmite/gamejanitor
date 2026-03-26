@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -305,7 +306,7 @@ func TestScenario_Business_WebhookIntegration(t *testing.T) {
 	log := testutil.TestLogger()
 
 	// Business sets up a webhook for their billing/monitoring system
-	whSvc := service.NewWebhookEndpointService(svc.DB, log)
+	whSvc := webhook.NewWebhookEndpointService(store.NewWebhookStore(svc.DB), log)
 	result, err := whSvc.Create(
 		"https://billing.example.com/webhook",
 		"Billing webhook",
