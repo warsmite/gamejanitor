@@ -14,6 +14,7 @@ type DB struct {
 	*WorkerNodeStore
 	*ModStore
 	*SettingStore
+	*OperationStore
 }
 
 func New(db *sql.DB) *DB {
@@ -27,5 +28,6 @@ func New(db *sql.DB) *DB {
 		WorkerNodeStore: NewWorkerNodeStore(db),
 		ModStore:        NewModStore(db),
 		SettingStore:    NewSettingStore(db),
+		OperationStore:  NewOperationStore(db),
 	}
 }

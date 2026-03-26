@@ -87,6 +87,20 @@ CREATE TABLE worker_nodes (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE operations (
+    id TEXT PRIMARY KEY,
+    gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
+    worker_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    error TEXT NOT NULL DEFAULT '',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    started_at DATETIME NOT NULL,
+    completed_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_operations_gameserver_id ON operations(gameserver_id);
+CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
