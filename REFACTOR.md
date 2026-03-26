@@ -89,126 +89,59 @@ Eliminates current `Set*()` cycle-breaking hacks.
 
 ---
 
-### Phase 1: Leaf renames (no internal dependency changes)
+### Phase 1: Leaf renames [DONE]
 
-- [ ] `models/` → `model/` (absorb `validate/validate.go` → `model/validate.go`)
-- [ ] `naming/` → `pkg/naming/`
-- [ ] `netinfo/` → `pkg/netinfo/`
-- [ ] `tlsutil/` → `pkg/tlsutil/`
-- [ ] Delete `constants/` — inline values into consumers
-- [ ] `api/handlers/` → `api/handler/`
-- [ ] Update all import paths project-wide
-- [ ] Run tests, `go vet ./...`
+- [x] `models/` → `model/`, `validate/` → `pkg/validate/`
+- [x] `naming/` → `pkg/naming/`, `netinfo/` → `pkg/netinfo/`, `tlsutil/` → `pkg/tlsutil/`
+- [x] `constants/` deleted, values inlined
+- [x] `api/handlers/` → `api/handler/`
 
-### Phase 2: Worker sub-packages
+### Phase 2: Worker sub-packages [DONE]
 
-Scoped down — most worker files are methods on LocalWorker or use unexported types
-(volumeResolver), so they can't move to sub-packages without major refactoring.
-`controller_grpc.go` moves to orchestrator/ in Phase 4d. docker/ stays until
-the circular dep (worker↔docker) is resolved by a future LocalWorker refactor.
+- [x] `worker/logparse.go` → `worker/logparse/`
+- Remaining worker/ restructuring deferred — LocalWorker methods can't split without major refactor
 
-- [x] `worker/logparse.go` → `worker/logparse/` (standalone functions, clean separation)
-- [ ] Remaining worker/ restructuring deferred — tight coupling to LocalWorker internals
+### Phase 3: Controller parent package [DONE]
 
-### Phase 3: Controller parent package
+- [x] `controller/eventbus.go` — EventBus, WebhookEvent, StatusEvent
+- [x] `controller/errors.go` — ServiceError + error constructors
+- [x] `controller/status.go` — status constants + helpers (exported)
+- [x] `controller/events.go` — all event types, constants, Actor, AllEventTypes
 
-- [ ] Create `controller/eventbus.go` — EventBus + event types (from `service/broadcast.go` + `service/events.go`)
-- [ ] Create `controller/errors.go` — ServiceError (from `service/errors.go`)
-- [ ] Create `controller/status.go` — status constants + helpers (from `service/common.go`)
-- [ ] Update all `service.EventBus` / `service.ServiceError` / `service.Status*` refs
-  - Includes remaining `service/` files + external consumers (api/, cli/, testutil/)
-- [ ] Run tests
+### Phase 4: Controller domain packages [PARTIAL]
 
-### Phase 4: Controller domain packages
+**Done:**
+- [x] 4a: `controller/auth/` — AuthService, permissions, token context
+- [x] 4b: `controller/settings/` — SettingsService
+- [x] 4c: `controller/event/` — EventHistoryService (EventStore stays in service/ — circular dep)
+- [x] 4e: `controller/orchestrator/` — Dispatcher, Registry, ControllerGRPC (from worker/)
+  - WorkerNodeService stays in service/ (depends on service event types)
 
-One at a time, in dependency order. For each step:
-1. Move files, change `package` declaration
-2. Extract narrow interfaces for cross-service deps (or import leaves concretely)
-3. Update remaining `service/` files that referenced moved types
-4. Update external consumers (api/, cli/, testutil/, sftp/)
-5. Run tests
+**Remaining — service/ still has 25 files:**
 
-Leaves first, then core services, then consumers of multiple siblings.
+The remaining domain services (gameserver, backup, status, schedule, webhook, mod)
+are tightly coupled through shared types within service/. Each references types
+from multiple siblings (GameserverService, BackupStore, EventBus, Dispatcher, etc).
 
-**4a — `controller/auth/`** (leaf — no deps on other controller sub-packages)
-- [ ] `service/auth.go` → `controller/auth/auth.go`
-- [ ] `service/permissions.go` → `controller/auth/permissions.go`
-- [ ] Update remaining service/ files: `gameserver.go`, `events.go` (use `auth.TokenFromContext` etc.)
-- [ ] Update api/middleware.go, api/handler/, cli/
+Extracting them requires cross-service interfaces at each boundary. Now that events,
+auth, settings, and orchestrator are extracted, the remaining service/ files only
+cross-reference each other — they could be split using the interface pattern described
+above. This is mechanical but time-consuming work.
 
-**4b — `controller/settings/`** (leaf — no deps on other controller sub-packages)
-- [ ] `service/settings.go` → `controller/settings/settings.go`
-- [ ] Update remaining service/ files: `gameserver*.go`, `backup.go`, `mod*.go`
-- [ ] Update api/handler/, cli/
-
-**4c — `controller/event/`** (leaf — depends only on parent EventBus)
-- [ ] `service/event_store.go` → `controller/event/store.go`
-- [ ] `service/event_history.go` → `controller/event/history.go`
-- [ ] Update api/router.go, api/handler/
-
-**4d — `controller/webhook/`** (leaf — depends only on parent EventBus)
-- [ ] `service/webhook.go` → `controller/webhook/webhook.go`
-- [ ] `service/webhook_endpoint.go` → `controller/webhook/endpoint.go`
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4e — `controller/orchestrator/`** (move from worker/ + service/)
-- [ ] `worker/dispatcher.go` → `controller/orchestrator/dispatcher.go`
-- [ ] `worker/registry.go` → `controller/orchestrator/registry.go`
-- [ ] `service/worker_node.go` → `controller/orchestrator/worker_node.go`
-- [ ] Imports `worker.Worker` interface (no cycle)
-- [ ] Update remaining service/ files: all refs to `worker.Dispatcher` / `worker.Registry`
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4f — `controller/gameserver/`** (deps: settings concrete, orchestrator concrete)
-- [ ] `service/gameserver.go` → `controller/gameserver/gameserver.go`
-- [ ] `service/gameserver_lifecycle.go` → `controller/gameserver/lifecycle.go`
-- [ ] `service/gameserver_ports.go` → `controller/gameserver/ports.go`
-- [ ] `service/gameserver_migration.go` → `controller/gameserver/migration.go`
-- [ ] `service/gameserver_inspect.go` → `controller/gameserver/inspect.go`
-- [ ] `service/console.go` → `controller/gameserver/console.go`
-- [ ] `service/file.go` → `controller/gameserver/file.go`
-- [ ] Define interface for BackupStore dep (from backup — not yet moved, use interface)
-- [ ] Update remaining service/ files: `backup.go`, `scheduler.go`
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4g — `controller/backup/`** (deps: gameserver via interface, settings concrete)
-- [ ] `service/backup.go` → `controller/backup/backup.go`
-- [ ] `service/backup_store.go` → `controller/backup/store.go`
-- [ ] Define `GameserverLookup` interface (satisfied by gameserver.GameserverService)
-- [ ] Update remaining service/ files: `scheduler.go`
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4h — `controller/status/`** (deps: orchestrator concrete, gameserver via func value)
-- [ ] `service/status.go` → `controller/status/manager.go`
-- [ ] `service/query.go` → `controller/status/query.go`
-- [ ] `service/ready.go` → `controller/status/ready.go`
-- [ ] `service/stats_poller.go` → `controller/status/poller.go`
-- [ ] `service/status_subscriber.go` → `controller/status/subscriber.go`
-- [ ] `restartFunc` is already a `func` value — no interface needed for gameserver dep
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4i — `controller/schedule/`** (deps: gameserver + backup + console via interfaces)
-- [ ] `service/schedule.go` → `controller/schedule/schedule.go`
-- [ ] `service/scheduler.go` → `controller/schedule/scheduler.go`
-- [ ] Define `GameserverLifecycle`, `BackupCreator`, `CommandSender` interfaces
-- [ ] Update api/router.go, api/handler/, cli/
-
-**4j — `controller/mod/`** (deps: gameserver/file via interface, settings concrete)
-- [ ] `service/mod.go` → `controller/mod/mod.go`
-- [ ] `service/mod_source.go` → `controller/mod/source.go`
-- [ ] `service/mod_source_modrinth.go` → `controller/mod/modrinth.go`
-- [ ] `service/mod_source_umod.go` → `controller/mod/umod.go`
-- [ ] `service/mod_source_workshop.go` → `controller/mod/workshop.go`
-- [ ] Define `FileOperator` interface (satisfied by gameserver.FileService)
-- [ ] Update api/router.go, api/handler/, cli/
+- [ ] 4f: `controller/gameserver/` — 7 files (gameserver, lifecycle, ports, migration, inspect, console, file)
+- [ ] 4g: `controller/backup/` — 2 files (backup, backup_store)
+- [ ] 4h: `controller/status/` — 5 files (status manager, query, ready, stats_poller, subscriber)
+- [ ] 4i: `controller/schedule/` — 2 files (schedule, scheduler)
+- [ ] 4d: `controller/webhook/` — 2 files (webhook, endpoint)
+- [ ] 4j: `controller/mod/` — 5 files (mod, source, modrinth, umod, workshop)
+- [ ] Move event_store.go and worker_node.go to appropriate homes
 
 ### Phase 5: Cleanup
 
 - [ ] Delete empty `service/` directory
-- [ ] Delete empty `constants/` directory
-- [ ] Delete empty `validate/` directory
-- [ ] Delete empty `docker/` directory
-- [ ] Delete empty `naming/`, `netinfo/`, `tlsutil/` directories
+- [x] Delete `constants/` directory
+- [x] Delete `validate/` directory (moved to pkg/)
+- [ ] Delete empty `naming/`, `netinfo/`, `tlsutil/` directories (moved to pkg/)
 - [ ] Run full test suite
 - [ ] Run `go vet ./...`
 - [ ] Verify `go build ./cli/` works
