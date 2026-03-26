@@ -64,14 +64,9 @@ func runEventsHistory(cmd *cobra.Command) error {
 	}
 
 	w := newTabWriter()
-	fmt.Fprintln(w, "TIME\tTYPE\tSUMMARY")
+	fmt.Fprintln(w, "TIME\tTYPE\tSTATUS")
 	for _, e := range events {
-		// Extract summary from the event data
-		var data struct {
-			Summary string `json:"summary"`
-		}
-		json.Unmarshal(e.Data, &data)
-		fmt.Fprintf(w, "%s\t%s\t%s\n", e.CreatedAt.Format("2006-01-02T15:04:05Z"), e.EventType, data.Summary)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", e.StartedAt.Format("2006-01-02T15:04:05Z"), e.Type, e.Status)
 	}
 	w.Flush()
 	return nil

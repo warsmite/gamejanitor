@@ -7,27 +7,25 @@ import "database/sql"
 type DB struct {
 	*GameserverStore
 	*BackupStore
-	*EventStore
+	*ActivityStore
 	*ScheduleStore
 	*TokenStore
 	*WebhookStore
 	*WorkerNodeStore
 	*ModStore
 	*SettingStore
-	*OperationStore
 }
 
 func New(db *sql.DB) *DB {
 	return &DB{
 		GameserverStore: NewGameserverStore(db),
 		BackupStore:     NewBackupStore(db),
-		EventStore:      NewEventStore(db),
+		ActivityStore:   NewActivityStore(db),
 		ScheduleStore:   NewScheduleStore(db),
 		TokenStore:      NewTokenStore(db),
 		WebhookStore:    NewWebhookStore(db),
 		WorkerNodeStore: NewWorkerNodeStore(db),
 		ModStore:        NewModStore(db),
 		SettingStore:    NewSettingStore(db),
-		OperationStore:  NewOperationStore(db),
 	}
 }

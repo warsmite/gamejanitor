@@ -38,20 +38,17 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return controller.ErrUnavailablef("target worker unavailable: %v", err)
 	}
 
-	opID, opErr := s.trackOp(ctx, gameserverID, currentNodeID, model.OpMigrate, map[string]string{
-		"source_node": currentNodeID,
-		"target_node": targetNodeID,
-	})
+	opID, opErr := s.trackActivity(ctx, gameserverID, currentNodeID, model.OpMigrate, nil, nil)
 	if opErr != nil {
 		return opErr
 	}
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failOp(opID, err)
+				s.failActivity(opID, err)
 			} else {
-				s.completeOp(opID)
+				s.completeActivity(opID)
 			}
 		}()
 	}

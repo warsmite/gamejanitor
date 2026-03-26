@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -70,7 +71,7 @@ type GameserverService struct {
 	dataDir      string
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 	portProbe func(int) bool // nil uses default net.Listen probe
-	ops       *OperationTracker
+	activity  *ActivityTracker
 }
 
 // SetPortProbe overrides the host port availability check. Used in tests
@@ -79,32 +80,42 @@ func (s *GameserverService) SetPortProbe(fn func(int) bool) {
 	s.portProbe = fn
 }
 
-func (s *GameserverService) SetOperationTracker(ops *OperationTracker) {
-	s.ops = ops
+func (s *GameserverService) SetActivityTracker(tracker *ActivityTracker) {
+	s.activity = tracker
 }
 
-// trackOp starts an operation if the tracker is set. Returns "" if tracker is nil (tests)
-// or if this call is already part of a larger operation (e.g. Stop/Start within Restart).
-func (s *GameserverService) trackOp(ctx context.Context, gsID, workerID, opType string, metadata any) (string, error) {
-	if s.ops == nil {
+// trackActivity starts an activity if the tracker is set. Returns "" if tracker is nil (tests)
+// or if this call is already part of a larger activity (e.g. Restart → Stop → Start).
+func (s *GameserverService) trackActivity(ctx context.Context, gsID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error) {
+	if s.activity == nil {
 		return "", nil
 	}
-	// Skip if we're already inside a parent operation (e.g. Restart → Stop → Start)
-	if OperationIDFromContext(ctx) != "" {
+	// Skip if we're already inside a parent activity (e.g. Restart → Stop → Start)
+	if ActivityIDFromContext(ctx) != "" {
 		return "", nil
 	}
-	return s.ops.Start(gsID, workerID, opType, metadata)
+	return s.activity.Start(gsID, workerID, activityType, actor, data)
 }
 
-func (s *GameserverService) completeOp(opID string) {
-	if s.ops != nil {
-		s.ops.Complete(opID)
+func (s *GameserverService) completeActivity(activityID string) {
+	if s.activity != nil {
+		s.activity.Complete(activityID)
 	}
 }
 
-func (s *GameserverService) failOp(opID string, err error) {
-	if s.ops != nil {
-		s.ops.Fail(opID, err)
+func (s *GameserverService) failActivity(activityID string, err error) {
+	if s.activity != nil {
+		s.activity.Fail(activityID, err)
+	}
+}
+
+// recordInstant records an instant (non-lifecycle) activity for CRUD operations.
+func (s *GameserverService) recordInstant(gameserverID *string, activityType string, actor json.RawMessage, data json.RawMessage) {
+	if s.activity == nil {
+		return
+	}
+	if err := s.activity.RecordInstant(gameserverID, activityType, actor, data); err != nil {
+		s.log.Error("failed to record instant activity", "type", activityType, "error", err)
 	}
 }
 
@@ -301,13 +312,18 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	s.store.PopulateNode(gs)
 
+	actor := controller.ActorFromContext(ctx)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverCreate,
 		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
+		Actor:        actor,
 		GameserverID: gs.ID,
 		Gameserver:   gs,
 	})
+
+	actorJSON, _ := json.Marshal(actor)
+	dataJSON, _ := json.Marshal(gs)
+	s.recordInstant(&gs.ID, controller.EventGameserverCreate, actorJSON, dataJSON)
 
 	return rawPassword, nil
 }
@@ -570,13 +586,18 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 
 	s.store.PopulateNode(existing)
+	updateActor := controller.ActorFromContext(ctx)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverUpdate,
 		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
+		Actor:        updateActor,
 		GameserverID: existing.ID,
 		Gameserver:   existing,
 	})
+
+	updateActorJSON, _ := json.Marshal(updateActor)
+	updateDataJSON, _ := json.Marshal(existing)
+	s.recordInstant(&existing.ID, controller.EventGameserverUpdate, updateActorJSON, updateDataJSON)
 
 	return needsMigration, nil
 }
@@ -682,13 +703,18 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	}
 
 	s.store.PopulateNode(gs)
+	deleteActor := controller.ActorFromContext(ctx)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverDelete,
 		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
+		Actor:        deleteActor,
 		GameserverID: gs.ID,
 		Gameserver:   gs,
 	})
+
+	deleteActorJSON, _ := json.Marshal(deleteActor)
+	deleteDataJSON, _ := json.Marshal(gs)
+	s.recordInstant(&gs.ID, controller.EventGameserverDelete, deleteActorJSON, deleteDataJSON)
 
 	return nil
 }

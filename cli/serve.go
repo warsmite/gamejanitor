@@ -131,8 +131,7 @@ type services struct {
 	scheduleSvc   *schedule.ScheduleService
 	authSvc       *auth.AuthService
 	statusMgr     *status.StatusManager
-	statusSub     *status.StatusSubscriber
-	eventStore      *event.EventStoreSubscriber
+	statusSub       *status.StatusSubscriber
 	eventHistorySvc *event.EventHistoryService
 	webhookWorker   *webhook.WebhookWorker
 	webhookSvc      *webhook.WebhookEndpointService
@@ -162,19 +161,18 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		return nil, err
 	}
 
-	// Operation tracking for long-running worker dispatches
-	opTracker := gameserver.NewOperationTracker(db, logger)
-	gameserverSvc.SetOperationTracker(opTracker)
+	// Activity tracking for long-running worker dispatches and CRUD events
+	activityTracker := gameserver.NewActivityTracker(db, logger)
+	gameserverSvc.SetActivityTracker(activityTracker)
 
 	gameserverSvc.SetBackupStore(backupStorage)
 	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
-	backupSvc.SetOperationTracker(opTracker)
+	backupSvc.SetActivityTracker(activityTracker)
 	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
 	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, logger)
-	eventStore := event.NewEventStoreSubscriber(db, broadcaster, logger)
 	eventHistorySvc := event.NewEventHistoryService(db)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
 	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
@@ -197,7 +195,6 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		authSvc:         authSvc,
 		statusMgr:       statusMgr,
 		statusSub:       statusSub,
-		eventStore:      eventStore,
 		eventHistorySvc: eventHistorySvc,
 		webhookWorker:   webhookWorker,
 		webhookSvc:      webhookSvc,
@@ -312,20 +309,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	svcs.statusSub.Start(ctx)
 	defer svcs.statusSub.Stop()
 
-	svcs.eventStore.Start(ctx)
-	defer svcs.eventStore.Stop()
-
 	svcs.webhookWorker.Start(ctx)
 	defer svcs.webhookWorker.Stop()
 
-	// Prune old events on startup, then hourly
+	// Prune old activities on startup, then hourly
 	go func() {
 		retDays := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
-			if pruned, err := db.PruneEvents(retDays); err != nil {
-				logger.Error("failed to prune events on startup", "error", err)
+			if pruned, err := db.PruneActivities(retDays); err != nil {
+				logger.Error("failed to prune activities on startup", "error", err)
 			} else if pruned > 0 {
-				logger.Info("pruned old events", "count", pruned, "retention_days", retDays)
+				logger.Info("pruned old activities", "count", pruned, "retention_days", retDays)
 			}
 		}
 		ticker := time.NewTicker(time.Hour)
@@ -333,10 +327,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		for range ticker.C {
 			days := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 			if days > 0 {
-				if pruned, err := db.PruneEvents(days); err != nil {
-					logger.Error("failed to prune events", "error", err)
+				if pruned, err := db.PruneActivities(days); err != nil {
+					logger.Error("failed to prune activities", "error", err)
 				} else if pruned > 0 {
-					logger.Info("pruned old events", "count", pruned, "retention_days", days)
+					logger.Info("pruned old activities", "count", pruned, "retention_days", days)
 				}
 			}
 		}
@@ -440,11 +434,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		logger.Error("failed to recover gameserver status on startup", "error", err)
 	}
 
-	// Mark any operations still "running" from a previous crash as abandoned.
-	if abandoned, err := db.AbandonRunningOperations(); err != nil {
-		logger.Error("failed to abandon stale operations", "error", err)
+	// Mark any activities still "running" from a previous crash as abandoned.
+	if abandoned, err := db.AbandonRunningActivities(); err != nil {
+		logger.Error("failed to abandon stale activities", "error", err)
 	} else if abandoned > 0 {
-		logger.Warn("abandoned stale operations from previous run", "count", abandoned)
+		logger.Warn("abandoned stale activities from previous run", "count", abandoned)
 	}
 
 	router := api.NewRouter(api.RouterOptions{
@@ -464,7 +458,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WorkerNodeSvc:   svcs.workerNodeSvc,
 		WebhookSvc:      svcs.webhookSvc,
 		EventHistorySvc: svcs.eventHistorySvc,
-		OperationStore:  db,
+		ActivityStore:   db,
 		Broadcaster:     svcs.broadcaster,
 		ModSvc:          svcs.modSvc,
 		Log:             logger,

@@ -5,15 +5,14 @@ import (
 	"time"
 )
 
-// Operation status constants
 const (
-	OperationStatusRunning   = "running"
-	OperationStatusCompleted = "completed"
-	OperationStatusFailed    = "failed"
-	OperationStatusAbandoned = "abandoned"
+	ActivityRunning   = "running"
+	ActivityCompleted = "completed"
+	ActivityFailed    = "failed"
+	ActivityAbandoned = "abandoned"
 )
 
-// Operation type constants — every stateful dispatch to a worker.
+// Activity type constants for stateful worker dispatches.
 const (
 	OpStart     = "start"
 	OpStop      = "stop"
@@ -25,20 +24,23 @@ const (
 	OpRestore   = "restore"
 )
 
-type Operation struct {
+type Activity struct {
 	ID           string          `json:"id"`
-	GameserverID string          `json:"gameserver_id"`
-	WorkerID     string          `json:"worker_id"`
+	GameserverID *string         `json:"gameserver_id,omitempty"`
+	WorkerID     string          `json:"worker_id,omitempty"`
 	Type         string          `json:"type"`
 	Status       string          `json:"status"`
+	Actor        json.RawMessage `json:"actor"`
+	Data         json.RawMessage `json:"data"`
 	Error        string          `json:"error,omitempty"`
-	Metadata     json.RawMessage `json:"metadata"`
 	StartedAt    time.Time       `json:"started_at"`
 	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
 }
 
-type OperationFilter struct {
+type ActivityFilter struct {
 	GameserverID *string
+	Type         *string
 	Status       *string
 	WorkerID     *string
+	Pagination
 }

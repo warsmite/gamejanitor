@@ -88,20 +88,22 @@ CREATE TABLE worker_nodes (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE operations (
+CREATE TABLE activity (
     id TEXT PRIMARY KEY,
-    gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
-    worker_id TEXT NOT NULL,
+    gameserver_id TEXT REFERENCES gameservers(id) ON DELETE CASCADE,
+    worker_id TEXT NOT NULL DEFAULT '',
     type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'running',
+    actor TEXT NOT NULL DEFAULT '{}',
+    data TEXT NOT NULL DEFAULT '{}',
     error TEXT NOT NULL DEFAULT '',
-    metadata TEXT NOT NULL DEFAULT '{}',
     started_at DATETIME NOT NULL,
     completed_at DATETIME
 );
 
-CREATE INDEX IF NOT EXISTS idx_operations_gameserver_id ON operations(gameserver_id);
-CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
+CREATE INDEX IF NOT EXISTS idx_activity_gameserver_id ON activity(gameserver_id);
+CREATE INDEX IF NOT EXISTS idx_activity_status ON activity(status);
+CREATE INDEX IF NOT EXISTS idx_activity_type ON activity(type);
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
@@ -134,18 +136,6 @@ CREATE TABLE webhook_deliveries (
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_state_next ON webhook_deliveries(state, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint ON webhook_deliveries(webhook_endpoint_id);
 
-CREATE TABLE events (
-    id TEXT PRIMARY KEY,
-    event_type TEXT NOT NULL,
-    gameserver_id TEXT NOT NULL DEFAULT '',
-    actor JSON NOT NULL DEFAULT '{}',
-    data JSON NOT NULL DEFAULT '{}',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_gameserver ON events(gameserver_id);
-CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 
 CREATE TABLE installed_mods (
     id TEXT PRIMARY KEY,

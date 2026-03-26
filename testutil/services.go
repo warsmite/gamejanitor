@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/warsmite/gamejanitor/controller/backup"
-	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/schedule"
@@ -40,7 +39,6 @@ type ServiceBundle struct {
 	ModSvc        *mod.ModService
 	BackupStorage backup.Storage
 	StatusSub     *status.StatusSubscriber
-	EventStore    *event.EventStoreSubscriber
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.
@@ -69,13 +67,13 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
 	gameserverSvc.SetPortProbe(func(int) bool { return true }) // skip host probe in tests
-	opTracker := gameserver.NewOperationTracker(s, log)
-	gameserverSvc.SetOperationTracker(opTracker)
+	activityTracker := gameserver.NewActivityTracker(s, log)
+	gameserverSvc.SetActivityTracker(activityTracker)
 
 	consoleSvc := gameserver.NewConsoleService(s, dispatcher, gameStore, log)
 	fileSvc := gameserver.NewFileService(s, dispatcher, log)
 	backupSvc := backup.NewBackupService(s, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
-	backupSvc.SetOperationTracker(opTracker)
+	backupSvc.SetActivityTracker(activityTracker)
 	scheduler := schedule.NewScheduler(s, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
 	scheduleSvc := schedule.NewScheduleService(s, scheduler, broadcaster, log)
 	authSvc := auth.NewAuthService(s, log)
@@ -113,8 +111,8 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 }
 
 // NewTestServicesWithSubscribers is like NewTestServices but also starts the async
-// event subscribers (StatusSubscriber, EventStoreSubscriber). Use this for tests that
-// need to verify status derivation from lifecycle events or event persistence to the DB.
+// event subscribers (StatusSubscriber). Use this for tests that need to verify
+// status derivation from lifecycle events.
 // Subscribers are stopped on test cleanup.
 func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	t.Helper()
@@ -123,11 +121,9 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	s := store.New(svc.DB)
 
 	statusSub := status.NewStatusSubscriber(s, svc.Broadcaster, log)
-	eventStore := event.NewEventStoreSubscriber(s, svc.Broadcaster, log)
 
 	ctx := TestContext()
 	statusSub.Start(ctx)
-	eventStore.Start(ctx)
 
 	t.Cleanup(func() {
 		// Stop ReadyWatcher first — its goroutines hold references to
@@ -135,11 +131,9 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 		svc.ReadyWatcher.StopAll()
 		svc.QuerySvc.StopAll()
 		statusSub.Stop()
-		eventStore.Stop()
 	})
 
 	svc.StatusSub = statusSub
-	svc.EventStore = eventStore
 
 	return svc
 }

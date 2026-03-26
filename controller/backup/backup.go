@@ -3,6 +3,7 @@ package backup
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -49,11 +50,11 @@ func backupOperationFailedReason(prefix string, err error) string {
 	}
 }
 
-// OperationTracker records the lifecycle of long-running operations.
-type OperationTracker interface {
-	Start(gameserverID, workerID, opType string, metadata any) (string, error)
-	Complete(opID string)
-	Fail(opID string, reason error)
+// ActivityTracker records the lifecycle of long-running activities.
+type ActivityTracker interface {
+	Start(gameserverID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error)
+	Complete(activityID string)
+	Fail(activityID string, reason error)
 }
 
 type BackupService struct {
@@ -64,35 +65,35 @@ type BackupService struct {
 	storage       Storage
 	settingsSvc   *settings.SettingsService
 	broadcaster   *controller.EventBus
-	ops           OperationTracker
+	activity      ActivityTracker
 	log           *slog.Logger
 }
 
-func (s *BackupService) SetOperationTracker(ops OperationTracker) {
-	s.ops = ops
+func (s *BackupService) SetActivityTracker(tracker ActivityTracker) {
+	s.activity = tracker
 }
 
-func (s *BackupService) startOp(gsID, workerID, opType string, metadata any) string {
-	if s.ops == nil {
+func (s *BackupService) startActivity(gsID, workerID, activityType string, data json.RawMessage) string {
+	if s.activity == nil {
 		return ""
 	}
-	opID, err := s.ops.Start(gsID, workerID, opType, metadata)
+	activityID, err := s.activity.Start(gsID, workerID, activityType, nil, data)
 	if err != nil {
-		s.log.Warn("failed to start operation tracking", "type", opType, "error", err)
+		s.log.Warn("failed to start activity tracking", "type", activityType, "error", err)
 		return ""
 	}
-	return opID
+	return activityID
 }
 
-func (s *BackupService) completeOp(opID string) {
-	if s.ops != nil && opID != "" {
-		s.ops.Complete(opID)
+func (s *BackupService) completeActivity(activityID string) {
+	if s.activity != nil && activityID != "" {
+		s.activity.Complete(activityID)
 	}
 }
 
-func (s *BackupService) failOp(opID string, reason error) {
-	if s.ops != nil && opID != "" {
-		s.ops.Fail(opID, reason)
+func (s *BackupService) failActivityRecord(activityID string, reason error) {
+	if s.activity != nil && activityID != "" {
+		s.activity.Fail(activityID, reason)
 	}
 }
 
@@ -194,12 +195,13 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID := s.startOp(gameserverID, workerID, model.OpBackup, map[string]string{"backup_id": backupID})
+	backupMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
+	opID := s.startActivity(gameserverID, workerID, model.OpBackup, backupMetaJSON)
 
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
-		s.failOp(opID, fmt.Errorf("worker unavailable"))
+		s.failActivityRecord(opID, fmt.Errorf("worker unavailable"))
 		s.failBackup(ctx, gameserverID, backupID, name, actor, "worker unavailable for backup")
 		return
 	}
@@ -218,7 +220,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	// Get tar stream from volume
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		s.failOp(opID, err)
+		s.failActivityRecord(opID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("backing up volume: %v", err))
 		return
 	}
@@ -245,13 +247,13 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}()
 
 	if err := s.storage.Save(ctx, gameserverID, backupID, pr); err != nil {
-		s.failOp(opID, err)
+		s.failActivityRecord(opID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("saving to store: %v", err))
 		return
 	}
 	if compressErr != nil {
 		s.storage.Delete(ctx, gameserverID, backupID)
-		s.failOp(opID, compressErr)
+		s.failActivityRecord(opID, compressErr)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, compressErr.Error())
 		return
 	}
@@ -267,7 +269,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		return
 	}
 
-	s.completeOp(opID)
+	s.completeActivity(opID)
 	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
@@ -350,13 +352,14 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID := s.startOp(gameserverID, workerID, model.OpRestore, map[string]string{"backup_id": backupID})
+	restoreMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
+	opID := s.startActivity(gameserverID, workerID, model.OpRestore, restoreMetaJSON)
 	opSucceeded := false
 	defer func() {
 		if opSucceeded {
-			s.completeOp(opID)
+			s.completeActivity(opID)
 		} else {
-			s.failOp(opID, fmt.Errorf("restore failed"))
+			s.failActivityRecord(opID, fmt.Errorf("restore failed"))
 		}
 	}()
 

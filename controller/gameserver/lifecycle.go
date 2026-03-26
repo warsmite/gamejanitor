@@ -75,17 +75,17 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, opErr := s.trackOp(ctx, id, workerID, model.OpStart, nil)
+	opID, opErr := s.trackActivity(ctx, id, workerID, model.OpStart, nil, nil)
 	if opErr != nil {
 		return opErr
 	}
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failOp(opID, err)
+				s.failActivity(opID, err)
 			} else {
-				s.completeOp(opID)
+				s.completeActivity(opID)
 			}
 		}()
 	}
@@ -223,14 +223,14 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, _ := s.trackOp(ctx, id, workerID, model.OpStop, nil)
+	opID, _ := s.trackActivity(ctx, id, workerID, model.OpStop, nil, nil)
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failOp(opID, err)
+				s.failActivity(opID, err)
 			} else {
-				s.completeOp(opID)
+				s.completeActivity(opID)
 			}
 		}()
 	}
@@ -280,17 +280,17 @@ func (s *GameserverService) Restart(ctx context.Context, id string) (err error) 
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, opErr := s.trackOp(ctx, id, workerID, model.OpRestart, nil)
+	opID, opErr := s.trackActivity(ctx, id, workerID, model.OpRestart, nil, nil)
 	if opErr != nil {
 		return opErr
 	}
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failOp(opID, err)
+				s.failActivity(opID, err)
 			} else {
-				s.completeOp(opID)
+				s.completeActivity(opID)
 			}
 		}()
 	}
@@ -333,12 +333,12 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, opErr := s.trackOp(ctx, id, workerID, model.OpUpdate, nil)
+	opID, opErr := s.trackActivity(ctx, id, workerID, model.OpUpdate, nil, nil)
 	if opErr != nil {
 		return opErr
 	}
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 	}
 
 	s.store.PopulateNode(gs)
@@ -353,10 +353,10 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.failOp(opID, err)
+			s.failActivity(opID, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
 		} else {
-			s.completeOp(opID)
+			s.completeActivity(opID)
 		}
 	}()
 
@@ -439,12 +439,12 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, opErr := s.trackOp(ctx, id, workerID, model.OpReinstall, nil)
+	opID, opErr := s.trackActivity(ctx, id, workerID, model.OpReinstall, nil, nil)
 	if opErr != nil {
 		return opErr
 	}
 	if opID != "" {
-		ctx = WithOperationID(ctx, opID)
+		ctx = WithActivityID(ctx, opID)
 	}
 
 	s.store.PopulateNode(gs)
@@ -459,10 +459,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.failOp(opID, err)
+			s.failActivity(opID, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
 		} else {
-			s.completeOp(opID)
+			s.completeActivity(opID)
 		}
 	}()
 

@@ -3,6 +3,7 @@ package testutil
 import (
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/webhook"
+
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/store"
 	"net/http/httptest"
@@ -51,6 +52,7 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		WorkerNodeSvc:   orchestrator.NewWorkerNodeService(db, svc.Registry, svc.Broadcaster, log),
 		WebhookSvc:      webhook.NewWebhookEndpointService(db, log),
 		EventHistorySvc: event.NewEventHistoryService(db),
+		ActivityStore:   db,
 		Broadcaster:     svc.Broadcaster,
 		ModSvc:          svc.ModSvc,
 		Log:             log,

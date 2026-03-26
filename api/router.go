@@ -42,7 +42,7 @@ type RouterOptions struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	WebhookSvc      *webhook.WebhookEndpointService
 	EventHistorySvc *event.EventHistoryService
-	OperationStore  handler.OperationStore
+	ActivityStore   handler.ActivityStore
 	Broadcaster     *controller.EventBus
 	Log             *slog.Logger
 	WebUI           fs.FS // embedded UI static files (nil to disable)
@@ -82,7 +82,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
-	opHandlers := handler.NewOperationHandlers(opts.OperationStore)
+	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore)
 
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
 	requireAccess := RequireGameserverAccess(opts.SettingsSvc)
@@ -189,7 +189,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
 		r.Get("/events/history", eventHandlers.History)
-		r.Get("/operations", opHandlers.List)
+		r.Get("/activity", activityHandlers.List)
 
 		r.Route("/workers", func(r chi.Router) {
 			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermNodesManage))

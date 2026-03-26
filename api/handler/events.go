@@ -112,22 +112,30 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
-			respondOK(w, []model.Event{})
+			respondOK(w, []model.Activity{})
 			return
 		}
 	}
 
-	events, err := h.historySvc.List(model.EventFilter{
-		EventType:            r.URL.Query().Get("type"),
-		GameserverID:         requestedGSID,
-		AllowedGameserverIDs: allowedIDs,
-		Pagination:           p,
+	var gsIDFilter *string
+	if requestedGSID != "" {
+		gsIDFilter = &requestedGSID
+	}
+	var typeFilter *string
+	if v := r.URL.Query().Get("type"); v != "" {
+		typeFilter = &v
+	}
+
+	activities, err := h.historySvc.List(model.ActivityFilter{
+		Type:         typeFilter,
+		GameserverID: gsIDFilter,
+		Pagination:   p,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list events")
 		return
 	}
-	respondOK(w, events)
+	respondOK(w, activities)
 }
 
 // matchesTypeFilter checks if an event type matches any of the filter patterns.

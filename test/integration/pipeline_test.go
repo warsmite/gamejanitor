@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -50,39 +48,6 @@ func TestPipeline_StatusDerivedFromLifecycleEvents(t *testing.T) {
 	// Status should be one of the active states (installing, starting, started, running)
 	assert.Contains(t, []string{"installing", "starting", "started", "running"}, fetched.Status,
 		"status should be an active state, got %s", fetched.Status)
-}
-
-func TestPipeline_EventPersistedToDatabase(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServicesWithSubscribers(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-
-	gs := testutil.CreateTestGameserver(t, svc)
-
-	// EventStoreSubscriber should persist the create event
-	pollUntil(t, func() bool {
-		events, _ := store.New(svc.DB).ListEvents(model.EventFilter{
-			GameserverID: gs.ID,
-			Pagination: model.Pagination{Limit: 10},
-		})
-		return len(events) > 0
-	}, "create event should be persisted to events table")
-
-	events, err := store.New(svc.DB).ListEvents(model.EventFilter{
-		GameserverID: gs.ID,
-		Pagination: model.Pagination{Limit: 10},
-	})
-	require.NoError(t, err)
-
-	// Should find the gameserver.create event
-	found := false
-	for _, e := range events {
-		if e.EventType == controller.EventGameserverCreate {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "gameserver.create event should be persisted")
 }
 
 func TestPipeline_StatusChangedEventPublished(t *testing.T) {
@@ -141,34 +106,4 @@ func TestPipeline_StopDerivesStopped(t *testing.T) {
 		f, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 		return f != nil && f.Status == "stopped"
 	}, "status should return to stopped after stop")
-}
-
-func TestPipeline_MultipleEventsPersistedInOrder(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServicesWithSubscribers(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-	ctx := testutil.TestContext()
-
-	gs := testutil.CreateTestGameserver(t, svc)
-
-	// Start then stop — should generate multiple events
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-	time.Sleep(200 * time.Millisecond) // let events process
-	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
-
-	// Wait for events to be persisted
-	pollUntil(t, func() bool {
-		events, _ := store.New(svc.DB).ListEvents(model.EventFilter{
-			GameserverID: gs.ID,
-			Pagination: model.Pagination{Limit: 50},
-		})
-		return len(events) >= 3 // at least create + start + stop
-	}, "multiple events should be persisted")
-
-	events, err := store.New(svc.DB).ListEvents(model.EventFilter{
-		GameserverID: gs.ID,
-		Pagination: model.Pagination{Limit: 50},
-	})
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(events), 3, "should have create, start, and stop events at minimum")
 }
