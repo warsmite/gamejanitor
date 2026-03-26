@@ -6,7 +6,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
-	"database/sql"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -19,7 +18,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
-	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/api/handler"
 	"github.com/go-chi/chi/v5"
@@ -27,25 +25,26 @@ import (
 )
 
 type RouterOptions struct {
-	Config        config.Config
-	Role          string // "standalone", "controller", "controller+worker"
-	LogPath       string
-	GameStore     *games.GameStore
-	GameserverSvc *gameserver.GameserverService
-	ConsoleSvc    *gameserver.ConsoleService
-	FileSvc       *gameserver.FileService
-	ScheduleSvc   *schedule.ScheduleService
-	BackupSvc     *backup.BackupService
-	QuerySvc      *status.QueryService
-	StatsPoller   *status.StatsPoller
-	SettingsSvc   *settings.SettingsService
-	AuthSvc       *auth.AuthService
-	ModSvc        *mod.ModService
-	Broadcaster   *controller.EventBus
-	Registry      *orchestrator.Registry
-	DB            *sql.DB
-	Log           *slog.Logger
-	WebUI         fs.FS // embedded UI static files (nil to disable)
+	Config          config.Config
+	Role            string // "standalone", "controller", "controller+worker"
+	LogPath         string
+	GameStore       *games.GameStore
+	GameserverSvc   *gameserver.GameserverService
+	ConsoleSvc      *gameserver.ConsoleService
+	FileSvc         *gameserver.FileService
+	ScheduleSvc     *schedule.ScheduleService
+	BackupSvc       *backup.BackupService
+	QuerySvc        *status.QueryService
+	StatsPoller     *status.StatsPoller
+	SettingsSvc     *settings.SettingsService
+	AuthSvc         *auth.AuthService
+	ModSvc          *mod.ModService
+	WorkerNodeSvc   *orchestrator.WorkerNodeService
+	WebhookSvc      *webhook.WebhookEndpointService
+	EventHistorySvc *event.EventHistoryService
+	Broadcaster     *controller.EventBus
+	Log             *slog.Logger
+	WebUI           fs.FS // embedded UI static files (nil to disable)
 }
 
 func NewRouter(opts RouterOptions) http.Handler {
@@ -71,27 +70,16 @@ func NewRouter(opts RouterOptions) http.Handler {
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
 	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
-	eventStoreDB := store.NewEventStore(opts.DB)
-	eventHistorySvc := event.NewEventHistoryService(eventStoreDB)
-	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
+	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
 	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
 	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.Log)
-	workerNodeSvc := orchestrator.NewWorkerNodeService(
-		struct {
-			*store.WorkerNodeStore
-			*store.GameserverStore
-		}{store.NewWorkerNodeStore(opts.DB), store.NewGameserverStore(opts.DB)},
-		opts.Registry, opts.Broadcaster, opts.Log,
-	)
-	workerHandlers := handler.NewWorkerHandlers(workerNodeSvc, opts.Log)
-	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, workerNodeSvc, opts.Config, opts.Log)
+	workerHandlers := handler.NewWorkerHandlers(opts.WorkerNodeSvc, opts.Log)
+	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.WorkerNodeSvc, opts.Config, opts.Log)
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
-	webhookStore := store.NewWebhookStore(opts.DB)
-	webhookSvc := webhook.NewWebhookEndpointService(webhookStore, opts.Log)
-	webhookHandlers := handler.NewWebhookHandlers(webhookSvc, opts.Log)
+	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 
 	requireAdmin := RequireAdmin(opts.SettingsSvc)

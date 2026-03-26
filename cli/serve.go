@@ -132,9 +132,12 @@ type services struct {
 	authSvc       *auth.AuthService
 	statusMgr     *status.StatusManager
 	statusSub     *status.StatusSubscriber
-	eventStore    *event.EventStoreSubscriber
-	webhookWorker *webhook.WebhookWorker
-	modSvc        *mod.ModService
+	eventStore      *event.EventStoreSubscriber
+	eventHistorySvc *event.EventHistoryService
+	webhookWorker   *webhook.WebhookWorker
+	webhookSvc      *webhook.WebhookEndpointService
+	workerNodeSvc   *orchestrator.WorkerNodeService
+	modSvc          *mod.ModService
 }
 
 func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
@@ -167,28 +170,34 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, logger)
 	eventStore := event.NewEventStoreSubscriber(db, broadcaster, logger)
+	eventHistorySvc := event.NewEventHistoryService(db)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
+	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
+	workerNodeSvc := orchestrator.NewWorkerNodeService(db, registry, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
 	modSvc := mod.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
 	return &services{
-		broadcaster:   broadcaster,
-		settingsSvc:   settingsSvc,
-		gameserverSvc: gameserverSvc,
-		querySvc:      querySvc,
-		statsPoller:   statsPoller,
-		readyWatcher:  readyWatcher,
-		consoleSvc:    consoleSvc,
-		fileSvc:       fileSvc,
-		backupSvc:     backupSvc,
-		scheduler:     scheduler,
-		scheduleSvc:   scheduleSvc,
-		authSvc:       authSvc,
-		statusMgr:     statusMgr,
-		statusSub:     statusSub,
-		eventStore:    eventStore,
-		webhookWorker: webhookWorker,
-		modSvc:        modSvc,
+		broadcaster:     broadcaster,
+		settingsSvc:     settingsSvc,
+		gameserverSvc:   gameserverSvc,
+		querySvc:        querySvc,
+		statsPoller:     statsPoller,
+		readyWatcher:    readyWatcher,
+		consoleSvc:      consoleSvc,
+		fileSvc:         fileSvc,
+		backupSvc:       backupSvc,
+		scheduler:       scheduler,
+		scheduleSvc:     scheduleSvc,
+		authSvc:         authSvc,
+		statusMgr:       statusMgr,
+		statusSub:       statusSub,
+		eventStore:      eventStore,
+		eventHistorySvc: eventHistorySvc,
+		webhookWorker:   webhookWorker,
+		webhookSvc:      webhookSvc,
+		workerNodeSvc:   workerNodeSvc,
+		modSvc:          modSvc,
 	}, nil
 }
 
@@ -402,25 +411,26 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	router := api.NewRouter(api.RouterOptions{
-		Config:        cfg,
-		Role:          role,
-		LogPath:       logPath,
-		GameStore:     gameStore,
-		GameserverSvc: svcs.gameserverSvc,
-		ConsoleSvc:    svcs.consoleSvc,
-		FileSvc:       svcs.fileSvc,
-		ScheduleSvc:   svcs.scheduleSvc,
-		BackupSvc:     svcs.backupSvc,
-		QuerySvc:      svcs.querySvc,
-		StatsPoller:   svcs.statsPoller,
-		SettingsSvc:   svcs.settingsSvc,
-		AuthSvc:       svcs.authSvc,
-		Broadcaster:   svcs.broadcaster,
-		Registry:      registry,
-		DB:            database,
-		ModSvc:        svcs.modSvc,
-		Log:           logger,
-		WebUI:         webUIFS(cfg),
+		Config:          cfg,
+		Role:            role,
+		LogPath:         logPath,
+		GameStore:       gameStore,
+		GameserverSvc:   svcs.gameserverSvc,
+		ConsoleSvc:      svcs.consoleSvc,
+		FileSvc:         svcs.fileSvc,
+		ScheduleSvc:     svcs.scheduleSvc,
+		BackupSvc:       svcs.backupSvc,
+		QuerySvc:        svcs.querySvc,
+		StatsPoller:     svcs.statsPoller,
+		SettingsSvc:     svcs.settingsSvc,
+		AuthSvc:         svcs.authSvc,
+		WorkerNodeSvc:   svcs.workerNodeSvc,
+		WebhookSvc:      svcs.webhookSvc,
+		EventHistorySvc: svcs.eventHistorySvc,
+		Broadcaster:     svcs.broadcaster,
+		ModSvc:          svcs.modSvc,
+		Log:             logger,
+		WebUI:           webUIFS(cfg),
 	})
 
 	// Start SFTP server if enabled
