@@ -69,6 +69,7 @@ type WebhookWorker struct {
 	log         *slog.Logger
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
+	wake        chan struct{} // signals deliverLoop to process immediately
 }
 
 func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
@@ -78,6 +79,7 @@ func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *contr
 		broadcaster: broadcaster,
 		client:      &http.Client{Timeout: 10 * time.Second},
 		log:         log,
+		wake:        make(chan struct{}, 1),
 	}
 }
 
@@ -221,6 +223,12 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
 		}
 	}
+
+	// Wake the delivery goroutine to process immediately instead of waiting for the next poll tick
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
 }
 
 // matchEventFilter checks if an event type matches any of the filter patterns.
@@ -255,6 +263,8 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-w.wake:
+			w.processPendingDeliveries()
 		case <-ticker.C:
 			w.processPendingDeliveries()
 
