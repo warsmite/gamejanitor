@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -191,12 +193,27 @@ func (c *Config) ResolveContainerSocket() string {
 }
 
 func detectPodmanSocket() string {
-	if _, err := os.Stat("/run/podman/podman.sock"); err == nil {
-		return "/run/podman/podman.sock"
-	}
+	// Prefer rootless socket — it doesn't require group membership or root
 	rootless := fmt.Sprintf("/run/user/%d/podman/podman.sock", os.Getuid())
-	if _, err := os.Stat(rootless); err == nil {
+	if isSocketAccessible(rootless) {
 		return rootless
 	}
+	if isSocketAccessible("/run/podman/podman.sock") {
+		return "/run/podman/podman.sock"
+	}
 	return ""
+}
+
+// isSocketAccessible checks that a unix socket exists and is connectable.
+// A socket file can exist even when the daemon isn't running (stale socket).
+func isSocketAccessible(path string) bool {
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	conn, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
