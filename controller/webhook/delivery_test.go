@@ -1,4 +1,4 @@
-package service_test
+package webhook_test
 
 import (
 	"crypto/hmac"

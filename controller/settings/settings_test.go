@@ -1,4 +1,4 @@
-package service_test
+package settings_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/settings"

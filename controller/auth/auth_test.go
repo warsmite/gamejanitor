@@ -1,4 +1,4 @@
-package service_test
+package auth_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
