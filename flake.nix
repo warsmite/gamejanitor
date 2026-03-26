@@ -41,8 +41,15 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
-            # Watch Go files and game data, restart server on change
-            reflex -s -r '\.(go|yaml)$' -R 'node_modules' -- go run . serve -d /tmp/gamejanitor-data "$@"
+            # Build UI once at startup
+            (cd ui && npm run build) 2>&1 | head -5
+
+            # Watch Go, YAML, and UI source files. Rebuild UI on Svelte/TS/CSS changes.
+            reflex -s -r '\.(go|yaml|svelte|ts|css)$' -R 'node_modules' -R 'ui/dist' -- sh -c '
+              cd ui && npm run build 2>&1 | tail -1
+              cd ..
+              exec go run . serve -d /tmp/gamejanitor-data '"$@"'
+            '
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''
