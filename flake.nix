@@ -116,6 +116,13 @@
               -d "/tmp/gamejanitor-worker-$PORT" "''${EXTRA_ARGS[@]}" "''${@:4}"
           '';
 
+          update-vendor-hash = pkgs.writeShellScriptBin "update-vendor-hash" ''
+            go mod vendor
+            HASH=$(nix hash path --type sha256 vendor/)
+            sed -i "s|vendorHash = \".*\"|vendorHash = \"$HASH\"|" flake.nix
+            echo "Updated vendorHash to $HASH"
+          '';
+
           gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
             protoc --go_out=. --go_opt=module=github.com/warsmite/gamejanitor \
                    --go-grpc_out=. --go-grpc_opt=module=github.com/warsmite/gamejanitor \
@@ -220,6 +227,7 @@
             dev-controller
             dev-worker
             gen-proto
+            update-vendor-hash
             loc
             cleanup
             test
