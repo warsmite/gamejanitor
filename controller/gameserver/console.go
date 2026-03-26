@@ -61,8 +61,12 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, controller.ErrBadRequestf("console_read capability is disabled for game %s", game.Name)
 	}
 
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
 	s.log.Info("streaming logs", "gameserver_id", gameserverID, "container_id", (*gs.ContainerID)[:12])
-	return s.dispatcher.WorkerFor(gameserverID).ContainerLogs(ctx, *gs.ContainerID, tail, true)
+	return w.ContainerLogs(ctx, *gs.ContainerID, tail, true)
 }
 
 // SendCommand executes a command inside a running gameserver's container via /scripts/send-command.
@@ -91,9 +95,14 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", controller.ErrBadRequestf("command capability is disabled for game %s", game.Name)
 	}
 
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return "", controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
 
-	exitCode, stdout, stderr, err := s.dispatcher.WorkerFor(gameserverID).Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
+	exitCode, stdout, stderr, err := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
 	if err != nil {
 		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}
@@ -116,6 +125,9 @@ func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID strin
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
 	entries, err := w.ListFiles(ctx, gs.VolumeName, ".gamejanitor/logs")
 	if err != nil {
 		return nil, nil
@@ -159,6 +171,9 @@ func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID st
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
 	content, err := w.ReadFile(ctx, gs.VolumeName, path)
 	if err != nil {
 		s.log.Debug("no historical logs found", "gameserver_id", gameserverID, "session", session, "error", err)

@@ -14,76 +14,32 @@ Format:
 
 ---
 
-## PortMode defaults to empty string, skipping auto-allocation
-- **Test:** `TestGameserver_Create_PortModeDefaultShouldBeAuto` in `service/gameserver_test.go` (to be written in Phase 3)
-- **Expected:** When a gameserver is created without explicitly setting `port_mode`, ports should be auto-allocated from the configured port range. The DB default is `'auto'` but Go struct zero value is `""`.
-- **Actual:** `CreateGameserver` checks `gs.PortMode == "auto"` — empty string skips allocation entirely. Ports fall through to `applyGameDefaults` which uses the game's raw default ports (e.g., 27015). Two gameservers of the same game get identical host ports and will conflict on start.
-- **Severity:** blocks release
-- **Notes:** The API handler (`api/handlers/gameservers.go`) never sets `PortMode`. The DB column default `'auto'` only applies on SQL INSERT, but port allocation runs before the INSERT. Fix is likely: treat empty `PortMode` as `"auto"` in `CreateGameserver`, or have the API handler set it explicitly.
+## PortMode defaults to empty string, skipping auto-allocation — FIXED
+- **Fixed:** `CreateGameserver` now treats empty `PortMode` as `"auto"`.
 
-## GameserverIDFromContainerName fails to reject update/fileops containers
-- **Test:** `TestNaming_GameserverIDFromContainerName_RejectsUpdateContainer` and `_RejectsFileopsContainer` in `naming/naming_test.go`
-- **Expected:** `GameserverIDFromContainerName("gamejanitor-update-abc-123")` should return `("", false)` since it's an update container, not a gameserver.
-- **Actual:** Returns `("update-abc-123", true)`. After stripping `gamejanitor-` prefix, the remainder is `update-abc-123`. The check `strings.Contains(id, "-update-")` looks for `-update-` with a leading dash, but the remainder starts with `update-` (no leading dash). Same issue for `-fileops-`, `-reinstall-`, `-backup-`.
-- **Severity:** should fix
-- **Notes:** `naming/naming.go:34`. The StatusManager uses this to map container events to gameservers. Misidentifying update containers could cause spurious status changes. Fix: use `strings.HasPrefix(id, "update-")` instead of `strings.Contains(id, "-update-")`.
+## GameserverIDFromContainerName fails to reject update/fileops containers — FIXED
+- **Fixed:** Changed `strings.Contains(id, "-update-")` to `strings.HasPrefix(id, "update-")` (and similar for other prefixes) in `naming/naming.go`.
 
 ## runBackup panics on nil worker (missing nil check) — FIXED
-- **Test:** Discovered via `TestBackup_Create_ReturnsInProgressRecord` flaky panic in `service/backup_test.go`
-- **Fixed:** Added nil check on `w` in `service/backup.go:115` — calls `failBackup` if worker unavailable.
-- **Also fixed:** Same nil worker panic in `service/stats_poller.go:117` — returns false to stop polling.
-- **Notes:** Many other `WorkerFor` call sites in the codebase also lack nil checks (console.go, file.go, gameserver_inspect.go, etc). These are synchronous paths so less likely to hit in practice, but should be audited.
+- **Fixed:** Added nil check on `w` in `backup.go` — calls `failBackup` if worker unavailable. Same fix in `stats_poller.go`.
 
-## Sidecar file ops don't reject path traversal
-- **Test:** `TestWorker_FilePathTraversal` in `worker/local_test.go` (integration, skipped)
-- **Expected:** `ReadFile(ctx, vol, "../../etc/passwd")` should return an error.
-- **Actual:** Returns the container's `/etc/passwd` contents without error. The sidecar executes `cat` inside an Alpine container, so `../../etc/passwd` resolves to the container's `/etc/passwd` — not a host escape, but reads files outside `/data`.
-- **Severity:** should fix
-- **Notes:** The direct-access code path has `resolveVolumePath` with `strings.HasPrefix` protection, but the sidecar path (`local_fileops_sidecar.go`) doesn't enforce the same check before passing paths to container exec commands. Fix: validate paths in `LocalWorker` before delegating to either direct or sidecar.
+## Sidecar file ops don't reject path traversal — FIXED
+- **Fixed:** Added `sidecarPath` validation in `LocalWorker` before delegating to sidecar. Tests unskipped in `worker/local_test.go`.
 
-## Sidecar file ops fail with Permission denied on Docker volumes
-- **Test:** `TestWorker_VolumeOperations`, `TestWorker_BackupRestoreRoundTrip`, `TestWorker_Rename` in `worker/local_test.go` (integration, skipped)
-- **Expected:** Write/mkdir/rename operations should work on Docker volumes.
-- **Actual:** `Permission denied` — sidecar container runs as `1001:1001` but Docker volume root directory is owned by `root`.
-- **Severity:** should fix
-- **Notes:** This is the same underlying issue as the "File delete fails (Docker)" bug in MEMORY.md. Affects all sidecar file operations, not just delete. The direct-access path works but is only available when Docker volume mountpoints are accessible on the host (not when gamejanitor runs inside Docker itself).
+## Sidecar file ops fail with Permission denied on Docker volumes — FIXED
+- **Fixed:** Sidecar container now runs as root. Tests unskipped in `worker/local_test.go`.
 
-## Event bus silently drops events under load
-- **Test:** Discovered via flaky `TestReady_BothInstallAndReadyDetectedOnFirstStart` (removed as flaky) and `TestPipeline_StatusDerivedFromLifecycleEvents` (intermittent)
-- **Expected:** All lifecycle events (image_pulling → image_pulled → container_creating → container_started → ready) should be received by all subscribers.
-- **Actual:** `EventBus.Publish()` uses `select/default` — if a subscriber's 64-element channel buffer is full, the event is silently dropped with no logging or metrics. The StatusSubscriber does a DB read+write per event on single-connection SQLite, so it falls behind during rapid event bursts. When it's writing one status change, subsequent events overflow the buffer and are lost.
-- **Severity:** should fix
-- **Notes:** `service/broadcast.go:57-66`. This is a production bug, not just a test issue. A user starting multiple gameservers simultaneously would see missing status transitions. Possible fixes: (1) increase buffer size, (2) log when events are dropped, (3) use a blocking publish with timeout, (4) batch DB writes in the subscriber. At minimum, dropped events should be logged so operators can see the problem.
+## Event bus silently drops events under load — FIXED
+- **Fixed:** Added `slog.Warn` log when events are dropped in `EventBus.Publish()` (`controller/eventbus.go`).
 
-## ReadyWatcher goroutines have no explicit per-gameserver shutdown
-- **Test:** Discovered via cleanup races in all tests that call `GameserverService.Start`
-- **Expected:** When a gameserver is stopped or deleted, the ReadyWatcher goroutine monitoring its logs should be explicitly stopped.
-- **Actual:** The ReadyWatcher relies on the container log stream ending naturally (EOF from Docker). There's a `Stop(gameserverID)` method, but `GameserverService.Stop` never calls it — it just stops the container and hopes the log stream closes. In practice this works because Docker closes the stream when the container exits, but there's a race window between container stop and log stream close where the goroutine is still running and holding references to the DB and worker.
-- **Severity:** cosmetic (works in practice, but causes test flakiness and is technically a resource leak)
-- **Notes:** `service/ready.go:100-109` has `Stop(gameserverID)` but it's never called from the lifecycle code. `service/gameserver_lifecycle.go` Stop/Delete methods should call `s.readyWatcher.Stop(id)` explicitly. The `StopAll()` is only called on process shutdown.
+## ReadyWatcher goroutines have no explicit per-gameserver shutdown — FIXED
+- **Fixed:** `Stop()` and `DeleteGameserver()` in lifecycle now call `s.readyWatcher.Stop(id)` explicitly.
 
-## Multiple WorkerFor call sites lack nil checks
-- **Test:** Discovered via panics in `TestBackup_Create` and `TestPipeline_*` (2 fixed, others remain)
-- **Expected:** All callers of `dispatcher.WorkerFor(gameserverID)` should handle nil returns gracefully.
-- **Actual:** `WorkerFor` returns nil when the DB lookup fails or the worker isn't registered. Two call sites were fixed (backup.go, stats_poller.go). The remaining unchecked call sites will panic on nil pointer dereference if the worker disconnects at the wrong time:
-  - `service/console.go:60` — StreamLogs
-  - `service/console.go:91` — SendCommand
-  - `service/console.go:113` — ListLogSessions
-  - `service/console.go:156` — ReadHistoricalLogs
-  - `service/file.go:46,61,76,94,109,132` — all file operations
-  - `service/gameserver_inspect.go:23,35,71,85` — inspect, stats, volume size, logs
-  - `service/gameserver.go:546` — DeleteGameserver
-  - `service/gameserver_lifecycle.go:70,198,292,381` — Start, Stop, UpdateServerGame, Reinstall
-  - `service/backup.go:270` — runRestore
-- **Severity:** should fix
-- **Notes:** The synchronous paths (console, file, inspect) are less likely to hit in practice because the worker was just used to start the container. But worker disconnection between operations is possible in multi-node setups. Fix: each call site should check for nil and return a clear "worker unavailable" error instead of panicking.
+## Multiple WorkerFor call sites lack nil checks — FIXED
+- **Fixed:** All `WorkerFor` call sites now check for nil and return a clear "worker unavailable" error. Covers: lifecycle.go (Start, Stop, UpdateServerGame, Reinstall), gameserver.go (DeleteGameserver), inspect.go, console.go, file.go, backup.go (runRestore), sftp/file_operator.go.
 
-## CPUEnforced always overwritten to false on any update
-- **Test:** `TestUpdateMerge_CPUEnforcedOverwrittenOnEveryUpdate` in `service/update_merge_test.go` (skipped)
-- **Expected:** Updating only the name of a gameserver should not change `cpu_enforced`.
-- **Actual:** `UpdateGameserver` at `service/gameserver.go:387` always sets `existing.CPUEnforced = gs.CPUEnforced`. Unlike every other field which has a zero-value guard (`if gs.X != 0`), `CPUEnforced` is a bool — its zero value is `false`, so there's no way to distinguish "caller didn't set it" from "caller set it to false". Every PATCH that updates any field silently disables CPU enforcement.
-- **Severity:** should fix
-- **Notes:** Fix options: (1) use `*bool` for CPUEnforced in the update struct so nil means "don't change", (2) use a separate update request struct with optional fields, (3) only update CPUEnforced when CPULimit is also being changed.
+## CPUEnforced always overwritten to false on any update — FIXED
+- **Fixed:** `CPUEnforced` is now only updated when `CPULimit` is also being changed (they're semantically coupled). Test unskipped in `controller/gameserver/update_merge_test.go`.
 
 ---
 

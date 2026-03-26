@@ -13,8 +13,7 @@ import (
 )
 
 func TestUpdateMerge_CPUEnforcedOverwrittenOnEveryUpdate(t *testing.T) {
-	t.Skip("BUG: CPUEnforced is always overwritten to the zero value (false) on any update, even when the caller didn't set it — see TESTING_BUGS.md")
-
+	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()

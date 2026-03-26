@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -68,6 +69,7 @@ func (b *EventBus) Publish(event WebhookEvent) {
 		select {
 		case ch <- event:
 		default:
+			slog.Warn("event bus: dropped event, subscriber buffer full", "event_type", event.EventType())
 		}
 	}
 }

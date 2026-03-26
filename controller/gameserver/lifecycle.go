@@ -67,6 +67,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	w := s.dispatcher.WorkerFor(id)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+	}
 
 	// Pull image
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
@@ -176,6 +179,10 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
+	if s.readyWatcher != nil {
+		s.readyWatcher.Stop(id)
+	}
+
 	if gs.Status == controller.StatusStopped {
 		s.log.Info("gameserver already stopped, skipping", "id", id)
 		return nil
@@ -194,11 +201,15 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
-		if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
-			s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
-		}
-		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-			s.log.Warn("failed to remove container", "id", id, "error", err)
+		if w == nil {
+			s.log.Warn("worker unavailable during stop, skipping container cleanup", "id", id)
+		} else {
+			if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
+				s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
+			}
+			if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+				s.log.Warn("failed to remove container", "id", id, "error", err)
+			}
 		}
 	}
 
@@ -286,6 +297,9 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	}
 
 	w := s.dispatcher.WorkerFor(id)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+	}
 
 	// Pull latest image
 	if err := w.PullImage(ctx, game.BaseImage); err != nil {
@@ -374,6 +388,9 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	}
 
 	w := s.dispatcher.WorkerFor(id)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+	}
 
 	gs.Installed = false
 	if err := s.store.UpdateGameserver(gs); err != nil {

@@ -49,7 +49,11 @@ func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, di
 		relPath = "/"
 	}
 
-	return s.dispatcher.WorkerFor(gameserverID).ListFiles(ctx, gs.VolumeName, relPath)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.ListFiles(ctx, gs.VolumeName, relPath)
 }
 
 func (s *FileService) ReadFile(ctx context.Context, gameserverID string, filePath string) ([]byte, error) {
@@ -64,7 +68,11 @@ func (s *FileService) ReadFile(ctx context.Context, gameserverID string, filePat
 	}
 
 	relPath := strings.TrimPrefix(filePath, "/data")
-	return s.dispatcher.WorkerFor(gameserverID).ReadFile(ctx, gs.VolumeName, relPath)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.ReadFile(ctx, gs.VolumeName, relPath)
 }
 
 func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
@@ -79,7 +87,11 @@ func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePa
 	}
 
 	relPath := strings.TrimPrefix(filePath, "/data")
-	return s.dispatcher.WorkerFor(gameserverID).WriteFile(ctx, gs.VolumeName, relPath, content, 0644)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.WriteFile(ctx, gs.VolumeName, relPath, content, 0644)
 }
 
 func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targetPath string) error {
@@ -97,7 +109,11 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 	}
 
 	relPath := strings.TrimPrefix(targetPath, "/data")
-	return s.dispatcher.WorkerFor(gameserverID).DeletePath(ctx, gs.VolumeName, relPath)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.DeletePath(ctx, gs.VolumeName, relPath)
 }
 
 func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error {
@@ -112,7 +128,11 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 	}
 
 	relPath := strings.TrimPrefix(dirPath, "/data")
-	return s.dispatcher.WorkerFor(gameserverID).CreateDirectory(ctx, gs.VolumeName, relPath)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.CreateDirectory(ctx, gs.VolumeName, relPath)
 }
 
 func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPath string, newPath string) error {
@@ -135,7 +155,11 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 
 	oldRel := strings.TrimPrefix(oldPath, "/data")
 	newRel := strings.TrimPrefix(newPath, "/data")
-	return s.dispatcher.WorkerFor(gameserverID).RenamePath(ctx, gs.VolumeName, oldRel, newRel)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.RenamePath(ctx, gs.VolumeName, oldRel, newRel)
 }
 
 // DownloadFile returns file contents for download — same as ReadFile but named for clarity in handler.

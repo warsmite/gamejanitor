@@ -1,10 +1,11 @@
 package sftp
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"context"
+	"fmt"
 	"os"
 
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -32,7 +33,11 @@ func NewDispatcherFileOperator(dispatcher *orchestrator.Dispatcher, gameserverID
 }
 
 func (o *DispatcherFileOperator) ListFiles(volumeName string, path string) ([]FileEntry, error) {
-	entries, err := o.dispatcher.WorkerFor(o.gameserverID).ListFiles(context.Background(), volumeName, path)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return nil, fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	entries, err := w.ListFiles(context.Background(), volumeName, path)
 	if err != nil {
 		return nil, err
 	}
@@ -49,23 +54,43 @@ func (o *DispatcherFileOperator) ListFiles(volumeName string, path string) ([]Fi
 }
 
 func (o *DispatcherFileOperator) ReadFile(volumeName string, path string) ([]byte, error) {
-	return o.dispatcher.WorkerFor(o.gameserverID).ReadFile(context.Background(), volumeName, path)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return nil, fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	return w.ReadFile(context.Background(), volumeName, path)
 }
 
 func (o *DispatcherFileOperator) WriteFile(volumeName string, path string, content []byte, perm os.FileMode) error {
-	return o.dispatcher.WorkerFor(o.gameserverID).WriteFile(context.Background(), volumeName, path, content, perm)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	return w.WriteFile(context.Background(), volumeName, path, content, perm)
 }
 
 func (o *DispatcherFileOperator) DeletePath(volumeName string, path string) error {
-	return o.dispatcher.WorkerFor(o.gameserverID).DeletePath(context.Background(), volumeName, path)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	return w.DeletePath(context.Background(), volumeName, path)
 }
 
 func (o *DispatcherFileOperator) CreateDirectory(volumeName string, path string) error {
-	return o.dispatcher.WorkerFor(o.gameserverID).CreateDirectory(context.Background(), volumeName, path)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	return w.CreateDirectory(context.Background(), volumeName, path)
 }
 
 func (o *DispatcherFileOperator) RenamePath(volumeName string, from string, to string) error {
-	return o.dispatcher.WorkerFor(o.gameserverID).RenamePath(context.Background(), volumeName, from, to)
+	w := o.dispatcher.WorkerFor(o.gameserverID)
+	if w == nil {
+		return fmt.Errorf("worker unavailable for gameserver %s", o.gameserverID)
+	}
+	return w.RenamePath(context.Background(), volumeName, from, to)
 }
 
 func (o *WorkerFileOperator) ListFiles(volumeName string, path string) ([]FileEntry, error) {

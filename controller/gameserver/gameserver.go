@@ -127,6 +127,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
 	gs.Status = controller.StatusStopped
+	if gs.PortMode == "" {
+		gs.PortMode = "auto"
+	}
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
 
 	rawPassword := generateRandomPassword(16)
@@ -410,8 +413,8 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 	if gs.CPULimit != 0 {
 		existing.CPULimit = gs.CPULimit
+		existing.CPUEnforced = gs.CPUEnforced
 	}
-	existing.CPUEnforced = gs.CPUEnforced
 	if gs.BackupLimit != nil {
 		existing.BackupLimit = gs.BackupLimit
 	}
@@ -548,6 +551,10 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name)
 
+	if s.readyWatcher != nil {
+		s.readyWatcher.Stop(id)
+	}
+
 	if gs.Status != controller.StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
@@ -563,6 +570,9 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	}
 
 	w := s.dispatcher.WorkerFor(id)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+	}
 	if gs.ContainerID != nil {
 		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
 			s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)

@@ -86,7 +86,6 @@ func TestWorker_ContainerLifecycle(t *testing.T) {
 }
 
 func TestWorker_VolumeOperations(t *testing.T) {
-	t.Skip("BUG: sidecar file ops fail with Permission denied — sidecar runs as 1001:1001 but Docker volume root is owned by root. Known issue from MEMORY.md (File delete fails). Direct access path works but is unavailable when running inside Docker.")
 
 	w := newTestLocalWorker(t)
 	ctx := context.Background()
@@ -141,7 +140,6 @@ func TestWorker_VolumeOperations(t *testing.T) {
 }
 
 func TestWorker_BackupRestoreRoundTrip(t *testing.T) {
-	t.Skip("BUG: same sidecar permission issue as TestWorker_VolumeOperations — can't write to volume")
 
 	w := newTestLocalWorker(t)
 	ctx := context.Background()
@@ -185,7 +183,6 @@ func TestWorker_BackupRestoreRoundTrip(t *testing.T) {
 }
 
 func TestWorker_FilePathTraversal(t *testing.T) {
-	t.Skip("BUG: sidecar file ops don't reject path traversal — ../../etc/passwd reads container's /etc/passwd. Not a host escape, but reads outside /data. Direct access path has resolveVolumePath protection, sidecar path does not. — see TESTING_BUGS.md")
 
 	w := newTestLocalWorker(t)
 	ctx := context.Background()
@@ -205,7 +202,6 @@ func TestWorker_FilePathTraversal(t *testing.T) {
 }
 
 func TestWorker_Rename(t *testing.T) {
-	t.Skip("BUG: same sidecar permission issue as TestWorker_VolumeOperations")
 
 	w := newTestLocalWorker(t)
 	ctx := context.Background()

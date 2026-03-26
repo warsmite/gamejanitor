@@ -307,6 +307,10 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		s.failRestore(gameserverID, backupID, backupName, actor, "worker unavailable for restore")
+		return
+	}
 
 	// Load backup from store and decompress
 	reader, err := s.storage.Load(ctx, gameserverID, backupID)

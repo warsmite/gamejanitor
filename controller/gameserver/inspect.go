@@ -20,7 +20,11 @@ func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID s
 	if gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
-	return s.dispatcher.WorkerFor(gameserverID).InspectContainer(ctx, *gs.ContainerID)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.InspectContainer(ctx, *gs.ContainerID)
 }
 
 func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
@@ -33,6 +37,9 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
 	stats := &worker.GameserverStats{
 		StorageLimitMB: gs.StorageLimitMB,
 	}
@@ -68,7 +75,11 @@ func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID stri
 	if gs == nil {
 		return 0, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	return s.dispatcher.WorkerFor(gameserverID).VolumeSize(ctx, gs.VolumeName)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return 0, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.VolumeSize(ctx, gs.VolumeName)
 }
 
 func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
@@ -82,5 +93,9 @@ func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID s
 	if gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
-	return s.dispatcher.WorkerFor(gameserverID).ContainerLogs(ctx, *gs.ContainerID, tail, false)
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.ContainerLogs(ctx, *gs.ContainerID, tail, false)
 }
