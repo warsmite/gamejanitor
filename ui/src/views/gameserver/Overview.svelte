@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { api, type Event } from '$lib/api';
+  import { api, type Activity } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
   import { CopyBlock, TelemetryCell } from '$lib/components';
@@ -27,7 +27,7 @@
   );
 
   // Activity feed — page-specific state
-  let events = $state<Event[]>([]);
+  let events = $state<Activity[]>([]);
   let unsub: (() => void) | null = null;
 
   onMount(async () => {
@@ -41,13 +41,17 @@
     unsub = onGameserverEvent(id, (data: any) => {
       if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
 
-      const event: Event = {
+      const event: Activity = {
         id: crypto.randomUUID(),
-        event_type: data.type || 'unknown',
         gameserver_id: id,
+        worker_id: '',
+        type: data.type || 'unknown',
+        status: 'completed',
         actor: data.actor,
         data: data,
-        created_at: new Date().toISOString(),
+        error: '',
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
       };
       events = [event, ...events.slice(0, 19)];
     });
@@ -206,10 +210,10 @@
         <div class="feed-list">
           {#each events as event (event.id)}
             <div class="feed-item">
-              <span class="feed-dot {eventDotColor(event.event_type)}"></span>
+              <span class="feed-dot {eventDotColor(event.type)}"></span>
               <div>
-                <div class="feed-text">{eventLabel(event.event_type, event.data)}</div>
-                <div class="feed-time">{timeAgo(event.created_at)} · {formatTime(event.created_at)}</div>
+                <div class="feed-text">{eventLabel(event.type, event.data)}</div>
+                <div class="feed-time">{timeAgo(event.started_at)} · {formatTime(event.started_at)}</div>
               </div>
             </div>
           {:else}
