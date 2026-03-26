@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/warsmite/gamejanitor/model"
 	"context"
 	"fmt"
 	"os"
@@ -133,7 +134,7 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 		return err
 	}
 	// Sidecar runs as root — chown so game server can access the file
-	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", GameserverUID, GameserverGID), containerPath})
+	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", model.GameserverUID, model.GameserverGID), containerPath})
 	return nil
 }
 

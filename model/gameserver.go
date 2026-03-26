@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+// Container user identity — game processes run as this UID/GID inside containers.
+const (
+	GameserverUID  = 1001
+	GameserverGID  = 1001
+	GameserverPerm = 0644
+)
+
 type GameserverNode struct {
 	ExternalIP string `json:"external_ip"`
 	LanIP      string `json:"lan_ip"`

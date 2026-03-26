@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/warsmite/gamejanitor/model"
 	"archive/tar"
 	"context"
 	"fmt"
@@ -76,7 +77,7 @@ func writeFileDirect(resolve volumeResolver, ctx context.Context, volumeName str
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
-	return os.Chown(hostPath, GameserverUID, GameserverGID)
+	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
 }
 
 func deletePathDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) error {
