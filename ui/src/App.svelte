@@ -20,11 +20,16 @@
 
   const route = $derived(getRoute());
 
+  // In embedded mode, the gameserver ID comes from the store (single scoped server), not the URL
+  const embeddedId = $derived(embedded ? gameserverStore.list[0]?.id || '' : '');
+
   // Is this a gameserver sub-route?
   const isGameserverRoute = $derived(
-    route.name.startsWith('gameserver') && route.name !== 'newGameserver' && !!route.params.id
+    embedded
+      ? route.name.startsWith('gameserver')
+      : route.name.startsWith('gameserver') && route.name !== 'newGameserver' && !!route.params.id
   );
-  const gameserverId = $derived(route.params.id || '');
+  const gameserverId = $derived(embedded ? embeddedId : route.params.id || '');
 
   onMount(() => {
     initAuth();

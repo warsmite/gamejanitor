@@ -3,7 +3,7 @@
   import { api } from '$lib/api';
   import { gameserverStore, formatUptime, operationLabels, toast } from '$lib/stores';
   import { GameIcon, StatusPill } from '$lib/components';
-  import { getRoute, navigate } from '$lib/router';
+  import { getRoute, navigate, isActive } from '$lib/router';
   import { embedded } from '$lib/base';
   import type { Snippet } from 'svelte';
 
@@ -71,10 +71,15 @@
   ]);
 
   function tabHref(tab: typeof tabs[0]) {
+    if (embedded) return tab.path || '/';
     return `/gameservers/${id}${tab.path}`;
   }
 
   function isActiveTab(tab: typeof tabs[0]) {
+    if (embedded) {
+      if (tab.path === '') return currentPath === '/' || currentPath === '';
+      return currentPath.startsWith(tab.path);
+    }
     const base = `/gameservers/${id}`;
     if (tab.path === '') {
       return currentPath === base || currentPath === base + '/';

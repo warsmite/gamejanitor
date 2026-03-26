@@ -1,8 +1,11 @@
 // History-based router for plain Svelte SPA.
 // Reads window.location.pathname, strips basePath if present,
 // matches against known route patterns, and exposes reactive state.
+//
+// In embedded mode (basePath set), routes are flat: /, /console, /backups, etc.
+// The gameserver ID is resolved from the token scope, not the URL.
 
-import { basePath } from './base';
+import { basePath, embedded } from './base';
 
 interface Route {
   name: string;
@@ -10,7 +13,7 @@ interface Route {
   params: Record<string, string>;
 }
 
-const patterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
+const standardPatterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
   { name: 'dashboard', pattern: /^\/$/, paramNames: [] },
   { name: 'settings', pattern: /^\/settings$/, paramNames: [] },
   { name: 'newGameserver', pattern: /^\/gameservers\/new$/, paramNames: [] },
@@ -23,8 +26,20 @@ const patterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
   { name: 'gameserverOverview', pattern: /^\/gameservers\/([^/]+)$/, paramNames: ['id'] },
 ];
 
+// Embedded mode: no gameserver ID in URL — resolved from token scope
+const embeddedPatterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
+  { name: 'gameserverConsole', pattern: /^\/console$/, paramNames: [] },
+  { name: 'gameserverFiles', pattern: /^\/files$/, paramNames: [] },
+  { name: 'gameserverBackups', pattern: /^\/backups$/, paramNames: [] },
+  { name: 'gameserverSchedules', pattern: /^\/schedules$/, paramNames: [] },
+  { name: 'gameserverSettings', pattern: /^\/settings$/, paramNames: [] },
+  { name: 'gameserverMods', pattern: /^\/mods$/, paramNames: [] },
+  { name: 'gameserverOverview', pattern: /^\/$/, paramNames: [] },
+];
+
+const patterns = embedded ? embeddedPatterns : standardPatterns;
+
 function parsePath(): Route {
-  // Strip basePath prefix (e.g., /panel/abc123) to get the app-relative path
   let path = window.location.pathname;
   if (basePath && path.startsWith(basePath)) {
     path = path.slice(basePath.length) || '/';
@@ -40,7 +55,7 @@ function parsePath(): Route {
       return { name, path, params };
     }
   }
-  return { name: 'dashboard', path: '/', params: {} };
+  return { name: embedded ? 'gameserverOverview' : 'dashboard', path: '/', params: {} };
 }
 
 let route = $state<Route>(parsePath());
