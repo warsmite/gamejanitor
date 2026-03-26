@@ -4,7 +4,11 @@ go 1.25.7
 
 require github.com/warsmite/gamejanitor/sdk v0.0.0
 
+require github.com/warsmite/gamejanitor/games v0.0.0
+
 replace github.com/warsmite/gamejanitor/sdk => ./sdk
+
+replace github.com/warsmite/gamejanitor/games => ./games
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
