@@ -223,3 +223,100 @@ func TestGameserver_DeleteCascadesBackups(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, schedules)
 }
+
+func TestPopulateNode_NilNodeID(t *testing.T) {
+	t.Parallel()
+	db := store.New(testutil.NewTestDB(t))
+
+	gs := newGameserver("gs-1", "No Node", "test-game", nil)
+	require.NoError(t, db.CreateGameserver(gs))
+
+	fetched, err := db.GetGameserver("gs-1")
+	require.NoError(t, err)
+
+	// Should not panic when NodeID is nil
+	db.PopulateNode(fetched)
+	assert.Nil(t, fetched.Node)
+}
+
+func TestPopulateNode_NonexistentNode(t *testing.T) {
+	t.Parallel()
+	db := store.New(testutil.NewTestDB(t))
+
+	nodeID := "ghost-node"
+	gs := newGameserver("gs-1", "Ghost Node", "test-game", &nodeID)
+	require.NoError(t, db.CreateGameserver(gs))
+
+	fetched, err := db.GetGameserver("gs-1")
+	require.NoError(t, err)
+
+	// Node doesn't exist in worker_nodes — should not panic, Node stays nil
+	db.PopulateNode(fetched)
+	assert.Nil(t, fetched.Node)
+}
+
+func TestPopulateNodes_MixedValid(t *testing.T) {
+	t.Parallel()
+	testDB := testutil.NewTestDB(t)
+	s := store.New(testDB)
+
+	realNodeID := "real-node"
+	ghostNodeID := "ghost-node"
+
+	_, err := testDB.Exec(`INSERT INTO worker_nodes (id, external_ip, lan_ip) VALUES (?, ?, ?)`,
+		realNodeID, "1.2.3.4", "192.168.1.1")
+	require.NoError(t, err)
+
+	gs1 := newGameserver("gs-1", "On Real Node", "test-game", &realNodeID)
+	gs2 := newGameserver("gs-2", "Nil Node", "test-game", nil)
+	gs3 := newGameserver("gs-3", "Ghost Node", "test-game", &ghostNodeID)
+
+	require.NoError(t, s.CreateGameserver(gs1))
+	require.NoError(t, s.CreateGameserver(gs2))
+	require.NoError(t, s.CreateGameserver(gs3))
+
+	list, err := s.ListGameservers(model.GameserverFilter{})
+	require.NoError(t, err)
+	require.Len(t, list, 3)
+
+	s.PopulateNodes(list)
+
+	// Find each by ID to check
+	nodeMap := make(map[string]*model.GameserverNode)
+	for _, gs := range list {
+		nodeMap[gs.ID] = gs.Node
+	}
+
+	assert.NotNil(t, nodeMap["gs-1"], "gs-1 should have node populated")
+	assert.Equal(t, "1.2.3.4", nodeMap["gs-1"].ExternalIP)
+	assert.Nil(t, nodeMap["gs-2"], "gs-2 has nil NodeID, should have nil Node")
+	assert.Nil(t, nodeMap["gs-3"], "gs-3 has nonexistent node, should have nil Node")
+}
+
+func TestPopulateNodes_SharedNode(t *testing.T) {
+	t.Parallel()
+	testDB := testutil.NewTestDB(t)
+	s := store.New(testDB)
+
+	sharedNodeID := "shared-node"
+	_, err := testDB.Exec(`INSERT INTO worker_nodes (id, external_ip, lan_ip) VALUES (?, ?, ?)`,
+		sharedNodeID, "10.0.0.1", "192.168.0.1")
+	require.NoError(t, err)
+
+	gs1 := newGameserver("gs-1", "Server A", "test-game", &sharedNodeID)
+	gs2 := newGameserver("gs-2", "Server B", "test-game", &sharedNodeID)
+	require.NoError(t, s.CreateGameserver(gs1))
+	require.NoError(t, s.CreateGameserver(gs2))
+
+	list, err := s.ListGameservers(model.GameserverFilter{})
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+
+	s.PopulateNodes(list)
+
+	// Both should have the same node data (cache hit for second)
+	assert.NotNil(t, list[0].Node)
+	assert.NotNil(t, list[1].Node)
+	assert.Equal(t, "10.0.0.1", list[0].Node.ExternalIP)
+	assert.Equal(t, "10.0.0.1", list[1].Node.ExternalIP)
+}

@@ -96,3 +96,57 @@ func TestLifecycle_Stop_AlreadyStopped_Noop(t *testing.T) {
 	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)
 }
+
+func TestLifecycle_Start_WorkerUnavailable(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
+	gs := testutil.CreateTestGameserver(t, svc)
+
+	// Unregister the worker so it becomes unavailable
+	_ = fw
+	svc.Registry.Unregister("worker-1")
+
+	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "worker unavailable")
+}
+
+func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	gs := testutil.CreateTestGameserver(t, svc)
+
+	// Start it first
+	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
+
+	// Set status to running so stop doesn't short-circuit
+	s := store.New(svc.DB)
+	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched.Status = "running"
+	require.NoError(t, s.UpdateGameserver(fetched))
+
+	// Unregister the worker
+	svc.Registry.Unregister("worker-1")
+
+	// Stop should still succeed — the lifecycle code logs a warning but
+	// proceeds with clearing the container ID and completing the stop.
+	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
+	assert.NoError(t, err)
+}
+
+func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	gs := testutil.CreateTestGameserver(t, svc)
+
+	// Unregister the worker
+	svc.Registry.Unregister("worker-1")
+
+	// Restart requires starting, which needs a worker
+	err := svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "worker unavailable")
+}
