@@ -393,6 +393,23 @@ func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScrip
 	return resp, nil
 }
 
+func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {
+	containers, err := a.worker.ListGameserverContainers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var pbContainers []*pb.GameserverContainer
+	for _, c := range containers {
+		pbContainers = append(pbContainers, &pb.GameserverContainer{
+			ContainerId:   c.ContainerID,
+			ContainerName: c.ContainerName,
+			GameserverId:  c.GameserverID,
+			State:         c.State,
+		})
+	}
+	return &pb.ListGameserverContainersResponse{Containers: pbContainers}, nil
+}
+
 func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	a.log.Debug("heartbeat received",
 		"worker_id", req.WorkerId,

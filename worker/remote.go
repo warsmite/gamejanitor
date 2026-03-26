@@ -411,3 +411,20 @@ func (w *RemoteWorker) RestoreVolume(ctx context.Context, volumeName string, tar
 	_, err = stream.CloseAndRecv()
 	return err
 }
+
+func (w *RemoteWorker) ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error) {
+	resp, err := w.client.ListGameserverContainers(ctx, &pb.ListGameserverContainersRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("listing gameserver containers on %s: %w", w.nodeID, err)
+	}
+	var result []GameserverContainer
+	for _, c := range resp.Containers {
+		result = append(result, GameserverContainer{
+			ContainerID:   c.ContainerId,
+			ContainerName: c.ContainerName,
+			GameserverID:  c.GameserverId,
+			State:         c.State,
+		})
+	}
+	return result, nil
+}

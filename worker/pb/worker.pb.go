@@ -2950,6 +2950,154 @@ func (x *SFTPLoginResponse) GetVolumeName() string {
 	return ""
 }
 
+type ListGameserverContainersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGameserverContainersRequest) Reset() {
+	*x = ListGameserverContainersRequest{}
+	mi := &file_proto_worker_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGameserverContainersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGameserverContainersRequest) ProtoMessage() {}
+
+func (x *ListGameserverContainersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGameserverContainersRequest.ProtoReflect.Descriptor instead.
+func (*ListGameserverContainersRequest) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{56}
+}
+
+type ListGameserverContainersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Containers    []*GameserverContainer `protobuf:"bytes,1,rep,name=containers,proto3" json:"containers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGameserverContainersResponse) Reset() {
+	*x = ListGameserverContainersResponse{}
+	mi := &file_proto_worker_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGameserverContainersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGameserverContainersResponse) ProtoMessage() {}
+
+func (x *ListGameserverContainersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGameserverContainersResponse.ProtoReflect.Descriptor instead.
+func (*ListGameserverContainersResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *ListGameserverContainersResponse) GetContainers() []*GameserverContainer {
+	if x != nil {
+		return x.Containers
+	}
+	return nil
+}
+
+type GameserverContainer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ContainerName string                 `protobuf:"bytes,2,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
+	GameserverId  string                 `protobuf:"bytes,3,opt,name=gameserver_id,json=gameserverId,proto3" json:"gameserver_id,omitempty"` // extracted from container name
+	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                                   // running, exited, etc.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameserverContainer) Reset() {
+	*x = GameserverContainer{}
+	mi := &file_proto_worker_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameserverContainer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameserverContainer) ProtoMessage() {}
+
+func (x *GameserverContainer) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameserverContainer.ProtoReflect.Descriptor instead.
+func (*GameserverContainer) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *GameserverContainer) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+func (x *GameserverContainer) GetContainerName() string {
+	if x != nil {
+		return x.ContainerName
+	}
+	return ""
+}
+
+func (x *GameserverContainer) GetGameserverId() string {
+	if x != nil {
+		return x.GameserverId
+	}
+	return ""
+}
+
+func (x *GameserverContainer) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 type PrepareGameScriptsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GameId        string                 `protobuf:"bytes,1,opt,name=game_id,json=gameId,proto3" json:"game_id,omitempty"`
@@ -2960,7 +3108,7 @@ type PrepareGameScriptsRequest struct {
 
 func (x *PrepareGameScriptsRequest) Reset() {
 	*x = PrepareGameScriptsRequest{}
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2972,7 +3120,7 @@ func (x *PrepareGameScriptsRequest) String() string {
 func (*PrepareGameScriptsRequest) ProtoMessage() {}
 
 func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2985,7 +3133,7 @@ func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsRequest.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{56}
+	return file_proto_worker_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *PrepareGameScriptsRequest) GetGameId() string {
@@ -3012,7 +3160,7 @@ type PrepareGameScriptsResponse struct {
 
 func (x *PrepareGameScriptsResponse) Reset() {
 	*x = PrepareGameScriptsResponse{}
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3024,7 +3172,7 @@ func (x *PrepareGameScriptsResponse) String() string {
 func (*PrepareGameScriptsResponse) ProtoMessage() {}
 
 func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3037,7 +3185,7 @@ func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsResponse.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{57}
+	return file_proto_worker_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *PrepareGameScriptsResponse) GetScriptDir() string {
@@ -3247,14 +3395,24 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid\x12#\n" +
 	"\rgameserver_id\x18\x02 \x01(\tR\fgameserverId\x12\x1f\n" +
 	"\vvolume_name\x18\x03 \x01(\tR\n" +
-	"volumeName\"Y\n" +
+	"volumeName\"!\n" +
+	"\x1fListGameserverContainersRequest\"_\n" +
+	" ListGameserverContainersResponse\x12;\n" +
+	"\n" +
+	"containers\x18\x01 \x03(\v2\x1b.worker.GameserverContainerR\n" +
+	"containers\"\x9a\x01\n" +
+	"\x13GameserverContainer\x12!\n" +
+	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12%\n" +
+	"\x0econtainer_name\x18\x02 \x01(\tR\rcontainerName\x12#\n" +
+	"\rgameserver_id\x18\x03 \x01(\tR\fgameserverId\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\"Y\n" +
 	"\x19PrepareGameScriptsRequest\x12\x17\n" +
 	"\agame_id\x18\x01 \x01(\tR\x06gameId\x12#\n" +
 	"\rgameserver_id\x18\x02 \x01(\tR\fgameserverId\"^\n" +
 	"\x1aPrepareGameScriptsResponse\x12\x1d\n" +
 	"\n" +
 	"script_dir\x18\x01 \x01(\tR\tscriptDir\x12!\n" +
-	"\fdefaults_dir\x18\x02 \x01(\tR\vdefaultsDir2\x8b\x10\n" +
+	"\fdefaults_dir\x18\x02 \x01(\tR\vdefaultsDir2\xfa\x10\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
@@ -3283,7 +3441,8 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x0fCopyToContainer\x12\x1e.worker.CopyToContainerRequest\x1a\x1f.worker.CopyToContainerResponse\x12P\n" +
 	"\x14CopyDirFromContainer\x12#.worker.CopyDirFromContainerRequest\x1a\x11.worker.DataChunk0\x01\x12]\n" +
 	"\x12CopyTarToContainer\x12!.worker.CopyTarToContainerRequest\x1a\".worker.CopyTarToContainerResponse(\x01\x12F\n" +
-	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x19.worker.ContainerEventMsg0\x01\x12@\n" +
+	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x19.worker.ContainerEventMsg0\x01\x12m\n" +
+	"\x18ListGameserverContainers\x12'.worker.ListGameserverContainersRequest\x1a(.worker.ListGameserverContainersResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
 	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse2\xde\x01\n" +
 	"\x11ControllerService\x12=\n" +
@@ -3303,135 +3462,141 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 	return file_proto_worker_proto_rawDescData
 }
 
-var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 58)
+var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
 var file_proto_worker_proto_goTypes = []any{
-	(*DataChunk)(nil),                   // 0: worker.DataChunk
-	(*PullImageRequest)(nil),            // 1: worker.PullImageRequest
-	(*PullImageResponse)(nil),           // 2: worker.PullImageResponse
-	(*PortBinding)(nil),                 // 3: worker.PortBinding
-	(*CreateContainerRequest)(nil),      // 4: worker.CreateContainerRequest
-	(*CreateContainerResponse)(nil),     // 5: worker.CreateContainerResponse
-	(*StartContainerRequest)(nil),       // 6: worker.StartContainerRequest
-	(*StartContainerResponse)(nil),      // 7: worker.StartContainerResponse
-	(*StopContainerRequest)(nil),        // 8: worker.StopContainerRequest
-	(*StopContainerResponse)(nil),       // 9: worker.StopContainerResponse
-	(*RemoveContainerRequest)(nil),      // 10: worker.RemoveContainerRequest
-	(*RemoveContainerResponse)(nil),     // 11: worker.RemoveContainerResponse
-	(*InspectContainerRequest)(nil),     // 12: worker.InspectContainerRequest
-	(*InspectContainerResponse)(nil),    // 13: worker.InspectContainerResponse
-	(*ExecRequest)(nil),                 // 14: worker.ExecRequest
-	(*ExecResponse)(nil),                // 15: worker.ExecResponse
-	(*ContainerLogsRequest)(nil),        // 16: worker.ContainerLogsRequest
-	(*ContainerStatsRequest)(nil),       // 17: worker.ContainerStatsRequest
-	(*ContainerStatsResponse)(nil),      // 18: worker.ContainerStatsResponse
-	(*CreateVolumeRequest)(nil),         // 19: worker.CreateVolumeRequest
-	(*CreateVolumeResponse)(nil),        // 20: worker.CreateVolumeResponse
-	(*RemoveVolumeRequest)(nil),         // 21: worker.RemoveVolumeRequest
-	(*RemoveVolumeResponse)(nil),        // 22: worker.RemoveVolumeResponse
-	(*VolumeSizeRequest)(nil),           // 23: worker.VolumeSizeRequest
-	(*VolumeSizeResponse)(nil),          // 24: worker.VolumeSizeResponse
-	(*BackupVolumeRequest)(nil),         // 25: worker.BackupVolumeRequest
-	(*RestoreVolumeRequest)(nil),        // 26: worker.RestoreVolumeRequest
-	(*RestoreVolumeResponse)(nil),       // 27: worker.RestoreVolumeResponse
-	(*ListFilesRequest)(nil),            // 28: worker.ListFilesRequest
-	(*FileEntryMsg)(nil),                // 29: worker.FileEntryMsg
-	(*ListFilesResponse)(nil),           // 30: worker.ListFilesResponse
-	(*ReadFileRequest)(nil),             // 31: worker.ReadFileRequest
-	(*ReadFileResponse)(nil),            // 32: worker.ReadFileResponse
-	(*WriteFileRequest)(nil),            // 33: worker.WriteFileRequest
-	(*WriteFileResponse)(nil),           // 34: worker.WriteFileResponse
-	(*DeletePathRequest)(nil),           // 35: worker.DeletePathRequest
-	(*DeletePathResponse)(nil),          // 36: worker.DeletePathResponse
-	(*CreateDirectoryRequest)(nil),      // 37: worker.CreateDirectoryRequest
-	(*CreateDirectoryResponse)(nil),     // 38: worker.CreateDirectoryResponse
-	(*RenamePathRequest)(nil),           // 39: worker.RenamePathRequest
-	(*RenamePathResponse)(nil),          // 40: worker.RenamePathResponse
-	(*CopyFromContainerRequest)(nil),    // 41: worker.CopyFromContainerRequest
-	(*CopyFromContainerResponse)(nil),   // 42: worker.CopyFromContainerResponse
-	(*CopyToContainerRequest)(nil),      // 43: worker.CopyToContainerRequest
-	(*CopyToContainerResponse)(nil),     // 44: worker.CopyToContainerResponse
-	(*CopyDirFromContainerRequest)(nil), // 45: worker.CopyDirFromContainerRequest
-	(*CopyTarToContainerRequest)(nil),   // 46: worker.CopyTarToContainerRequest
-	(*CopyTarToContainerResponse)(nil),  // 47: worker.CopyTarToContainerResponse
-	(*WatchEventsRequest)(nil),          // 48: worker.WatchEventsRequest
-	(*ContainerEventMsg)(nil),           // 49: worker.ContainerEventMsg
-	(*HeartbeatRequest)(nil),            // 50: worker.HeartbeatRequest
-	(*HeartbeatResponse)(nil),           // 51: worker.HeartbeatResponse
-	(*RegisterRequest)(nil),             // 52: worker.RegisterRequest
-	(*RegisterResponse)(nil),            // 53: worker.RegisterResponse
-	(*SFTPLoginRequest)(nil),            // 54: worker.SFTPLoginRequest
-	(*SFTPLoginResponse)(nil),           // 55: worker.SFTPLoginResponse
-	(*PrepareGameScriptsRequest)(nil),   // 56: worker.PrepareGameScriptsRequest
-	(*PrepareGameScriptsResponse)(nil),  // 57: worker.PrepareGameScriptsResponse
+	(*DataChunk)(nil),                        // 0: worker.DataChunk
+	(*PullImageRequest)(nil),                 // 1: worker.PullImageRequest
+	(*PullImageResponse)(nil),                // 2: worker.PullImageResponse
+	(*PortBinding)(nil),                      // 3: worker.PortBinding
+	(*CreateContainerRequest)(nil),           // 4: worker.CreateContainerRequest
+	(*CreateContainerResponse)(nil),          // 5: worker.CreateContainerResponse
+	(*StartContainerRequest)(nil),            // 6: worker.StartContainerRequest
+	(*StartContainerResponse)(nil),           // 7: worker.StartContainerResponse
+	(*StopContainerRequest)(nil),             // 8: worker.StopContainerRequest
+	(*StopContainerResponse)(nil),            // 9: worker.StopContainerResponse
+	(*RemoveContainerRequest)(nil),           // 10: worker.RemoveContainerRequest
+	(*RemoveContainerResponse)(nil),          // 11: worker.RemoveContainerResponse
+	(*InspectContainerRequest)(nil),          // 12: worker.InspectContainerRequest
+	(*InspectContainerResponse)(nil),         // 13: worker.InspectContainerResponse
+	(*ExecRequest)(nil),                      // 14: worker.ExecRequest
+	(*ExecResponse)(nil),                     // 15: worker.ExecResponse
+	(*ContainerLogsRequest)(nil),             // 16: worker.ContainerLogsRequest
+	(*ContainerStatsRequest)(nil),            // 17: worker.ContainerStatsRequest
+	(*ContainerStatsResponse)(nil),           // 18: worker.ContainerStatsResponse
+	(*CreateVolumeRequest)(nil),              // 19: worker.CreateVolumeRequest
+	(*CreateVolumeResponse)(nil),             // 20: worker.CreateVolumeResponse
+	(*RemoveVolumeRequest)(nil),              // 21: worker.RemoveVolumeRequest
+	(*RemoveVolumeResponse)(nil),             // 22: worker.RemoveVolumeResponse
+	(*VolumeSizeRequest)(nil),                // 23: worker.VolumeSizeRequest
+	(*VolumeSizeResponse)(nil),               // 24: worker.VolumeSizeResponse
+	(*BackupVolumeRequest)(nil),              // 25: worker.BackupVolumeRequest
+	(*RestoreVolumeRequest)(nil),             // 26: worker.RestoreVolumeRequest
+	(*RestoreVolumeResponse)(nil),            // 27: worker.RestoreVolumeResponse
+	(*ListFilesRequest)(nil),                 // 28: worker.ListFilesRequest
+	(*FileEntryMsg)(nil),                     // 29: worker.FileEntryMsg
+	(*ListFilesResponse)(nil),                // 30: worker.ListFilesResponse
+	(*ReadFileRequest)(nil),                  // 31: worker.ReadFileRequest
+	(*ReadFileResponse)(nil),                 // 32: worker.ReadFileResponse
+	(*WriteFileRequest)(nil),                 // 33: worker.WriteFileRequest
+	(*WriteFileResponse)(nil),                // 34: worker.WriteFileResponse
+	(*DeletePathRequest)(nil),                // 35: worker.DeletePathRequest
+	(*DeletePathResponse)(nil),               // 36: worker.DeletePathResponse
+	(*CreateDirectoryRequest)(nil),           // 37: worker.CreateDirectoryRequest
+	(*CreateDirectoryResponse)(nil),          // 38: worker.CreateDirectoryResponse
+	(*RenamePathRequest)(nil),                // 39: worker.RenamePathRequest
+	(*RenamePathResponse)(nil),               // 40: worker.RenamePathResponse
+	(*CopyFromContainerRequest)(nil),         // 41: worker.CopyFromContainerRequest
+	(*CopyFromContainerResponse)(nil),        // 42: worker.CopyFromContainerResponse
+	(*CopyToContainerRequest)(nil),           // 43: worker.CopyToContainerRequest
+	(*CopyToContainerResponse)(nil),          // 44: worker.CopyToContainerResponse
+	(*CopyDirFromContainerRequest)(nil),      // 45: worker.CopyDirFromContainerRequest
+	(*CopyTarToContainerRequest)(nil),        // 46: worker.CopyTarToContainerRequest
+	(*CopyTarToContainerResponse)(nil),       // 47: worker.CopyTarToContainerResponse
+	(*WatchEventsRequest)(nil),               // 48: worker.WatchEventsRequest
+	(*ContainerEventMsg)(nil),                // 49: worker.ContainerEventMsg
+	(*HeartbeatRequest)(nil),                 // 50: worker.HeartbeatRequest
+	(*HeartbeatResponse)(nil),                // 51: worker.HeartbeatResponse
+	(*RegisterRequest)(nil),                  // 52: worker.RegisterRequest
+	(*RegisterResponse)(nil),                 // 53: worker.RegisterResponse
+	(*SFTPLoginRequest)(nil),                 // 54: worker.SFTPLoginRequest
+	(*SFTPLoginResponse)(nil),                // 55: worker.SFTPLoginResponse
+	(*ListGameserverContainersRequest)(nil),  // 56: worker.ListGameserverContainersRequest
+	(*ListGameserverContainersResponse)(nil), // 57: worker.ListGameserverContainersResponse
+	(*GameserverContainer)(nil),              // 58: worker.GameserverContainer
+	(*PrepareGameScriptsRequest)(nil),        // 59: worker.PrepareGameScriptsRequest
+	(*PrepareGameScriptsResponse)(nil),       // 60: worker.PrepareGameScriptsResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
 	29, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
-	1,  // 2: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
-	4,  // 3: worker.WorkerService.CreateContainer:input_type -> worker.CreateContainerRequest
-	6,  // 4: worker.WorkerService.StartContainer:input_type -> worker.StartContainerRequest
-	8,  // 5: worker.WorkerService.StopContainer:input_type -> worker.StopContainerRequest
-	10, // 6: worker.WorkerService.RemoveContainer:input_type -> worker.RemoveContainerRequest
-	12, // 7: worker.WorkerService.InspectContainer:input_type -> worker.InspectContainerRequest
-	14, // 8: worker.WorkerService.Exec:input_type -> worker.ExecRequest
-	16, // 9: worker.WorkerService.ContainerLogs:input_type -> worker.ContainerLogsRequest
-	17, // 10: worker.WorkerService.ContainerStats:input_type -> worker.ContainerStatsRequest
-	19, // 11: worker.WorkerService.CreateVolume:input_type -> worker.CreateVolumeRequest
-	21, // 12: worker.WorkerService.RemoveVolume:input_type -> worker.RemoveVolumeRequest
-	23, // 13: worker.WorkerService.VolumeSize:input_type -> worker.VolumeSizeRequest
-	25, // 14: worker.WorkerService.BackupVolume:input_type -> worker.BackupVolumeRequest
-	26, // 15: worker.WorkerService.RestoreVolume:input_type -> worker.RestoreVolumeRequest
-	28, // 16: worker.WorkerService.ListFiles:input_type -> worker.ListFilesRequest
-	31, // 17: worker.WorkerService.ReadFile:input_type -> worker.ReadFileRequest
-	33, // 18: worker.WorkerService.WriteFile:input_type -> worker.WriteFileRequest
-	35, // 19: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
-	37, // 20: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
-	39, // 21: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
-	41, // 22: worker.WorkerService.CopyFromContainer:input_type -> worker.CopyFromContainerRequest
-	43, // 23: worker.WorkerService.CopyToContainer:input_type -> worker.CopyToContainerRequest
-	45, // 24: worker.WorkerService.CopyDirFromContainer:input_type -> worker.CopyDirFromContainerRequest
-	46, // 25: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
-	48, // 26: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
-	50, // 27: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	56, // 28: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
-	52, // 29: worker.ControllerService.Register:input_type -> worker.RegisterRequest
-	50, // 30: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	54, // 31: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
-	2,  // 32: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 33: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
-	7,  // 34: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
-	9,  // 35: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
-	11, // 36: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
-	13, // 37: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
-	15, // 38: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 39: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
-	18, // 40: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
-	20, // 41: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
-	22, // 42: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
-	24, // 43: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
-	0,  // 44: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
-	27, // 45: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
-	30, // 46: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
-	32, // 47: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
-	34, // 48: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
-	36, // 49: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
-	38, // 50: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
-	40, // 51: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
-	42, // 52: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
-	44, // 53: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
-	0,  // 54: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
-	47, // 55: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
-	49, // 56: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
-	51, // 57: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	57, // 58: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
-	53, // 59: worker.ControllerService.Register:output_type -> worker.RegisterResponse
-	51, // 60: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	55, // 61: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
-	32, // [32:62] is the sub-list for method output_type
-	2,  // [2:32] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	58, // 2: worker.ListGameserverContainersResponse.containers:type_name -> worker.GameserverContainer
+	1,  // 3: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
+	4,  // 4: worker.WorkerService.CreateContainer:input_type -> worker.CreateContainerRequest
+	6,  // 5: worker.WorkerService.StartContainer:input_type -> worker.StartContainerRequest
+	8,  // 6: worker.WorkerService.StopContainer:input_type -> worker.StopContainerRequest
+	10, // 7: worker.WorkerService.RemoveContainer:input_type -> worker.RemoveContainerRequest
+	12, // 8: worker.WorkerService.InspectContainer:input_type -> worker.InspectContainerRequest
+	14, // 9: worker.WorkerService.Exec:input_type -> worker.ExecRequest
+	16, // 10: worker.WorkerService.ContainerLogs:input_type -> worker.ContainerLogsRequest
+	17, // 11: worker.WorkerService.ContainerStats:input_type -> worker.ContainerStatsRequest
+	19, // 12: worker.WorkerService.CreateVolume:input_type -> worker.CreateVolumeRequest
+	21, // 13: worker.WorkerService.RemoveVolume:input_type -> worker.RemoveVolumeRequest
+	23, // 14: worker.WorkerService.VolumeSize:input_type -> worker.VolumeSizeRequest
+	25, // 15: worker.WorkerService.BackupVolume:input_type -> worker.BackupVolumeRequest
+	26, // 16: worker.WorkerService.RestoreVolume:input_type -> worker.RestoreVolumeRequest
+	28, // 17: worker.WorkerService.ListFiles:input_type -> worker.ListFilesRequest
+	31, // 18: worker.WorkerService.ReadFile:input_type -> worker.ReadFileRequest
+	33, // 19: worker.WorkerService.WriteFile:input_type -> worker.WriteFileRequest
+	35, // 20: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
+	37, // 21: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
+	39, // 22: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
+	41, // 23: worker.WorkerService.CopyFromContainer:input_type -> worker.CopyFromContainerRequest
+	43, // 24: worker.WorkerService.CopyToContainer:input_type -> worker.CopyToContainerRequest
+	45, // 25: worker.WorkerService.CopyDirFromContainer:input_type -> worker.CopyDirFromContainerRequest
+	46, // 26: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
+	48, // 27: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
+	56, // 28: worker.WorkerService.ListGameserverContainers:input_type -> worker.ListGameserverContainersRequest
+	50, // 29: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	59, // 30: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
+	52, // 31: worker.ControllerService.Register:input_type -> worker.RegisterRequest
+	50, // 32: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	54, // 33: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
+	2,  // 34: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
+	5,  // 35: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
+	7,  // 36: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
+	9,  // 37: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
+	11, // 38: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
+	13, // 39: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
+	15, // 40: worker.WorkerService.Exec:output_type -> worker.ExecResponse
+	0,  // 41: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
+	18, // 42: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
+	20, // 43: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
+	22, // 44: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
+	24, // 45: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
+	0,  // 46: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
+	27, // 47: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
+	30, // 48: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
+	32, // 49: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
+	34, // 50: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
+	36, // 51: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
+	38, // 52: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
+	40, // 53: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
+	42, // 54: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
+	44, // 55: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
+	0,  // 56: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
+	47, // 57: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
+	49, // 58: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
+	57, // 59: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
+	51, // 60: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	60, // 61: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
+	53, // 62: worker.ControllerService.Register:output_type -> worker.RegisterResponse
+	51, // 63: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	55, // 64: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
+	34, // [34:65] is the sub-list for method output_type
+	3,  // [3:34] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_worker_proto_init() }
@@ -3445,7 +3610,7 @@ func file_proto_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_worker_proto_rawDesc), len(file_proto_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   58,
+			NumMessages:   61,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

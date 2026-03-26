@@ -624,3 +624,33 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 
 	return eventCh, errCh
 }
+
+// ListGameserverContainers returns all containers matching the gamejanitor naming prefix.
+func (c *Client) ListGameserverContainers(ctx context.Context) ([]GameserverContainerInfo, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("name", naming.ContainerPrefix)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result []GameserverContainerInfo
+	for _, ct := range containers {
+		name := ""
+		if len(ct.Names) > 0 {
+			name = strings.TrimPrefix(ct.Names[0], "/")
+		}
+		result = append(result, GameserverContainerInfo{
+			ID:    ct.ID,
+			Name:  name,
+			State: ct.State,
+		})
+	}
+	return result, nil
+}
+
+type GameserverContainerInfo struct {
+	ID    string
+	Name  string
+	State string
+}

@@ -509,5 +509,9 @@ func (w *FakeWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverI
 	return scriptDir, "", nil
 }
 
+func (w *FakeWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
+	return nil, nil
+}
+
 // Compile-time check that FakeWorker implements worker.Worker.
 var _ worker.Worker = (*FakeWorker)(nil)

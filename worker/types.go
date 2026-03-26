@@ -49,6 +49,13 @@ type ContainerEvent struct {
 	Action        string // "start", "stop", "die", "kill", etc.
 }
 
+type GameserverContainer struct {
+	ContainerID   string
+	ContainerName string
+	GameserverID  string // extracted from container name
+	State         string // running, exited, etc.
+}
+
 type FileEntry struct {
 	Name        string    `json:"name"`
 	IsDir       bool      `json:"is_dir"`

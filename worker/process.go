@@ -549,6 +549,11 @@ func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserv
 	return prepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
+// ListGameserverContainers is not applicable for the process runtime — no containers.
+func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error) {
+	return nil, nil
+}
+
 // --- Helpers ---
 
 // buildBox64Command constructs a command that runs x86 binaries through Box64 on ARM.

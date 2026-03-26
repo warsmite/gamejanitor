@@ -354,7 +354,8 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 	m.log.Info("stopped event watcher for disconnected worker", "worker_id", nodeID)
 }
 
-// recoverWorkerGameservers recovers gameservers assigned to a specific worker node.
+// recoverWorkerGameservers recovers gameservers assigned to a specific worker node
+// and detects orphan containers (running on Docker but not tracked in DB).
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
@@ -362,15 +363,46 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		return
 	}
 
+	// Forward check: DB → Docker (existing recovery)
+	knownIDs := make(map[string]bool)
 	for _, gs := range gameservers {
 		if gs.NodeID == nil || *gs.NodeID != nodeID {
 			continue
 		}
+		knownIDs[gs.ID] = true
 		if !controller.NeedsRecoveryOnReconnect(gs.Status) {
 			continue
 		}
 		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
 		m.recoverGameserver(ctx, &gs, w)
+	}
+
+	// Reverse check: Docker → DB (orphan detection)
+	m.detectOrphanContainers(ctx, nodeID, w, knownIDs)
+}
+
+// detectOrphanContainers finds gamejanitor containers running on a worker that
+// aren't tracked in the database. These are logged as warnings — not auto-removed,
+// as they may contain player data (e.g. after a DB restore).
+func (m *StatusManager) detectOrphanContainers(ctx context.Context, nodeID string, w worker.Worker, knownIDs map[string]bool) {
+	containers, err := w.ListGameserverContainers(ctx)
+	if err != nil {
+		m.log.Warn("failed to list containers for orphan detection", "worker_id", nodeID, "error", err)
+		return
+	}
+
+	for _, c := range containers {
+		if knownIDs[c.GameserverID] {
+			continue
+		}
+		// Also check gameservers on other nodes (might have been migrated)
+		gs, _ := m.store.GetGameserver(c.GameserverID)
+		if gs != nil {
+			continue
+		}
+		m.log.Warn("orphan container detected — container exists on worker but gameserver not found in database",
+			"worker_id", nodeID, "container_id", c.ContainerID[:12], "container_name", c.ContainerName,
+			"gameserver_id", c.GameserverID, "state", c.State)
 	}
 }
 

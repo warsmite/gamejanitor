@@ -42,6 +42,9 @@ service WorkerService {
     // Events — long-lived server stream of Docker container events
     rpc WatchEvents(WatchEventsRequest) returns (stream ContainerEventMsg);
 
+    // Discovery
+    rpc ListGameserverContainers(ListGameserverContainersRequest) returns (ListGameserverContainersResponse);
+
     // Health
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 
@@ -315,6 +318,19 @@ message SFTPLoginResponse {
     bool valid = 1;
     string gameserver_id = 2;
     string volume_name = 3;
+}
+
+// Discovery
+
+message ListGameserverContainersRequest {}
+message ListGameserverContainersResponse {
+    repeated GameserverContainer containers = 1;
+}
+message GameserverContainer {
+    string container_id = 1;
+    string container_name = 2;
+    string gameserver_id = 3; // extracted from container name
+    string state = 4;         // running, exited, etc.
 }
 
 // Game scripts

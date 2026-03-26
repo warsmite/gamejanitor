@@ -44,6 +44,9 @@ type Worker interface {
 	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
 	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
 
+	// Discovery
+	ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error)
+
 	// Events
 	WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error)
 

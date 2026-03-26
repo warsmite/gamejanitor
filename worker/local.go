@@ -12,6 +12,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/pkg/naming"
 )
 
 // LocalWorker implements Worker by delegating to the Docker client.
@@ -291,4 +292,25 @@ func (w *LocalWorker) CopyDirFromContainer(ctx context.Context, containerID stri
 
 func (w *LocalWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
 	return w.docker.CopyTarToContainer(ctx, containerID, destPath, content)
+}
+
+func (w *LocalWorker) ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error) {
+	containers, err := w.docker.ListGameserverContainers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result []GameserverContainer
+	for _, c := range containers {
+		gsID, ok := naming.GameserverIDFromContainerName(c.Name)
+		if !ok {
+			continue // update/fileops/backup container, not a gameserver
+		}
+		result = append(result, GameserverContainer{
+			ContainerID:   c.ID,
+			ContainerName: c.Name,
+			GameserverID:  gsID,
+			State:         c.State,
+		})
+	}
+	return result, nil
 }

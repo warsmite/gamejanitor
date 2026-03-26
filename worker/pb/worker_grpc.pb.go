@@ -19,33 +19,34 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WorkerService_PullImage_FullMethodName            = "/worker.WorkerService/PullImage"
-	WorkerService_CreateContainer_FullMethodName      = "/worker.WorkerService/CreateContainer"
-	WorkerService_StartContainer_FullMethodName       = "/worker.WorkerService/StartContainer"
-	WorkerService_StopContainer_FullMethodName        = "/worker.WorkerService/StopContainer"
-	WorkerService_RemoveContainer_FullMethodName      = "/worker.WorkerService/RemoveContainer"
-	WorkerService_InspectContainer_FullMethodName     = "/worker.WorkerService/InspectContainer"
-	WorkerService_Exec_FullMethodName                 = "/worker.WorkerService/Exec"
-	WorkerService_ContainerLogs_FullMethodName        = "/worker.WorkerService/ContainerLogs"
-	WorkerService_ContainerStats_FullMethodName       = "/worker.WorkerService/ContainerStats"
-	WorkerService_CreateVolume_FullMethodName         = "/worker.WorkerService/CreateVolume"
-	WorkerService_RemoveVolume_FullMethodName         = "/worker.WorkerService/RemoveVolume"
-	WorkerService_VolumeSize_FullMethodName           = "/worker.WorkerService/VolumeSize"
-	WorkerService_BackupVolume_FullMethodName         = "/worker.WorkerService/BackupVolume"
-	WorkerService_RestoreVolume_FullMethodName        = "/worker.WorkerService/RestoreVolume"
-	WorkerService_ListFiles_FullMethodName            = "/worker.WorkerService/ListFiles"
-	WorkerService_ReadFile_FullMethodName             = "/worker.WorkerService/ReadFile"
-	WorkerService_WriteFile_FullMethodName            = "/worker.WorkerService/WriteFile"
-	WorkerService_DeletePath_FullMethodName           = "/worker.WorkerService/DeletePath"
-	WorkerService_CreateDirectory_FullMethodName      = "/worker.WorkerService/CreateDirectory"
-	WorkerService_RenamePath_FullMethodName           = "/worker.WorkerService/RenamePath"
-	WorkerService_CopyFromContainer_FullMethodName    = "/worker.WorkerService/CopyFromContainer"
-	WorkerService_CopyToContainer_FullMethodName      = "/worker.WorkerService/CopyToContainer"
-	WorkerService_CopyDirFromContainer_FullMethodName = "/worker.WorkerService/CopyDirFromContainer"
-	WorkerService_CopyTarToContainer_FullMethodName   = "/worker.WorkerService/CopyTarToContainer"
-	WorkerService_WatchEvents_FullMethodName          = "/worker.WorkerService/WatchEvents"
-	WorkerService_Heartbeat_FullMethodName            = "/worker.WorkerService/Heartbeat"
-	WorkerService_PrepareGameScripts_FullMethodName   = "/worker.WorkerService/PrepareGameScripts"
+	WorkerService_PullImage_FullMethodName                = "/worker.WorkerService/PullImage"
+	WorkerService_CreateContainer_FullMethodName          = "/worker.WorkerService/CreateContainer"
+	WorkerService_StartContainer_FullMethodName           = "/worker.WorkerService/StartContainer"
+	WorkerService_StopContainer_FullMethodName            = "/worker.WorkerService/StopContainer"
+	WorkerService_RemoveContainer_FullMethodName          = "/worker.WorkerService/RemoveContainer"
+	WorkerService_InspectContainer_FullMethodName         = "/worker.WorkerService/InspectContainer"
+	WorkerService_Exec_FullMethodName                     = "/worker.WorkerService/Exec"
+	WorkerService_ContainerLogs_FullMethodName            = "/worker.WorkerService/ContainerLogs"
+	WorkerService_ContainerStats_FullMethodName           = "/worker.WorkerService/ContainerStats"
+	WorkerService_CreateVolume_FullMethodName             = "/worker.WorkerService/CreateVolume"
+	WorkerService_RemoveVolume_FullMethodName             = "/worker.WorkerService/RemoveVolume"
+	WorkerService_VolumeSize_FullMethodName               = "/worker.WorkerService/VolumeSize"
+	WorkerService_BackupVolume_FullMethodName             = "/worker.WorkerService/BackupVolume"
+	WorkerService_RestoreVolume_FullMethodName            = "/worker.WorkerService/RestoreVolume"
+	WorkerService_ListFiles_FullMethodName                = "/worker.WorkerService/ListFiles"
+	WorkerService_ReadFile_FullMethodName                 = "/worker.WorkerService/ReadFile"
+	WorkerService_WriteFile_FullMethodName                = "/worker.WorkerService/WriteFile"
+	WorkerService_DeletePath_FullMethodName               = "/worker.WorkerService/DeletePath"
+	WorkerService_CreateDirectory_FullMethodName          = "/worker.WorkerService/CreateDirectory"
+	WorkerService_RenamePath_FullMethodName               = "/worker.WorkerService/RenamePath"
+	WorkerService_CopyFromContainer_FullMethodName        = "/worker.WorkerService/CopyFromContainer"
+	WorkerService_CopyToContainer_FullMethodName          = "/worker.WorkerService/CopyToContainer"
+	WorkerService_CopyDirFromContainer_FullMethodName     = "/worker.WorkerService/CopyDirFromContainer"
+	WorkerService_CopyTarToContainer_FullMethodName       = "/worker.WorkerService/CopyTarToContainer"
+	WorkerService_WatchEvents_FullMethodName              = "/worker.WorkerService/WatchEvents"
+	WorkerService_ListGameserverContainers_FullMethodName = "/worker.WorkerService/ListGameserverContainers"
+	WorkerService_Heartbeat_FullMethodName                = "/worker.WorkerService/Heartbeat"
+	WorkerService_PrepareGameScripts_FullMethodName       = "/worker.WorkerService/PrepareGameScripts"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -85,6 +86,8 @@ type WorkerServiceClient interface {
 	CopyTarToContainer(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse], error)
 	// Events — long-lived server stream of Docker container events
 	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error)
+	// Discovery
+	ListGameserverContainers(ctx context.Context, in *ListGameserverContainersRequest, opts ...grpc.CallOption) (*ListGameserverContainersResponse, error)
 	// Health
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
@@ -391,6 +394,16 @@ func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_WatchEventsClient = grpc.ServerStreamingClient[ContainerEventMsg]
 
+func (c *workerServiceClient) ListGameserverContainers(ctx context.Context, in *ListGameserverContainersRequest, opts ...grpc.CallOption) (*ListGameserverContainersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGameserverContainersResponse)
+	err := c.cc.Invoke(ctx, WorkerService_ListGameserverContainers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *workerServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HeartbeatResponse)
@@ -448,6 +461,8 @@ type WorkerServiceServer interface {
 	CopyTarToContainer(grpc.ClientStreamingServer[CopyTarToContainerRequest, CopyTarToContainerResponse]) error
 	// Events — long-lived server stream of Docker container events
 	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[ContainerEventMsg]) error
+	// Discovery
+	ListGameserverContainers(context.Context, *ListGameserverContainersRequest) (*ListGameserverContainersResponse, error)
 	// Health
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
@@ -536,6 +551,9 @@ func (UnimplementedWorkerServiceServer) CopyTarToContainer(grpc.ClientStreamingS
 }
 func (UnimplementedWorkerServiceServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[ContainerEventMsg]) error {
 	return status.Error(codes.Unimplemented, "method WatchEvents not implemented")
+}
+func (UnimplementedWorkerServiceServer) ListGameserverContainers(context.Context, *ListGameserverContainersRequest) (*ListGameserverContainersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGameserverContainers not implemented")
 }
 func (UnimplementedWorkerServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
@@ -964,6 +982,24 @@ func _WorkerService_WatchEvents_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_WatchEventsServer = grpc.ServerStreamingServer[ContainerEventMsg]
 
+func _WorkerService_ListGameserverContainers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGameserverContainersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).ListGameserverContainers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_ListGameserverContainers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).ListGameserverContainers(ctx, req.(*ListGameserverContainersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _WorkerService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HeartbeatRequest)
 	if err := dec(in); err != nil {
@@ -1082,6 +1118,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CopyToContainer",
 			Handler:    _WorkerService_CopyToContainer_Handler,
+		},
+		{
+			MethodName: "ListGameserverContainers",
+			Handler:    _WorkerService_ListGameserverContainers_Handler,
 		},
 		{
 			MethodName: "Heartbeat",
