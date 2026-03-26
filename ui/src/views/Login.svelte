@@ -87,8 +87,8 @@
       </button>
 
       <div class="login-hint">
-        <p>Create a token with the CLI:</p>
-        <code>gamejanitor tokens create --name my-token --scope admin</code>
+        <p>Locked out? Create a token directly via the database:</p>
+        <code>gamejanitor tokens offline create --name admin --type admin</code>
       </div>
     </div>
   </div>

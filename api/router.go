@@ -78,7 +78,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.Log)
 	workerHandlers := handler.NewWorkerHandlers(opts.WorkerNodeSvc, opts.Log)
 	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.WorkerNodeSvc, opts.Config, opts.Log)
-	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
+	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 
