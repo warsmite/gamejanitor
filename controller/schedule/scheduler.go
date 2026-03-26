@@ -1,51 +1,50 @@
-package service
+package schedule
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/robfig/cron/v3"
 )
 
-// schedulerGameserverOps is a narrow interface for the gameserver operations the scheduler needs.
-type schedulerGameserverOps interface {
+// GameserverOps is the subset of gameserver operations the scheduler needs.
+type GameserverOps interface {
 	Restart(ctx context.Context, id string) error
 	UpdateServerGame(ctx context.Context, id string) error
 }
 
-// schedulerConsoleOps is a narrow interface for the console operations the scheduler needs.
-type schedulerConsoleOps interface {
-	SendCommand(ctx context.Context, gameserverID string, command string) (string, error)
+// BackupOps is the subset of backup operations the scheduler needs.
+type BackupOps interface {
+	CreateBackup(ctx context.Context, gameserverID string, name string) (*model.Backup, error)
 }
 
-// schedulerBackupOps is a narrow interface for the backup operations the scheduler needs.
-type schedulerBackupOps interface {
-	CreateBackup(ctx context.Context, gameserverID string, name string) (*model.Backup, error)
+// ConsoleOps is the subset of console operations the scheduler needs.
+type ConsoleOps interface {
+	SendCommand(ctx context.Context, gameserverID string, command string) (string, error)
 }
 
 type Scheduler struct {
 	cron          *cron.Cron
-	db            *sql.DB
-	backupSvc     schedulerBackupOps
-	gameserverSvc schedulerGameserverOps
-	consoleSvc    schedulerConsoleOps
+	store         Store
+	backupSvc     BackupOps
+	gameserverSvc GameserverOps
+	consoleSvc    ConsoleOps
 	broadcaster   *controller.EventBus
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(db *sql.DB, backupSvc schedulerBackupOps, gameserverSvc schedulerGameserverOps, consoleSvc schedulerConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(store Store, backupSvc BackupOps, gameserverSvc GameserverOps, consoleSvc ConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
-		db:            db,
+		store:         store,
 		backupSvc:     backupSvc,
 		gameserverSvc: gameserverSvc,
 		consoleSvc:    consoleSvc,
@@ -59,13 +58,13 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	s.log.Info("loading schedules into cron")
 
 	// Load all gameservers to iterate their schedules
-	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
+	gameservers, err := s.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		return fmt.Errorf("listing gameservers for scheduler: %w", err)
 	}
 
 	for _, gs := range gameservers {
-		schedules, err := model.ListSchedules(s.db, gs.ID)
+		schedules, err := s.store.ListSchedules(gs.ID)
 		if err != nil {
 			s.log.Error("listing schedules for gameserver", "gameserver_id", gs.ID, "error", err)
 			continue
@@ -99,14 +98,14 @@ func shouldCatchUp(schedType string) bool {
 func (s *Scheduler) catchUpMissed() {
 	now := time.Now()
 
-	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
+	gameservers, err := s.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		s.log.Error("failed to list gameservers for missed schedule check", "error", err)
 		return
 	}
 
 	for _, gs := range gameservers {
-		schedules, err := model.ListSchedules(s.db, gs.ID)
+		schedules, err := s.store.ListSchedules(gs.ID)
 		if err != nil {
 			continue
 		}
@@ -197,7 +196,7 @@ func (s *Scheduler) addEntry(schedule model.Schedule) error {
 	if !entry.Next.IsZero() {
 		nextRun := entry.Next
 		schedule.NextRun = &nextRun
-		if err := model.UpdateSchedule(s.db, &schedule); err != nil {
+		if err := s.store.UpdateSchedule(&schedule); err != nil {
 			s.log.Warn("failed to update next_run for schedule", "schedule_id", schedID, "error", err)
 		}
 	}
@@ -207,7 +206,7 @@ func (s *Scheduler) addEntry(schedule model.Schedule) error {
 }
 
 func (s *Scheduler) executeTask(scheduleID string) {
-	schedule, err := model.GetSchedule(s.db, scheduleID)
+	schedule, err := s.store.GetSchedule(scheduleID)
 	if err != nil || schedule == nil {
 		s.log.Error("failed to load schedule for execution", "schedule_id", scheduleID, "error", err)
 		return
@@ -285,14 +284,14 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		s.mu.Unlock()
 	}
 
-	if err := model.UpdateSchedule(s.db, schedule); err != nil {
+	if err := s.store.UpdateSchedule(schedule); err != nil {
 		s.log.Error("failed to update schedule after execution", "schedule_id", scheduleID, "error", err)
 	}
 }
 
 // RemoveSchedulesByGameserver removes all cron entries for a gameserver.
 func (s *Scheduler) RemoveSchedulesByGameserver(gameserverID string) {
-	schedules, err := model.ListSchedules(s.db, gameserverID)
+	schedules, err := s.store.ListSchedules(gameserverID)
 	if err != nil {
 		s.log.Error("listing schedules for removal", "gameserver_id", gameserverID, "error", err)
 		return

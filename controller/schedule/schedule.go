@@ -1,31 +1,41 @@
-package service
+package schedule
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
 
+// Store covers the schedule DB operations needed by ScheduleService and Scheduler.
+type Store interface {
+	ListSchedules(gameserverID string) ([]model.Schedule, error)
+	GetSchedule(id string) (*model.Schedule, error)
+	CreateSchedule(sched *model.Schedule) error
+	UpdateSchedule(sched *model.Schedule) error
+	DeleteSchedule(id string) error
+	DeleteSchedulesByGameserver(gameserverID string) error
+	ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error)
+}
+
 type ScheduleService struct {
-	db          *sql.DB
+	store       Store
 	scheduler   *Scheduler
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewScheduleService(db *sql.DB, scheduler *Scheduler, broadcaster *controller.EventBus, log *slog.Logger) *ScheduleService {
-	return &ScheduleService{db: db, scheduler: scheduler, broadcaster: broadcaster, log: log}
+func NewScheduleService(store Store, scheduler *Scheduler, broadcaster *controller.EventBus, log *slog.Logger) *ScheduleService {
+	return &ScheduleService{store: store, scheduler: scheduler, broadcaster: broadcaster, log: log}
 }
 
 func (s *ScheduleService) ListSchedules(gameserverID string) ([]model.Schedule, error) {
-	return model.ListSchedules(s.db, gameserverID)
+	return s.store.ListSchedules(gameserverID)
 }
 
 func (s *ScheduleService) GetSchedule(gameserverID, scheduleID string) (*model.Schedule, error) {
@@ -34,7 +44,7 @@ func (s *ScheduleService) GetSchedule(gameserverID, scheduleID string) (*model.S
 
 // getScheduleForGameserver fetches a schedule and verifies it belongs to the expected gameserver.
 func (s *ScheduleService) getScheduleForGameserver(gameserverID, scheduleID string) (*model.Schedule, error) {
-	schedule, err := model.GetSchedule(s.db, scheduleID)
+	schedule, err := s.store.GetSchedule(scheduleID)
 	if err != nil {
 		return nil, fmt.Errorf("getting schedule %s: %w", scheduleID, err)
 	}
@@ -56,13 +66,13 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *model.Sc
 
 	s.log.Info("creating schedule", "id", schedule.ID, "name", schedule.Name, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
 
-	if err := model.CreateSchedule(s.db, schedule); err != nil {
+	if err := s.store.CreateSchedule(schedule); err != nil {
 		return err
 	}
 
 	if schedule.Enabled {
 		if err := s.scheduler.AddSchedule(*schedule); err != nil {
-			if delErr := model.DeleteSchedule(s.db, schedule.ID); delErr != nil {
+			if delErr := s.store.DeleteSchedule(schedule.ID); delErr != nil {
 				s.log.Error("failed to clean up schedule after cron registration failure", "id", schedule.ID, "error", delErr)
 			}
 			return fmt.Errorf("registering schedule with cron: %w", err)
@@ -90,7 +100,7 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *model.Sc
 
 	s.log.Info("updating schedule", "id", schedule.ID)
 
-	if err := model.UpdateSchedule(s.db, schedule); err != nil {
+	if err := s.store.UpdateSchedule(schedule); err != nil {
 		return err
 	}
 
@@ -118,7 +128,7 @@ func (s *ScheduleService) DeleteSchedule(ctx context.Context, gameserverID, sche
 	s.log.Info("deleting schedule", "id", scheduleID)
 
 	s.scheduler.RemoveSchedule(scheduleID)
-	if err := model.DeleteSchedule(s.db, scheduleID); err != nil {
+	if err := s.store.DeleteSchedule(scheduleID); err != nil {
 		return err
 	}
 
@@ -143,7 +153,7 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, gameserverID, sche
 
 	s.log.Info("toggling schedule", "id", scheduleID, "enabled", schedule.Enabled)
 
-	if err := model.UpdateSchedule(s.db, schedule); err != nil {
+	if err := s.store.UpdateSchedule(schedule); err != nil {
 		return err
 	}
 

@@ -6,16 +6,16 @@ import (
 	"net/http"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/go-chi/chi/v5"
 )
 
 type ScheduleHandlers struct {
-	svc *service.ScheduleService
+	svc *schedule.ScheduleService
 	log *slog.Logger
 }
 
-func NewScheduleHandlers(svc *service.ScheduleService, log *slog.Logger) *ScheduleHandlers {
+func NewScheduleHandlers(svc *schedule.ScheduleService, log *slog.Logger) *ScheduleHandlers {
 	return &ScheduleHandlers{svc: svc, log: log}
 }
 
