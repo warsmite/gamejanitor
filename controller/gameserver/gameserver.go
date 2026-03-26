@@ -178,7 +178,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
-	gs.Status = controller.StatusStopped
+	gs.Status = controller.StatusStopped // Not persisted — status is derived from activities
 	if gs.PortMode == "" {
 		gs.PortMode = "auto"
 	}

@@ -53,9 +53,7 @@ func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
 	// Manually set status to running to simulate the status subscriber
-	gs2, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	gs2.Status = "running"
-	store.New(svc.DB).UpdateGameserver(gs2)
+	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
 
 	// Starting again should be a no-op
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
@@ -122,10 +120,7 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
 	// Set status to running so stop doesn't short-circuit
-	s := store.New(svc.DB)
-	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.Status = "running"
-	require.NoError(t, s.UpdateGameserver(fetched))
+	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
 
 	// Unregister the worker
 	svc.Registry.Unregister("worker-1")

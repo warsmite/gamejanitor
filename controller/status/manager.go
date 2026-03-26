@@ -186,7 +186,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 	return false
 }
 
-// setRecoveryStatus directly writes status to DB without publishing events.
+// setRecoveryStatus records a status_changed activity without publishing events.
 // Used during startup recovery to reconcile DB with Docker reality.
 func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
 	gs, err := m.store.GetGameserver(id)
@@ -195,28 +195,27 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 		return
 	}
 	oldStatus := gs.Status
-	gs.Status = newStatus
-	if newStatus == controller.StatusError {
-		gs.ErrorReason = errorReason
-	} else {
-		gs.ErrorReason = ""
+	if newStatus != controller.StatusError {
+		errorReason = ""
 	}
-	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to update status", "id", id, "from", oldStatus, "to", newStatus, "error", err)
+	if err := recordStatusActivity(m.store, id, newStatus, errorReason); err != nil {
+		m.log.Error("recovery: failed to record status_changed activity", "id", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
 	m.log.Info("recovery: status set", "id", id, "from", oldStatus, "to", newStatus)
 }
 
-// clearContainerAndSetStatus clears the container_id and updates status in one DB write.
+// clearContainerAndSetStatus clears the container_id and records a status_changed activity.
 // Used during startup recovery — no events published.
 func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.ContainerID = nil
-	gs.Status = newStatus
-	gs.ErrorReason = ""
 	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
+		m.log.Error("recovery: failed to clear container", "id", gs.ID, "error", err)
+		return
+	}
+	if err := recordStatusActivity(m.store, gs.ID, newStatus, ""); err != nil {
+		m.log.Error("recovery: failed to record status_changed activity", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
 	m.log.Info("recovery: status set", "id", gs.ID, "from", oldStatus, "to", newStatus)

@@ -1,8 +1,8 @@
 package testutil
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 )
 
 // TestGameID is the game ID used by the test game definition in testdata/.
@@ -42,6 +45,31 @@ func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *model.Gameserver {
 		t.Fatalf("creating test gameserver: %v", err)
 	}
 	return gs
+}
+
+// SetGameserverStatus writes a status_changed activity to set the gameserver's derived status.
+// Use this in tests that need to put a gameserver into a specific status without going
+// through the full lifecycle.
+func SetGameserverStatus(t *testing.T, db *store.DB, gameserverID, newStatus string) {
+	t.Helper()
+	data, _ := json.Marshal(map[string]string{
+		"new_status":   newStatus,
+		"error_reason": "",
+	})
+	now := time.Now()
+	a := &model.Activity{
+		ID:           uuid.New().String(),
+		GameserverID: &gameserverID,
+		Type:         controller.EventStatusChanged,
+		Status:       model.ActivityCompleted,
+		Actor:        json.RawMessage(`{}`),
+		Data:         data,
+		StartedAt:    now,
+		CompletedAt:  &now,
+	}
+	if err := db.CreateActivity(a); err != nil {
+		t.Fatalf("setting gameserver status: %v", err)
+	}
 }
 
 // testdataDir returns the absolute path to the testdata/ directory.

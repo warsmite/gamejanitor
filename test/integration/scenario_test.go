@@ -381,8 +381,8 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.ContainerID = &containerID
-	fetched.Status = "running"
 	store.New(svc.DB).UpdateGameserver(fetched)
+	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
 
 	// test-game doesn't disable "command" capability, so SendCommand should work
 	_, err = svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")

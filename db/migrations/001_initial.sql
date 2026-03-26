@@ -9,8 +9,6 @@ CREATE TABLE gameservers (
     cpu_enforced INTEGER NOT NULL DEFAULT 0,
     container_id TEXT,
     volume_name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'stopped',
-    error_reason TEXT NOT NULL DEFAULT '',
     port_mode TEXT NOT NULL DEFAULT 'auto',
     node_id TEXT,
     sftp_username TEXT NOT NULL DEFAULT '',
@@ -104,6 +102,7 @@ CREATE TABLE activity (
 CREATE INDEX IF NOT EXISTS idx_activity_gameserver_id ON activity(gameserver_id);
 CREATE INDEX IF NOT EXISTS idx_activity_status ON activity(status);
 CREATE INDEX IF NOT EXISTS idx_activity_type ON activity(type);
+CREATE INDEX IF NOT EXISTS idx_activity_status_changed ON activity(gameserver_id, type, started_at DESC) WHERE type = 'status_changed';
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);

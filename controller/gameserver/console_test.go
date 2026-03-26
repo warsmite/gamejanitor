@@ -50,10 +50,11 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, fw.StartContainer(ctx, containerID))
 
+	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.ContainerID = &containerID
-	fetched.Status = "running"
-	store.New(svc.DB).UpdateGameserver(fetched)
+	s.UpdateGameserver(fetched)
+	testutil.SetGameserverStatus(t, s, gs.ID, "running")
 
 	output, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.NoError(t, err)

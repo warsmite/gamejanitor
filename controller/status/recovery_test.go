@@ -47,10 +47,9 @@ func TestRecovery_RunningInDB_ContainerGone(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, fetched.ContainerID)
 
-	// Set status to "running" in DB to simulate a crash recovery scenario
+	// Set status to "running" via activity to simulate a crash recovery scenario
 	s := store.New(svc.DB)
-	fetched.Status = controller.StatusRunning
-	require.NoError(t, s.UpdateGameserver(fetched))
+	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 
 	// Remove the container from the fake worker so InspectContainer fails
 	fw.FailNext("InspectContainer", fmt.Errorf("container not found"))
@@ -89,9 +88,9 @@ func TestRecovery_RunningInDB_ContainerRunning(t *testing.T) {
 	containerID := fw.AddFakeContainer(gs.ID)
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.Status = controller.StatusRunning
 	fetched.ContainerID = &containerID
 	require.NoError(t, s.UpdateGameserver(fetched))
+	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 
 	// Container is "running" in fake worker — recovery should re-attach (set to "started")
 	sm := newTestStatusManager(t, svc)
@@ -122,13 +121,13 @@ func TestRecovery_UnreachableStatus_WorkerOffline(t *testing.T) {
 		Ports:       model.Ports{},
 		Env:         model.Env{"REQUIRED_VAR": "v"},
 		VolumeName:  "vol-unreachable",
-		Status:      controller.StatusUnreachable,
 		PortMode:    "auto",
 		NodeID:      &nodeID,
 		NodeTags:    model.Labels{},
 		AutoRestart: &autoRestart,
 	}
 	require.NoError(t, s.CreateGameserver(gs))
+	testutil.SetGameserverStatus(t, s, "gs-unreachable", controller.StatusUnreachable)
 
 	sm := newTestStatusManager(t, svc)
 

@@ -156,10 +156,20 @@ func (s *ActivityStore) ListActivities(filter model.ActivityFilter) ([]model.Act
 }
 
 // PruneActivities deletes completed/failed/abandoned activities older than the given number of days.
+// Always preserves the most recent status_changed activity per gameserver since
+// that is the source of truth for gameserver status.
 func (s *ActivityStore) PruneActivities(retentionDays int) (int, error) {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	result, err := s.db.Exec(
-		"DELETE FROM activity WHERE status != ? AND completed_at < ?",
+		`DELETE FROM activity WHERE status != ? AND completed_at < ?
+		 AND id NOT IN (
+			SELECT a.id FROM activity a
+			WHERE a.type = 'status_changed'
+			AND a.started_at = (
+				SELECT MAX(a2.started_at) FROM activity a2
+				WHERE a2.gameserver_id = a.gameserver_id AND a2.type = 'status_changed'
+			)
+		 )`,
 		model.ActivityRunning, cutoff,
 	)
 	if err != nil {

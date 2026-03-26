@@ -3,6 +3,7 @@ package store_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,12 +21,32 @@ func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 		Ports:      model.Ports{},
 		Env:        model.Env{},
 		VolumeName: "vol-" + id,
-		Status:     "stopped",
 		PortMode:   "auto",
 		NodeID:     nodeID,
 		NodeTags:    model.Labels{},
 		AutoRestart: boolPtr(false),
 	}
+}
+
+// insertStatusActivity creates a status_changed activity for a gameserver.
+func insertStatusActivity(t *testing.T, db *store.DB, gsID, newStatus string) {
+	t.Helper()
+	now := time.Now()
+	data, _ := json.Marshal(map[string]string{
+		"new_status":   newStatus,
+		"error_reason": "",
+	})
+	a := &model.Activity{
+		ID:           gsID + "-status-" + newStatus,
+		GameserverID: &gsID,
+		Type:         "status_changed",
+		Status:       model.ActivityCompleted,
+		Actor:        json.RawMessage(`{}`),
+		Data:         data,
+		StartedAt:    now,
+		CompletedAt:  &now,
+	}
+	require.NoError(t, db.CreateActivity(a))
 }
 
 func boolPtr(b bool) *bool { return &b
@@ -63,8 +84,10 @@ func TestGameserver_Update(t *testing.T) {
 	require.NoError(t, db.CreateGameserver(gs))
 
 	gs.Name = "Updated"
-	gs.Status = "running"
 	require.NoError(t, db.UpdateGameserver(gs))
+
+	// Set status via activity
+	insertStatusActivity(t, db, "gs-1", "running")
 
 	fetched, err := db.GetGameserver("gs-1")
 	require.NoError(t, err)
@@ -91,15 +114,16 @@ func TestGameserver_ListFilters(t *testing.T) {
 	db := store.New(testutil.NewTestDB(t))
 
 	gs1 := newGameserver("gs-1", "Server1", "minecraft-java", testutil.StrPtr("node-a"))
-	gs1.Status = "running"
 	gs2 := newGameserver("gs-2", "Server2", "rust", testutil.StrPtr("node-b"))
-	gs2.Status = "stopped"
 	gs3 := newGameserver("gs-3", "Server3", "minecraft-java", testutil.StrPtr("node-a"))
-	gs3.Status = "stopped"
 
 	require.NoError(t, db.CreateGameserver(gs1))
 	require.NoError(t, db.CreateGameserver(gs2))
 	require.NoError(t, db.CreateGameserver(gs3))
+
+	// Set statuses via activity records
+	insertStatusActivity(t, db, "gs-1", "running")
+	// gs-2 and gs-3 have no status activity, so they default to "stopped"
 
 	t.Run("filter by game_id", func(t *testing.T) {
 		gameID := "minecraft-java"
