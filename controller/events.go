@@ -93,6 +93,7 @@ type ImagePullingEvent struct {
 func (e ImagePullingEvent) EventType() string        { return EventImagePulling }
 func (e ImagePullingEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ImagePullingEvent) EventGameserverID() string { return e.GameserverID }
+func (e ImagePullingEvent) EventActor() Actor          { return SystemActor }
 
 type ImagePulledEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -102,6 +103,7 @@ type ImagePulledEvent struct {
 func (e ImagePulledEvent) EventType() string        { return EventImagePulled }
 func (e ImagePulledEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ImagePulledEvent) EventGameserverID() string { return e.GameserverID }
+func (e ImagePulledEvent) EventActor() Actor          { return SystemActor }
 
 type ContainerCreatingEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -111,6 +113,7 @@ type ContainerCreatingEvent struct {
 func (e ContainerCreatingEvent) EventType() string        { return EventContainerCreating }
 func (e ContainerCreatingEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ContainerCreatingEvent) EventGameserverID() string { return e.GameserverID }
+func (e ContainerCreatingEvent) EventActor() Actor          { return SystemActor }
 
 type ContainerStartedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -120,6 +123,7 @@ type ContainerStartedEvent struct {
 func (e ContainerStartedEvent) EventType() string        { return EventContainerStarted }
 func (e ContainerStartedEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ContainerStartedEvent) EventGameserverID() string { return e.GameserverID }
+func (e ContainerStartedEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverReadyEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -129,6 +133,7 @@ type GameserverReadyEvent struct {
 func (e GameserverReadyEvent) EventType() string        { return EventGameserverReady }
 func (e GameserverReadyEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverReadyEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverReadyEvent) EventActor() Actor          { return SystemActor }
 
 type ContainerStoppingEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -138,6 +143,7 @@ type ContainerStoppingEvent struct {
 func (e ContainerStoppingEvent) EventType() string        { return EventContainerStopping }
 func (e ContainerStoppingEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ContainerStoppingEvent) EventGameserverID() string { return e.GameserverID }
+func (e ContainerStoppingEvent) EventActor() Actor          { return SystemActor }
 
 type ContainerStoppedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -147,6 +153,7 @@ type ContainerStoppedEvent struct {
 func (e ContainerStoppedEvent) EventType() string        { return EventContainerStopped }
 func (e ContainerStoppedEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ContainerStoppedEvent) EventGameserverID() string { return e.GameserverID }
+func (e ContainerStoppedEvent) EventActor() Actor          { return SystemActor }
 
 type ContainerExitedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -156,6 +163,7 @@ type ContainerExitedEvent struct {
 func (e ContainerExitedEvent) EventType() string        { return EventContainerExited }
 func (e ContainerExitedEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ContainerExitedEvent) EventGameserverID() string { return e.GameserverID }
+func (e ContainerExitedEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverErrorEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -166,6 +174,7 @@ type GameserverErrorEvent struct {
 func (e GameserverErrorEvent) EventType() string        { return EventGameserverError }
 func (e GameserverErrorEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverErrorEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverErrorEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverStatsEvent struct {
 	GameserverID    string    `json:"gameserver_id"`
@@ -180,6 +189,7 @@ type GameserverStatsEvent struct {
 func (e GameserverStatsEvent) EventType() string        { return EventGameserverStats }
 func (e GameserverStatsEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverStatsEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverStatsEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverQueryEvent struct {
 	GameserverID  string   `json:"gameserver_id"`
@@ -194,6 +204,7 @@ type GameserverQueryEvent struct {
 func (e GameserverQueryEvent) EventType() string        { return EventGameserverQuery }
 func (e GameserverQueryEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverQueryEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverQueryEvent) EventActor() Actor          { return SystemActor }
 
 // Actor represents who/what initiated an action.
 type Actor struct {
@@ -237,6 +248,7 @@ type GameserverActionEvent struct {
 func (e GameserverActionEvent) EventType() string        { return e.Type }
 func (e GameserverActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverActionEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverActionEvent) EventActor() Actor          { return e.Actor }
 
 type BackupActionEvent struct {
 	Type         string         `json:"type"`
@@ -250,6 +262,7 @@ type BackupActionEvent struct {
 func (e BackupActionEvent) EventType() string        { return e.Type }
 func (e BackupActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e BackupActionEvent) EventGameserverID() string { return e.GameserverID }
+func (e BackupActionEvent) EventActor() Actor          { return e.Actor }
 
 type WorkerActionEvent struct {
 	Type      string      `json:"type"`
@@ -262,6 +275,7 @@ type WorkerActionEvent struct {
 func (e WorkerActionEvent) EventType() string        { return e.Type }
 func (e WorkerActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e WorkerActionEvent) EventGameserverID() string { return "" }
+func (e WorkerActionEvent) EventActor() Actor          { return e.Actor }
 
 type ScheduleActionEvent struct {
 	Type         string           `json:"type"`
@@ -274,6 +288,7 @@ type ScheduleActionEvent struct {
 func (e ScheduleActionEvent) EventType() string        { return e.Type }
 func (e ScheduleActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ScheduleActionEvent) EventGameserverID() string { return e.GameserverID }
+func (e ScheduleActionEvent) EventActor() Actor          { return e.Actor }
 
 type ScheduledTaskEvent struct {
 	Type         string           `json:"type"`
@@ -288,6 +303,7 @@ type ScheduledTaskEvent struct {
 func (e ScheduledTaskEvent) EventType() string        { return e.Type }
 func (e ScheduledTaskEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ScheduledTaskEvent) EventGameserverID() string { return e.GameserverID }
+func (e ScheduledTaskEvent) EventActor() Actor          { return e.Actor }
 
 type ModActionEvent struct {
 	Type         string              `json:"type"`
@@ -300,3 +316,4 @@ type ModActionEvent struct {
 func (e ModActionEvent) EventType() string        { return e.Type }
 func (e ModActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ModActionEvent) EventGameserverID() string { return e.GameserverID }
+func (e ModActionEvent) EventActor() Actor          { return e.Actor }

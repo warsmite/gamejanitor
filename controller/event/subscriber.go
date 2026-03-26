@@ -70,11 +70,9 @@ func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 	}
 
 	gameserverID := event.EventGameserverID()
-	actor := extractActor(event)
-	data := extractData(event)
 
-	actorJSON, _ := json.Marshal(actor)
-	dataJSON, _ := json.Marshal(data)
+	actorJSON, _ := json.Marshal(event.EventActor())
+	dataJSON, _ := json.Marshal(event)
 
 	e := &model.Event{
 		ID:           uuid.New().String(),
@@ -90,24 +88,3 @@ func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 	}
 }
 
-func extractActor(event controller.WebhookEvent) controller.Actor {
-	switch e := event.(type) {
-	case controller.GameserverActionEvent:
-		return e.Actor
-	case controller.BackupActionEvent:
-		return e.Actor
-	case controller.WorkerActionEvent:
-		return e.Actor
-	case controller.ModActionEvent:
-		return e.Actor
-	case controller.ScheduleActionEvent:
-		return e.Actor
-	case controller.ScheduledTaskEvent:
-		return e.Actor
-	}
-	return controller.SystemActor
-}
-
-func extractData(event controller.WebhookEvent) any {
-	return event
-}

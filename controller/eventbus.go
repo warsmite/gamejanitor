@@ -9,6 +9,7 @@ type WebhookEvent interface {
 	EventType() string
 	EventTimestamp() time.Time
 	EventGameserverID() string
+	EventActor() Actor
 }
 
 type StatusEvent struct {
@@ -24,6 +25,7 @@ const EventStatusChanged = "status_changed"
 func (e StatusEvent) EventType() string        { return EventStatusChanged }
 func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e StatusEvent) EventGameserverID() string { return e.GameserverID }
+func (e StatusEvent) EventActor() Actor          { return SystemActor }
 
 type EventBus struct {
 	mu          sync.RWMutex
