@@ -2,132 +2,44 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
-type apiResponse struct {
-	Status string          `json:"status"`
-	Data   json.RawMessage `json:"data,omitempty"`
-	Error  string          `json:"error,omitempty"`
-}
+var sdkClient *gamejanitor.Client
 
-func apiGet(path string) (*apiResponse, error) {
-	return apiRequest("GET", path, nil)
-}
-
-func apiPost(path string, body any) (*apiResponse, error) {
-	return apiRequest("POST", path, body)
-}
-
-func apiPatch(path string, body any) (*apiResponse, error) {
-	return apiRequest("PATCH", path, body)
-}
-
-func apiDelete(path string) (*apiResponse, error) {
-	return apiRequest("DELETE", path, nil)
-}
-
-func apiRequest(method, path string, body any) (*apiResponse, error) {
-	resolvedURL, resolvedToken := resolveClusterContext()
-	url := strings.TrimRight(resolvedURL, "/") + path
-
-	var bodyReader io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("encoding request body: %w", err)
+func getClient() *gamejanitor.Client {
+	if sdkClient == nil {
+		baseURL, token := resolveClusterContext()
+		opts := []gamejanitor.Option{}
+		if token != "" {
+			opts = append(opts, gamejanitor.WithToken(token))
 		}
-		bodyReader = bytes.NewReader(data)
+		sdkClient = gamejanitor.New(baseURL, opts...)
 	}
-
-	req, err := http.NewRequest(method, url, bodyReader)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if resolvedToken != "" {
-		req.Header.Set("Authorization", "Bearer "+resolvedToken)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to gamejanitor at %s\n  Is the server running? Start it with: gamejanitor serve\n  Or set up a remote cluster: gamejanitor cluster add <name> --address <url> --token <token>", resolvedURL)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNoContent {
-		return &apiResponse{Status: "ok"}, nil
-	}
-
-	var result apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	if result.Status == "error" {
-		return nil, fmt.Errorf("%s", result.Error)
-	}
-
-	return &result, nil
+	return sdkClient
 }
 
-// apiDownload performs a raw HTTP GET and returns the response body. Caller must close.
-func apiDownload(path string) (*http.Response, error) {
-	resolvedURL, resolvedToken := resolveClusterContext()
-	url := strings.TrimRight(resolvedURL, "/") + path
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-	if resolvedToken != "" {
-		req.Header.Set("Authorization", "Bearer "+resolvedToken)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to gamejanitor at %s", resolvedURL)
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
-	}
-	return resp, nil
+func ctx() context.Context {
+	return context.Background()
 }
 
-// --- JSON helpers ---
+// --- JSON output helper ---
 
-func mustMarshal(v any) json.RawMessage {
-	data, _ := json.Marshal(v)
-	return data
+func printJSON(v any) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(v)
 }
 
 // --- Output helpers ---
-
-func printJSONResponse(resp *apiResponse) {
-	out := map[string]any{"status": resp.Status}
-	if resp.Data != nil {
-		var data any
-		if err := json.Unmarshal(resp.Data, &data); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to parse response data: %v\n", err)
-		} else {
-			out["data"] = data
-		}
-	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	enc.Encode(out)
-}
 
 func newTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -261,12 +173,13 @@ func fetchGameserverList() ([]namedEntry, error) {
 	if cachedGameservers != nil {
 		return cachedGameservers, nil
 	}
-	resp, err := apiGet("/api/gameservers")
+	resp, err := getClient().Gameservers.List(ctx(), nil)
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(resp.Data, &cachedGameservers); err != nil {
-		return nil, fmt.Errorf("parsing gameserver list: %w", err)
+	cachedGameservers = make([]namedEntry, len(resp.Gameservers))
+	for i, gs := range resp.Gameservers {
+		cachedGameservers[i] = namedEntry{ID: gs.ID, Name: gs.Name}
 	}
 	return cachedGameservers, nil
 }
@@ -295,12 +208,13 @@ func gameserverName(id string) string {
 func resolveBackupID(gsID, identifier string) (string, error) {
 	entries, ok := cachedBackups[gsID]
 	if !ok {
-		resp, err := apiGet("/api/gameservers/" + gsID + "/backups")
+		backups, err := getClient().Backups.List(ctx(), gsID, nil)
 		if err != nil {
 			return "", err
 		}
-		if err := json.Unmarshal(resp.Data, &entries); err != nil {
-			return "", fmt.Errorf("parsing backup list: %w", err)
+		entries = make([]namedEntry, len(backups))
+		for i, b := range backups {
+			entries[i] = namedEntry{ID: b.ID, Name: b.Name}
 		}
 		cachedBackups[gsID] = entries
 	}
@@ -310,12 +224,13 @@ func resolveBackupID(gsID, identifier string) (string, error) {
 func resolveScheduleID(gsID, identifier string) (string, error) {
 	entries, ok := cachedSchedules[gsID]
 	if !ok {
-		resp, err := apiGet("/api/gameservers/" + gsID + "/schedules")
+		schedules, err := getClient().Schedules.List(ctx(), gsID)
 		if err != nil {
 			return "", err
 		}
-		if err := json.Unmarshal(resp.Data, &entries); err != nil {
-			return "", fmt.Errorf("parsing schedule list: %w", err)
+		entries = make([]namedEntry, len(schedules))
+		for i, s := range schedules {
+			entries[i] = namedEntry{ID: s.ID, Name: s.Name}
 		}
 		cachedSchedules[gsID] = entries
 	}

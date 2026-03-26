@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 var schedulesCmd = &cobra.Command{
@@ -34,26 +35,14 @@ var schedulesListCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		resp, err := apiGet("/api/gameservers/" + gsID + "/schedules")
+		schedules, err := getClient().Schedules.List(ctx(), gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(schedules)
 			return nil
-		}
-
-		var schedules []struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Type     string `json:"type"`
-			CronExpr string `json:"cron_expr"`
-			Enabled  bool   `json:"enabled"`
-			NextRun  string `json:"next_run"`
-		}
-		if err := json.Unmarshal(resp.Data, &schedules); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(schedules) == 0 {
@@ -69,8 +58,8 @@ var schedulesListCmd = &cobra.Command{
 				enabled = "no"
 			}
 			nextRun := "-"
-			if s.NextRun != "" {
-				nextRun = s.NextRun
+			if s.NextRun != nil {
+				nextRun = s.NextRun.Format("2006-01-02T15:04:05Z")
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", s.ID[:8], s.Name, s.Type, s.CronExpr, enabled, nextRun)
 		}
@@ -98,36 +87,29 @@ var schedulesCreateCmd = &cobra.Command{
 			return exitError(fmt.Errorf("--name, --type, and --cron are required"))
 		}
 
-		body := map[string]any{
-			"name":      name,
-			"type":      schedType,
-			"cron_expr": cronExpr,
+		req := &gamejanitor.CreateScheduleRequest{
+			Name:     name,
+			Type:     schedType,
+			CronExpr: cronExpr,
 		}
 		if payload != "" {
 			var p json.RawMessage
 			if err := json.Unmarshal([]byte(payload), &p); err != nil {
 				return exitError(fmt.Errorf("invalid payload JSON: %w", err))
 			}
-			body["payload"] = p
+			req.Payload = p
 		}
 
-		resp, err := apiPost("/api/gameservers/"+gsID+"/schedules", body)
+		schedule, err := getClient().Schedules.Create(ctx(), gsID, req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(schedule)
 			return nil
 		}
 
-		var schedule struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(resp.Data, &schedule); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
 		fmt.Printf("Schedule created: %s (%s)\n", schedule.Name, schedule.ID)
 		return nil
 	},
@@ -147,31 +129,35 @@ var schedulesUpdateCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		body := map[string]any{}
+		req := &gamejanitor.UpdateScheduleRequest{}
+		hasUpdate := false
 		if cmd.Flags().Changed("enabled") {
 			enabled, _ := cmd.Flags().GetBool("enabled")
-			body["enabled"] = enabled
+			req.Enabled = gamejanitor.Ptr(enabled)
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("cron") {
 			cronExpr, _ := cmd.Flags().GetString("cron")
-			body["cron_expr"] = cronExpr
+			req.CronExpr = gamejanitor.Ptr(cronExpr)
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("name") {
 			name, _ := cmd.Flags().GetString("name")
-			body["name"] = name
+			req.Name = gamejanitor.Ptr(name)
+			hasUpdate = true
 		}
 
-		if len(body) == 0 {
+		if !hasUpdate {
 			return exitError(fmt.Errorf("no update flags specified"))
 		}
 
-		resp, err := apiPatch("/api/gameservers/"+gsID+"/schedules/"+id, body)
+		schedule, err := getClient().Schedules.Update(ctx(), gsID, id, req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(schedule)
 			return nil
 		}
 
@@ -199,13 +185,13 @@ var schedulesDeleteCmd = &cobra.Command{
 			return nil
 		}
 
-		_, err = apiDelete("/api/gameservers/" + gsID + "/schedules/" + id)
+		err = getClient().Schedules.Delete(ctx(), gsID, id)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(&apiResponse{Status: "ok"})
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 

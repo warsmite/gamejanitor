@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
-
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +20,7 @@ func completeGameserverName(cmd *cobra.Command, args []string, toComplete string
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeGameserverNameMulti allows completion at any arg position (for commands taking gs + sub-resource).
+// completeGameserverNameAtPos allows completion at a specific arg position.
 func completeGameserverNameAtPos(pos int) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != pos {
@@ -45,14 +43,8 @@ func completeGameID(cmd *cobra.Command, args []string, toComplete string) ([]str
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	resp, err := apiGet("/api/games")
+	games, err := getClient().Games.List(ctx())
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	var games []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(resp.Data, &games); err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	var ids []string
@@ -67,14 +59,8 @@ func completeWorkerID(cmd *cobra.Command, args []string, toComplete string) ([]s
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	resp, err := apiGet("/api/workers")
+	workers, err := getClient().Workers.List(ctx())
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	var workers []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(resp.Data, &workers); err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	var ids []string

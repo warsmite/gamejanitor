@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 // --- Start / Stop / Restart ---
@@ -48,6 +48,23 @@ func init() {
 	migrateCmd.Flags().String("node", "", "Target worker node ID")
 }
 
+// sdkAction calls the appropriate SDK method for a single gameserver action.
+func sdkAction(action, id string) (*gamejanitor.Gameserver, error) {
+	c := getClient()
+	switch action {
+	case "start":
+		return c.Gameservers.Start(ctx(), id)
+	case "stop":
+		return c.Gameservers.Stop(ctx(), id)
+	case "restart":
+		return c.Gameservers.Restart(ctx(), id)
+	case "update-game":
+		return c.Gameservers.UpdateGame(ctx(), id)
+	default:
+		return nil, fmt.Errorf("unknown action %q", action)
+	}
+}
+
 func runAction(action, verb string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
@@ -72,22 +89,16 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 			fmt.Printf("%s gameserver %s...\n", verb, name)
 		}
 
-		resp, err := apiPost("/api/gameservers/"+id+"/"+action, nil)
+		gs, err := sdkAction(action, id)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(gs)
 			return nil
 		}
 
-		var gs struct {
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(resp.Data, &gs); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
 		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
 		return nil
 	}
@@ -104,32 +115,22 @@ func runBulkAction(action, verb string, all bool, nodeID string) error {
 		return nil
 	}
 
-	body := map[string]any{"action": action}
+	req := &gamejanitor.BulkActionRequest{Action: action}
 	if all {
-		body["all"] = true
+		req.All = true
 	}
 	if nodeID != "" {
-		body["node_id"] = nodeID
+		req.NodeID = nodeID
 	}
 
-	resp, err := apiPost("/api/gameservers/bulk", body)
+	results, err := getClient().Gameservers.BulkAction(ctx(), req)
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(results)
 		return nil
-	}
-
-	var results []struct {
-		ID     string `json:"id"`
-		Name   string `json:"name"`
-		Status string `json:"status"`
-		Error  string `json:"error"`
-	}
-	if err := json.Unmarshal(resp.Data, &results); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
 	}
 
 	if len(results) == 0 {
@@ -169,28 +170,14 @@ var statusCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		resp, err := apiGet("/api/gameservers/" + gsID + "/status")
+		status, err := getClient().Gameservers.Status(ctx(), gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(status)
 			return nil
-		}
-
-		var status struct {
-			Status    string `json:"status"`
-			Container *struct {
-				State         string  `json:"state"`
-				StartedAt     string  `json:"started_at"`
-				MemoryUsageMB int     `json:"memory_usage_mb"`
-				MemoryLimitMB int     `json:"memory_limit_mb"`
-				CPUPercent    float64 `json:"cpu_percent"`
-			} `json:"container"`
-		}
-		if err := json.Unmarshal(resp.Data, &status); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		fmt.Printf("Status: %s\n", colorStatus(status.Status))
@@ -198,45 +185,30 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Container:\n")
 			fmt.Printf("  State:      %s\n", status.Container.State)
 			fmt.Printf("  Started:    %s\n", status.Container.StartedAt)
-			fmt.Printf("  Memory:     %s / %s\n", formatMemory(status.Container.MemoryUsageMB), formatMemory(status.Container.MemoryLimitMB))
-			fmt.Printf("  CPU:        %.1f%%\n", status.Container.CPUPercent)
 		}
 		return nil
 	},
 }
 
 func runStatusOverview() error {
-	resp, err := apiGet("/api/gameservers")
+	resp, err := getClient().Gameservers.List(ctx(), nil)
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(resp)
 		return nil
 	}
 
-	var listResp struct {
-		Gameservers []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			GameID string `json:"game_id"`
-			Status string `json:"status"`
-		} `json:"gameservers"`
-	}
-	if err := json.Unmarshal(resp.Data, &listResp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-	gameservers := listResp.Gameservers
-
-	if len(gameservers) == 0 {
+	if len(resp.Gameservers) == 0 {
 		fmt.Println("No gameservers found.")
 		return nil
 	}
 
 	w := newTabWriter()
 	fmt.Fprintln(w, "NAME\tGAME\tSTATUS")
-	for _, gs := range gameservers {
+	for _, gs := range resp.Gameservers {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Status))
 	}
 	w.Flush()
@@ -272,26 +244,17 @@ var logsCmd = &cobra.Command{
 			return exitError(fmt.Errorf("--follow is not yet supported (requires streaming API endpoint)"))
 		}
 
-		path := fmt.Sprintf("/api/gameservers/%s/logs?tail=%d", gsID, tail)
-
-		resp, err := apiGet(path)
+		logsResp, err := getClient().Gameservers.Logs(ctx(), gsID, tail)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(logsResp)
 			return nil
 		}
 
-		var data struct {
-			Lines []string `json:"lines"`
-		}
-		if err := json.Unmarshal(resp.Data, &data); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
-
-		for _, line := range data.Lines {
+		for _, line := range logsResp.Lines {
 			fmt.Println(line)
 		}
 		return nil
@@ -300,26 +263,18 @@ var logsCmd = &cobra.Command{
 
 func runServiceLogs(cmd *cobra.Command) error {
 	tail, _ := cmd.Flags().GetInt("tail")
-	path := fmt.Sprintf("/api/logs?tail=%d", tail)
 
-	resp, err := apiGet(path)
+	lines, err := getClient().Logs.Get(ctx(), tail)
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(map[string]any{"lines": lines})
 		return nil
 	}
 
-	var data struct {
-		Lines []string `json:"lines"`
-	}
-	if err := json.Unmarshal(resp.Data, &data); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	for _, line := range data.Lines {
+	for _, line := range lines {
 		fmt.Println(line)
 	}
 	return nil
@@ -337,22 +292,18 @@ var commandCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		body := map[string]string{"command": args[1]}
-		resp, err := apiPost("/api/gameservers/"+gsID+"/command", body)
+		result, err := getClient().Gameservers.SendCommand(ctx(), gsID, args[1])
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(result)
 			return nil
 		}
 
-		var output struct {
-			Output string `json:"output"`
-		}
-		if err := json.Unmarshal(resp.Data, &output); err == nil && output.Output != "" {
-			fmt.Print(output.Output)
+		if result.Output != "" {
+			fmt.Print(result.Output)
 		} else {
 			fmt.Println("Command sent.")
 		}
@@ -383,22 +334,16 @@ var reinstallCmd = &cobra.Command{
 			fmt.Printf("Reinstalling gameserver %s...\n", name)
 		}
 
-		resp, err := apiPost("/api/gameservers/"+id+"/reinstall", nil)
+		gs, err := getClient().Gameservers.Reinstall(ctx(), id)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(gs)
 			return nil
 		}
 
-		var gs struct {
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(resp.Data, &gs); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
 		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
 		return nil
 	},
@@ -431,14 +376,13 @@ var migrateCmd = &cobra.Command{
 			fmt.Printf("Migrating gameserver %s to node %s...\n", name, nodeID)
 		}
 
-		body := map[string]string{"node_id": nodeID}
-		resp, err := apiPost("/api/gameservers/"+gsID+"/migrate", body)
+		gs, err := getClient().Gameservers.Migrate(ctx(), gsID, nodeID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(gs)
 			return nil
 		}
 

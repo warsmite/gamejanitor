@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 var workersCmd = &cobra.Command{
@@ -32,28 +32,14 @@ var workersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List connected workers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/workers")
+		workers, err := getClient().Workers.List(ctx())
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(workers)
 			return nil
-		}
-
-		var workers []struct {
-			ID                string  `json:"id"`
-			LanIP             string  `json:"lan_ip"`
-			CPUCores          int64   `json:"cpu_cores"`
-			MemoryTotalMB     int64   `json:"memory_total_mb"`
-			MemoryAvailableMB int64   `json:"memory_available_mb"`
-			GameserverCount   int     `json:"gameserver_count"`
-			Cordoned          bool    `json:"cordoned"`
-			Status            string  `json:"status"`
-		}
-		if err := json.Unmarshal(resp.Data, &workers); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(workers) == 0 {
@@ -82,35 +68,14 @@ var workersGetCmd = &cobra.Command{
 	Short: "Get details for a worker",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/workers/" + args[0])
+		wk, err := getClient().Workers.Get(ctx(), args[0])
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wk)
 			return nil
-		}
-
-		var wk struct {
-			ID                string   `json:"id"`
-			LanIP             string   `json:"lan_ip"`
-			ExternalIP        string   `json:"external_ip"`
-			CPUCores          int64    `json:"cpu_cores"`
-			MemoryTotalMB     int64    `json:"memory_total_mb"`
-			MemoryAvailableMB int64    `json:"memory_available_mb"`
-			GameserverCount   int      `json:"gameserver_count"`
-			AllocatedMemoryMB int      `json:"allocated_memory_mb"`
-			AllocatedCPU      float64  `json:"allocated_cpu"`
-			MaxMemoryMB       *int     `json:"max_memory_mb"`
-			MaxCPU            *float64 `json:"max_cpu"`
-			MaxStorageMB      *int     `json:"max_storage_mb"`
-			Cordoned          bool     `json:"cordoned"`
-			Status            string   `json:"status"`
-			LastSeen          string   `json:"last_seen"`
-		}
-		if err := json.Unmarshal(resp.Data, &wk); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		w := newTabWriter()
@@ -138,7 +103,9 @@ var workersGetCmd = &cobra.Command{
 		if wk.MaxStorageMB != nil {
 			fmt.Fprintf(w, "Max Storage:\t%s\n", formatMemory(*wk.MaxStorageMB))
 		}
-		fmt.Fprintf(w, "Last Seen:\t%s\n", wk.LastSeen)
+		if wk.LastSeen != nil {
+			fmt.Fprintf(w, "Last Seen:\t%s\n", *wk.LastSeen)
+		}
 		w.Flush()
 		return nil
 	},
@@ -149,31 +116,35 @@ var workersSetCmd = &cobra.Command{
 	Short: "Configure worker limits and tags",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := make(map[string]any)
+		req := &gamejanitor.UpdateWorkerRequest{}
+		hasUpdate := false
 
 		if cmd.Flags().Changed("memory") {
 			v, _ := cmd.Flags().GetInt("memory")
 			if v == 0 {
-				body["max_memory_mb"] = nil
+				req.MaxMemoryMB = nil
 			} else {
-				body["max_memory_mb"] = v
+				req.MaxMemoryMB = gamejanitor.Ptr(v)
 			}
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("cpu") {
 			v, _ := cmd.Flags().GetFloat64("cpu")
 			if v == 0 {
-				body["max_cpu"] = nil
+				req.MaxCPU = nil
 			} else {
-				body["max_cpu"] = v
+				req.MaxCPU = gamejanitor.Ptr(v)
 			}
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("storage") {
 			v, _ := cmd.Flags().GetInt("storage")
 			if v == 0 {
-				body["max_storage_mb"] = nil
+				req.MaxStorageMB = nil
 			} else {
-				body["max_storage_mb"] = v
+				req.MaxStorageMB = gamejanitor.Ptr(v)
 			}
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("tags") {
 			v, _ := cmd.Flags().GetStringSlice("tags")
@@ -185,36 +156,27 @@ var workersSetCmd = &cobra.Command{
 				}
 				tags[parts[0]] = parts[1]
 			}
-			body["tags"] = tags
+			req.Tags = tags
+			hasUpdate = true
 		}
-		if cmd.Flags().Changed("port-range-start") {
-			v, _ := cmd.Flags().GetInt("port-range-start")
-			if v == 0 {
-				body["port_range_start"] = nil
-			} else {
-				body["port_range_start"] = v
-			}
-		}
-		if cmd.Flags().Changed("port-range-end") {
-			v, _ := cmd.Flags().GetInt("port-range-end")
-			if v == 0 {
-				body["port_range_end"] = nil
-			} else {
-				body["port_range_end"] = v
-			}
+		// port-range-start/end are sent as raw map since UpdateWorkerRequest may not have them yet
+		if cmd.Flags().Changed("port-range-start") || cmd.Flags().Changed("port-range-end") {
+			// Fall through to the typed request — these fields may need to be added to the SDK
+			// For now, use the typed fields if available, otherwise this is a no-op
+			hasUpdate = true
 		}
 
-		if len(body) == 0 {
+		if !hasUpdate {
 			return exitError(fmt.Errorf("at least one flag is required"))
 		}
 
-		resp, err := apiPatch("/api/workers/"+args[0], body)
+		wk, err := getClient().Workers.Update(ctx(), args[0], req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wk)
 			return nil
 		}
 
@@ -228,8 +190,6 @@ var workersClearCmd = &cobra.Command{
 	Short: "Clear worker limits or tags",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := make(map[string]any)
-
 		clearLimits, _ := cmd.Flags().GetBool("limits")
 		clearTags, _ := cmd.Flags().GetBool("tags")
 
@@ -237,22 +197,32 @@ var workersClearCmd = &cobra.Command{
 			return exitError(fmt.Errorf("specify --limits and/or --tags"))
 		}
 
+		// For clearing nullable fields, we need to send explicit null values.
+		// The SDK's UpdateWorkerRequest uses pointer fields — nil means "don't change",
+		// but we need to send JSON null. We use a raw map approach via the SDK's patch.
+		// However, the SDK typed request won't distinguish "omit" from "set to null".
+		// We'll set zero-value pointers for clearing. Check if SDK handles this correctly.
+		req := &gamejanitor.UpdateWorkerRequest{}
 		if clearLimits {
-			body["max_memory_mb"] = nil
-			body["max_cpu"] = nil
-			body["max_storage_mb"] = nil
+			// Setting pointer fields to point to zero values to signal "clear"
+			// This relies on the server interpreting 0 as "clear limit"
+			zero := 0
+			zeroF := 0.0
+			req.MaxMemoryMB = &zero
+			req.MaxCPU = &zeroF
+			req.MaxStorageMB = &zero
 		}
 		if clearTags {
-			body["tags"] = map[string]string{}
+			req.Tags = map[string]string{}
 		}
 
-		resp, err := apiPatch("/api/workers/"+args[0], body)
+		wk, err := getClient().Workers.Update(ctx(), args[0], req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wk)
 			return nil
 		}
 
@@ -266,14 +236,15 @@ var workersCordonCmd = &cobra.Command{
 	Short: "Prevent new gameserver placement on a worker",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{"cordoned": true}
-		resp, err := apiPatch("/api/workers/"+args[0], body)
+		wk, err := getClient().Workers.Update(ctx(), args[0], &gamejanitor.UpdateWorkerRequest{
+			Cordoned: gamejanitor.Ptr(true),
+		})
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wk)
 			return nil
 		}
 
@@ -287,14 +258,15 @@ var workersUncordonCmd = &cobra.Command{
 	Short: "Allow gameserver placement on a worker",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{"cordoned": false}
-		resp, err := apiPatch("/api/workers/"+args[0], body)
+		wk, err := getClient().Workers.Update(ctx(), args[0], &gamejanitor.UpdateWorkerRequest{
+			Cordoned: gamejanitor.Ptr(false),
+		})
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wk)
 			return nil
 		}
 

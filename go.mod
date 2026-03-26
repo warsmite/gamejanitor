@@ -2,6 +2,10 @@ module github.com/warsmite/gamejanitor
 
 go 1.25.7
 
+require github.com/warsmite/gamejanitor/sdk v0.0.0
+
+replace github.com/warsmite/gamejanitor/sdk => ./sdk
+
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/docker/docker v27.5.1+incompatible

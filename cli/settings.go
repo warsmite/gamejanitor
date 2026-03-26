@@ -19,16 +19,18 @@ func init() {
 }
 
 func runSettingsGet(cmd *cobra.Command, args []string) error {
-	resp, err := apiGet("/api/settings")
+	settings, err := getClient().Settings.Get(ctx())
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(settings)
 		return nil
 	}
 
+	// Decode into a typed struct for display
+	raw, _ := json.Marshal(settings)
 	var s struct {
 		ConnectionAddress        string `json:"connection_address"`
 		ConnectionAddressFromEnv bool   `json:"connection_address_from_env"`
@@ -50,8 +52,8 @@ func runSettingsGet(cmd *cobra.Command, args []string) error {
 		WebhookSecretSet         bool   `json:"webhook_secret_set"`
 		WebhookSecretFromEnv     bool   `json:"webhook_secret_from_env"`
 	}
-	if err := json.Unmarshal(resp.Data, &s); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return fmt.Errorf("parsing settings: %w", err)
 	}
 
 	w := newTabWriter()
@@ -140,14 +142,15 @@ var settingsSetCmd = &cobra.Command{
 			parsed = value
 		}
 
-		body := map[string]any{apiKey: parsed}
-		resp, err := apiPatch("/api/settings", body)
+		rawValue, _ := json.Marshal(parsed)
+		settings := map[string]json.RawMessage{apiKey: rawValue}
+		err := getClient().Settings.Update(ctx(), settings)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 

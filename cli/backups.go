@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 var backupsCmd = &cobra.Command{
@@ -29,24 +29,14 @@ var backupsListCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		resp, err := apiGet("/api/gameservers/" + gsID + "/backups")
+		backups, err := getClient().Backups.List(ctx(), gsID, nil)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(backups)
 			return nil
-		}
-
-		var backups []struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			SizeBytes int64  `json:"size_bytes"`
-			CreatedAt string `json:"created_at"`
-		}
-		if err := json.Unmarshal(resp.Data, &backups); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(backups) == 0 {
@@ -57,7 +47,7 @@ var backupsListCmd = &cobra.Command{
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tSIZE\tCREATED")
 		for _, b := range backups {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", b.ID[:8], b.Name, formatBytes(b.SizeBytes), b.CreatedAt)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", b.ID[:8], b.Name, formatBytes(b.SizeBytes), b.CreatedAt.Format("2006-01-02T15:04:05Z"))
 		}
 		w.Flush()
 		return nil
@@ -75,34 +65,26 @@ var backupsCreateCmd = &cobra.Command{
 		}
 
 		name, _ := cmd.Flags().GetString("name")
-		body := map[string]string{}
+		req := &gamejanitor.CreateBackupRequest{}
 		if name != "" {
-			body["name"] = name
+			req.Name = name
 		}
 
 		if !jsonOutput {
 			fmt.Println("Creating backup...")
 		}
 
-		resp, err := apiPost("/api/gameservers/"+gsID+"/backups", body)
+		err = getClient().Backups.Create(ctx(), gsID, req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 
-		var backup struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			SizeBytes int64  `json:"size_bytes"`
-		}
-		if err := json.Unmarshal(resp.Data, &backup); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
-		fmt.Printf("Backup created: %s (%s, %s)\n", backup.Name, backup.ID, formatBytes(backup.SizeBytes))
+		fmt.Println("Backup creation started.")
 		return nil
 	},
 }
@@ -130,13 +112,13 @@ var backupsRestoreCmd = &cobra.Command{
 			fmt.Println("Restoring backup...")
 		}
 
-		resp, err := apiPost("/api/gameservers/"+gsID+"/backups/"+backupID+"/restore", nil)
+		err = getClient().Backups.Restore(ctx(), gsID, backupID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 
@@ -164,13 +146,13 @@ var backupsDeleteCmd = &cobra.Command{
 			return nil
 		}
 
-		_, err = apiDelete("/api/gameservers/" + gsID + "/backups/" + backupID)
+		err = getClient().Backups.Delete(ctx(), gsID, backupID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(&apiResponse{Status: "ok"})
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 
@@ -193,11 +175,11 @@ var backupsDownloadCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		resp, err := apiDownload("/api/gameservers/" + gsID + "/backups/" + backupID + "/download")
+		body, err := getClient().Backups.Download(ctx(), gsID, backupID)
 		if err != nil {
 			return exitError(err)
 		}
-		defer resp.Body.Close()
+		defer body.Close()
 
 		outPath := backupID[:8] + ".tar.gz"
 		if len(args) == 3 {
@@ -210,7 +192,7 @@ var backupsDownloadCmd = &cobra.Command{
 		}
 		defer f.Close()
 
-		written, err := io.Copy(f, resp.Body)
+		written, err := io.Copy(f, body)
 		if err != nil {
 			return exitError(fmt.Errorf("writing backup: %w", err))
 		}

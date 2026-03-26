@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 var webhooksCmd = &cobra.Command{
@@ -36,25 +36,14 @@ var webhooksListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List webhook endpoints",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/webhooks")
+		webhooks, err := getClient().Webhooks.List(ctx())
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(webhooks)
 			return nil
-		}
-
-		var webhooks []struct {
-			ID          string   `json:"id"`
-			URL         string   `json:"url"`
-			Description string   `json:"description"`
-			Events      []string `json:"events"`
-			Enabled     bool     `json:"enabled"`
-		}
-		if err := json.Unmarshal(resp.Data, &webhooks); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(webhooks) == 0 {
@@ -81,37 +70,30 @@ var webhooksCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a webhook endpoint",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		url, _ := cmd.Flags().GetString("url")
+		webhookURL, _ := cmd.Flags().GetString("url")
 		events, _ := cmd.Flags().GetStringSlice("events")
 		secret, _ := cmd.Flags().GetString("secret")
 		description, _ := cmd.Flags().GetString("description")
 
-		body := map[string]any{
-			"url":         url,
-			"events":      events,
-			"description": description,
+		req := &gamejanitor.CreateWebhookRequest{
+			URL:         webhookURL,
+			Events:      events,
+			Description: description,
 		}
 		if secret != "" {
-			body["secret"] = secret
+			req.Secret = secret
 		}
 
-		resp, err := apiPost("/api/webhooks", body)
+		wh, err := getClient().Webhooks.Create(ctx(), req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wh)
 			return nil
 		}
 
-		var wh struct {
-			ID  string `json:"id"`
-			URL string `json:"url"`
-		}
-		if err := json.Unmarshal(resp.Data, &wh); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
 		fmt.Printf("Webhook created: %s (%s)\n", wh.URL, wh.ID[:8])
 		return nil
 	},
@@ -122,40 +104,46 @@ var webhooksUpdateCmd = &cobra.Command{
 	Short: "Update a webhook endpoint",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{}
+		req := &gamejanitor.UpdateWebhookRequest{}
+		hasUpdate := false
 
 		if cmd.Flags().Changed("url") {
 			v, _ := cmd.Flags().GetString("url")
-			body["url"] = v
+			req.URL = gamejanitor.Ptr(v)
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("events") {
 			v, _ := cmd.Flags().GetStringSlice("events")
-			body["events"] = v
+			req.Events = v
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("secret") {
 			v, _ := cmd.Flags().GetString("secret")
-			body["secret"] = v
+			req.Secret = gamejanitor.Ptr(v)
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("enabled") {
 			v, _ := cmd.Flags().GetBool("enabled")
-			body["enabled"] = v
+			req.Enabled = gamejanitor.Ptr(v)
+			hasUpdate = true
 		}
 		if cmd.Flags().Changed("description") {
 			v, _ := cmd.Flags().GetString("description")
-			body["description"] = v
+			req.Description = gamejanitor.Ptr(v)
+			hasUpdate = true
 		}
 
-		if len(body) == 0 {
+		if !hasUpdate {
 			return exitError(fmt.Errorf("no update flags specified"))
 		}
 
-		resp, err := apiPatch("/api/webhooks/"+args[0], body)
+		wh, err := getClient().Webhooks.Update(ctx(), args[0], req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(wh)
 			return nil
 		}
 
@@ -174,7 +162,7 @@ var webhooksDeleteCmd = &cobra.Command{
 			return nil
 		}
 
-		_, err := apiDelete("/api/webhooks/" + args[0])
+		err := getClient().Webhooks.Delete(ctx(), args[0])
 		if err != nil {
 			return exitError(err)
 		}
@@ -191,13 +179,13 @@ var webhooksTestCmd = &cobra.Command{
 	Short: "Send a test delivery to a webhook",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiPost("/api/webhooks/"+args[0]+"/test", nil)
+		result, err := getClient().Webhooks.Test(ctx(), args[0])
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(result)
 			return nil
 		}
 
@@ -211,30 +199,22 @@ var webhooksDeliveriesCmd = &cobra.Command{
 	Short: "List deliveries for a webhook",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		params := fmt.Sprintf("?limit=%d", mustGetInt(cmd, "limit"))
-		if v, _ := cmd.Flags().GetString("state"); v != "" {
-			params += "&state=" + v
+		limit, _ := cmd.Flags().GetInt("limit")
+		state, _ := cmd.Flags().GetString("state")
+
+		opts := &gamejanitor.DeliveryListOptions{
+			Limit: limit,
+			State: state,
 		}
 
-		resp, err := apiGet("/api/webhooks/" + args[0] + "/deliveries" + params)
+		deliveries, err := getClient().Webhooks.Deliveries(ctx(), args[0], opts)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(deliveries)
 			return nil
-		}
-
-		var deliveries []struct {
-			ID         string `json:"id"`
-			State      string `json:"state"`
-			StatusCode int    `json:"status_code"`
-			CreatedAt  string `json:"created_at"`
-			EventType  string `json:"event_type"`
-		}
-		if err := json.Unmarshal(resp.Data, &deliveries); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(deliveries) == 0 {
@@ -243,20 +223,11 @@ var webhooksDeliveriesCmd = &cobra.Command{
 		}
 
 		w := newTabWriter()
-		fmt.Fprintln(w, "ID\tEVENT\tSTATE\tHTTP\tTIME")
+		fmt.Fprintln(w, "ID\tEVENT\tSTATE\tTIME")
 		for _, d := range deliveries {
-			httpStatus := fmt.Sprintf("%d", d.StatusCode)
-			if d.StatusCode == 0 {
-				httpStatus = "-"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", d.ID[:8], d.EventType, d.State, httpStatus, d.CreatedAt)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", d.ID[:8], d.EventType, d.State, d.CreatedAt.Format("2006-01-02T15:04:05Z"))
 		}
 		w.Flush()
 		return nil
 	},
-}
-
-func mustGetInt(cmd *cobra.Command, name string) int {
-	v, _ := cmd.Flags().GetInt(name)
-	return v
 }

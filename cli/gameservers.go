@@ -3,11 +3,11 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 // --- List ---
@@ -25,49 +25,32 @@ func init() {
 }
 
 func runGameserversList(cmd *cobra.Command, args []string) error {
-	path := "/api/gameservers"
-	params := url.Values{}
+	opts := &gamejanitor.GameserverListOptions{}
 	if v, _ := cmd.Flags().GetString("game"); v != "" {
-		params.Set("game", v)
+		opts.Game = v
 	}
 	if v, _ := cmd.Flags().GetString("status"); v != "" {
-		params.Set("status", v)
-	}
-	if len(params) > 0 {
-		path += "?" + params.Encode()
+		opts.Status = v
 	}
 
-	resp, err := apiGet(path)
+	resp, err := getClient().Gameservers.List(ctx(), opts)
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(resp)
 		return nil
 	}
 
-	var listResp struct {
-		Gameservers []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			GameID string `json:"game_id"`
-			Status string `json:"status"`
-		} `json:"gameservers"`
-	}
-	if err := json.Unmarshal(resp.Data, &listResp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-	gameservers := listResp.Gameservers
-
-	if len(gameservers) == 0 {
+	if len(resp.Gameservers) == 0 {
 		fmt.Println("No gameservers found.")
 		return nil
 	}
 
 	w := newTabWriter()
 	fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
-	for _, gs := range gameservers {
+	for _, gs := range resp.Gameservers {
 		id := gs.ID
 		if len(id) > 8 {
 			id = id[:8]
@@ -90,38 +73,18 @@ var getCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		resp, err := apiGet("/api/gameservers/" + gsID)
+		gs, err := getClient().Gameservers.Get(ctx(), gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(gs)
 			return nil
 		}
 
-		var gs struct {
-			ID                string          `json:"id"`
-			Name              string          `json:"name"`
-			GameID            string          `json:"game_id"`
-			Status            string          `json:"status"`
-			MemoryLimitMB     int             `json:"memory_limit_mb"`
-			CPULimit          float64         `json:"cpu_limit"`
-			VolumeName        string          `json:"volume_name"`
-			Ports             json.RawMessage `json:"ports"`
-			Env               json.RawMessage `json:"env"`
-			AutoRestart       bool            `json:"auto_restart"`
-			ConnectionAddress *string         `json:"connection_address"`
-			Node              *struct {
-				LanIP      string `json:"lan_ip"`
-				ExternalIP string `json:"external_ip"`
-			} `json:"node"`
-			SFTPUsername string `json:"sftp_username"`
-			SFTPPassword string `json:"sftp_password"`
-		}
-		if err := json.Unmarshal(resp.Data, &gs); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
+		portsJSON, _ := json.Marshal(gs.Ports)
+		envJSON, _ := json.Marshal(gs.Env)
 
 		fmt.Printf("ID:         %s\n", gs.ID)
 		fmt.Printf("Name:       %s\n", gs.Name)
@@ -133,14 +96,17 @@ var getCmd = &cobra.Command{
 		} else {
 			fmt.Printf("CPU:        unlimited\n")
 		}
-		fmt.Printf("Restart:    %v\n", gs.AutoRestart)
+		autoRestart := false
+		if gs.AutoRestart != nil {
+			autoRestart = *gs.AutoRestart
+		}
+		fmt.Printf("Restart:    %v\n", autoRestart)
 		fmt.Printf("Connect:    %s\n", cliConnectionAddress(gs.ConnectionAddress, gs.Node, gs.Ports))
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
-		fmt.Printf("Ports:      %s\n", string(gs.Ports))
-		fmt.Printf("Env:        %s\n", string(gs.Env))
+		fmt.Printf("Ports:      %s\n", string(portsJSON))
+		fmt.Printf("Env:        %s\n", string(envJSON))
 		if gs.SFTPUsername != "" {
 			fmt.Printf("SFTP User:  %s\n", gs.SFTPUsername)
-			fmt.Printf("SFTP Pass:  %s\n", gs.SFTPPassword)
 		}
 		return nil
 	},
@@ -177,7 +143,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return exitError(err)
 	}
 
-	ports, err := parsePorts(portFlags)
+	ports, err := parsePortMappings(portFlags)
 	if err != nil {
 		return exitError(err)
 	}
@@ -186,45 +152,36 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	nodeID, _ := cmd.Flags().GetString("node")
 	autoRestart, _ := cmd.Flags().GetBool("auto-restart")
 
-	body := map[string]any{
-		"name":            name,
-		"game_id":         gameID,
-		"ports":           ports,
-		"env":             env,
-		"memory_limit_mb": memory,
-		"cpu_limit":       cpu,
-		"auto_restart":    autoRestart,
+	req := &gamejanitor.CreateGameserverRequest{
+		Name:          name,
+		GameID:        gameID,
+		Ports:         ports,
+		Env:           env,
+		MemoryLimitMB: memory,
+		CPULimit:      cpu,
+		AutoRestart:   gamejanitor.Ptr(autoRestart),
 	}
 	if len(portFlags) == 0 {
-		body["port_mode"] = "auto"
+		req.PortMode = "auto"
 	}
 	if nodeID != "" {
-		body["node_id"] = nodeID
+		req.NodeID = gamejanitor.Ptr(nodeID)
 	}
 
-	resp, err := apiPost("/api/gameservers", body)
+	result, err := getClient().Gameservers.Create(ctx(), req)
 	if err != nil {
 		return exitError(err)
 	}
 
 	if jsonOutput {
-		printJSONResponse(resp)
+		printJSON(result)
 		return nil
 	}
 
-	var gs struct {
-		ID           string `json:"id"`
-		Name         string `json:"name"`
-		SFTPUsername string `json:"sftp_username"`
-		SFTPPassword string `json:"sftp_password"`
-	}
-	if err := json.Unmarshal(resp.Data, &gs); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-	fmt.Printf("Gameserver %s created (id: %s).\n", gs.Name, gs.ID)
-	if gs.SFTPUsername != "" && gs.SFTPPassword != "" {
-		fmt.Printf("SFTP username: %s\n", gs.SFTPUsername)
-		fmt.Printf("SFTP password: %s (will not be shown again)\n", gs.SFTPPassword)
+	fmt.Printf("Gameserver %s created (id: %s).\n", result.Name, result.ID)
+	if result.SFTPUsername != "" && result.SFTPPassword != "" {
+		fmt.Printf("SFTP username: %s\n", result.SFTPUsername)
+		fmt.Printf("SFTP password: %s (will not be shown again)\n", result.SFTPPassword)
 	}
 	return nil
 }
@@ -249,13 +206,13 @@ var deleteCmd = &cobra.Command{
 			return nil
 		}
 
-		_, err = apiDelete("/api/gameservers/" + gsID)
+		err = getClient().Gameservers.Delete(ctx(), gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(&apiResponse{Status: "ok"})
+			printJSON(map[string]string{"status": "ok"})
 			return nil
 		}
 
@@ -276,23 +233,23 @@ var editCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		body := map[string]any{"id": gsID}
+		req := &gamejanitor.UpdateGameserverRequest{}
 
 		if cmd.Flags().Changed("name") {
 			v, _ := cmd.Flags().GetString("name")
-			body["name"] = v
+			req.Name = gamejanitor.Ptr(v)
 		}
 		if cmd.Flags().Changed("port") {
 			portFlags, _ := cmd.Flags().GetStringSlice("port")
-			ports, err := parsePorts(portFlags)
+			ports, err := parsePortMappings(portFlags)
 			if err != nil {
 				return exitError(err)
 			}
-			body["ports"] = ports
+			req.Ports = ports
 		}
 		if cmd.Flags().Changed("env") {
 			envFlags, _ := cmd.Flags().GetStringSlice("env")
-			body["env"] = parseEnvFlags(envFlags)
+			req.Env = parseEnvFlags(envFlags)
 		}
 		if cmd.Flags().Changed("memory") {
 			v, _ := cmd.Flags().GetString("memory")
@@ -300,24 +257,24 @@ var editCmd = &cobra.Command{
 			if err != nil {
 				return exitError(err)
 			}
-			body["memory_limit_mb"] = mb
+			req.MemoryLimitMB = gamejanitor.Ptr(mb)
 		}
 		if cmd.Flags().Changed("cpu") {
 			v, _ := cmd.Flags().GetFloat64("cpu")
-			body["cpu_limit"] = v
+			req.CPULimit = gamejanitor.Ptr(v)
 		}
 		if cmd.Flags().Changed("auto-restart") {
 			v, _ := cmd.Flags().GetBool("auto-restart")
-			body["auto_restart"] = v
+			req.AutoRestart = gamejanitor.Ptr(v)
 		}
 
-		resp, err := apiPatch("/api/gameservers/"+gsID, body)
+		result, err := getClient().Gameservers.Update(ctx(), gsID, req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(result)
 			return nil
 		}
 
@@ -371,8 +328,8 @@ func parseMemory(s string) (int, error) {
 	}
 }
 
-func parsePorts(flags []string) ([]map[string]any, error) {
-	var ports []map[string]any
+func parsePortMappings(flags []string) ([]gamejanitor.PortMapping, error) {
+	var ports []gamejanitor.PortMapping
 	for _, f := range flags {
 		proto := "tcp"
 		if idx := strings.LastIndex(f, "/"); idx != -1 {
@@ -394,27 +351,21 @@ func parsePorts(flags []string) ([]map[string]any, error) {
 			return nil, fmt.Errorf("invalid container port %q: %w", parts[2], err)
 		}
 
-		ports = append(ports, map[string]any{
-			"name":           parts[0],
-			"host_port":      hostPort,
-			"container_port": containerPort,
-			"protocol":       proto,
+		ports = append(ports, gamejanitor.PortMapping{
+			Name:          parts[0],
+			HostPort:      hostPort,
+			ContainerPort: containerPort,
+			Protocol:      proto,
 		})
 	}
 	return ports, nil
 }
 
-func cliConnectionAddress(connAddr *string, node *struct {
-	LanIP      string `json:"lan_ip"`
-	ExternalIP string `json:"external_ip"`
-}, portsJSON json.RawMessage) string {
+func cliConnectionAddress(connAddr *string, node *gamejanitor.GameserverNode, ports []gamejanitor.PortMapping) string {
 	if connAddr != nil && *connAddr != "" {
 		return *connAddr
 	}
-	var ports []struct {
-		HostPort int `json:"host_port"`
-	}
-	if err := json.Unmarshal(portsJSON, &ports); err == nil && len(ports) > 0 {
+	if len(ports) > 0 {
 		ip := ""
 		if node != nil {
 			if node.LanIP != "" {

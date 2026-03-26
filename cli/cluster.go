@@ -215,11 +215,10 @@ var clusterListCmd = &cobra.Command{
 		}
 
 		if jsonOutput {
-			out := map[string]any{
+			printJSON(map[string]any{
 				"current":  cfg.Current,
 				"clusters": cfg.Clusters,
-			}
-			printJSONResponse(&apiResponse{Status: "ok", Data: mustMarshal(out)})
+			})
 			return nil
 		}
 
@@ -295,11 +294,10 @@ var clusterCurrentCmd = &cobra.Command{
 		}
 
 		if jsonOutput {
-			out := map[string]any{
+			printJSON(map[string]any{
 				"name":    cfg.Current,
 				"address": c.Address,
-			}
-			printJSONResponse(&apiResponse{Status: "ok", Data: mustMarshal(out)})
+			})
 			return nil
 		}
 

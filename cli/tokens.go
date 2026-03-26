@@ -1,13 +1,13 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/warsmite/gamejanitor/controller/auth"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 )
 
 var tokensCmd = &cobra.Command{
@@ -33,30 +33,15 @@ var tokensListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tokens",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := "/api/tokens"
-		if scope, _ := cmd.Flags().GetString("scope"); scope != "" {
-			path += "?scope=" + scope
-		}
-		resp, err := apiGet(path)
+		scope, _ := cmd.Flags().GetString("scope")
+		tokens, err := getClient().Tokens.List(ctx(), scope)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(tokens)
 			return nil
-		}
-
-		var tokens []struct {
-			ID         string  `json:"id"`
-			Name       string  `json:"name"`
-			Scope      string  `json:"scope"`
-			CreatedAt  string  `json:"created_at"`
-			LastUsedAt *string `json:"last_used_at"`
-			ExpiresAt  *string `json:"expires_at"`
-		}
-		if err := json.Unmarshal(resp.Data, &tokens); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		if len(tokens) == 0 {
@@ -69,14 +54,14 @@ var tokensListCmd = &cobra.Command{
 		for _, t := range tokens {
 			lastUsed := "-"
 			if t.LastUsedAt != nil {
-				lastUsed = *t.LastUsedAt
+				lastUsed = t.LastUsedAt.Format("2006-01-02T15:04:05Z")
 			}
 			expires := "never"
 			if t.ExpiresAt != nil {
-				expires = *t.ExpiresAt
+				expires = t.ExpiresAt.Format("2006-01-02T15:04:05Z")
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				t.ID[:8], t.Name, t.Scope, t.CreatedAt, lastUsed, expires)
+				t.ID[:8], t.Name, t.Scope, t.CreatedAt.Format("2006-01-02T15:04:05Z"), lastUsed, expires)
 		}
 		w.Flush()
 		return nil
@@ -95,22 +80,16 @@ var tokensCreateCmd = &cobra.Command{
 		scope, _ := cmd.Flags().GetString("scope")
 
 		if scope == "worker" {
-			resp, err := apiPost("/api/tokens", map[string]any{"name": name, "scope": "worker"})
+			result, err := getClient().Tokens.Create(ctx(), &gamejanitor.CreateTokenRequest{
+				Name:  name,
+				Scope: "worker",
+			})
 			if err != nil {
 				return exitError(err)
 			}
 			if jsonOutput {
-				printJSONResponse(resp)
+				printJSON(result)
 				return nil
-			}
-			var result struct {
-				Token   string `json:"token"`
-				TokenID string `json:"token_id"`
-				Name    string `json:"name"`
-				Exists  bool   `json:"exists"`
-			}
-			if err := json.Unmarshal(resp.Data, &result); err != nil {
-				return fmt.Errorf("parsing response: %w", err)
 			}
 			if result.Exists {
 				fmt.Fprintf(os.Stderr, "Worker token %q already exists (id: %s)\n", result.Name, result.TokenID)
@@ -136,33 +115,24 @@ var tokensCreateCmd = &cobra.Command{
 			gameserverIDs = append(gameserverIDs, id)
 		}
 
-		body := map[string]any{
-			"name":           name,
-			"scope":          scope,
-			"gameserver_ids": gameserverIDs,
-			"permissions":    permissions,
+		req := &gamejanitor.CreateTokenRequest{
+			Name:          name,
+			Scope:         scope,
+			GameserverIDs: gameserverIDs,
+			Permissions:   permissions,
 		}
 		if expiresIn != "" {
-			body["expires_in"] = expiresIn
+			req.ExpiresIn = expiresIn
 		}
 
-		resp, err := apiPost("/api/tokens", body)
+		result, err := getClient().Tokens.Create(ctx(), req)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(result)
 			return nil
-		}
-
-		var result struct {
-			Token   string `json:"token"`
-			TokenID string `json:"token_id"`
-			Name    string `json:"name"`
-		}
-		if err := json.Unmarshal(resp.Data, &result); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		fmt.Fprintf(os.Stderr, "Token %q created (id: %s)\n", result.Name, result.TokenID)
@@ -196,16 +166,9 @@ var tokensRotateCmd = &cobra.Command{
 		}
 
 		// Resolve worker token name to ID
-		listResp, err := apiGet("/api/tokens?scope=worker")
+		tokens, err := getClient().Tokens.List(ctx(), "worker")
 		if err != nil {
 			return exitError(err)
-		}
-		var tokens []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(listResp.Data, &tokens); err != nil {
-			return fmt.Errorf("parsing token list: %w", err)
 		}
 		var tokenID string
 		for _, t := range tokens {
@@ -218,23 +181,14 @@ var tokensRotateCmd = &cobra.Command{
 			return exitError(fmt.Errorf("worker token %q not found", name))
 		}
 
-		resp, err := apiPost("/api/tokens/"+tokenID+"/rotate", nil)
+		result, err := getClient().Tokens.Rotate(ctx(), tokenID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSON(result)
 			return nil
-		}
-
-		var result struct {
-			Token   string `json:"token"`
-			TokenID string `json:"token_id"`
-			Name    string `json:"name"`
-		}
-		if err := json.Unmarshal(resp.Data, &result); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
 		}
 
 		fmt.Fprintf(os.Stderr, "Worker token %q rotated (new id: %s)\n", result.Name, result.TokenID)
@@ -254,7 +208,7 @@ var tokensDeleteCmd = &cobra.Command{
 			return nil
 		}
 
-		_, err := apiDelete("/api/tokens/" + args[0])
+		err := getClient().Tokens.Delete(ctx(), args[0])
 		if err != nil {
 			return exitError(err)
 		}
