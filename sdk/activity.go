@@ -5,14 +5,14 @@ import (
 	"net/url"
 )
 
-// OperationService handles activity-related API calls.
-// Kept as OperationService for backward compatibility in the SDK.
-type OperationService struct {
+// ActivityService handles activity-related API calls.
+// Kept as ActivityService for backward compatibility in the SDK.
+type ActivityService struct {
 	client *Client
 }
 
-// OperationListOptions configures filters for listing activities.
-type OperationListOptions struct {
+// ActivityListOptions configures filters for listing activities.
+type ActivityListOptions struct {
 	GameserverID string
 	Type         string
 	Status       string // running, completed, failed, abandoned
@@ -20,7 +20,7 @@ type OperationListOptions struct {
 }
 
 // List returns activities matching the given filters.
-func (s *OperationService) List(ctx context.Context, opts *OperationListOptions) ([]Activity, error) {
+func (s *ActivityService) List(ctx context.Context, opts *ActivityListOptions) ([]Activity, error) {
 	v := url.Values{}
 	if opts != nil {
 		if opts.GameserverID != "" {
@@ -49,11 +49,11 @@ func (s *OperationService) List(ctx context.Context, opts *OperationListOptions)
 }
 
 // ListByGameserver is a convenience method to list activities for a specific gameserver.
-func (s *OperationService) ListByGameserver(ctx context.Context, gameserverID string) ([]Activity, error) {
-	return s.List(ctx, &OperationListOptions{GameserverID: gameserverID})
+func (s *ActivityService) ListByGameserver(ctx context.Context, gameserverID string) ([]Activity, error) {
+	return s.List(ctx, &ActivityListOptions{GameserverID: gameserverID})
 }
 
 // Running returns all currently running activities.
-func (s *OperationService) Running(ctx context.Context) ([]Activity, error) {
-	return s.List(ctx, &OperationListOptions{Status: "running"})
+func (s *ActivityService) Running(ctx context.Context) ([]Activity, error) {
+	return s.List(ctx, &ActivityListOptions{Status: "running"})
 }
