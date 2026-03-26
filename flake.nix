@@ -163,12 +163,9 @@
           '';
 
           loc = pkgs.writeShellScriptBin "loc" ''
-            echo "=== Go ==="
-            find . -name '*.go' -not -path './vendor/*' -not -path './node_modules/*' | xargs wc -l | tail -1
-            echo "=== TypeScript/JSX ==="
-            find ./ui/src -name '*.ts' -o -name '*.tsx' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1
-            echo "=== Total ==="
-            find . \( -name '*.go' -o -name '*.ts' -o -name '*.tsx' \) -not -path './vendor/*' -not -path './node_modules/*' | xargs wc -l | tail -1
+            ${pkgs.tokei}/bin/tokei . \
+              --exclude vendor --exclude node_modules --exclude 'worker/pb/*.go' \
+              --types Go,TypeScript,TSX,CSS,HTML,Nix,YAML,Protobuf,SQL,Shell
           '';
 
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
