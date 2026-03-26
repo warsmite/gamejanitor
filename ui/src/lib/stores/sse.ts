@@ -1,6 +1,7 @@
 // Single SSE connection to /api/events.
 // Components subscribe to filtered events. Reconnects with backoff on failure.
 
+import { basePath } from '../base';
 import { toast } from './toasts';
 
 type EventCallback = (data: any) => void;
@@ -22,7 +23,7 @@ const maxBackoff = 30000;
 export function connect() {
   if (eventSource) return;
 
-  eventSource = new EventSource('/api/events');
+  eventSource = new EventSource(basePath + '/api/events');
 
   eventSource.onopen = () => {
     backoff = 1000; // reset on successful connect
@@ -75,8 +76,8 @@ export function connect() {
       try {
         const data = JSON.parse(e.data);
         dispatch(type, data);
-      } catch {
-        // ignore malformed events
+      } catch (err) {
+        console.warn('sse: malformed event data for', type, err);
       }
     });
   }
@@ -91,7 +92,7 @@ export function disconnect() {
 function dispatch(type: string | null, data: any) {
   // Parse if string
   if (typeof data === 'string') {
-    try { data = JSON.parse(data); } catch { return; }
+    try { data = JSON.parse(data); } catch (e) { console.warn('sse: failed to parse event data', e); return; }
   }
 
   const eventType = type || data?.type;

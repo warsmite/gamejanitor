@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import { onMount, onDestroy, tick } from 'svelte';
   import { api } from '$lib/api';
   import { toast } from '$lib/stores';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
 
   let lines = $state<string[]>([]);
   let command = $state('');
@@ -19,11 +18,11 @@
   onMount(async () => {
     // Load initial logs
     try {
-      const result = await api.gameservers.logs(gsId, 200);
+      const result = await api.gameservers.logs(id, 200);
       lines = result.lines || [];
       await tick();
       scrollToBottom();
-    } catch { /* server may not be running */ }
+    } catch (e) { console.warn('Console: failed to load initial logs', e); }
 
     // Poll for new logs (SSE doesn't stream log lines, only events)
     pollInterval = setInterval(fetchLogs, 2000);
@@ -38,7 +37,7 @@
 
   async function fetchLogs() {
     try {
-      const result = await api.gameservers.logs(gsId, 200);
+      const result = await api.gameservers.logs(id, 200);
       if (result.lines && result.lines.length > 0) {
         const newLines = result.lines;
         // Only update if content changed
@@ -50,7 +49,7 @@
           }
         }
       }
-    } catch { /* ignore — server may be offline */ }
+    } catch (e) { console.warn('Console: failed to fetch logs', e); }
   }
 
   function scrollToBottom() {
@@ -74,7 +73,7 @@
     command = '';
 
     try {
-      await api.gameservers.command(gsId, cmd);
+      await api.gameservers.command(id, cmd);
     } catch (e: any) {
       toast(`Command failed: ${e.message}`, 'error');
     }

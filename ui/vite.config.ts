@@ -1,8 +1,13 @@
-import { sveltekit } from '@sveltejs/kit/vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [sveltekit()],
+  plugins: [svelte()],
+  resolve: {
+    alias: {
+      '$lib': '/src/lib',
+    },
+  },
   server: {
     proxy: {
       // SSE endpoint needs special handling — disable buffering
@@ -29,5 +34,8 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  build: {
+    outDir: 'dist',
   },
 });

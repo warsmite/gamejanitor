@@ -75,7 +75,7 @@ class GameserverStore {
       const backups = await api.backups.list(gsId);
       const state = this.gameservers[gsId];
       if (state) state.backups = backups || [];
-    } catch { /* non-fatal */ }
+    } catch (e) { console.warn('gameserverStore: failed to load backups', e); }
   }
 
   async loadSchedules(gsId: string) {
@@ -83,7 +83,7 @@ class GameserverStore {
       const schedules = await api.schedules.list(gsId);
       const state = this.gameservers[gsId];
       if (state) state.schedules = schedules || [];
-    } catch { /* non-fatal */ }
+    } catch (e) { console.warn('gameserverStore: failed to load schedules', e); }
   }
 
   // ── Lifecycle ──
@@ -111,13 +111,13 @@ class GameserverStore {
           this.fetchLogs(gs.id);
         }
         if (gs.status === 'running' || gs.status === 'started') {
-          api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch(() => {});
-          api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch(() => {});
+          api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
+          api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.status(gs.id).then(s => {
             if (s?.container?.started_at && this.gameservers[gs.id]) {
               this.gameservers[gs.id].containerStartedAt = s.container.started_at;
             }
-          }).catch(() => {});
+          }).catch((e) => { console.warn('gameserverStore:', e); });
         }
       }
 
@@ -214,7 +214,7 @@ class GameserverStore {
           if (this.gameservers[gs.id]) {
             this.gameservers[gs.id].gameserver = gs;
           }
-        }).catch(() => {});
+        }).catch((e) => { console.warn('gameserverStore:', e); });
       }
 
       // Refresh log tail
@@ -282,7 +282,7 @@ class GameserverStore {
       if (data.gameserver_id && !this.gameservers[data.gameserver_id]) {
         api.gameservers.get(data.gameserver_id).then(gs => {
           this.gameservers[gs.id] = this.newState(gs);
-        }).catch(() => {});
+        }).catch((e) => { console.warn('gameserverStore:', e); });
       }
     }));
 
@@ -324,7 +324,7 @@ class GameserverStore {
       if (state && r?.lines) {
         state.logLines = r.lines.slice(-4);
       }
-    }).catch(() => {});
+    }).catch((e) => { console.warn('gameserverStore:', e); });
   }
 }
 

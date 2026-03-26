@@ -30,7 +30,7 @@
       if (ports && ports.length > 0) {
         return `${ports[0].host_port || ports[0].container_port}`;
       }
-    } catch {}
+    } catch (e) { console.warn('Dashboard: failed to parse ports', e); }
     return '';
   }
 
@@ -47,7 +47,7 @@
 <main>
   <div class="page-header">
     <h1>Gameservers</h1>
-    <a href="/gameservers/new" class="btn-new">
+    <a href="#/gameservers/new" class="btn-new">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
       New
     </a>
@@ -84,7 +84,7 @@
       </div>
       <h2>No gameservers yet</h2>
       <p>Create your first gameserver to get started. Pick a game, name it, and you're live in minutes.</p>
-      <a href="/gameservers/new" class="btn-solid">
+      <a href="#/gameservers/new" class="btn-solid">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
         Create Gameserver
       </a>

@@ -1,22 +1,23 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
   import { api } from '$lib/api';
   import { gameserverStore, formatUptime, operationLabels, toast } from '$lib/stores';
   import { GameIcon, StatusPill } from '$lib/components';
+  import { getRoute, navigate } from '$lib/router';
+  import type { Snippet } from 'svelte';
 
-  let { children } = $props();
+  let { id, children }: { id: string; children: Snippet } = $props();
 
-  const gsId = $derived($page.params.id as string);
-  const currentPath = $derived($page.url.pathname);
+  const route = $derived(getRoute());
+  const currentPath = $derived(route.path);
 
-  const gsState = $derived(gameserverStore.getState(gsId));
+  const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
   const activeOperation = $derived(gsState?.activeOperation ?? null);
 
-  const isRunning = $derived(gameserverStore.isRunning(gsId));
-  const isStopped = $derived(gameserverStore.isStopped(gsId));
+  const isRunning = $derived(gameserverStore.isRunning(id));
+  const isStopped = $derived(gameserverStore.isStopped(id));
   const isTransitioning = $derived(() => {
     const s = gameserver?.status;
     return s === 'starting' || s === 'installing' || s === 'stopping';
@@ -29,10 +30,11 @@
   $effect(() => {
     if (gameserverStore.initialized && !gsState && !notFound) {
       // Try fetching directly
-      api.gameservers.get(gsId).then(gs => {
+      api.gameservers.get(id).then(() => {
         // Shouldn't normally happen — store should have it
         // But if it's there, the store's SSE will pick it up
-      }).catch(() => {
+      }).catch((e) => {
+        console.warn('Layout: gameserver not found', id, e);
         notFound = true;
       });
     }
@@ -68,23 +70,23 @@
   ]);
 
   function tabHref(tab: typeof tabs[0]) {
-    return `/gameservers/${gsId}${tab.path}`;
+    return `#/gameservers/${id}${tab.path}`;
   }
 
   function isActiveTab(tab: typeof tabs[0]) {
-    const href = tabHref(tab);
+    const base = `/gameservers/${id}`;
     if (tab.path === '') {
-      return currentPath === `/gameservers/${gsId}` || currentPath === `/gameservers/${gsId}/`;
+      return currentPath === base || currentPath === base + '/';
     }
-    return currentPath.startsWith(href);
+    return currentPath.startsWith(base + tab.path);
   }
 
   async function handleAction(action: string) {
     if (!gameserver) return;
     try {
-      if (action === 'start') await api.gameservers.start(gsId);
-      else if (action === 'stop') await api.gameservers.stop(gsId);
-      else if (action === 'restart') await api.gameservers.restart(gsId);
+      if (action === 'start') await api.gameservers.start(id);
+      else if (action === 'stop') await api.gameservers.stop(id);
+      else if (action === 'restart') await api.gameservers.restart(id);
     } catch (e: any) {
       toast(`Failed to ${action}: ${e.message}`, 'error');
     }
@@ -92,7 +94,7 @@
 </script>
 
 <main>
-  <a href="/" class="breadcrumb">
+  <a href="#/" class="breadcrumb">
     <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
     Gameservers
   </a>
@@ -102,7 +104,7 @@
   {:else if notFound}
     <div class="error-text">
       <p>Gameserver not found.</p>
-      <a href="/" class="btn-accent">Back to Dashboard</a>
+      <a href="#/" class="btn-accent">Back to Dashboard</a>
     </div>
   {:else if gameserver}
     <!-- Server Header -->

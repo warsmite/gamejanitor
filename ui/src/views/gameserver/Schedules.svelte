@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  
   import { onMount } from 'svelte';
   import { api, type Schedule } from '$lib/api';
   import { gameserverStore, toast, confirm } from '$lib/stores';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
+  const gsId = id;
 
   // Read schedules from store — SSE keeps them updated
   const gsState = $derived(gameserverStore.getState(gsId));

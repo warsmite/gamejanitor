@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { navigate } from '$lib/router';
   import { api, type Game, type DynamicOption } from '$lib/api';
   import { toast } from '$lib/stores';
   import { GameIcon, GameserverForm } from '$lib/components';
@@ -42,7 +42,7 @@
     try {
       const [gameList, settings] = await Promise.all([
         api.games.list(),
-        api.settings.get().catch(() => null),
+        api.settings.get().catch((e) => { console.warn('NewGameserver: failed to load settings', e); return null; }),
       ]);
       games = gameList;
       if (settings?.max_backups) globalMaxBackups = settings.max_backups;
@@ -96,8 +96,8 @@
     try {
       const opts = await api.games.options(gameId, key);
       dynamicOptions[key] = opts;
-    } catch {
-      // Silently fail — the select will just show the default
+    } catch (e) {
+      console.warn('NewGameserver: failed to load dynamic options for', key, e);
     }
   }
 
@@ -138,7 +138,7 @@
       };
 
       if (autoStart) {
-        api.gameservers.start(result.id).catch(() => {});
+        api.gameservers.start(result.id).catch((e) => { console.warn('NewGameserver: failed to auto-start', e); });
       }
     } catch (e: any) {
       toast(`Failed to create server: ${e.message}`, 'error');
@@ -158,7 +158,7 @@
 </script>
 
 <main>
-  <a href="/" class="breadcrumb">
+  <a href="#/" class="breadcrumb">
     <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
     Gameservers
   </a>
@@ -257,7 +257,7 @@
 
   <!-- SFTP password modal -->
   {#if createdServer}
-    <div class="modal-overlay" onclick={() => goto(`/gameservers/${createdServer?.id}`)}>
+    <div class="modal-overlay" onclick={() => navigate(`/gameservers/${createdServer?.id}`)}>
       <div class="modal" onclick={(e) => e.stopPropagation()}>
         <div class="modal-title">Gameserver Created</div>
         <p class="modal-text">Your SFTP credentials are below. <strong>Save the password now</strong> — it cannot be retrieved later.</p>
@@ -277,7 +277,7 @@
           <button class="btn-accent" onclick={copySftpPassword}>
             {sftpCopied ? 'Copied!' : 'Copy Password'}
           </button>
-          <button class="btn-solid" onclick={() => goto(`/gameservers/${createdServer?.id}`)}>
+          <button class="btn-solid" onclick={() => navigate(`/gameservers/${createdServer?.id}`)}>
             Go to Server
           </button>
         </div>

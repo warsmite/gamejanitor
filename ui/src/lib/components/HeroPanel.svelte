@@ -36,7 +36,7 @@
   );
 </script>
 
-<div class="hero" class:running={isRunning} class:stopped={isStopped} onclick={() => window.location.href = `/gameservers/${gameserver.id}`} onkeydown={(e) => e.key === 'Enter' && (window.location.href = `/gameservers/${gameserver.id}`)} role="link" tabindex="0">
+<div class="hero" class:running={isRunning} class:stopped={isStopped} onclick={() => window.location.hash = `/gameservers/${gameserver.id}`} onkeydown={(e) => e.key === 'Enter' && (window.location.hash = `/gameservers/${gameserver.id}`)} role="link" tabindex="0">
   <!-- Identity + status -->
   <div class="head">
     <div class="id-left">
@@ -89,7 +89,7 @@
 
     <!-- Log preview -->
     {#if logLines.length > 0}
-      <a href="/gameservers/{gameserver.id}/console" class="log-preview" onclick={(e) => e.stopPropagation()}>
+      <a href="#/gameservers/{gameserver.id}/console" class="log-preview" onclick={(e) => e.stopPropagation()}>
         {#each logLines as line}
           <div class="log-line">{line}</div>
         {/each}
@@ -117,10 +117,10 @@
       {/if}
     </div>
     <div class="shortcuts">
-      <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
-      <a href="/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
-      <a href="/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
-      <a href="/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
+      <a href="#/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
+      <a href="#/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
+      <a href="#/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
+      <a href="#/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
     </div>
   </div>
 </div>

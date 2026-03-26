@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { api, type Backup } from '$lib/api';
   import { gameserverStore, toast, confirm } from '$lib/stores';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
 
   // Read backups from store — SSE keeps them updated
-  const gsState = $derived(gameserverStore.getState(gsId));
+  const gsState = $derived(gameserverStore.getState(id));
   const backups = $derived(gsState?.backups ?? []);
   const loading = $derived(gsState?.backups === null);
   let creating = $state(false);
@@ -21,14 +20,14 @@
   onMount(() => {
     // Trigger lazy load if not already loaded
     if (gsState?.backups === null) {
-      gameserverStore.loadBackups(gsId);
+      gameserverStore.loadBackups(id);
     }
   });
 
   async function createBackup() {
     creating = true;
     try {
-      await api.backups.create(gsId);
+      await api.backups.create(id);
       // SSE will refresh the list via store
     } catch (e: any) {
       toast(`Failed to create backup: ${e.message}`, 'error');
@@ -40,7 +39,7 @@
   async function restoreBackup(backup: Backup) {
     if (!await confirm({ title: 'Restore Backup', message: `Restore from "${backup.name}"? This will overwrite all current server data. There is no rollback.`, confirmLabel: 'Restore', danger: true })) return;
     try {
-      await api.backups.restore(gsId, backup.id);
+      await api.backups.restore(id, backup.id);
       toast('Restore started', 'info');
     } catch (e: any) {
       toast(`Failed to restore: ${e.message}`, 'error');
@@ -48,14 +47,14 @@
   }
 
   function downloadBackup(backup: Backup) {
-    const url = api.backups.downloadUrl(gsId, backup.id);
+    const url = api.backups.downloadUrl(id, backup.id);
     window.open(url, '_blank');
   }
 
   async function deleteBackup(backup: Backup) {
     if (!await confirm({ title: 'Delete Backup', message: `Delete backup "${backup.name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     try {
-      await api.backups.delete(gsId, backup.id);
+      await api.backups.delete(id, backup.id);
       // SSE will refresh the list via store
     } catch (e: any) {
       toast(`Failed to delete: ${e.message}`, 'error');

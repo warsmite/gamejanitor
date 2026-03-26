@@ -1,24 +1,18 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
   import { api, type FileEntry } from '$lib/api';
   import { toast, confirm, prompt } from '$lib/stores';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
 
-  // URL is the source of truth for navigation
-  const urlPath = $derived($page.url.searchParams.get('path') || '/');
-  const urlEdit = $derived($page.url.searchParams.get('edit') === '1');
-  const currentPath = $derived(urlEdit ? (urlPath.split('/').slice(0, -1).join('/') || '/') : urlPath);
-
-  let files = $state<FileEntry[]>([]);
-  let loading = $state(true);
-
-  // Editor state
+  // Local state replaces URL search params for file navigation
+  let currentPath = $state('/');
   let editing = $state(false);
   let editPath = $state('');
   let editContent = $state('');
   let editSaving = $state(false);
+
+  let files = $state<FileEntry[]>([]);
+  let loading = $state(true);
 
   // Rename state
   let renamingFile = $state('');
@@ -55,40 +49,19 @@
     })
   );
 
-  // React to URL changes (including browser back/forward)
-  let lastSyncedUrl = '';
+  // Load files on mount and when path changes
+  let lastLoadedPath = '';
   $effect(() => {
-    const key = currentPath + (urlEdit ? ':edit:' + urlPath : '');
-    if (key === lastSyncedUrl) return;
-    lastSyncedUrl = key;
-
-    if (urlEdit) {
-      // Open editor for the file in urlPath
-      const fileName = urlPath.split('/').pop()!;
-      loadFilesAndEdit(fileName);
-    } else {
-      editing = false;
+    if (currentPath !== lastLoadedPath && !editing) {
+      lastLoadedPath = currentPath;
       loadFiles();
     }
   });
 
-  async function loadFilesAndEdit(fileName: string) {
-    await loadFiles();
-    const path = currentPath === '/' ? `/${fileName}` : `${currentPath}/${fileName}`;
-    try {
-      const result = await api.files.read(gsId, apiPath(path));
-      editPath = path;
-      editContent = result.content;
-      editing = true;
-    } catch (e: any) {
-      toast(`Failed to read file: ${e.message}`, 'error');
-    }
-  }
-
   async function loadFiles() {
     loading = true;
     try {
-      files = (await api.files.list(gsId, apiPath(currentPath))) || [];
+      files = (await api.files.list(id, apiPath(currentPath))) || [];
     } catch (e: any) {
       toast(`Failed to load files: ${e.message}`, 'error');
       files = [];
@@ -99,14 +72,8 @@
 
   function navigateTo(path: string) {
     renamingFile = '';
-    const url = new URL($page.url);
-    url.searchParams.delete('edit');
-    if (path === '/') {
-      url.searchParams.delete('path');
-    } else {
-      url.searchParams.set('path', path);
-    }
-    goto(url.pathname + url.search, { noScroll: true, keepFocus: true });
+    editing = false;
+    currentPath = path;
   }
 
   function openDir(name: string) {
@@ -114,28 +81,26 @@
     navigateTo(newPath);
   }
 
-  function goUp() {
-    if (currentPath === '/') return;
-    const parent = currentPath.split('/').slice(0, -1).join('/') || '/';
-    navigateTo(parent);
-  }
-
   function filePath(name: string): string {
     return currentPath === '/' ? `/${name}` : `${currentPath}/${name}`;
   }
 
-  function openEditor(name: string) {
+  async function openEditor(name: string) {
     const path = filePath(name);
-    const url = new URL($page.url);
-    url.searchParams.set('path', path);
-    url.searchParams.set('edit', '1');
-    goto(url.pathname + url.search, { noScroll: true, keepFocus: true });
+    try {
+      const result = await api.files.read(id, apiPath(path));
+      editPath = path;
+      editContent = result.content;
+      editing = true;
+    } catch (e: any) {
+      toast(`Failed to read file: ${e.message}`, 'error');
+    }
   }
 
   async function saveFile() {
     editSaving = true;
     try {
-      await api.files.write(gsId, apiPath(editPath), editContent);
+      await api.files.write(id, apiPath(editPath), editContent);
       toast('File saved', 'success');
     } catch (e: any) {
       toast(`Failed to save: ${e.message}`, 'error');
@@ -145,14 +110,14 @@
   }
 
   function closeEditor() {
-    navigateTo(currentPath);
+    editing = false;
   }
 
   async function deleteFile(name: string, isDir: boolean) {
     const path = filePath(name);
     if (!await confirm({ title: `Delete ${isDir ? 'Directory' : 'File'}`, message: `Delete "${name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     try {
-      await api.files.delete(gsId, apiPath(path));
+      await api.files.delete(id, apiPath(path));
       files = files.filter(f => f.name !== name);
     } catch (e: any) {
       toast(`Failed to delete: ${e.message}`, 'error');
@@ -174,7 +139,7 @@
     const from = filePath(oldName);
     const to = filePath(newName);
     try {
-      await api.files.rename(gsId, apiPath(from), apiPath(to));
+      await api.files.rename(id, apiPath(from), apiPath(to));
       files = files.map(f => f.name === oldName ? { ...f, name: newName } : f);
     } catch (e: any) {
       toast(`Failed to rename: ${e.message}`, 'error');
@@ -186,7 +151,7 @@
     if (!name) return;
     const path = filePath(name);
     try {
-      await api.files.mkdir(gsId, apiPath(path));
+      await api.files.mkdir(id, apiPath(path));
       files = [...files, { name, is_dir: true, size: 0, mod_time: new Date().toISOString(), permissions: '' }];
     } catch (e: any) {
       toast(`Failed to create directory: ${e.message}`, 'error');
@@ -198,7 +163,7 @@
     if (!name) return;
     const path = filePath(name);
     try {
-      await api.files.write(gsId, apiPath(path), '');
+      await api.files.write(id, apiPath(path), '');
       files = [...files, { name, is_dir: false, size: 0, mod_time: new Date().toISOString(), permissions: '' }];
       if (isTextFile(name)) {
         openEditor(name);
@@ -213,7 +178,7 @@
     const file = input.files?.[0];
     if (!file) return;
     try {
-      await api.files.upload(gsId, apiPath(currentPath), file);
+      await api.files.upload(id, apiPath(currentPath), file);
       toast('File uploaded', 'success');
       const existing = files.find(f => f.name === file.name);
       if (existing) {
@@ -229,7 +194,7 @@
 
   function downloadFile(name: string) {
     const path = filePath(name);
-    const url = api.files.downloadUrl(gsId, apiPath(path));
+    const url = api.files.downloadUrl(id, apiPath(path));
     window.open(url, '_blank');
   }
 

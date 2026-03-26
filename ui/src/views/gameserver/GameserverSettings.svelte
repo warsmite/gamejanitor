@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  
+  import { navigate } from '$lib/router';
   import { onMount } from 'svelte';
   import { api, type Gameserver, type Game, type DynamicOption } from '$lib/api';
   import { toast, confirm } from '$lib/stores';
   import { GameIcon, GameserverForm } from '$lib/components';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
+  const gsId = id;
 
   let gameserver = $state<Gameserver | null>(null);
   let game = $state<Game | null>(null);
@@ -63,7 +64,7 @@
             protocol: p.protocol || 'tcp',
           }));
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.warn('GameserverSettings: failed to parse ports', e); }
 
       try {
         game = await api.games.get(gameserver.game_id);
@@ -71,10 +72,10 @@
           if (e.dynamic_options) {
             try {
               dynamicOptions[e.key] = await api.games.options(game.id, e.key);
-            } catch { /* non-fatal */ }
+            } catch (e) { console.warn('GameserverSettings: failed to load dynamic options', e); }
           }
         }
-      } catch { /* game def not found */ }
+      } catch (e) { console.warn('GameserverSettings: game definition not found', e); }
     } catch (e: any) {
       toast(`Failed to load: ${e.message}`, 'error');
     } finally {
@@ -152,7 +153,7 @@
     try {
       await api.gameservers.delete(gsId);
       toast('Gameserver deleted', 'info');
-      goto('/');
+      navigate('/');
     } catch (e: any) {
       toast(`Failed: ${e.message}`, 'error');
     } finally {

@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
   import { api, type Event } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
   import { CopyBlock, TelemetryCell } from '$lib/components';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
 
-  const gsState = $derived(gameserverStore.getState(gsId));
+  const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const stats = $derived(gsState?.stats ?? null);
   const query = $derived(gsState?.query ?? null);
-  const isRunning = $derived(gameserverStore.isRunning(gsId));
+  const isRunning = $derived(gameserverStore.isRunning(id));
 
   const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
 
@@ -33,7 +32,7 @@
       if (ports && ports.length > 0) {
         return `${ports[0].host_port || ports[0].container_port}`;
       }
-    } catch {}
+    } catch (e) { console.warn('Overview: failed to parse ports', e); }
     return '';
   }
 
@@ -44,18 +43,18 @@
   onMount(async () => {
     // Load activity feed
     try {
-      const allEvents = await api.events.history({ gameserver_id: gsId, limit: 40 });
+      const allEvents = await api.events.history({ gameserver_id: id, limit: 40 });
       events = allEvents.filter(e => e.event_type !== 'status_changed').slice(0, 20);
-    } catch { /* non-fatal */ }
+    } catch (e) { console.warn('Overview: failed to load events', e); }
 
     // SSE: activity feed only — stats/query/status handled by store
-    unsub = onGameserverEvent(gsId, (data: any) => {
+    unsub = onGameserverEvent(id, (data: any) => {
       if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
 
       const event: Event = {
         id: crypto.randomUUID(),
         event_type: data.type || 'unknown',
-        gameserver_id: gsId,
+        gameserver_id: id,
         actor: data.actor,
         data: data,
         created_at: new Date().toISOString(),

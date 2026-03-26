@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  
   import { onMount, onDestroy } from 'svelte';
   import { api, type InstalledMod, type ModSearchResult, type ModVersion, type ModSourceInfo } from '$lib/api';
   import { gameserverStore, toast, confirm, onGameserverEvent } from '$lib/stores';
 
-  const gsId = $derived($page.params.id as string);
+  let { id }: { id: string } = $props();
+  const gsId = id;
   const gsState = $derived(gameserverStore.getState(gsId));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
@@ -89,7 +90,7 @@
 
     unsubSSE = onGameserverEvent(gsId, (event) => {
       if (event.type === 'mod.installed' || event.type === 'mod.uninstalled') {
-        api.mods.list(gsId).then(mods => { installed = mods; }).catch(() => {});
+        api.mods.list(gsId).then(mods => { installed = mods; }).catch((e) => { console.warn('Mods: failed to refresh mod list', e); });
       }
     });
   });

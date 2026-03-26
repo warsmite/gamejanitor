@@ -1,6 +1,8 @@
 // Typed API client for the Gamejanitor REST API.
 // Every API call goes through this file — no raw fetch elsewhere.
 
+import { basePath } from './base';
+
 function getToken(): string | null {
   const match = document.cookie.match(/(?:^|; )_token=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -21,7 +23,7 @@ class ApiClientError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: any, query?: Record<string, any>): Promise<T> {
-  let url = path;
+  let url = basePath + path;
   if (query) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) {
@@ -46,8 +48,7 @@ async function request<T>(method: string, path: string, body?: any, query?: Reco
   if (resp.status === 204) return undefined as T;
 
   if (resp.status === 401) {
-    // Auth required but no valid token — redirect to login
-    window.location.href = '/login';
+    console.warn('api: 401 Unauthorized on', method, path);
     throw new ApiClientError(401, 'Unauthorized');
   }
 
@@ -85,10 +86,10 @@ async function putRaw(url: string, content: string): Promise<void> {
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const resp = await fetch(url, { method: 'PUT', headers, body: content });
+  const resp = await fetch(basePath + url, { method: 'PUT', headers, body: content });
   if (resp.status === 204) return;
   if (!resp.ok) {
-    const json = await resp.json().catch(() => ({ error: 'Write failed' }));
+    const json = await resp.json().catch((e) => { console.warn('api: failed to parse write response', e); return { error: 'Write failed' }; });
     throw new ApiClientError(resp.status, json.error || 'Write failed');
   }
 }
@@ -102,9 +103,9 @@ async function uploadFile(path: string, filePath: string, file: File): Promise<v
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const resp = await fetch(path, { method: 'POST', headers, body: form });
+  const resp = await fetch(basePath + path, { method: 'POST', headers, body: form });
   if (!resp.ok) {
-    const json = await resp.json().catch(() => ({ error: 'Upload failed' }));
+    const json = await resp.json().catch((e) => { console.warn('api: failed to parse upload response', e); return { error: 'Upload failed' }; });
     throw new ApiClientError(resp.status, json.error || 'Upload failed');
   }
 }
