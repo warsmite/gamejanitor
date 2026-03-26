@@ -4,6 +4,7 @@
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
   import { CopyBlock, TelemetryCell } from '$lib/components';
+  import { embedded } from '$lib/base';
 
   let { id }: { id: string } = $props();
 
@@ -177,6 +178,12 @@
             <span class="query-val">{query.map}</span>
           </div>
         {/if}
+        {#if !embedded && gameserver.node_id}
+          <div class="query-row">
+            <span class="query-key">Node</span>
+            <span class="query-val query-val-mono">{gameserver.node_id}</span>
+          </div>
+        {/if}
         {#if query?.players && query.players.length > 0}
           <div class="player-grid">
             {#each query.players as player}
@@ -264,6 +271,7 @@
   .query-row + .query-row { border-top: 1px solid var(--border-dim); }
   .query-key { font-size: 0.78rem; color: var(--text-tertiary); }
   .query-val { font-size: 0.82rem; font-family: var(--font-mono); font-weight: 500; }
+  .query-val-mono { font-size: 0.74rem; color: var(--text-tertiary); }
   .query-empty { font-size: 0.78rem; color: var(--text-tertiary); padding: 8px 0; }
 
   .player-grid {
