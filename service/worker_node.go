@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
-	"github.com/warsmite/gamejanitor/validate"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/validate"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -40,7 +40,7 @@ type WorkerView struct {
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
 	Cordoned          bool     `json:"cordoned"`
-	Tags              models.Labels `json:"tags"`
+	Tags              model.Labels `json:"tags"`
 	Status            string   `json:"status"`
 	LastSeen          *string  `json:"last_seen"`
 }
@@ -56,7 +56,7 @@ func (s *WorkerNodeService) List() ([]WorkerView, error) {
 
 	views := make([]WorkerView, 0, len(infos))
 	for _, info := range infos {
-		node, _ := models.GetWorkerNode(s.db, info.ID)
+		node, _ := model.GetWorkerNode(s.db, info.ID)
 		views = append(views, s.buildView(info, gsCount[info.ID], allocMem[info.ID], allocCPU[info.ID], allocStorage[info.ID], node))
 	}
 	return views, nil
@@ -73,7 +73,7 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 	}
 
 	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()
-	node, _ := models.GetWorkerNode(s.db, id)
+	node, _ := model.GetWorkerNode(s.db, id)
 	v := s.buildView(info, gsCount[id], allocMem[id], allocCPU[id], allocStorage[id], node)
 	return &v, nil
 }
@@ -85,7 +85,7 @@ type WorkerNodeUpdate struct {
 	MaxCPU       *float64  `json:"max_cpu,omitempty"`
 	MaxStorageMB *int      `json:"max_storage_mb,omitempty"`
 	Cordoned     *bool     `json:"cordoned,omitempty"`
-	Tags         *models.Labels `json:"tags,omitempty"`
+	Tags         *model.Labels `json:"tags,omitempty"`
 }
 
 func (u *WorkerNodeUpdate) Validate() error {
@@ -102,17 +102,17 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	}
 
 	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
-		if err := models.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
+		if err := model.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
 			return err
 		}
 	}
 	if update.Cordoned != nil {
-		if err := models.SetWorkerNodeCordoned(s.db, id, *update.Cordoned); err != nil {
+		if err := model.SetWorkerNodeCordoned(s.db, id, *update.Cordoned); err != nil {
 			return err
 		}
 	}
 	if update.Tags != nil {
-		if err := models.SetWorkerNodeTags(s.db, id, *update.Tags); err != nil {
+		if err := model.SetWorkerNodeTags(s.db, id, *update.Tags); err != nil {
 			return err
 		}
 	}
@@ -129,7 +129,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	return nil
 }
 
-func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *models.WorkerNode) WorkerView {
+func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *model.WorkerNode) WorkerView {
 	var lastSeen *string
 	if !info.LastSeen.IsZero() {
 		ls := info.LastSeen.UTC().Format(time.RFC3339)
@@ -160,7 +160,7 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 		v.Tags = node.Tags
 	}
 	if v.Tags == nil {
-		v.Tags = models.Labels{}
+		v.Tags = model.Labels{}
 	}
 	return v
 }
@@ -170,7 +170,7 @@ func (s *WorkerNodeService) nodeStats() (gsCount map[string]int, allocMem map[st
 	allocMem = make(map[string]int)
 	allocCPU = make(map[string]float64)
 	allocStorage = make(map[string]int)
-	gameservers, err := models.ListGameservers(s.db, models.GameserverFilter{})
+	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
 	if err != nil {
 		s.log.Error("listing gameservers for worker stats", "error", err)
 		return

@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -142,8 +142,8 @@ func (s *FileService) UploadFile(ctx context.Context, gameserverID string, fileP
 	return s.WriteFile(ctx, gameserverID, filePath, content)
 }
 
-func (s *FileService) getGameserver(gameserverID string) (*models.Gameserver, error) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, error) {
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}

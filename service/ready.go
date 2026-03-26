@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -48,7 +48,7 @@ func (w *ReadyWatcher) SetStatsPoller(sp *StatsPoller) {
 // Watch starts monitoring container logs for the ready pattern.
 // If the game has no ready_pattern, promotes immediately.
 func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID string) {
-	gs, err := models.GetGameserver(w.db, gameserverID)
+	gs, err := model.GetGameserver(w.db, gameserverID)
 	if err != nil || gs == nil {
 		w.log.Error("failed to load gameserver for ready watch", "id", gameserverID, "error", err)
 		return
@@ -173,13 +173,13 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 }
 
 func (w *ReadyWatcher) markInstalled(gameserverID string) {
-	gs, err := models.GetGameserver(w.db, gameserverID)
+	gs, err := model.GetGameserver(w.db, gameserverID)
 	if err != nil || gs == nil {
 		w.log.Error("failed to load gameserver to mark installed", "id", gameserverID, "error", err)
 		return
 	}
 	gs.Installed = true
-	if err := models.UpdateGameserver(w.db, gs); err != nil {
+	if err := model.UpdateGameserver(w.db, gs); err != nil {
 		w.log.Error("failed to mark gameserver as installed", "id", gameserverID, "error", err)
 		return
 	}

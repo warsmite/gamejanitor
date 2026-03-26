@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/naming"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -38,7 +38,7 @@ func operationFailedReason(prefix string, err error) string {
 }
 
 func (s *GameserverService) Start(ctx context.Context, id string) error {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if gs.ContainerID != nil {
 		oldID := *gs.ContainerID
 		gs.ContainerID = nil
-		if err := models.UpdateGameserver(s.db, gs); err != nil {
+		if err := model.UpdateGameserver(s.db, gs); err != nil {
 			s.log.Warn("failed to clear old container ID", "id", id, "error", err)
 		}
 		if err := w.RemoveContainer(ctx, oldID); err != nil {
@@ -145,7 +145,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	// Save container ID (direct DB write — must persist immediately)
 	gs.ContainerID = &containerID
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		w.RemoveContainer(ctx, containerID)
 		return err
 	}
@@ -168,7 +168,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) Stop(ctx context.Context, id string) error {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	}
 
 	// Clear container ID (direct DB write)
-	gs, err = models.GetGameserver(s.db, id)
+	gs, err = model.GetGameserver(s.db, id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 	}
@@ -211,7 +211,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.ContainerID = nil
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		return err
 	}
 
@@ -221,7 +221,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) Restart(ctx context.Context, id string) error {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (err error) {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 }
 
 func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error) {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -376,7 +376,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	w := s.dispatcher.WorkerFor(id)
 
 	gs.Installed = false
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
 	}
 
@@ -427,7 +427,7 @@ type portMapping struct {
 	Protocol      string  `json:"protocol"`
 }
 
-func mergeEnv(game *games.Game, gs *models.Gameserver) ([]string, error) {
+func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 	env := make(map[string]string)
 	systemKeys := make(map[string]bool)
 
@@ -488,7 +488,7 @@ func mergeEnv(game *games.Game, gs *models.Gameserver) ([]string, error) {
 	return result, nil
 }
 
-func parseGameserverPorts(gs *models.Gameserver) ([]worker.PortBinding, error) {
+func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 	var ports []portMapping
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return nil, fmt.Errorf("parsing gameserver ports: %w", err)

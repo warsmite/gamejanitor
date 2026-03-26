@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -17,11 +17,11 @@ func TestSchedule_Create_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID,
 		Name:         "daily-restart",
 		Type:         "restart",
@@ -40,11 +40,11 @@ func TestSchedule_Create_InvalidCron(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID,
 		Name:         "bad-cron",
 		Type:         "restart",
@@ -62,12 +62,12 @@ func TestSchedule_List_ByGameserver(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
 	for _, name := range []string{"sched-1", "sched-2"} {
-		sched := &models.Schedule{
+		sched := &model.Schedule{
 			GameserverID: gs.ID, Name: name, Type: "restart",
 			CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true,
 		}
@@ -85,11 +85,11 @@ func TestSchedule_Delete_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID, Name: "to-delete", Type: "restart",
 		CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true,
 	}
@@ -109,11 +109,11 @@ func TestSchedule_Create_InvalidType(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{Name: "Type Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Type Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID, Name: "bad-type", Type: "invalid_type",
 		CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true,
 	}

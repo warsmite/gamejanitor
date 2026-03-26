@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 )
 
@@ -17,7 +17,7 @@ func TestPermission_HasPermission_NilToken_ReturnsFalse(t *testing.T) {
 
 func TestPermission_HasPermission_AdminScope_AlwaysTrue(t *testing.T) {
 	t.Parallel()
-	token := &models.Token{
+	token := &model.Token{
 		Scope:         "admin",
 		GameserverIDs: json.RawMessage(`[]`),
 		Permissions:   json.RawMessage(`[]`),
@@ -29,7 +29,7 @@ func TestPermission_HasPermission_AdminScope_AlwaysTrue(t *testing.T) {
 
 func TestPermission_HasPermission_CustomScope_ChecksGameserverIDs(t *testing.T) {
 	t.Parallel()
-	token := &models.Token{
+	token := &model.Token{
 		Scope:         "custom",
 		GameserverIDs: json.RawMessage(`["gs-1","gs-2"]`),
 		Permissions:   json.RawMessage(`["gameserver.start"]`),
@@ -41,7 +41,7 @@ func TestPermission_HasPermission_CustomScope_ChecksGameserverIDs(t *testing.T) 
 
 func TestPermission_HasPermission_CustomScope_EmptyIDs_AllAccess(t *testing.T) {
 	t.Parallel()
-	token := &models.Token{
+	token := &model.Token{
 		Scope:         "custom",
 		GameserverIDs: json.RawMessage(`[]`),
 		Permissions:   json.RawMessage(`["gameserver.start"]`),
@@ -51,7 +51,7 @@ func TestPermission_HasPermission_CustomScope_EmptyIDs_AllAccess(t *testing.T) {
 
 func TestPermission_HasPermission_CustomScope_MissingPermission(t *testing.T) {
 	t.Parallel()
-	token := &models.Token{
+	token := &model.Token{
 		Scope:         "custom",
 		GameserverIDs: json.RawMessage(`[]`),
 		Permissions:   json.RawMessage(`["gameserver.start"]`),
@@ -62,9 +62,9 @@ func TestPermission_HasPermission_CustomScope_MissingPermission(t *testing.T) {
 
 func TestPermission_IsAdmin(t *testing.T) {
 	t.Parallel()
-	admin := &models.Token{Scope: "admin"}
-	custom := &models.Token{Scope: "custom"}
-	worker := &models.Token{Scope: "worker"}
+	admin := &model.Token{Scope: "admin"}
+	custom := &model.Token{Scope: "custom"}
+	worker := &model.Token{Scope: "worker"}
 
 	assert.True(t, service.IsAdmin(admin))
 	assert.False(t, service.IsAdmin(custom))

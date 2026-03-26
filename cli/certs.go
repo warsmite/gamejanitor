@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/warsmite/gamejanitor/tlsutil"
+	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/spf13/cobra"
 )
 

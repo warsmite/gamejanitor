@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -17,7 +17,7 @@ func TestResourceEnforcement_MemoryExceedsNodeLimit(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithMaxMemoryMB(1024))
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Too Much Memory",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -34,7 +34,7 @@ func TestResourceEnforcement_CPUExceedsNodeLimit(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithMaxCPU(2.0))
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "Too Much CPU",
 		GameID:   testutil.TestGameID,
 		CPULimit: 4.0,
@@ -52,7 +52,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// First gameserver uses 2048MB — fits
-	gs1 := &models.Gameserver{
+	gs1 := &model.Gameserver{
 		Name:          "First",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -62,7 +62,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second gameserver wants 2048MB — cumulative 4096 > 3000 limit
-	gs2 := &models.Gameserver{
+	gs2 := &model.Gameserver{
 		Name:          "Second",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -81,7 +81,7 @@ func TestResourceEnforcement_RequireMemoryLimitSetting(t *testing.T) {
 	// Enable the require_memory_limit setting
 	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireMemoryLimit, true))
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "No Memory Set",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 0,
@@ -101,7 +101,7 @@ func TestResourceEnforcement_RequireCPULimitSetting(t *testing.T) {
 	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireCPULimit, true))
 
 	// CPU has no game default, so zero stays zero
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "No CPU Set",
 		GameID:   testutil.TestGameID,
 		CPULimit: 0,
@@ -120,7 +120,7 @@ func TestResourceEnforcement_RequireStorageLimitSetting(t *testing.T) {
 
 	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireStorageLimit, true))
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "No Storage Set",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
@@ -135,7 +135,7 @@ func TestResourceEnforcement_ZeroMemoryMeansUnlimited(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Unlimited Memory",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 0,

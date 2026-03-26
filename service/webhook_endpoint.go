@@ -16,7 +16,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // WebhookEndpointService manages webhook endpoint CRUD and test delivery.
@@ -48,7 +48,7 @@ type WebhookEndpointView struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func toEndpointView(e *models.WebhookEndpoint) WebhookEndpointView {
+func toEndpointView(e *model.WebhookEndpoint) WebhookEndpointView {
 	var events []string
 	if err := json.Unmarshal([]byte(e.Events), &events); err != nil {
 		events = []string{}
@@ -66,7 +66,7 @@ func toEndpointView(e *models.WebhookEndpoint) WebhookEndpointView {
 }
 
 func (s *WebhookEndpointService) List() ([]WebhookEndpointView, error) {
-	endpoints, err := models.ListWebhookEndpoints(s.db)
+	endpoints, err := model.ListWebhookEndpoints(s.db)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (s *WebhookEndpointService) List() ([]WebhookEndpointView, error) {
 }
 
 func (s *WebhookEndpointService) Get(id string) (*WebhookEndpointView, error) {
-	ep, err := models.GetWebhookEndpoint(s.db, id)
+	ep, err := model.GetWebhookEndpoint(s.db, id)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ type CreateEndpointResult struct {
 }
 
 func (s *WebhookEndpointService) Create(rawURL, description, secret string, events []string, enabled bool) (*CreateEndpointResult, error) {
-	ep := &models.WebhookEndpoint{
+	ep := &model.WebhookEndpoint{
 		Description: description,
 		URL:         rawURL,
 		Secret:      secret,
@@ -114,7 +114,7 @@ func (s *WebhookEndpointService) Create(rawURL, description, secret string, even
 
 	eventsJSON, _ := json.Marshal(events)
 	ep.Events = string(eventsJSON)
-	if err := models.CreateWebhookEndpoint(s.db, ep); err != nil {
+	if err := model.CreateWebhookEndpoint(s.db, ep); err != nil {
 		return nil, err
 	}
 
@@ -155,7 +155,7 @@ func checkURLReachability(rawURL string) string {
 }
 
 func (s *WebhookEndpointService) Update(id string, description, url, secret *string, events []string, enabled *bool) (*WebhookEndpointView, error) {
-	ep, err := models.GetWebhookEndpoint(s.db, id)
+	ep, err := model.GetWebhookEndpoint(s.db, id)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 		return nil, err
 	}
 
-	if err := models.UpdateWebhookEndpoint(s.db, ep); err != nil {
+	if err := model.UpdateWebhookEndpoint(s.db, ep); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +197,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 }
 
 func (s *WebhookEndpointService) Delete(id string) error {
-	if err := models.DeleteWebhookEndpoint(s.db, id); err != nil {
+	if err := model.DeleteWebhookEndpoint(s.db, id); err != nil {
 		if err == sql.ErrNoRows {
 			return ErrNotFoundf("webhook endpoint %s not found", id)
 		}
@@ -220,7 +220,7 @@ type DeliveryView struct {
 
 func (s *WebhookEndpointService) ListDeliveries(endpointID, state string, limit int) ([]DeliveryView, error) {
 	// Verify endpoint exists
-	ep, err := models.GetWebhookEndpoint(s.db, endpointID)
+	ep, err := model.GetWebhookEndpoint(s.db, endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func (s *WebhookEndpointService) ListDeliveries(endpointID, state string, limit 
 		return nil, ErrNotFoundf("webhook endpoint %s not found", endpointID)
 	}
 
-	deliveries, err := models.ListDeliveriesByEndpoint(s.db, endpointID, state, limit)
+	deliveries, err := model.ListDeliveriesByEndpoint(s.db, endpointID, state, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ type TestResult struct {
 }
 
 func (s *WebhookEndpointService) Test(id string) (*TestResult, error) {
-	ep, err := models.GetWebhookEndpoint(s.db, id)
+	ep, err := model.GetWebhookEndpoint(s.db, id)
 	if err != nil {
 		return nil, err
 	}

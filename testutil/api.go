@@ -14,7 +14,7 @@ type TestAPI struct {
 	Services *ServiceBundle
 }
 
-// NewTestAPI creates a full HTTP test server with the chi router, all middleware, and all handlers.
+// NewTestAPI creates a full HTTP test server with the chi router, all middleware, and all handler.
 // The server is closed when the test finishes.
 func NewTestAPI(t *testing.T) *TestAPI {
 	t.Helper()

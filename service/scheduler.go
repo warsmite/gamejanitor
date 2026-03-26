@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/robfig/cron/v3"
 )
 
@@ -42,13 +42,13 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	s.log.Info("loading schedules into cron")
 
 	// Load all gameservers to iterate their schedules
-	gameservers, err := models.ListGameservers(s.db, models.GameserverFilter{})
+	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
 	if err != nil {
 		return fmt.Errorf("listing gameservers for scheduler: %w", err)
 	}
 
 	for _, gs := range gameservers {
-		schedules, err := models.ListSchedules(s.db, gs.ID)
+		schedules, err := model.ListSchedules(s.db, gs.ID)
 		if err != nil {
 			s.log.Error("listing schedules for gameserver", "gameserver_id", gs.ID, "error", err)
 			continue
@@ -82,14 +82,14 @@ func shouldCatchUp(schedType string) bool {
 func (s *Scheduler) catchUpMissed() {
 	now := time.Now()
 
-	gameservers, err := models.ListGameservers(s.db, models.GameserverFilter{})
+	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
 	if err != nil {
 		s.log.Error("failed to list gameservers for missed schedule check", "error", err)
 		return
 	}
 
 	for _, gs := range gameservers {
-		schedules, err := models.ListSchedules(s.db, gs.ID)
+		schedules, err := model.ListSchedules(s.db, gs.ID)
 		if err != nil {
 			continue
 		}
@@ -132,7 +132,7 @@ func (s *Scheduler) Stop() {
 	s.cron.Stop()
 }
 
-func (s *Scheduler) AddSchedule(schedule models.Schedule) error {
+func (s *Scheduler) AddSchedule(schedule model.Schedule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -153,7 +153,7 @@ func (s *Scheduler) RemoveSchedule(scheduleID string) {
 	}
 }
 
-func (s *Scheduler) UpdateSchedule(schedule models.Schedule) error {
+func (s *Scheduler) UpdateSchedule(schedule model.Schedule) error {
 	s.RemoveSchedule(schedule.ID)
 	if schedule.Enabled {
 		s.mu.Lock()
@@ -164,7 +164,7 @@ func (s *Scheduler) UpdateSchedule(schedule models.Schedule) error {
 }
 
 // addEntry registers a schedule with cron. Must be called with s.mu held.
-func (s *Scheduler) addEntry(schedule models.Schedule) error {
+func (s *Scheduler) addEntry(schedule model.Schedule) error {
 	schedID := schedule.ID
 	entryID, err := s.cron.AddFunc(schedule.CronExpr, func() {
 		s.executeTask(schedID)
@@ -180,7 +180,7 @@ func (s *Scheduler) addEntry(schedule models.Schedule) error {
 	if !entry.Next.IsZero() {
 		nextRun := entry.Next
 		schedule.NextRun = &nextRun
-		if err := models.UpdateSchedule(s.db, &schedule); err != nil {
+		if err := model.UpdateSchedule(s.db, &schedule); err != nil {
 			s.log.Warn("failed to update next_run for schedule", "schedule_id", schedID, "error", err)
 		}
 	}
@@ -190,7 +190,7 @@ func (s *Scheduler) addEntry(schedule models.Schedule) error {
 }
 
 func (s *Scheduler) executeTask(scheduleID string) {
-	schedule, err := models.GetSchedule(s.db, scheduleID)
+	schedule, err := model.GetSchedule(s.db, scheduleID)
 	if err != nil || schedule == nil {
 		s.log.Error("failed to load schedule for execution", "schedule_id", scheduleID, "error", err)
 		return
@@ -268,14 +268,14 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		s.mu.Unlock()
 	}
 
-	if err := models.UpdateSchedule(s.db, schedule); err != nil {
+	if err := model.UpdateSchedule(s.db, schedule); err != nil {
 		s.log.Error("failed to update schedule after execution", "schedule_id", scheduleID, "error", err)
 	}
 }
 
 // RemoveSchedulesByGameserver removes all cron entries for a gameserver.
 func (s *Scheduler) RemoveSchedulesByGameserver(gameserverID string) {
-	schedules, err := models.ListSchedules(s.db, gameserverID)
+	schedules, err := model.ListSchedules(s.db, gameserverID)
 	if err != nil {
 		s.log.Error("listing schedules for removal", "gameserver_id", gameserverID, "error", err)
 		return

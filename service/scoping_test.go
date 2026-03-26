@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -28,11 +28,11 @@ func TestScoping_Backup_CrossAccess_Blocked(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create two gameservers
-	gsA := &models.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &models.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
@@ -69,16 +69,16 @@ func TestScoping_Schedule_CrossAccess_Blocked(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &models.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &models.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
 	// Create schedule on GS-A
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gsA.ID, Name: "test-sched", Type: "restart",
 		CronExpr: "0 0 * * *", Payload: []byte(`{}`), Enabled: true,
 	}
@@ -110,11 +110,11 @@ func TestScoping_ListGameservers_TokenScoped(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &models.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &models.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
@@ -122,13 +122,13 @@ func TestScoping_ListGameservers_TokenScoped(t *testing.T) {
 	scopedCtx := scopedContext(t, svc, []string{"gameserver.start"}, []string{gsA.ID})
 
 	// List with scoped context — only sees GS-A
-	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, models.GameserverFilter{})
+	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gsA.ID, list[0].ID)
 
 	// List with unscoped context — sees both
-	list, err = svc.GameserverSvc.ListGameservers(ctx, models.GameserverFilter{})
+	list, err = svc.GameserverSvc.ListGameservers(ctx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 }
@@ -139,22 +139,22 @@ func TestScoping_ListGameservers_IDsIntersectsTokenScope(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &models.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &models.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
 	// Token scoped to GS-A, but requesting GS-B via ?ids= — should get empty
 	scopedCtx := scopedContext(t, svc, []string{"gameserver.start"}, []string{gsA.ID})
-	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, models.GameserverFilter{IDs: []string{gsB.ID}})
+	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{IDs: []string{gsB.ID}})
 	require.NoError(t, err)
 	assert.Len(t, list, 0)
 
 	// Token scoped to GS-A, requesting GS-A via ?ids= — should get GS-A
-	list, err = svc.GameserverSvc.ListGameservers(scopedCtx, models.GameserverFilter{IDs: []string{gsA.ID}})
+	list, err = svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{IDs: []string{gsA.ID}})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gsA.ID, list[0].ID)

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 	"github.com/warsmite/gamejanitor/worker"
@@ -27,7 +27,7 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Newbie creates a gameserver with minimal info — just name and game
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "My Minecraft Server",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"yes"}`),
@@ -79,7 +79,7 @@ func TestScenario_Newbie_SFTPLogin(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "SFTP Test",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
@@ -89,7 +89,7 @@ func TestScenario_Newbie_SFTPLogin(t *testing.T) {
 
 	// Verify SFTP credentials work against the DB directly
 	// (testing the same path the SFTP server uses)
-	fetched, err := models.GetGameserverBySFTPUsername(svc.DB, gs.SFTPUsername)
+	fetched, err := model.GetGameserverBySFTPUsername(svc.DB, gs.SFTPUsername)
 	require.NoError(t, err)
 	require.NotNil(t, fetched)
 	assert.Equal(t, gs.ID, fetched.ID)
@@ -105,7 +105,7 @@ func TestScenario_Newbie_RegenerateSFTPPassword(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "SFTP Regen",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
@@ -129,7 +129,7 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create on node-us explicitly
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "US Server",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -154,8 +154,8 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create two gameservers
-	gs1 := &models.Gameserver{Name: "Minecraft", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
-	gs2 := &models.Gameserver{Name: "Rust", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs1 := &model.Gameserver{Name: "Minecraft", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs2 := &model.Gameserver{Name: "Rust", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
@@ -195,7 +195,7 @@ func TestScenario_PowerUser_BackupAndSchedule(t *testing.T) {
 	// Wait for completion
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		b, _ := models.GetBackup(svc.DB, backup.ID)
+		b, _ := model.GetBackup(svc.DB, backup.ID)
 		if b != nil && b.Status != "in_progress" {
 			break
 		}
@@ -203,7 +203,7 @@ func TestScenario_PowerUser_BackupAndSchedule(t *testing.T) {
 	}
 
 	// Schedule daily restarts
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID,
 		Name:         "daily-restart",
 		Type:         "restart",
@@ -285,7 +285,7 @@ func TestScenario_Business_ResourceLimitsRequired(t *testing.T) {
 	svc.SettingsSvc.Set(service.SettingRequireStorageLimit, true)
 
 	// Create without limits — should fail
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "No Limits",
 		GameID:   testutil.TestGameID,
 		CPULimit: 0,
@@ -335,7 +335,7 @@ func TestScenario_Business_MultipleWorkersWithCapacityPlanning(t *testing.T) {
 
 	// Fill node-3 (smallest) to capacity by placing explicitly
 	for i := 0; i < 2; i++ {
-		gs := &models.Gameserver{
+		gs := &model.Gameserver{
 			Name:          "Filler",
 			GameID:        testutil.TestGameID,
 			MemoryLimitMB: 4096,
@@ -348,7 +348,7 @@ func TestScenario_Business_MultipleWorkersWithCapacityPlanning(t *testing.T) {
 	}
 
 	// Next gameserver (auto-placed) should NOT go on node-3 (full)
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Should Not Be On Node 3",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 4096,
@@ -378,7 +378,7 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.ContainerID = &containerID
 	fetched.Status = "running"
-	models.UpdateGameserver(svc.DB, fetched)
+	model.UpdateGameserver(svc.DB, fetched)
 
 	// test-game doesn't disable "command" capability, so SendCommand should work
 	_, err = svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")

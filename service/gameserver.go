@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/naming"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -48,7 +48,7 @@ func (s *GameserverService) SetBackupStore(store BackupStore) {
 	s.store = store
 }
 
-func (s *GameserverService) ListGameservers(ctx context.Context, filter models.GameserverFilter) ([]models.Gameserver, error) {
+func (s *GameserverService) ListGameservers(ctx context.Context, filter model.GameserverFilter) ([]model.Gameserver, error) {
 	// Apply token scoping — intersect requested IDs with token's allowed IDs
 	if token := TokenFromContext(ctx); token != nil && !IsAdmin(token) {
 		tokenIDs := AllowedGameserverIDs(token)
@@ -56,21 +56,21 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter models.G
 			filter.IDs = intersectIDs(filter.IDs, tokenIDs)
 			// Empty intersection means the token has no access to the requested IDs
 			if len(filter.IDs) == 0 {
-				return []models.Gameserver{}, nil
+				return []model.Gameserver{}, nil
 			}
 		}
 	}
 
-	gameservers, err := models.ListGameservers(s.db, filter)
+	gameservers, err := model.ListGameservers(s.db, filter)
 	if err != nil {
 		return nil, err
 	}
-	models.PopulateNodes(s.db, gameservers)
+	model.PopulateNodes(s.db, gameservers)
 	return gameservers, nil
 }
 
-func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error) {
-	gs, err := models.GetGameserver(s.db, id)
+func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) {
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil || gs == nil {
 		return gs, err
 	}
@@ -78,7 +78,7 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 	return gs, nil
 }
 
-func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
+func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Gameserver) (string, error) {
 	if err := gs.ValidateCreate(); err != nil {
 		return "", err
 	}
@@ -208,7 +208,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return "", fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
 	}
 
-	if err := models.CreateGameserver(s.db, gs); err != nil {
+	if err := model.CreateGameserver(s.db, gs); err != nil {
 		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
 		}
@@ -229,7 +229,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 }
 
 func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserverID string) (string, error) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return "", err
 	}
@@ -244,7 +244,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 	}
 
 	gs.HashedSFTPPassword = string(hashed)
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		return "", err
 	}
 
@@ -253,7 +253,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 }
 
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.
-func applyGameDefaults(gs *models.Gameserver, game *games.Game) error {
+func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 	// Apply default ports if none provided
 	if len(gs.Ports) == 0 || string(gs.Ports) == "null" || string(gs.Ports) == "[]" {
 		gsPorts := make([]portMapping, len(game.DefaultPorts))
@@ -331,12 +331,12 @@ func generatePassword(length int) (string, error) {
 
 // UpdateGameserver merges provided fields and writes to DB.
 // Returns migrationTriggered=true if resources changed and the server needs to move to a different node.
-func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gameserver) (migrationTriggered bool, err error) {
+func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Gameserver) (migrationTriggered bool, err error) {
 	if err := gs.ValidateUpdate(); err != nil {
 		return false, err
 	}
 
-	existing, err := models.GetGameserver(s.db, gs.ID)
+	existing, err := model.GetGameserver(s.db, gs.ID)
 	if err != nil {
 		return false, err
 	}
@@ -440,7 +440,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 			s.log.Info("auto-migration needed for resource upgrade", "id", existing.ID, "from_node", *existing.NodeID, "to_node", foundNode)
 
 			// Write new values first, then migrate async
-			if err := models.UpdateGameserver(s.db, existing); err != nil {
+			if err := model.UpdateGameserver(s.db, existing); err != nil {
 				return false, err
 			}
 
@@ -459,14 +459,14 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 
 	if !needsMigration {
 		s.log.Info("updating gameserver", "id", gs.ID)
-		if err := models.UpdateGameserver(s.db, existing); err != nil {
+		if err := model.UpdateGameserver(s.db, existing); err != nil {
 			return false, err
 		}
 	}
 
 	if installTriggered {
 		existing.Installed = false
-		if err := models.UpdateGameserver(s.db, existing); err != nil {
+		if err := model.UpdateGameserver(s.db, existing); err != nil {
 			s.log.Error("failed to clear installed flag after env change", "id", gs.ID, "error", err)
 		} else {
 			s.log.Info("install-triggering env var changed, cleared installed flag", "id", gs.ID)
@@ -487,7 +487,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 
 // installTriggeringEnvChanged checks if any env var marked with triggers_install
 // has changed between the existing and updated gameserver.
-func (s *GameserverService) installTriggeringEnvChanged(existing, updated *models.Gameserver) bool {
+func (s *GameserverService) installTriggeringEnvChanged(existing, updated *model.Gameserver) bool {
 	game := s.gameStore.GetGame(existing.GameID)
 	if game == nil {
 		return false
@@ -523,7 +523,7 @@ func (s *GameserverService) installTriggeringEnvChanged(existing, updated *model
 }
 
 func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) error {
-	gs, err := models.GetGameserver(s.db, id)
+	gs, err := model.GetGameserver(s.db, id)
 	if err != nil {
 		return err
 	}
@@ -538,7 +538,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
 		}
 		// Re-read after stop — Stop() clears ContainerID in DB
-		gs, err = models.GetGameserver(s.db, id)
+		gs, err = model.GetGameserver(s.db, id)
 		if err != nil {
 			return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 		}
@@ -571,12 +571,12 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	// List backups before delete — CASCADE will remove DB records,
 	// but we need the IDs to clean up store files afterward.
-	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: id})
+	backups, err := model.ListBackups(s.db, model.BackupFilter{GameserverID: id})
 	if err != nil {
 		s.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
 	}
 
-	if err := models.DeleteGameserver(s.db, id); err != nil {
+	if err := model.DeleteGameserver(s.db, id); err != nil {
 		return err
 	}
 
@@ -599,7 +599,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	return nil
 }
 
-func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *models.Gameserver) error {
+func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *model.Gameserver) error {
 	var env map[string]string
 	if gs.Env != nil {
 		if err := json.Unmarshal(gs.Env, &env); err != nil {

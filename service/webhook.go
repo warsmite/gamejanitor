@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 )
 
@@ -35,7 +35,7 @@ type statusChangedData struct {
 	OldStatus    string             `json:"old_status"`
 	NewStatus    string             `json:"new_status"`
 	ErrorReason  string             `json:"error_reason,omitempty"`
-	Gameserver   *models.Gameserver `json:"gameserver,omitempty"`
+	Gameserver   *model.Gameserver `json:"gameserver,omitempty"`
 }
 
 type WebhookWorker struct {
@@ -99,7 +99,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		return
 	}
 
-	endpoints, err := models.ListEnabledWebhookEndpoints(w.db)
+	endpoints, err := model.ListEnabledWebhookEndpoints(w.db)
 	if err != nil {
 		w.log.Error("webhook: failed to list enabled endpoints", "error", err)
 		return
@@ -113,7 +113,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 	var payloadData any
 	switch ev := event.(type) {
 	case StatusEvent:
-		gs, _ := models.GetGameserver(w.db, ev.GameserverID)
+		gs, _ := model.GetGameserver(w.db, ev.GameserverID)
 		if gs != nil {
 			gs.PopulateNode(w.db)
 		}
@@ -190,7 +190,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		}
 
 		now := time.Now()
-		delivery := &models.WebhookDelivery{
+		delivery := &model.WebhookDelivery{
 			ID:                payload.ID,
 			WebhookEndpointID: ep.ID,
 			EventType:         payload.EventType,
@@ -198,7 +198,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 			NextAttemptAt:     now,
 			CreatedAt:         now,
 		}
-		if err := models.CreateWebhookDelivery(w.db, delivery); err != nil {
+		if err := model.CreateWebhookDelivery(w.db, delivery); err != nil {
 			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
 		}
 	}
@@ -240,7 +240,7 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 			w.processPendingDeliveries()
 
 			if time.Since(lastCleanup) > time.Hour {
-				if pruned, err := models.PruneWebhookDeliveries(w.db); err != nil {
+				if pruned, err := model.PruneWebhookDeliveries(w.db); err != nil {
 					w.log.Error("webhook: failed to prune deliveries", "error", err)
 				} else if pruned > 0 {
 					w.log.Info("webhook: pruned old deliveries", "count", pruned)
@@ -252,19 +252,19 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 }
 
 func (w *WebhookWorker) processPendingDeliveries() {
-	deliveries, err := models.GetPendingDeliveries(w.db, 10)
+	deliveries, err := model.GetPendingDeliveries(w.db, 10)
 	if err != nil {
 		w.log.Error("webhook: failed to fetch pending deliveries", "error", err)
 		return
 	}
 
 	// Cache endpoint lookups within this poll cycle
-	endpointCache := make(map[string]*models.WebhookEndpoint)
+	endpointCache := make(map[string]*model.WebhookEndpoint)
 
 	for _, d := range deliveries {
 		ep, cached := endpointCache[d.WebhookEndpointID]
 		if !cached {
-			ep, err = models.GetWebhookEndpoint(w.db, d.WebhookEndpointID)
+			ep, err = model.GetWebhookEndpoint(w.db, d.WebhookEndpointID)
 			if err != nil {
 				w.log.Error("webhook: failed to fetch endpoint for delivery", "id", d.ID, "endpoint_id", d.WebhookEndpointID, "error", err)
 				continue
@@ -274,7 +274,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 
 		if ep == nil {
 			// Endpoint was deleted but CASCADE didn't clean up (shouldn't happen)
-			if err := models.MarkDeliveryFailed(w.db, d.ID, "endpoint deleted"); err != nil {
+			if err := model.MarkDeliveryFailed(w.db, d.ID, "endpoint deleted"); err != nil {
 				w.log.Error("webhook: failed to mark orphan delivery failed", "id", d.ID, "error", err)
 			}
 			continue
@@ -283,7 +283,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		statusCode, deliverErr := w.deliver(ep.URL, []byte(d.Payload), ep.Secret)
 
 		if deliverErr == nil && statusCode >= 200 && statusCode < 300 {
-			if err := models.MarkDeliverySuccess(w.db, d.ID); err != nil {
+			if err := model.MarkDeliverySuccess(w.db, d.ID); err != nil {
 				w.log.Error("webhook: failed to mark delivery success", "id", d.ID, "error", err)
 			} else {
 				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "response_status", statusCode)
@@ -300,7 +300,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 
 		newAttempts := d.Attempts + 1
 		if newAttempts >= maxDeliveryAttempts {
-			if err := models.MarkDeliveryFailed(w.db, d.ID, errMsg); err != nil {
+			if err := model.MarkDeliveryFailed(w.db, d.ID, errMsg); err != nil {
 				w.log.Error("webhook: failed to mark delivery failed", "id", d.ID, "error", err)
 			}
 			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempts", newAttempts, "last_error", errMsg)
@@ -313,7 +313,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		}
 		nextAttempt := time.Now().Add(time.Duration(backoffSec) * time.Second)
 
-		if err := models.MarkDeliveryRetry(w.db, d.ID, nextAttempt, errMsg); err != nil {
+		if err := model.MarkDeliveryRetry(w.db, d.ID, nextAttempt, errMsg); err != nil {
 			w.log.Error("webhook: failed to mark delivery for retry", "id", d.ID, "error", err)
 		}
 		w.log.Warn("webhook: delivery failed, will retry",

@@ -21,11 +21,11 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
-	"github.com/warsmite/gamejanitor/netinfo"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/service"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
-	"github.com/warsmite/gamejanitor/tlsutil"
+	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/ui"
 	"github.com/warsmite/gamejanitor/worker"
@@ -286,7 +286,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	go func() {
 		retDays := svcs.settingsSvc.GetInt(service.SettingEventRetention)
 		if retDays > 0 {
-			if pruned, err := models.PruneEvents(database, retDays); err != nil {
+			if pruned, err := model.PruneEvents(database, retDays); err != nil {
 				logger.Error("failed to prune events on startup", "error", err)
 			} else if pruned > 0 {
 				logger.Info("pruned old events", "count", pruned, "retention_days", retDays)
@@ -297,7 +297,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		for range ticker.C {
 			days := svcs.settingsSvc.GetInt(service.SettingEventRetention)
 			if days > 0 {
-				if pruned, err := models.PruneEvents(database, days); err != nil {
+				if pruned, err := model.PruneEvents(database, days); err != nil {
 					logger.Error("failed to prune events", "error", err)
 				} else if pruned > 0 {
 					logger.Info("pruned old events", "count", pruned, "retention_days", days)

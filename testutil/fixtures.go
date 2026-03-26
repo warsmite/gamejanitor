@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 )
 
@@ -30,9 +30,9 @@ func PastTime(hours int) time.Time {
 // CreateTestGameserver creates a gameserver with sensible defaults for tests that
 // need one but aren't testing creation itself. Requires a registered worker.
 // The test game definition requires REQUIRED_VAR to be set — this helper provides it.
-func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *models.Gameserver {
+func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *model.Gameserver {
 	t.Helper()
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Test Gameserver",
 		GameID: TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"test-value"}`),

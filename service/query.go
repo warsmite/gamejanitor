@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gjq"
 )
 
@@ -61,7 +61,7 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 // Only collects player/map/version data — does not promote status.
 // No-op for games without query support.
 func (s *QueryService) StartPolling(gameserverID string) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("failed to load gameserver for polling", "id", gameserverID, "error", err)
 		return
@@ -133,7 +133,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	defer ticker.Stop()
 
 	for {
-		gs, err := models.GetGameserver(s.db, gameserverID)
+		gs, err := model.GetGameserver(s.db, gameserverID)
 		if err != nil || gs == nil {
 			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
 			return
@@ -209,7 +209,7 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 	return true
 }
 
-func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
+func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {
 	var ports []struct {
 		Name     string  `json:"name"`
 		HostPort flexInt `json:"host_port"`

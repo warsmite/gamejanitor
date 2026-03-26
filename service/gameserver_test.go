@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -17,7 +17,7 @@ func TestGameserver_Create_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "My Test Server",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
@@ -53,7 +53,7 @@ func TestGameserver_Create_InvalidGameID(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Bad Game",
 		GameID: "nonexistent-game",
 	}
@@ -69,7 +69,7 @@ func TestGameserver_Create_MissingRequiredEnvVar(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Missing Env",
 		GameID: testutil.TestGameID,
 		// REQUIRED_VAR is not set
@@ -86,7 +86,7 @@ func TestGameserver_Create_NoWorkersAvailable(t *testing.T) {
 	// No workers registered
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "No Workers",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
@@ -103,7 +103,7 @@ func TestGameserver_Delete_CascadesCleanup(t *testing.T) {
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "To Delete",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
@@ -136,7 +136,7 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 	ch, unsub := svc.Broadcaster.Subscribe()
 	defer unsub()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Event Test",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),

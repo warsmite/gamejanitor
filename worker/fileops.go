@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/warsmite/gamejanitor/constants"
 )
 
 // volumeResolver maps a volume name to its host filesystem path.
@@ -77,7 +76,7 @@ func writeFileDirect(resolve volumeResolver, ctx context.Context, volumeName str
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
-	return os.Chown(hostPath, constants.GameserverUID, constants.GameserverGID)
+	return os.Chown(hostPath, GameserverUID, GameserverGID)
 }
 
 func deletePathDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) error {

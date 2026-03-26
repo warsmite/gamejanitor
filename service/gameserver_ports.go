@@ -6,19 +6,19 @@ import (
 	"sort"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // UsedHostPorts returns all host ports in use.
 // In cluster scope: checks all nodes (ports are cluster-unique).
 // In node scope: checks only the given node.
 func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
-	var filter models.GameserverFilter
+	var filter model.GameserverFilter
 	if s.settingsSvc.GetString(SettingPortUniqueness) == "node" {
 		filter.NodeID = &nodeID
 	}
 
-	allGS, err := models.ListGameservers(s.db, filter)
+	allGS, err := model.ListGameservers(s.db, filter)
 	if err != nil {
 		return nil, fmt.Errorf("listing gameservers for port check: %w", err)
 	}
@@ -47,13 +47,13 @@ func (s *GameserverService) portRange() (int, int) {
 
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.
 func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int) error {
-	node, err := models.GetWorkerNode(s.db, nodeID)
+	node, err := model.GetWorkerNode(s.db, nodeID)
 	if err != nil || node == nil {
 		return nil // no node record = no limits
 	}
 
 	if node.MaxMemoryMB != nil {
-		allocated, err := models.AllocatedMemoryByNode(s.db, nodeID)
+		allocated, err := model.AllocatedMemoryByNode(s.db, nodeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
@@ -63,7 +63,7 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 	}
 
 	if node.MaxCPU != nil {
-		allocated, err := models.AllocatedCPUByNode(s.db, nodeID)
+		allocated, err := model.AllocatedCPUByNode(s.db, nodeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
@@ -73,7 +73,7 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 	}
 
 	if node.MaxStorageMB != nil && storageNeeded > 0 {
-		allocated, err := models.AllocatedStorageByNode(s.db, nodeID)
+		allocated, err := model.AllocatedStorageByNode(s.db, nodeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
@@ -88,13 +88,13 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 // checkWorkerLimitsExcluding is like checkWorkerLimits but excludes one gameserver's allocation.
 // Used by auto-migration to check if a node can still fit after a resource update.
 func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
-	node, err := models.GetWorkerNode(s.db, nodeID)
+	node, err := model.GetWorkerNode(s.db, nodeID)
 	if err != nil || node == nil {
 		return nil
 	}
 
 	if node.MaxMemoryMB != nil {
-		allocated, err := models.AllocatedMemoryByNodeExcluding(s.db, nodeID, excludeID)
+		allocated, err := model.AllocatedMemoryByNodeExcluding(s.db, nodeID, excludeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
@@ -104,7 +104,7 @@ func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeed
 	}
 
 	if node.MaxCPU != nil {
-		allocated, err := models.AllocatedCPUByNodeExcluding(s.db, nodeID, excludeID)
+		allocated, err := model.AllocatedCPUByNodeExcluding(s.db, nodeID, excludeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
@@ -114,7 +114,7 @@ func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeed
 	}
 
 	if node.MaxStorageMB != nil && storageNeeded > 0 {
-		allocated, err := models.AllocatedStorageByNodeExcluding(s.db, nodeID, excludeID)
+		allocated, err := model.AllocatedStorageByNodeExcluding(s.db, nodeID, excludeID)
 		if err != nil {
 			return fmt.Errorf("checking worker limits: %w", err)
 		}

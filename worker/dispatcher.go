@@ -7,7 +7,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // PlacementCandidate is a worker ranked for gameserver placement.
@@ -59,7 +59,7 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // Scores by minimum headroom percentage across memory and CPU limits.
 // Uses allocated (sum of limits for assigned gameservers), not live usage,
 // to avoid overcommit when stopped servers are started.
-func (d *Dispatcher) RankWorkersForPlacement(requiredLabels models.Labels) []PlacementCandidate {
+func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []PlacementCandidate {
 	workers := d.registry.ListOnlineWorkers()
 	if len(workers) == 0 {
 		d.log.Error("no workers available for gameserver placement")
@@ -71,7 +71,7 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels models.Labels) []Pla
 	for _, info := range workers {
 		// Label filtering: skip workers that don't have all required labels
 		if !requiredLabels.IsEmpty() && d.db != nil {
-			node, err := models.GetWorkerNode(d.db, info.ID)
+			node, err := model.GetWorkerNode(d.db, info.ID)
 			if err != nil || node == nil {
 				continue
 			}
@@ -80,23 +80,23 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels models.Labels) []Pla
 				continue
 			}
 		}
-		allocMem, err := models.AllocatedMemoryByNode(d.db, info.ID)
+		allocMem, err := model.AllocatedMemoryByNode(d.db, info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
-		allocCPU, err := models.AllocatedCPUByNode(d.db, info.ID)
+		allocCPU, err := model.AllocatedCPUByNode(d.db, info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated CPU for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
-		allocStorage, err := models.AllocatedStorageByNode(d.db, info.ID)
+		allocStorage, err := model.AllocatedStorageByNode(d.db, info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated storage for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
 
-		node, _ := models.GetWorkerNode(d.db, info.ID)
+		node, _ := model.GetWorkerNode(d.db, info.ID)
 
 		if node != nil && node.Cordoned {
 			d.log.Debug("skipping cordoned worker for placement", "worker_id", info.ID)
@@ -169,7 +169,7 @@ func (d *Dispatcher) lookupNodeID(gameserverID string) (string, error) {
 	if d.db == nil {
 		return "", nil
 	}
-	gs, err := models.GetGameserver(d.db, gameserverID)
+	gs, err := model.GetGameserver(d.db, gameserverID)
 	if err != nil {
 		return "", fmt.Errorf("looking up node_id for gameserver %s: %w", gameserverID, err)
 	}

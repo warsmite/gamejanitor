@@ -7,14 +7,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 )
 
 // MigrateGameserver moves a gameserver from its current node to a different node.
 // Requires both source and target workers to be online.
 func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) (err error) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return err
 	}
@@ -38,7 +38,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	// Validate target node labels
 	if !gs.NodeTags.IsEmpty() {
-		targetNode, err := models.GetWorkerNode(s.db, targetNodeID)
+		targetNode, err := model.GetWorkerNode(s.db, targetNodeID)
 		if err != nil || targetNode == nil {
 			return ErrNotFoundf("target node %s not found", targetNodeID)
 		}
@@ -168,7 +168,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.placementMu.Unlock()
 	}
 
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		return fmt.Errorf("updating gameserver node assignment: %w", err)
 	}
 

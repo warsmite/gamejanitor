@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
-	"github.com/warsmite/gamejanitor/naming"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -110,7 +110,7 @@ func (m *StatusManager) Stop() {
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	m.log.Info("recovering gameserver status from docker state")
 
-	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{})
+	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{})
 	if err != nil {
 		return err
 	}
@@ -150,13 +150,13 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 }
 
 // workerForGameserver returns the appropriate worker, or nil if unavailable.
-func (m *StatusManager) workerForGameserver(gs *models.Gameserver) worker.Worker {
+func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker {
 	return m.dispatcher.WorkerFor(gs.ID)
 }
 
 // recoverGameserver reconciles a single gameserver's DB status with container reality.
 // Returns true if the gameserver had a container ID but the container was not found.
-func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) bool {
+func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
 		m.setRecoveryStatus(gs.ID, StatusStopped, "")
@@ -188,7 +188,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 // setRecoveryStatus directly writes status to DB without publishing events.
 // Used during startup recovery to reconcile DB with Docker reality.
 func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
-	gs, err := models.GetGameserver(m.db, id)
+	gs, err := model.GetGameserver(m.db, id)
 	if err != nil || gs == nil {
 		m.log.Error("recovery: failed to get gameserver", "id", id, "error", err)
 		return
@@ -200,7 +200,7 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	} else {
 		gs.ErrorReason = ""
 	}
-	if err := models.UpdateGameserver(m.db, gs); err != nil {
+	if err := model.UpdateGameserver(m.db, gs); err != nil {
 		m.log.Error("recovery: failed to update status", "id", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -209,12 +209,12 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 
 // clearContainerAndSetStatus clears the container_id and updates status in one DB write.
 // Used during startup recovery — no events published.
-func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newStatus string) {
+func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.ContainerID = nil
 	gs.Status = newStatus
 	gs.ErrorReason = ""
-	if err := models.UpdateGameserver(m.db, gs); err != nil {
+	if err := model.UpdateGameserver(m.db, gs); err != nil {
 		m.log.Error("recovery: failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -253,7 +253,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		return
 	}
 
-	gs, err := models.GetGameserver(m.db, gsID)
+	gs, err := model.GetGameserver(m.db, gsID)
 	if err != nil || gs == nil {
 		m.log.Debug("container event for unknown gameserver", "container_name", event.ContainerName, "action", event.Action)
 		return
@@ -323,7 +323,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 // onWorkerOffline is called when a worker transitions to offline (heartbeat timeout or explicit).
 // Marks affected gameservers as unreachable so the UI doesn't show stale "running" status.
 func (m *StatusManager) onWorkerOffline(nodeID string) {
-	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{NodeID: &nodeID})
+	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{NodeID: &nodeID})
 	if err != nil {
 		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
 	} else {
@@ -355,7 +355,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 
 // recoverWorkerGameservers recovers gameservers assigned to a specific worker node.
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
-	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{})
+	gameservers, err := model.ListGameservers(m.db, model.GameserverFilter{})
 	if err != nil {
 		m.log.Error("failed to list gameservers for worker recovery", "worker_id", nodeID, "error", err)
 		return
@@ -377,7 +377,7 @@ const maxAutoRestartAttempts = 3
 
 // handleUnexpectedDeath handles an unexpected container death. If auto-restart
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
-func (m *StatusManager) handleUnexpectedDeath(gs *models.Gameserver) {
+func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	if !gs.AutoRestart || m.restartFunc == nil {
 		m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
 		return

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -19,7 +19,7 @@ func NewLocalAuth(db *sql.DB) *LocalAuth {
 }
 
 func (a *LocalAuth) ValidateLogin(username, password string) (string, string, error) {
-	gs, err := models.GetGameserverBySFTPUsername(a.db, username)
+	gs, err := model.GetGameserverBySFTPUsername(a.db, username)
 	if err != nil || gs == nil {
 		return "", "", fmt.Errorf("unknown sftp user %s", username)
 	}

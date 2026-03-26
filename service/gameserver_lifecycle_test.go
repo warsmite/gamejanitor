@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -55,7 +55,7 @@ func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
 	// Manually set status to running to simulate the status subscriber
 	gs2, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	gs2.Status = "running"
-	models.UpdateGameserver(svc.DB, gs2)
+	model.UpdateGameserver(svc.DB, gs2)
 
 	// Starting again should be a no-op
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)

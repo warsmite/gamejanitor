@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 )
 
@@ -70,7 +70,7 @@ func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
 	actorJSON, _ := json.Marshal(actor)
 	dataJSON, _ := json.Marshal(data)
 
-	e := &models.Event{
+	e := &model.Event{
 		ID:           uuid.New().String(),
 		EventType:    event.EventType(),
 		GameserverID: gameserverID,
@@ -79,7 +79,7 @@ func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
 		CreatedAt:    event.EventTimestamp(),
 	}
 
-	if err := models.CreateEvent(s.db, e); err != nil {
+	if err := model.CreateEvent(s.db, e); err != nil {
 		s.log.Error("event store: failed to persist event", "event_type", event.EventType(), "error", err)
 	}
 }

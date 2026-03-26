@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -53,7 +53,7 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.ContainerID = &containerID
 	fetched.Status = "running"
-	models.UpdateGameserver(svc.DB, fetched)
+	model.UpdateGameserver(svc.DB, fetched)
 
 	output, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.NoError(t, err)

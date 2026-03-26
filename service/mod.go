@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 type ModService struct {
@@ -146,7 +145,7 @@ func (s *ModService) GetVersions(ctx context.Context, gameserverID string, sourc
 	return versions, nil
 }
 
-func (s *ModService) Install(ctx context.Context, gameserverID string, sourceType string, sourceID string, versionID string, displayName string) (*models.InstalledMod, error) {
+func (s *ModService) Install(ctx context.Context, gameserverID string, sourceType string, sourceID string, versionID string, displayName string) (*model.InstalledMod, error) {
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -162,7 +161,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 	}
 
 	// Check if already installed
-	existing, err := models.GetInstalledModBySource(s.db, gameserverID, sourceType, sourceID)
+	existing, err := model.GetInstalledModBySource(s.db, gameserverID, sourceType, sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("checking existing mod: %w", err)
 	}
@@ -241,7 +240,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		modName = targetVersion.FileName
 	}
 
-	mod := &models.InstalledMod{
+	mod := &model.InstalledMod{
 		ID:           uuid.New().String(),
 		GameserverID: gameserverID,
 		Source:       sourceType,
@@ -255,7 +254,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		InstalledAt:  time.Now(),
 	}
 
-	if err := models.CreateInstalledMod(s.db, mod); err != nil {
+	if err := model.CreateInstalledMod(s.db, mod); err != nil {
 		return nil, fmt.Errorf("saving installed mod: %w", err)
 	}
 
@@ -271,7 +270,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 }
 
 func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID string) error {
-	mod, err := models.GetInstalledMod(s.db, modID)
+	mod, err := model.GetInstalledMod(s.db, modID)
 	if err != nil {
 		return fmt.Errorf("getting installed mod: %w", err)
 	}
@@ -293,7 +292,7 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 		}
 	}
 
-	if err := models.DeleteInstalledMod(s.db, modID); err != nil {
+	if err := model.DeleteInstalledMod(s.db, modID); err != nil {
 		return fmt.Errorf("deleting installed mod: %w", err)
 	}
 
@@ -310,13 +309,13 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 	return nil
 }
 
-func (s *ModService) ListInstalled(ctx context.Context, gameserverID string) ([]models.InstalledMod, error) {
-	return models.ListInstalledMods(s.db, gameserverID)
+func (s *ModService) ListInstalled(ctx context.Context, gameserverID string) ([]model.InstalledMod, error) {
+	return model.ListInstalledMods(s.db, gameserverID)
 }
 
 // --- Workshop helpers ---
 
-func (s *ModService) installWorkshop(ctx context.Context, gs *models.Gameserver, srcConfig *games.ModSourceConfig, source ModSource, sourceID string, displayName string) (*models.InstalledMod, error) {
+func (s *ModService) installWorkshop(ctx context.Context, gs *model.Gameserver, srcConfig *games.ModSourceConfig, source ModSource, sourceID string, displayName string) (*model.InstalledMod, error) {
 	// Fetch metadata about the workshop item
 	versions, err := source.GetVersions(ctx, sourceID, "", "")
 	if err != nil {
@@ -336,7 +335,7 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *models.Gameserver,
 	}
 	metadataJSON, _ := json.Marshal(metadata)
 
-	mod := &models.InstalledMod{
+	mod := &model.InstalledMod{
 		ID:           uuid.New().String(),
 		GameserverID: gs.ID,
 		Source:       "workshop",
@@ -350,7 +349,7 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *models.Gameserver,
 		InstalledAt:  time.Now(),
 	}
 
-	if err := models.CreateInstalledMod(s.db, mod); err != nil {
+	if err := model.CreateInstalledMod(s.db, mod); err != nil {
 		return nil, fmt.Errorf("saving workshop mod: %w", err)
 	}
 
@@ -371,10 +370,10 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *models.Gameserver,
 	return mod, nil
 }
 
-func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string, mod *models.InstalledMod) error {
+func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string, mod *model.InstalledMod) error {
 	// Rewrite the manifest after removing this mod (DB row deleted by caller after this returns)
 	// We need to read current mods, exclude this one, and rewrite
-	mods, err := models.ListInstalledMods(s.db, gameserverID)
+	mods, err := model.ListInstalledMods(s.db, gameserverID)
 	if err != nil {
 		return fmt.Errorf("listing mods for manifest update: %w", err)
 	}
@@ -402,7 +401,7 @@ func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string,
 }
 
 func (s *ModService) writeWorkshopManifest(ctx context.Context, gameserverID string) error {
-	mods, err := models.ListInstalledMods(s.db, gameserverID)
+	mods, err := model.ListInstalledMods(s.db, gameserverID)
 	if err != nil {
 		return err
 	}
@@ -424,8 +423,8 @@ func (s *ModService) writeWorkshopManifest(ctx context.Context, gameserverID str
 
 // --- Internal helpers ---
 
-func (s *ModService) getGameserver(gameserverID string) (*models.Gameserver, error) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+func (s *ModService) getGameserver(gameserverID string) (*model.Gameserver, error) {
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver: %w", err)
 	}
@@ -449,7 +448,7 @@ func (s *ModService) getSourceConfig(gameID string, sourceType string) (*games.M
 	return nil, ErrBadRequestf("game %s does not support mod source %q", game.Name, sourceType)
 }
 
-func (s *ModService) checkPreconditions(gs *models.Gameserver, srcConfig *games.ModSourceConfig) error {
+func (s *ModService) checkPreconditions(gs *model.Gameserver, srcConfig *games.ModSourceConfig) error {
 	if len(srcConfig.RequiresEnv) == 0 && len(srcConfig.Loaders) == 0 {
 		return nil
 	}
@@ -479,7 +478,7 @@ func (s *ModService) checkPreconditions(gs *models.Gameserver, srcConfig *games.
 	return nil
 }
 
-func (s *ModService) resolveFilters(gs *models.Gameserver, srcConfig *games.ModSourceConfig) (string, string) {
+func (s *ModService) resolveFilters(gs *model.Gameserver, srcConfig *games.ModSourceConfig) (string, string) {
 	env := s.parseEnv(gs)
 
 	var gameVersion, loader string
@@ -518,7 +517,7 @@ func (s *ModService) resolveInstallPath(srcConfig *games.ModSourceConfig, loader
 	return srcConfig.InstallPath
 }
 
-func (s *ModService) parseEnv(gs *models.Gameserver) map[string]string {
+func (s *ModService) parseEnv(gs *model.Gameserver) map[string]string {
 	env := make(map[string]string)
 	if err := json.Unmarshal(gs.Env, &env); err != nil {
 		s.log.Warn("failed to parse gameserver env", "gameserver_id", gs.ID, "error", err)
@@ -543,7 +542,7 @@ func (s *ModService) downloadFile(ctx context.Context, downloadURL string) ([]by
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxModDownloadBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxModDownloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading download: %w", err)
 	}

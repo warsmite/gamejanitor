@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -149,7 +149,7 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 
 	tags := cfg.tags
 	if tags == nil {
-		tags = models.Labels{}
+		tags = model.Labels{}
 	}
 
 	// Persist the worker node record in the DB so placement queries find it
@@ -173,7 +173,7 @@ type fakeWorkerConfig struct {
 	maxMemoryMB  int
 	maxCPU       float64
 	maxStorageMB int
-	tags         models.Labels
+	tags         model.Labels
 }
 
 type FakeWorkerOption func(*fakeWorkerConfig)
@@ -190,7 +190,7 @@ func WithMaxStorageMB(mb int) FakeWorkerOption {
 	return func(c *fakeWorkerConfig) { c.maxStorageMB = mb }
 }
 
-func WithTags(tags models.Labels) FakeWorkerOption {
+func WithTags(tags model.Labels) FakeWorkerOption {
 	return func(c *fakeWorkerConfig) { c.tags = tags }
 }
 

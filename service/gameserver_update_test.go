@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -20,7 +20,7 @@ func TestUpdate_NameChange(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	update := &models.Gameserver{ID: gs.ID, Name: "New Name"}
+	update := &model.Gameserver{ID: gs.ID, Name: "New Name"}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -38,7 +38,7 @@ func TestUpdate_EnvChange(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	newEnv := json.RawMessage(`{"REQUIRED_VAR":"updated","SERVER_NAME":"My Server"}`)
-	update := &models.Gameserver{ID: gs.ID, Env: newEnv}
+	update := &model.Gameserver{ID: gs.ID, Env: newEnv}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -62,7 +62,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	ctx := service.SetTokenInContext(testutil.TestContext(), token)
 
 	// Try to change memory — should be blocked
-	update := &models.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
+	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient permissions")
@@ -80,7 +80,7 @@ func TestUpdate_AdminCanChangeResources(t *testing.T) {
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	ctx := service.SetTokenInContext(testutil.TestContext(), token)
 
-	update := &models.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
+	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -95,7 +95,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	update := &models.Gameserver{ID: "nonexistent", Name: "Whatever"}
+	update := &model.Gameserver{ID: "nonexistent", Name: "Whatever"}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

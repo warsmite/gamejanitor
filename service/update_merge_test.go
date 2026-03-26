@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -20,7 +20,7 @@ func TestUpdateMerge_CPUEnforcedOverwrittenOnEveryUpdate(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create with cpu_enforced = true via admin
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:        "CPU Enforced",
 		GameID:      testutil.TestGameID,
 		CPULimit:    2.0,
@@ -35,7 +35,7 @@ func TestUpdateMerge_CPUEnforcedOverwrittenOnEveryUpdate(t *testing.T) {
 	require.True(t, fetched.CPUEnforced)
 
 	// Update just the name — cpu_enforced should stay true
-	update := &models.Gameserver{ID: gs.ID, Name: "Renamed"}
+	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -49,7 +49,7 @@ func TestUpdateMerge_EnvTriggersReinstall(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Reinstall Test",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v","INSTALL_TRIGGER":"stable"}`),
@@ -60,10 +60,10 @@ func TestUpdateMerge_EnvTriggersReinstall(t *testing.T) {
 	// Mark as installed
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.Installed = true
-	models.UpdateGameserver(svc.DB, fetched)
+	model.UpdateGameserver(svc.DB, fetched)
 
 	// Change the INSTALL_TRIGGER env var — should clear installed flag
-	update := &models.Gameserver{
+	update := &model.Gameserver{
 		ID:  gs.ID,
 		Env: []byte(`{"REQUIRED_VAR":"v","INSTALL_TRIGGER":"beta"}`),
 	}
@@ -80,7 +80,7 @@ func TestUpdateMerge_EnvNoChangeDoesNotClearInstalled(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "No Change",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v","INSTALL_TRIGGER":"stable"}`),
@@ -90,10 +90,10 @@ func TestUpdateMerge_EnvNoChangeDoesNotClearInstalled(t *testing.T) {
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.Installed = true
-	models.UpdateGameserver(svc.DB, fetched)
+	model.UpdateGameserver(svc.DB, fetched)
 
 	// Update env with SAME value for INSTALL_TRIGGER — should NOT clear installed
-	update := &models.Gameserver{
+	update := &model.Gameserver{
 		ID:  gs.ID,
 		Env: []byte(`{"REQUIRED_VAR":"v","INSTALL_TRIGGER":"stable"}`),
 	}
@@ -110,7 +110,7 @@ func TestUpdateMerge_ZeroValueFieldsNotOverwritten(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Zero Guard",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 4096,
@@ -121,7 +121,7 @@ func TestUpdateMerge_ZeroValueFieldsNotOverwritten(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update just name — memory and CPU should stay unchanged
-	update := &models.Gameserver{ID: gs.ID, Name: "Renamed"}
+	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -136,7 +136,7 @@ func TestUpdateMerge_PortsNilNotOverwritten(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Ports Guard",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
@@ -148,7 +148,7 @@ func TestUpdateMerge_PortsNilNotOverwritten(t *testing.T) {
 	originalPorts := string(original.Ports)
 
 	// Update name only — ports should be untouched
-	update := &models.Gameserver{ID: gs.ID, Name: "Renamed"}
+	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
@@ -163,7 +163,7 @@ func TestUpdateMerge_AutoMigrationTriggered(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Auto Migrate",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 1024,
@@ -178,7 +178,7 @@ func TestUpdateMerge_AutoMigrationTriggered(t *testing.T) {
 	token := svc.AuthSvc.ValidateToken(adminToken)
 	adminCtx := service.SetTokenInContext(ctx, token)
 
-	update := &models.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
+	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	migrationTriggered, err := svc.GameserverSvc.UpdateGameserver(adminCtx, update)
 	require.NoError(t, err)
 	assert.True(t, migrationTriggered, "should trigger auto-migration when resources exceed current node")
@@ -190,7 +190,7 @@ func TestUpdateMerge_EnvValidationStillEnforced(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Validate Env",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
@@ -199,7 +199,7 @@ func TestUpdateMerge_EnvValidationStillEnforced(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update env without the required var — should fail
-	update := &models.Gameserver{
+	update := &model.Gameserver{
 		ID:  gs.ID,
 		Env: json.RawMessage(`{"SERVER_NAME":"new name"}`),
 	}

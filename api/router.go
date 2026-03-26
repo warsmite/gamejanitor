@@ -10,7 +10,7 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/service"
-	"github.com/warsmite/gamejanitor/api/handlers"
+	"github.com/warsmite/gamejanitor/api/handler"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -59,22 +59,22 @@ func NewRouter(opts RouterOptions) http.Handler {
 	authMiddleware := AuthMiddleware(opts.AuthSvc, opts.SettingsSvc)
 
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
-	gameHandlers := handlers.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
-	gameserverHandlers := handlers.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
+	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
+	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
 	eventHistorySvc := service.NewEventHistoryService(opts.DB)
-	eventHandlers := handlers.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
-	scheduleHandlers := handlers.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
-	backupHandlers := handlers.NewBackupHandlers(opts.BackupSvc, opts.Log)
-	fileHandlers := handlers.NewFileHandlers(opts.FileSvc, opts.Log)
-	logHandlers := handlers.NewLogHandlers(opts.LogPath, opts.Log)
-	authHandlers := handlers.NewAuthHandlers(opts.AuthSvc, opts.Log)
+	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
+	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
+	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
+	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
+	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
+	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.Log)
 	workerNodeSvc := service.NewWorkerNodeService(opts.DB, opts.Registry, opts.Broadcaster, opts.Log)
-	workerHandlers := handlers.NewWorkerHandlers(workerNodeSvc, opts.Log)
-	statusHandlers := handlers.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, workerNodeSvc, opts.Config, opts.Log)
-	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
+	workerHandlers := handler.NewWorkerHandlers(workerNodeSvc, opts.Log)
+	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, workerNodeSvc, opts.Config, opts.Log)
+	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
 	webhookSvc := service.NewWebhookEndpointService(opts.DB, opts.Log)
-	webhookHandlers := handlers.NewWebhookHandlers(webhookSvc, opts.Log)
-	modHandlers := handlers.NewModHandlers(opts.ModSvc, opts.Log)
+	webhookHandlers := handler.NewWebhookHandlers(webhookSvc, opts.Log)
+	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
 	requireAccess := RequireGameserverAccess(opts.SettingsSvc)

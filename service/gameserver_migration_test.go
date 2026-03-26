@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -19,7 +19,7 @@ func TestMigration_HappyPath(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Explicitly place on worker-1 so we know which node to migrate from
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Migration Test",
 		GameID: testutil.TestGameID,
 		NodeID: testutil.StrPtr("worker-1"),
@@ -58,7 +58,7 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2", testutil.WithMaxMemoryMB(512))
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Migration Source",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 512,
@@ -68,7 +68,7 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fill worker-2's 512MB limit with another gameserver
-	gs2 := &models.Gameserver{
+	gs2 := &model.Gameserver{
 		Name:          "Filler",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 512,
@@ -104,7 +104,7 @@ func TestMigration_SourceWorkerMustBeOnline(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Explicitly place on worker-1
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Source Offline Test",
 		GameID: testutil.TestGameID,
 		NodeID: testutil.StrPtr("worker-1"),
@@ -139,7 +139,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "Port Preserve Test",
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
@@ -167,7 +167,7 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "Port Realloc Test",
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",

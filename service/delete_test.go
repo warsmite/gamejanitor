@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -37,7 +37,7 @@ func TestDelete_CleansUpBackupStoreFiles(t *testing.T) {
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
 
 	// Verify backup DB records are gone (cascade)
-	backups, err := svc.BackupSvc.ListBackups(models.BackupFilter{GameserverID: gs.ID})
+	backups, err := svc.BackupSvc.ListBackups(model.BackupFilter{GameserverID: gs.ID})
 	require.NoError(t, err)
 	assert.Empty(t, backups)
 }
@@ -51,7 +51,7 @@ func TestDelete_CleansUpSchedules(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Create a schedule
-	sched := &models.Schedule{
+	sched := &model.Schedule{
 		GameserverID: gs.ID, Name: "test-sched", Type: "restart",
 		CronExpr: "0 0 * * *", Payload: []byte(`{}`), Enabled: true,
 	}

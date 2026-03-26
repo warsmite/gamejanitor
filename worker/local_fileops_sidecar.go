@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/docker"
-	"github.com/warsmite/gamejanitor/naming"
+	"github.com/warsmite/gamejanitor/pkg/naming"
 )
 
 const fileopsImage = "alpine:latest"
@@ -134,7 +133,7 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 		return err
 	}
 	// Sidecar runs as root — chown so game server can access the file
-	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", constants.GameserverUID, constants.GameserverGID), containerPath})
+	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", GameserverUID, GameserverGID), containerPath})
 	return nil
 }
 

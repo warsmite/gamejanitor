@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // Action events — user/schedule initiated, carry actor
@@ -230,7 +230,7 @@ type GameserverActionEvent struct {
 	Timestamp    time.Time          `json:"timestamp"`
 	Actor        Actor              `json:"actor"`
 	GameserverID string             `json:"gameserver_id"`
-	Gameserver   *models.Gameserver `json:"gameserver"`
+	Gameserver   *model.Gameserver `json:"gameserver"`
 }
 
 func (e GameserverActionEvent) EventType() string        { return e.Type }
@@ -242,7 +242,7 @@ type BackupActionEvent struct {
 	Timestamp    time.Time      `json:"timestamp"`
 	Actor        Actor          `json:"actor"`
 	GameserverID string         `json:"gameserver_id"`
-	Backup       *models.Backup `json:"backup"`
+	Backup       *model.Backup `json:"backup"`
 	Error        string         `json:"error,omitempty"`
 }
 
@@ -267,7 +267,7 @@ type ScheduleActionEvent struct {
 	Timestamp    time.Time        `json:"timestamp"`
 	Actor        Actor            `json:"actor"`
 	GameserverID string           `json:"gameserver_id"`
-	Schedule     *models.Schedule `json:"schedule"`
+	Schedule     *model.Schedule `json:"schedule"`
 }
 
 func (e ScheduleActionEvent) EventType() string        { return e.Type }
@@ -279,7 +279,7 @@ type ScheduledTaskEvent struct {
 	Timestamp    time.Time        `json:"timestamp"`
 	Actor        Actor            `json:"actor"`
 	GameserverID string           `json:"gameserver_id"`
-	Schedule     *models.Schedule `json:"schedule"`
+	Schedule     *model.Schedule `json:"schedule"`
 	TaskType     string           `json:"task_type"`
 	Error        string           `json:"error,omitempty"`
 }
@@ -293,7 +293,7 @@ type ModActionEvent struct {
 	Timestamp    time.Time           `json:"timestamp"`
 	Actor        Actor               `json:"actor"`
 	GameserverID string              `json:"gameserver_id"`
-	Mod          *models.InstalledMod `json:"mod"`
+	Mod          *model.InstalledMod `json:"mod"`
 }
 
 func (e ModActionEvent) EventType() string        { return e.Type }

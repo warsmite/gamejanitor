@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -23,7 +23,7 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2", testutil.WithMaxMemoryMB(8192))
 
 	// Pre-load worker-1 with a 2GB gameserver to reduce its headroom to 50%
-	gs1 := &models.Gameserver{
+	gs1 := &model.Gameserver{
 		Name:          "Pre-loaded",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -34,7 +34,7 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now create another — worker-2 has 100% headroom vs worker-1's 50%
-	gs2 := &models.Gameserver{
+	gs2 := &model.Gameserver{
 		Name:          "Placement Test",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 1024,
@@ -51,14 +51,14 @@ func TestPlacement_TagFiltering(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	ctx := testutil.TestContext()
 
-	testutil.RegisterFakeWorker(t, svc, "worker-gpu", testutil.WithTags(models.Labels{"hardware": "gpu"}))
+	testutil.RegisterFakeWorker(t, svc, "worker-gpu", testutil.WithTags(model.Labels{"hardware": "gpu"}))
 	testutil.RegisterFakeWorker(t, svc, "worker-plain")
 
 	// Request a gameserver that requires the "hardware=gpu" label
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "GPU Server",
 		GameID:   testutil.TestGameID,
-		NodeTags: models.Labels{"hardware": "gpu"},
+		NodeTags: model.Labels{"hardware": "gpu"},
 		Env:      []byte(`{"REQUIRED_VAR":"hello"}`),
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
@@ -79,7 +79,7 @@ func TestPlacement_CordonedWorkerSkipped(t *testing.T) {
 	_, err := svc.DB.Exec(`UPDATE worker_nodes SET cordoned = 1 WHERE id = ?`, "worker-cordoned")
 	require.NoError(t, err)
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:   "Cordon Test",
 		GameID: testutil.TestGameID,
 		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
@@ -100,7 +100,7 @@ func TestPortAllocation_ContiguousBlock(t *testing.T) {
 	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27010)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:     "Port Test",
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
@@ -133,7 +133,7 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs1 := &models.Gameserver{
+	gs1 := &model.Gameserver{
 		Name:     "First",
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
@@ -142,7 +142,7 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
 
-	gs2 := &models.Gameserver{
+	gs2 := &model.Gameserver{
 		Name:     "Second",
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
@@ -160,7 +160,7 @@ func TestPlacement_CapacityOverflow(t *testing.T) {
 	// Worker with only 1GB memory
 	testutil.RegisterFakeWorker(t, svc, "worker-small", testutil.WithMaxMemoryMB(1024))
 
-	gs := &models.Gameserver{
+	gs := &model.Gameserver{
 		Name:          "Too Big",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
@@ -180,7 +180,7 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs1 := &models.Gameserver{
+	gs1 := &model.Gameserver{
 		Name: "First", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: []byte(`{"REQUIRED_VAR":"v"}`),
 	}
@@ -188,7 +188,7 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	// Range is full — second create should fail
-	gs2 := &models.Gameserver{
+	gs2 := &model.Gameserver{
 		Name: "Second", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: []byte(`{"REQUIRED_VAR":"v"}`),
 	}
@@ -199,7 +199,7 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs1.ID))
 
 	// Now the same range should work again
-	gs3 := &models.Gameserver{
+	gs3 := &model.Gameserver{
 		Name: "Third", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: []byte(`{"REQUIRED_VAR":"v"}`),
 	}
@@ -219,7 +219,7 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 
 	allPorts := make(map[int]bool)
 	for i := 0; i < 5; i++ {
-		gs := &models.Gameserver{
+		gs := &model.Gameserver{
 			Name: "Fill-" + string(rune('A'+i)), GameID: testutil.TestGameID, PortMode: "auto",
 			Env: []byte(`{"REQUIRED_VAR":"v"}`),
 		}
@@ -237,7 +237,7 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 	assert.Len(t, allPorts, 10, "all 10 ports in range should be allocated")
 
 	// 6th should fail — range exhausted
-	gs6 := &models.Gameserver{
+	gs6 := &model.Gameserver{
 		Name: "Overflow", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: []byte(`{"REQUIRED_VAR":"v"}`),
 	}
@@ -261,13 +261,13 @@ func TestPortAllocation_ConcurrentCreates(t *testing.T) {
 	const n = 10
 	var wg sync.WaitGroup
 	errs := make([]error, n)
-	gameservers := make([]*models.Gameserver, n)
+	gameservers := make([]*model.Gameserver, n)
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			gs := &models.Gameserver{
+			gs := &model.Gameserver{
 				Name: "Concurrent", GameID: testutil.TestGameID, PortMode: "auto",
 				Env: []byte(`{"REQUIRED_VAR":"v"}`),
 			}

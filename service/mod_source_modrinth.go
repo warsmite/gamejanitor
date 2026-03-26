@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/warsmite/gamejanitor/constants"
 )
 
 const modrinthBaseURL = "https://api.modrinth.com/v2"
@@ -70,7 +69,7 @@ type modrinthFile struct {
 
 func (s *ModrinthSource) Search(ctx context.Context, query string, gameVersion string, loader string, offset int, limit int) ([]ModSearchResult, int, error) {
 	if limit <= 0 {
-		limit = constants.PaginationDefaultModLimit
+		limit = modDefaultLimit
 	}
 
 	// Build facets: array of OR-groups, AND'd together
@@ -217,7 +216,7 @@ func (s *ModrinthSource) Download(ctx context.Context, versionID string) ([]byte
 		return nil, "", fmt.Errorf("modrinth download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxModDownloadBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxModDownloadBytes))
 	if err != nil {
 		return nil, "", fmt.Errorf("reading modrinth download: %w", err)
 	}

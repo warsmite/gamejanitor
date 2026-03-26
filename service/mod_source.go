@@ -2,6 +2,13 @@ package service
 
 import "context"
 
+// Mod download limits — inlined from deleted constants/ package.
+const (
+	modDefaultLimit     = 20
+	maxModDownloadBytes = 100 * 1024 * 1024 // 100 MB
+	maxUmodDownloadBytes = 50 * 1024 * 1024 // 50 MB
+)
+
 // ModSearchResult is the common shape returned by all mod sources.
 type ModSearchResult struct {
 	SourceID    string `json:"source_id"`

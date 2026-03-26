@@ -8,7 +8,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
-	"github.com/warsmite/gamejanitor/validate"
+	"github.com/warsmite/gamejanitor/pkg/validate"
 )
 
 func TestSettings_GetDefaults(t *testing.T) {

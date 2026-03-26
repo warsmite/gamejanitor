@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/google/uuid"
 )
@@ -30,18 +30,18 @@ func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
-func (s *BackupService) ListBackups(filter models.BackupFilter) ([]models.Backup, error) {
-	return models.ListBackups(s.db, filter)
+func (s *BackupService) ListBackups(filter model.BackupFilter) ([]model.Backup, error) {
+	return model.ListBackups(s.db, filter)
 }
 
-func (s *BackupService) GetBackup(gameserverID, backupID string) (*models.Backup, error) {
+func (s *BackupService) GetBackup(gameserverID, backupID string) (*model.Backup, error) {
 	return s.getBackupForGameserver(gameserverID, backupID)
 }
 
 // getBackupForGameserver fetches a backup and verifies it belongs to the expected gameserver.
 // Returns ErrNotFound if the backup doesn't exist or belongs to a different gameserver.
-func (s *BackupService) getBackupForGameserver(gameserverID, backupID string) (*models.Backup, error) {
-	backup, err := models.GetBackup(s.db, backupID)
+func (s *BackupService) getBackupForGameserver(gameserverID, backupID string) (*model.Backup, error) {
+	backup, err := model.GetBackup(s.db, backupID)
 	if err != nil {
 		return nil, fmt.Errorf("getting backup %s: %w", backupID, err)
 	}
@@ -52,10 +52,10 @@ func (s *BackupService) getBackupForGameserver(gameserverID, backupID string) (*
 }
 
 func (s *BackupService) TotalBackupSize(gameserverID string) (int64, error) {
-	return models.TotalBackupSizeByGameserver(s.db, gameserverID)
+	return model.TotalBackupSizeByGameserver(s.db, gameserverID)
 }
 
-func (s *BackupService) DownloadBackup(ctx context.Context, gameserverID, backupID string) (io.ReadCloser, *models.Backup, error) {
+func (s *BackupService) DownloadBackup(ctx context.Context, gameserverID, backupID string) (io.ReadCloser, *model.Backup, error) {
 	backup, err := s.getBackupForGameserver(gameserverID, backupID)
 	if err != nil {
 		return nil, nil, err
@@ -69,8 +69,8 @@ func (s *BackupService) DownloadBackup(ctx context.Context, gameserverID, backup
 	return reader, backup, nil
 }
 
-func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, name string) (*models.Backup, error) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, name string) (*model.Backup, error) {
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
@@ -89,13 +89,13 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}
 
 	// Create backup record immediately with in_progress status
-	backup := &models.Backup{
+	backup := &model.Backup{
 		ID:           backupID,
 		GameserverID: gameserverID,
 		Name:         name,
-		Status:       models.BackupStatusInProgress,
+		Status:       model.BackupStatusInProgress,
 	}
-	if err := models.CreateBackup(s.db, backup); err != nil {
+	if err := model.CreateBackup(s.db, backup); err != nil {
 		return nil, fmt.Errorf("recording backup in database: %w", err)
 	}
 
@@ -116,7 +116,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	return backup, nil
 }
 
-func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *models.Gameserver, actor Actor) {
+func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model.Gameserver, actor Actor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -182,14 +182,14 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}
 
 	// Mark completed
-	if err := models.UpdateBackupStatus(s.db, backupID, models.BackupStatusCompleted, sizeBytes, ""); err != nil {
+	if err := model.UpdateBackupStatus(s.db, backupID, model.BackupStatusCompleted, sizeBytes, ""); err != nil {
 		s.log.Error("failed to mark backup completed", "backup_id", backupID, "error", err)
 		return
 	}
 
 	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
-	completedBackup, _ := models.GetBackup(s.db, backupID)
+	completedBackup, _ := model.GetBackup(s.db, backupID)
 	s.broadcaster.Publish(BackupActionEvent{
 		Type:         EventBackupCompleted,
 		Timestamp:    time.Now(),
@@ -208,11 +208,11 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 	}
 
 	// Mark failed in DB
-	if err := models.UpdateBackupStatus(s.db, backupID, models.BackupStatusFailed, 0, reason); err != nil {
+	if err := model.UpdateBackupStatus(s.db, backupID, model.BackupStatusFailed, 0, reason); err != nil {
 		s.log.Error("failed to mark backup as failed", "backup_id", backupID, "error", err)
 	}
 
-	failedBackup, _ := models.GetBackup(s.db, backupID)
+	failedBackup, _ := model.GetBackup(s.db, backupID)
 	s.broadcaster.Publish(BackupActionEvent{
 		Type:         EventBackupFailed,
 		Timestamp:    time.Now(),
@@ -229,7 +229,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 		return err
 	}
 
-	gs, err := models.GetGameserver(s.db, backup.GameserverID)
+	gs, err := model.GetGameserver(s.db, backup.GameserverID)
 	if err != nil {
 		return fmt.Errorf("getting gameserver %s: %w", backup.GameserverID, err)
 	}
@@ -260,7 +260,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	defer cancel()
 
 	// Stop gameserver if running
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.failRestore(gameserverID, backupID, backupName, actor, "gameserver not found")
 		return
@@ -299,7 +299,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gameserverID)
 
-	restoredBackup, _ := models.GetBackup(s.db, backupID)
+	restoredBackup, _ := model.GetBackup(s.db, backupID)
 	s.broadcaster.Publish(BackupActionEvent{
 		Type:         EventBackupRestoreCompleted,
 		Timestamp:    time.Now(),
@@ -321,7 +321,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 
 func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor Actor, reason string) {
 	s.log.Error("backup restore failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
-	failedRestoreBackup, _ := models.GetBackup(s.db, backupID)
+	failedRestoreBackup, _ := model.GetBackup(s.db, backupID)
 	s.broadcaster.Publish(BackupActionEvent{
 		Type:         EventBackupRestoreFailed,
 		Timestamp:    time.Now(),
@@ -341,7 +341,7 @@ func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID
 
 	s.log.Info("deleting backup", "backup_id", backupID, "gameserver_id", backup.GameserverID)
 
-	if err := models.DeleteBackup(s.db, backupID); err != nil {
+	if err := model.DeleteBackup(s.db, backupID); err != nil {
 		return fmt.Errorf("deleting backup record: %w", err)
 	}
 
@@ -362,12 +362,12 @@ func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID
 
 // DeleteBackupsByGameserver removes all backups for a gameserver (DB records + store files).
 func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserverID string) error {
-	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: gameserverID})
+	backups, err := model.ListBackups(s.db, model.BackupFilter{GameserverID: gameserverID})
 	if err != nil {
 		return fmt.Errorf("listing backups for cleanup: %w", err)
 	}
 
-	if err := models.DeleteBackupsByGameserver(s.db, gameserverID); err != nil {
+	if err := model.DeleteBackupsByGameserver(s.db, gameserverID); err != nil {
 		return fmt.Errorf("deleting backup records: %w", err)
 	}
 
@@ -385,7 +385,7 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 	maxBackups := s.settingsSvc.GetInt(SettingMaxBackups)
 
 	// Per-gameserver override takes precedence over global setting
-	if gs, err := models.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.BackupLimit != nil {
+	if gs, err := model.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.BackupLimit != nil {
 		maxBackups = *gs.BackupLimit
 	}
 
@@ -393,7 +393,7 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 		return nil
 	}
 
-	backups, err := models.ListBackups(s.db, models.BackupFilter{GameserverID: gameserverID})
+	backups, err := model.ListBackups(s.db, model.BackupFilter{GameserverID: gameserverID})
 	if err != nil {
 		return fmt.Errorf("listing backups for retention: %w", err)
 	}
@@ -407,7 +407,7 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 		if err := s.store.Delete(ctx, gameserverID, oldest.ID); err != nil {
 			s.log.Warn("retention: failed to delete backup file", "backup_id", oldest.ID, "error", err)
 		}
-		if err := models.DeleteBackup(s.db, oldest.ID); err != nil {
+		if err := model.DeleteBackup(s.db, oldest.ID); err != nil {
 			return fmt.Errorf("retention: deleting backup record: %w", err)
 		}
 

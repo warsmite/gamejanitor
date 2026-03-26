@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -104,7 +104,7 @@ func (s *StatsPoller) pollLoop(ctx context.Context, gameserverID string) {
 
 // pollOnce fetches stats, caches and publishes. Returns false if polling should stop.
 func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.log.Debug("gameserver gone, stopping stats poll", "id", gameserverID)
 		return false

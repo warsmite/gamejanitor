@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // StatusSubscriber listens to lifecycle events on the bus and derives gameserver
@@ -92,7 +92,7 @@ func (s *StatusSubscriber) handleEvent(event WebhookEvent) {
 }
 
 func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, errorReason string) {
-	gs, err := models.GetGameserver(s.db, gameserverID)
+	gs, err := model.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("status subscriber: failed to get gameserver", "id", gameserverID, "error", err)
 		return
@@ -110,7 +110,7 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 		gs.ErrorReason = ""
 	}
 
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+	if err := model.UpdateGameserver(s.db, gs); err != nil {
 		s.log.Error("status subscriber: failed to update gameserver status", "id", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}

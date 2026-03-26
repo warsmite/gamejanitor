@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/models"
-	"github.com/warsmite/gamejanitor/validate"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/validate"
 )
 
 // Setting key constants
@@ -159,7 +159,7 @@ func NewSettingsServiceWithMode(db *sql.DB, log *slog.Logger, mode string) *Sett
 	}
 
 	// Load persisted values from DB, overwriting defaults
-	stored, err := models.AllSettings(db)
+	stored, err := model.AllSettings(db)
 	if err != nil {
 		log.Error("failed to load settings from DB, using defaults", "error", err)
 		return s
@@ -216,7 +216,7 @@ func (s *SettingsService) ApplyConfig(settings map[string]any) {
 		s.values[key] = typed
 
 		// Persist to DB
-		if err := models.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+		if err := model.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
 			s.log.Error("failed to persist config setting", "key", key, "error", err)
 			continue
 		}
@@ -295,7 +295,7 @@ func (s *SettingsService) Set(key string, value any) error {
 		return err
 	}
 
-	if err := models.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+	if err := model.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
 		return err
 	}
 
@@ -340,7 +340,7 @@ func (s *SettingsService) validateSetting(key string, typed any) error {
 
 // Clear removes a setting from DB and reverts to default in memory.
 func (s *SettingsService) Clear(key string) error {
-	if err := models.DeleteSetting(s.db, key); err != nil {
+	if err := model.DeleteSetting(s.db, key); err != nil {
 		return err
 	}
 
@@ -385,7 +385,7 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 		return globalIP, true
 	}
 	if nodeID != nil && *nodeID != "" {
-		node, err := models.GetWorkerNode(s.db, *nodeID)
+		node, err := model.GetWorkerNode(s.db, *nodeID)
 		if err == nil && node != nil {
 			if node.ExternalIP != "" {
 				return node.ExternalIP, true

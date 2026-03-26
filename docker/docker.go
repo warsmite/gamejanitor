@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/warsmite/gamejanitor/constants"
-
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
@@ -24,9 +22,16 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
-	"github.com/warsmite/gamejanitor/naming"
+	"github.com/warsmite/gamejanitor/pkg/naming"
 )
 
+// Container user identity — duplicated from worker package to avoid circular import.
+// These merge into worker/runtime/ in Phase 2 of the refactor.
+const (
+	gameserverUID  = 1001
+	gameserverGID  = 1001
+	gameserverPerm = 0644
+)
 
 type Client struct {
 	cli *client.Client
@@ -524,10 +529,10 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 	// and game scripts running as gameserver can't modify them.
 	if err := tw.WriteHeader(&tar.Header{
 		Name:    filename,
-		Mode:    constants.GameserverPerm,
+		Mode:    gameserverPerm,
 		Size:    int64(len(content)),
-		Uid:     constants.GameserverUID,
-		Gid:     constants.GameserverGID,
+		Uid:     gameserverUID,
+		Gid:     gameserverGID,
 		ModTime: time.Now(),
 	}); err != nil {
 		return fmt.Errorf("writing tar header for %s: %w", path, err)

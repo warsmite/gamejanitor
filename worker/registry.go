@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // WorkerInfo tracks a connected worker's metadata and status.
@@ -63,11 +63,11 @@ func (r *Registry) LoadFromDB() error {
 	}
 
 	// Reset all workers to offline — they must heartbeat to prove they're alive
-	if err := models.ResetAllWorkerStatus(r.db, models.WorkerStatusOffline); err != nil {
+	if err := model.ResetAllWorkerStatus(r.db, model.WorkerStatusOffline); err != nil {
 		return fmt.Errorf("resetting worker status on startup: %w", err)
 	}
 
-	nodes, err := models.ListWorkerNodes(r.db)
+	nodes, err := model.ListWorkerNodes(r.db)
 	if err != nil {
 		return fmt.Errorf("loading workers from database: %w", err)
 	}
@@ -82,7 +82,7 @@ func (r *Registry) LoadFromDB() error {
 				ID:         node.ID,
 				LanIP:      node.LanIP,
 				ExternalIP: node.ExternalIP,
-				Status:     models.WorkerStatusOffline,
+				Status:     model.WorkerStatusOffline,
 			},
 		}
 	}
@@ -111,14 +111,14 @@ func (r *Registry) Register(nodeID string, w Worker, info WorkerInfo) {
 	}
 
 	info.LastSeen = time.Now()
-	info.Status = models.WorkerStatusOnline
+	info.Status = model.WorkerStatusOnline
 	r.workers[nodeID] = &registeredWorker{worker: w, info: info}
 	r.log.Info("worker online", "worker_id", nodeID, "lan_ip", info.LanIP)
 	r.mu.Unlock()
 
 	// Persist status to DB
 	if r.db != nil {
-		if err := models.SetWorkerNodeStatus(r.db, nodeID, models.WorkerStatusOnline); err != nil {
+		if err := model.SetWorkerNodeStatus(r.db, nodeID, model.WorkerStatusOnline); err != nil {
 			r.log.Warn("failed to persist worker online status", "worker_id", nodeID, "error", err)
 		}
 	}
@@ -145,13 +145,13 @@ func (r *Registry) SetOffline(nodeID string) {
 		}
 	}
 	rw.worker = nil
-	rw.info.Status = models.WorkerStatusOffline
+	rw.info.Status = model.WorkerStatusOffline
 	r.log.Info("worker offline", "worker_id", nodeID)
 	r.mu.Unlock()
 
 	// Persist status to DB
 	if r.db != nil {
-		if err := models.SetWorkerNodeStatus(r.db, nodeID, models.WorkerStatusOffline); err != nil {
+		if err := model.SetWorkerNodeStatus(r.db, nodeID, model.WorkerStatusOffline); err != nil {
 			r.log.Warn("failed to persist worker offline status", "worker_id", nodeID, "error", err)
 		}
 	}
@@ -221,7 +221,7 @@ func (r *Registry) UpdateHeartbeat(nodeID string, info WorkerInfo) error {
 		return fmt.Errorf("worker %s not online", nodeID)
 	}
 	info.LastSeen = time.Now()
-	info.Status = models.WorkerStatusOnline
+	info.Status = model.WorkerStatusOnline
 	info.TokenID = rw.info.TokenID // preserve token from registration
 	rw.info = info
 	return nil
