@@ -59,6 +59,30 @@ mkfifo "$FIFO" 2>/dev/null || true
 
 MODLOADER="${MODLOADER:-vanilla}"
 
+# Aikar's optimized G1GC flags — industry standard for Minecraft servers.
+# Tuned for Minecraft's high short-lived object allocation pattern.
+# https://docs.papermc.io/paper/aikars-flags
+AIKAR_FLAGS=(
+    -XX:+UseG1GC
+    -XX:+ParallelRefProcEnabled
+    -XX:MaxGCPauseMillis=200
+    -XX:+UnlockExperimentalVMOptions
+    -XX:+DisableExplicitGC
+    -XX:+AlwaysPreTouch
+    -XX:G1NewSizePercent=30
+    -XX:G1MaxNewSizePercent=40
+    -XX:G1HeapRegionSize=8M
+    -XX:G1ReservePercent=20
+    -XX:G1HeapWastePercent=5
+    -XX:G1MixedGCCountTarget=4
+    -XX:InitiatingHeapOccupancyPercent=15
+    -XX:G1MixedGCLiveThresholdPercent=90
+    -XX:G1RSetUpdatingPauseTimePercent=5
+    -XX:SurvivorRatio=32
+    -XX:+PerfDisableSharedMem
+    -XX:MaxTenuringThreshold=1
+)
+
 # Determine which jar to launch
 case "$MODLOADER" in
     fabric)
@@ -68,9 +92,12 @@ case "$MODLOADER" in
         # Modern Forge uses @unix_args.txt with classpath-based launch (no -jar)
         FORGE_ARGS=$(find /data/libraries -name "unix_args.txt" 2>/dev/null | head -1)
         if [ -n "$FORGE_ARGS" ]; then
-            # Write our heap settings into user_jvm_args.txt (Forge reads this via @user_jvm_args.txt)
-            echo "-Xmx${HEAP}m" > /data/user_jvm_args.txt
-            echo "-Xms${HEAP}m" >> /data/user_jvm_args.txt
+            # Write heap + Aikar's flags into user_jvm_args.txt (Forge reads this via @user_jvm_args.txt)
+            {
+                echo "-Xmx${HEAP}m"
+                echo "-Xms${HEAP}m"
+                printf '%s\n' "${AIKAR_FLAGS[@]}"
+            } > /data/user_jvm_args.txt
             echo "[start-server] starting Forge server (modloader=forge, args=$FORGE_ARGS)"
             cd /data
             exec "$JAVA_BIN" @user_jvm_args.txt @"$FORGE_ARGS" nogui < <(tail -f "$FIFO")
@@ -87,4 +114,4 @@ case "$MODLOADER" in
 esac
 
 echo "[start-server] starting Minecraft server (modloader=$MODLOADER, jar=$SERVER_JAR)"
-exec "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")
+exec "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m "${AIKAR_FLAGS[@]}" -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")
