@@ -14,11 +14,11 @@ import (
 
 )
 
-// volumeResolver maps a volume name to its host filesystem path.
+// VolumeResolver maps a volume name to its host filesystem path.
 // Docker-based workers resolve via VolumeMountpoint; process workers use plain directories.
-type volumeResolver func(ctx context.Context, volumeName string) (string, error)
+type VolumeResolver func(ctx context.Context, volumeName string) (string, error)
 
-func resolveVolumePath(resolve volumeResolver, ctx context.Context, volumeName string, relPath string) (string, error) {
+func ResolveVolumePath(resolve VolumeResolver, ctx context.Context, volumeName string, relPath string) (string, error) {
 	mountpoint, err := resolve(ctx, volumeName)
 	if err != nil {
 		return "", err
@@ -31,8 +31,8 @@ func resolveVolumePath(resolve volumeResolver, ctx context.Context, volumeName s
 	return resolved, nil
 }
 
-func listFilesDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
-	hostPath, err := resolveVolumePath(resolve, ctx, volumeName, path)
+func ListFilesDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return nil, err
 	}
@@ -57,20 +57,20 @@ func listFilesDirect(resolve volumeResolver, ctx context.Context, volumeName str
 		})
 	}
 
-	sortFileEntries(entries)
+	SortFileEntries(entries)
 	return entries, nil
 }
 
-func readFileDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) ([]byte, error) {
-	hostPath, err := resolveVolumePath(resolve, ctx, volumeName, path)
+func ReadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) ([]byte, error) {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return nil, err
 	}
 	return os.ReadFile(hostPath)
 }
 
-func writeFileDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	hostPath, err := resolveVolumePath(resolve, ctx, volumeName, path)
+func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
 	}
@@ -80,16 +80,16 @@ func writeFileDirect(resolve volumeResolver, ctx context.Context, volumeName str
 	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
 }
 
-func deletePathDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) error {
-	hostPath, err := resolveVolumePath(resolve, ctx, volumeName, path)
+func DeletePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) error {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
 	}
 	return os.RemoveAll(hostPath)
 }
 
-func createDirectoryDirect(resolve volumeResolver, ctx context.Context, volumeName string, path string) error {
-	hostPath, err := resolveVolumePath(resolve, ctx, volumeName, path)
+func CreateDirectoryDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) error {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
 	}
@@ -104,19 +104,19 @@ func createDirectoryDirect(resolve volumeResolver, ctx context.Context, volumeNa
 	})
 }
 
-func renamePathDirect(resolve volumeResolver, ctx context.Context, volumeName string, from string, to string) error {
-	fromPath, err := resolveVolumePath(resolve, ctx, volumeName, from)
+func RenamePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, from string, to string) error {
+	fromPath, err := ResolveVolumePath(resolve, ctx, volumeName, from)
 	if err != nil {
 		return err
 	}
-	toPath, err := resolveVolumePath(resolve, ctx, volumeName, to)
+	toPath, err := ResolveVolumePath(resolve, ctx, volumeName, to)
 	if err != nil {
 		return err
 	}
 	return os.Rename(fromPath, toPath)
 }
 
-func backupVolumeDirect(resolve volumeResolver, ctx context.Context, volumeName string) (io.ReadCloser, error) {
+func BackupVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName string) (io.ReadCloser, error) {
 	mountpoint, err := resolve(ctx, volumeName)
 	if err != nil {
 		return nil, fmt.Errorf("resolving volume mountpoint: %w", err)
@@ -171,7 +171,7 @@ func backupVolumeDirect(resolve volumeResolver, ctx context.Context, volumeName 
 	return pr, nil
 }
 
-func restoreVolumeDirect(resolve volumeResolver, ctx context.Context, volumeName string, tarStream io.Reader) error {
+func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName string, tarStream io.Reader) error {
 	mountpoint, err := resolve(ctx, volumeName)
 	if err != nil {
 		return fmt.Errorf("resolving volume mountpoint: %w", err)
@@ -239,7 +239,7 @@ func restoreVolumeDirect(resolve volumeResolver, ctx context.Context, volumeName
 	return nil
 }
 
-func volumeSizeDirect(resolve volumeResolver, ctx context.Context, volumeName string) (int64, error) {
+func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName string) (int64, error) {
 	mountpoint, err := resolve(ctx, volumeName)
 	if err != nil {
 		return 0, err
@@ -262,7 +262,7 @@ func volumeSizeDirect(resolve volumeResolver, ctx context.Context, volumeName st
 	return total, err
 }
 
-func sortFileEntries(entries []FileEntry) {
+func SortFileEntries(entries []FileEntry) {
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir != entries[j].IsDir {
 			return entries[i].IsDir

@@ -1,4 +1,4 @@
-package worker
+package agent
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/pb"
 )
 
@@ -17,13 +18,13 @@ import (
 // Runs on worker nodes; the controller connects via RemoteWorker.
 type Agent struct {
 	pb.UnimplementedWorkerServiceServer
-	worker    Worker
+	worker    worker.Worker
 	gameStore *games.GameStore
 	dataDir   string
 	log       *slog.Logger
 }
 
-func NewAgent(w Worker, gameStore *games.GameStore, dataDir string, log *slog.Logger) *Agent {
+func New(w worker.Worker, gameStore *games.GameStore, dataDir string, log *slog.Logger) *Agent {
 	return &Agent{worker: w, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
@@ -35,7 +36,7 @@ func (a *Agent) PullImage(ctx context.Context, req *pb.PullImageRequest) (*pb.Pu
 }
 
 func (a *Agent) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*pb.CreateContainerResponse, error) {
-	opts := ContainerOptions{
+	opts := worker.ContainerOptions{
 		Name:          req.Name,
 		Image:         req.Image,
 		Env:           req.Env,
@@ -48,7 +49,7 @@ func (a *Agent) CreateContainer(ctx context.Context, req *pb.CreateContainerRequ
 		Binds:         req.Binds,
 	}
 	for _, p := range req.Ports {
-		opts.Ports = append(opts.Ports, PortBinding{
+		opts.Ports = append(opts.Ports, worker.PortBinding{
 			HostPort:      int(p.HostPort),
 			ContainerPort: int(p.ContainerPort),
 			Protocol:      p.Protocol,

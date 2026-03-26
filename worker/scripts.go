@@ -8,7 +8,7 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 )
 
-func prepareGameScripts(gameStore *games.GameStore, dataDir, gameID, gameserverID string) (string, string, error) {
+func PrepareGameScripts(gameStore *games.GameStore, dataDir, gameID, gameserverID string) (string, string, error) {
 	gsDir := filepath.Join(dataDir, "gameservers", gameserverID)
 	if err := gameStore.ExtractScripts(gameID, gsDir); err != nil {
 		return "", "", fmt.Errorf("extracting scripts for %s: %w", gameserverID, err)

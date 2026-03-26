@@ -1,7 +1,8 @@
 package orchestrator
 
 import (
-	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/agent"
+	"github.com/warsmite/gamejanitor/worker/remote"
 	"context"
 	"crypto/ecdsa"
 	"crypto/tls"
@@ -63,7 +64,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	)
 
 	// Validate worker token
-	rawToken := worker.TokenFromContext(ctx)
+	rawToken := agent.TokenFromContext(ctx)
 	token := c.tokenAuth.ValidateToken(rawToken)
 	if token == nil || token.Scope != "worker" {
 		c.log.Warn("worker registration rejected: invalid or non-worker token", "worker_id", req.WorkerId)
@@ -154,7 +155,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 
 	if err := c.registry.UpdateHeartbeat(req.WorkerId, info); err != nil {
 		// Worker not in registry — first heartbeat after enrollment. Establish dial-back.
-		rawToken := worker.TokenFromContext(ctx)
+		rawToken := agent.TokenFromContext(ctx)
 		token := c.tokenAuth.ValidateToken(rawToken)
 		if token == nil || token.Scope != "worker" {
 			c.log.Warn("heartbeat rejected: invalid or non-worker token", "worker_id", req.WorkerId)
@@ -195,7 +196,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		}
 
 		info.TokenID = token.ID
-		remote := worker.NewRemoteWorker(conn, req.WorkerId)
+		remote := remote.New(conn, req.WorkerId)
 		c.registry.Register(req.WorkerId, remote, info)
 		c.log.Info("worker activated via first heartbeat", "worker_id", req.WorkerId, "grpc_address", node.GRPCAddress)
 	}
@@ -245,7 +246,7 @@ func DialController(address string, token string, tlsConfig *tls.Config) (pb.Con
 	}
 	opts := []grpc.DialOption{transportCreds}
 	if token != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(worker.WorkerCredentials{Token: token, RequireTLS: tlsConfig != nil}))
+		opts = append(opts, grpc.WithPerRPCCredentials(agent.WorkerCredentials{Token: token, RequireTLS: tlsConfig != nil}))
 	}
 	conn, err := grpc.NewClient(address, opts...)
 	if err != nil {
@@ -266,7 +267,7 @@ func DialControllerEnrollment(address string, token string) (pb.ControllerServic
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
 	}
 	if token != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(worker.WorkerCredentials{Token: token, RequireTLS: true}))
+		opts = append(opts, grpc.WithPerRPCCredentials(agent.WorkerCredentials{Token: token, RequireTLS: true}))
 	}
 	conn, err := grpc.NewClient(address, opts...)
 	if err != nil {

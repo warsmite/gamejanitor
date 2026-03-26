@@ -1,4 +1,4 @@
-package worker
+package local
 
 import (
 	"context"
@@ -13,54 +13,55 @@ import (
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // LocalWorker implements Worker by delegating to the Docker client.
 // Used in standalone mode where controller and worker run in the same process.
 type LocalWorker struct {
-	docker    *docker.Client
-	log       *slog.Logger
-	gameStore *games.GameStore
-	dataDir   string
-	resolve   volumeResolver
+	Docker    *docker.Client
+	Log       *slog.Logger
+	GameStore *games.GameStore
+	DataDir   string
+	Resolve   worker.VolumeResolver
 
 	// Direct volume access detection (probed once on first file op)
-	directAccessOnce sync.Once
-	directAccess     bool
+	DirectAccessOnce sync.Once
+	DirectAccess     bool
 
 	// Lazy sidecar containers for when direct volume access is unavailable
-	sidecarMu    sync.Mutex
-	sidecarCache map[string]string // volume name → container ID
+	SidecarMu    sync.Mutex
+	SidecarCache map[string]string // volume name -> container ID
 
 	// Volume size cache (120s staleness)
-	volumeSizeMu    sync.Mutex
-	volumeSizeCache map[string]*volumeSizeEntry
+	VolumeSizeMu    sync.Mutex
+	VolumeSizeCache map[string]*VolumeSizeEntry
 }
 
-type volumeSizeEntry struct {
-	sizeBytes  int64
-	measuredAt time.Time
+type VolumeSizeEntry struct {
+	SizeBytes  int64
+	MeasuredAt time.Time
 }
 
-func NewLocalWorker(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
+func New(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	w := &LocalWorker{
-		docker:          dockerClient,
-		log:             log,
-		gameStore:       gameStore,
-		dataDir:         dataDir,
-		sidecarCache:    make(map[string]string),
-		volumeSizeCache: make(map[string]*volumeSizeEntry),
+		Docker:          dockerClient,
+		Log:             log,
+		GameStore:       gameStore,
+		DataDir:         dataDir,
+		SidecarCache:    make(map[string]string),
+		VolumeSizeCache: make(map[string]*VolumeSizeEntry),
 	}
-	w.resolve = w.dockerVolumeResolver()
+	w.Resolve = w.DockerVolumeResolver()
 	return w
 }
 
 func (w *LocalWorker) PullImage(ctx context.Context, image string) error {
-	return w.docker.PullImage(ctx, image)
+	return w.Docker.PullImage(ctx, image)
 }
 
-func (w *LocalWorker) CreateContainer(ctx context.Context, opts ContainerOptions) (string, error) {
-	return w.docker.CreateContainer(ctx, docker.ContainerOptions{
+func (w *LocalWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
+	return w.Docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:          opts.Name,
 		Image:         opts.Image,
 		Env:           opts.Env,
@@ -76,23 +77,23 @@ func (w *LocalWorker) CreateContainer(ctx context.Context, opts ContainerOptions
 }
 
 func (w *LocalWorker) StartContainer(ctx context.Context, id string) error {
-	return w.docker.StartContainer(ctx, id)
+	return w.Docker.StartContainer(ctx, id)
 }
 
 func (w *LocalWorker) StopContainer(ctx context.Context, id string, timeoutSeconds int) error {
-	return w.docker.StopContainer(ctx, id, timeoutSeconds)
+	return w.Docker.StopContainer(ctx, id, timeoutSeconds)
 }
 
 func (w *LocalWorker) RemoveContainer(ctx context.Context, id string) error {
-	return w.docker.RemoveContainer(ctx, id)
+	return w.Docker.RemoveContainer(ctx, id)
 }
 
-func (w *LocalWorker) InspectContainer(ctx context.Context, id string) (*ContainerInfo, error) {
-	info, err := w.docker.InspectContainer(ctx, id)
+func (w *LocalWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
+	info, err := w.Docker.InspectContainer(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return &ContainerInfo{
+	return &worker.ContainerInfo{
 		ID:        info.ID,
 		State:     info.State,
 		StartedAt: info.StartedAt,
@@ -101,19 +102,19 @@ func (w *LocalWorker) InspectContainer(ctx context.Context, id string) (*Contain
 }
 
 func (w *LocalWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
-	return w.docker.Exec(ctx, containerID, cmd)
+	return w.Docker.Exec(ctx, containerID, cmd)
 }
 
 func (w *LocalWorker) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	return w.docker.ContainerLogs(ctx, containerID, tail, follow)
+	return w.Docker.ContainerLogs(ctx, containerID, tail, follow)
 }
 
-func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*ContainerStats, error) {
-	stats, err := w.docker.ContainerStats(ctx, containerID)
+func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
+	stats, err := w.Docker.ContainerStats(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
-	return &ContainerStats{
+	return &worker.ContainerStats{
 		MemoryUsageMB: stats.MemoryUsageMB,
 		MemoryLimitMB: stats.MemoryLimitMB,
 		CPUPercent:    stats.CPUPercent,
@@ -121,40 +122,40 @@ func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*
 }
 
 func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
-	return w.docker.CreateVolume(ctx, name)
+	return w.Docker.CreateVolume(ctx, name)
 }
 
 func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {
-	w.volumeSizeMu.Lock()
-	delete(w.volumeSizeCache, name)
-	w.volumeSizeMu.Unlock()
+	w.VolumeSizeMu.Lock()
+	delete(w.VolumeSizeCache, name)
+	w.VolumeSizeMu.Unlock()
 
-	w.removeSidecar(context.Background(), name)
+	w.RemoveSidecar(context.Background(), name)
 
-	return w.docker.RemoveVolume(ctx, name)
+	return w.Docker.RemoveVolume(ctx, name)
 }
 
 func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
-	w.volumeSizeMu.Lock()
-	if entry, ok := w.volumeSizeCache[volumeName]; ok && time.Since(entry.measuredAt) < 120*time.Second {
-		size := entry.sizeBytes
-		w.volumeSizeMu.Unlock()
+	w.VolumeSizeMu.Lock()
+	if entry, ok := w.VolumeSizeCache[volumeName]; ok && time.Since(entry.MeasuredAt) < 120*time.Second {
+		size := entry.SizeBytes
+		w.VolumeSizeMu.Unlock()
 		return size, nil
 	}
-	w.volumeSizeMu.Unlock()
+	w.VolumeSizeMu.Unlock()
 
 	// Try direct measurement first, fall back to sidecar
-	if w.hasDirectAccess(ctx, volumeName) {
-		size, err := volumeSizeDirect(w.resolve, ctx, volumeName)
+	if w.HasDirectAccess(ctx, volumeName) {
+		size, err := worker.VolumeSizeDirect(w.Resolve, ctx, volumeName)
 		if err == nil {
-			w.volumeSizeMu.Lock()
-			w.volumeSizeCache[volumeName] = &volumeSizeEntry{sizeBytes: size, measuredAt: time.Now()}
-			w.volumeSizeMu.Unlock()
+			w.VolumeSizeMu.Lock()
+			w.VolumeSizeCache[volumeName] = &VolumeSizeEntry{SizeBytes: size, MeasuredAt: time.Now()}
+			w.VolumeSizeMu.Unlock()
 			return size, nil
 		}
 	}
 
-	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, []string{"du", "-sb", "/data"})
+	exitCode, stdout, stderr, err := w.SidecarExec(ctx, volumeName, []string{"du", "-sb", "/data"})
 	if err != nil {
 		return 0, fmt.Errorf("measuring volume size: %w", err)
 	}
@@ -167,9 +168,9 @@ func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64,
 		return 0, fmt.Errorf("parsing volume size from %q: %w", stdout, err)
 	}
 
-	w.volumeSizeMu.Lock()
-	w.volumeSizeCache[volumeName] = &volumeSizeEntry{sizeBytes: sizeBytes, measuredAt: time.Now()}
-	w.volumeSizeMu.Unlock()
+	w.VolumeSizeMu.Lock()
+	w.VolumeSizeCache[volumeName] = &VolumeSizeEntry{SizeBytes: sizeBytes, MeasuredAt: time.Now()}
+	w.VolumeSizeMu.Unlock()
 
 	return sizeBytes, nil
 }
@@ -178,52 +179,52 @@ func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64,
 // Uses direct filesystem access when the host volume mountpoints are accessible,
 // falls back to a lazy sidecar container when running inside Docker.
 
-func (w *LocalWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return listFilesDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.ListFilesDirect(w.Resolve, ctx, volumeName, path)
 	}
 	return w.listFilesSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return readFileDirect(w.resolve, ctx, volumeName, path)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.ReadFileDirect(w.Resolve, ctx, volumeName, path)
 	}
 	return w.readFileSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return writeFileDirect(w.resolve, ctx, volumeName, path, content, perm)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.WriteFileDirect(w.Resolve, ctx, volumeName, path, content, perm)
 	}
 	return w.writeFileSidecar(ctx, volumeName, path, content)
 }
 
 func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return deletePathDirect(w.resolve, ctx, volumeName, path)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.DeletePathDirect(w.Resolve, ctx, volumeName, path)
 	}
 	return w.deletePathSidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return createDirectoryDirect(w.resolve, ctx, volumeName, path)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.CreateDirectoryDirect(w.Resolve, ctx, volumeName, path)
 	}
 	return w.createDirectorySidecar(ctx, volumeName, path)
 }
 
 func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return renamePathDirect(w.resolve, ctx, volumeName, from, to)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.RenamePathDirect(w.Resolve, ctx, volumeName, from, to)
 	}
 	return w.renamePathSidecar(ctx, volumeName, from, to)
 }
 
-func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error) {
-	dockerEventCh, dockerErrCh := w.docker.WatchEvents(ctx)
+func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
+	dockerEventCh, dockerErrCh := w.Docker.WatchEvents(ctx)
 
-	eventCh := make(chan ContainerEvent)
+	eventCh := make(chan worker.ContainerEvent)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -245,7 +246,7 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <
 					return
 				}
 				select {
-				case eventCh <- ContainerEvent{
+				case eventCh <- worker.ContainerEvent{
 					ContainerID:   de.ContainerID,
 					ContainerName: de.ContainerName,
 					Action:        de.Action,
@@ -261,10 +262,10 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <
 }
 
 func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
-	return prepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
+	return worker.PrepareGameScripts(w.GameStore, w.DataDir, gameID, gameserverID)
 }
 
-func toDockerPorts(ports []PortBinding) []docker.PortBinding {
+func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {
 	out := make([]docker.PortBinding, len(ports))
 	for i, p := range ports {
 		out[i] = docker.PortBinding{
@@ -279,33 +280,33 @@ func toDockerPorts(ports []PortBinding) []docker.PortBinding {
 // --- Copy operations (used by backup/restore) ---
 
 func (w *LocalWorker) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	return w.docker.CopyFromContainer(ctx, containerID, path)
+	return w.Docker.CopyFromContainer(ctx, containerID, path)
 }
 
 func (w *LocalWorker) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	return w.docker.CopyToContainer(ctx, containerID, path, content)
+	return w.Docker.CopyToContainer(ctx, containerID, path, content)
 }
 
 func (w *LocalWorker) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	return w.docker.CopyDirFromContainer(ctx, containerID, path)
+	return w.Docker.CopyDirFromContainer(ctx, containerID, path)
 }
 
 func (w *LocalWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	return w.docker.CopyTarToContainer(ctx, containerID, destPath, content)
+	return w.Docker.CopyTarToContainer(ctx, containerID, destPath, content)
 }
 
-func (w *LocalWorker) ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error) {
-	containers, err := w.docker.ListGameserverContainers(ctx)
+func (w *LocalWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
+	containers, err := w.Docker.ListGameserverContainers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var result []GameserverContainer
+	var result []worker.GameserverContainer
 	for _, c := range containers {
 		gsID, ok := naming.GameserverIDFromContainerName(c.Name)
 		if !ok {
 			continue // update/fileops/backup container, not a gameserver
 		}
-		result = append(result, GameserverContainer{
+		result = append(result, worker.GameserverContainer{
 			ContainerID:   c.ID,
 			ContainerName: c.Name,
 			GameserverID:  gsID,

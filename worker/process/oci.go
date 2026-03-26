@@ -1,4 +1,4 @@
-package worker
+package process
 
 import (
 	"archive/tar"
@@ -323,7 +323,7 @@ func imageRootFS(imagesDir string, imageName string) (string, *imageConfig, erro
 		return "", nil, fmt.Errorf("image index not found (run PullImage first): %w", err)
 	}
 
-	var index map[string]string // image name → digest dir (relative to imagesDir)
+	var index map[string]string // image name -> digest dir (relative to imagesDir)
 	if err := json.Unmarshal(indexData, &index); err != nil {
 		return "", nil, fmt.Errorf("parsing image index: %w", err)
 	}

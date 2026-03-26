@@ -1,4 +1,4 @@
-package worker
+package process
 
 import (
 	"bufio"
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // ProcessWorker implements Worker by running game servers as bare processes.
@@ -27,14 +28,14 @@ type ProcessWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
-	resolve     volumeResolver
+	resolve     worker.VolumeResolver
 	resolvConf  string
 
 	mu        sync.Mutex
 	processes map[string]*managedProcess
 
 	eventMu     sync.Mutex
-	eventCh     chan ContainerEvent
+	eventCh     chan worker.ContainerEvent
 	eventActive bool
 }
 
@@ -59,13 +60,13 @@ type processManifest struct {
 	Binds      []string `json:"binds"`
 }
 
-func NewProcessWorker(gameStore *games.GameStore, dataDir string, log *slog.Logger) *ProcessWorker {
+func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *ProcessWorker {
 	w := &ProcessWorker{
 		log:       log,
 		gameStore: gameStore,
 		dataDir:   dataDir,
 		processes: make(map[string]*managedProcess),
-		eventCh:   make(chan ContainerEvent, 64),
+		eventCh:   make(chan worker.ContainerEvent, 64),
 	}
 	w.resolve = w.processVolumeResolver()
 	w.resolvConf = ensureResolvConf(dataDir)
@@ -78,7 +79,7 @@ func NewProcessWorker(gameStore *games.GameStore, dataDir string, log *slog.Logg
 	return w
 }
 
-func (w *ProcessWorker) processVolumeResolver() volumeResolver {
+func (w *ProcessWorker) processVolumeResolver() worker.VolumeResolver {
 	return func(ctx context.Context, volumeName string) (string, error) {
 		path := filepath.Join(w.dataDir, "volumes", volumeName)
 		if _, err := os.Stat(path); err != nil {
@@ -103,7 +104,7 @@ func (w *ProcessWorker) PullImage(ctx context.Context, image string) error {
 	return err
 }
 
-func (w *ProcessWorker) CreateContainer(ctx context.Context, opts ContainerOptions) (string, error) {
+func (w *ProcessWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
 	id := opts.Name // reuse the container name as the process ID
 
 	dir := w.processDir(id)
@@ -218,7 +219,7 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 
 		if active {
 			select {
-			case w.eventCh <- ContainerEvent{
+			case w.eventCh <- worker.ContainerEvent{
 				ContainerID:   id,
 				ContainerName: manifest.Name,
 				Action:        "die",
@@ -282,7 +283,7 @@ func (w *ProcessWorker) RemoveContainer(ctx context.Context, id string) error {
 	return nil
 }
 
-func (w *ProcessWorker) InspectContainer(ctx context.Context, id string) (*ContainerInfo, error) {
+func (w *ProcessWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[id]
 	w.mu.Unlock()
@@ -296,7 +297,7 @@ func (w *ProcessWorker) InspectContainer(ctx context.Context, id string) (*Conta
 		state = "exited"
 	}
 
-	return &ContainerInfo{
+	return &worker.ContainerInfo{
 		ID:        proc.id,
 		State:     state,
 		StartedAt: proc.startedAt,
@@ -389,19 +390,19 @@ func (w *ProcessWorker) ContainerLogs(ctx context.Context, containerID string, t
 	return f, nil
 }
 
-func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) (*ContainerStats, error) {
+func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
 
 	if !ok || proc.exited || proc.cmd.Process == nil {
-		return &ContainerStats{}, nil
+		return &worker.ContainerStats{}, nil
 	}
 
 	pid := proc.cmd.Process.Pid
 	memBytes, err := readProcMemory(pid)
 	if err != nil {
-		return &ContainerStats{}, nil
+		return &worker.ContainerStats{}, nil
 	}
 
 	cpuPercent, err := readProcCPU(pid)
@@ -409,7 +410,7 @@ func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) 
 		cpuPercent = 0
 	}
 
-	return &ContainerStats{
+	return &worker.ContainerStats{
 		MemoryUsageMB: int(memBytes / (1024 * 1024)),
 		CPUPercent:    cpuPercent,
 	}, nil
@@ -428,33 +429,33 @@ func (w *ProcessWorker) RemoveVolume(ctx context.Context, name string) error {
 }
 
 func (w *ProcessWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
-	return volumeSizeDirect(w.resolve, ctx, volumeName)
+	return worker.VolumeSizeDirect(w.resolve, ctx, volumeName)
 }
 
 // --- File operations (all direct filesystem) ---
 
-func (w *ProcessWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
-	return listFilesDirect(w.resolve, ctx, volumeName, path)
+func (w *ProcessWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
+	return worker.ListFilesDirect(w.resolve, ctx, volumeName, path)
 }
 
 func (w *ProcessWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
-	return readFileDirect(w.resolve, ctx, volumeName, path)
+	return worker.ReadFileDirect(w.resolve, ctx, volumeName, path)
 }
 
 func (w *ProcessWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	return writeFileDirect(w.resolve, ctx, volumeName, path, content, perm)
+	return worker.WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 }
 
 func (w *ProcessWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
-	return deletePathDirect(w.resolve, ctx, volumeName, path)
+	return worker.DeletePathDirect(w.resolve, ctx, volumeName, path)
 }
 
 func (w *ProcessWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
-	return createDirectoryDirect(w.resolve, ctx, volumeName, path)
+	return worker.CreateDirectoryDirect(w.resolve, ctx, volumeName, path)
 }
 
 func (w *ProcessWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
-	return renamePathDirect(w.resolve, ctx, volumeName, from, to)
+	return worker.RenamePathDirect(w.resolve, ctx, volumeName, from, to)
 }
 
 // --- Copy operations (direct filesystem for process worker) ---
@@ -517,16 +518,16 @@ func (w *ProcessWorker) CopyTarToContainer(ctx context.Context, containerID stri
 // --- Backup/Restore ---
 
 func (w *ProcessWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
-	return backupVolumeDirect(w.resolve, ctx, volumeName)
+	return worker.BackupVolumeDirect(w.resolve, ctx, volumeName)
 }
 
 func (w *ProcessWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
-	return restoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
+	return worker.RestoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
 }
 
 // --- Events ---
 
-func (w *ProcessWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error) {
+func (w *ProcessWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
 	w.eventMu.Lock()
 	w.eventActive = true
 	w.eventMu.Unlock()
@@ -546,11 +547,11 @@ func (w *ProcessWorker) WatchEvents(ctx context.Context) (<-chan ContainerEvent,
 // --- Game scripts ---
 
 func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
-	return prepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
+	return worker.PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
 // ListGameserverContainers is not applicable for the process runtime — no containers.
-func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error) {
+func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
 	return nil, nil
 }
 
@@ -866,7 +867,7 @@ func tarDirectory(path string) (io.ReadCloser, error) {
 	resolve := func(_ context.Context, _ string) (string, error) {
 		return path, nil
 	}
-	return backupVolumeDirect(resolve, context.Background(), "")
+	return worker.BackupVolumeDirect(resolve, context.Background(), "")
 }
 
 // extractTar extracts a tar stream to a directory.
@@ -874,5 +875,5 @@ func extractTar(destPath string, content io.Reader) error {
 	resolve := func(_ context.Context, _ string) (string, error) {
 		return destPath, nil
 	}
-	return restoreVolumeDirect(resolve, context.Background(), "", content)
+	return worker.RestoreVolumeDirect(resolve, context.Background(), "", content)
 }

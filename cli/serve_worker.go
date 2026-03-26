@@ -22,7 +22,10 @@ import (
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/agent"
+	"github.com/warsmite/gamejanitor/worker/local"
 	"github.com/warsmite/gamejanitor/worker/pb"
+	"github.com/warsmite/gamejanitor/worker/process"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"google.golang.org/grpc"
@@ -44,14 +47,14 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 
 	var localWorker worker.Worker
 	if cfg.ContainerRuntime == "process" {
-		localWorker = worker.NewProcessWorker(gameStore, cfg.DataDir, logger)
+		localWorker = process.New(gameStore, cfg.DataDir, logger)
 	} else {
 		dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
 		if err != nil {
 			return fmt.Errorf("failed to connect to container runtime: %w", err)
 		}
 		defer dockerClient.Close()
-		localWorker = worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
+		localWorker = local.New(dockerClient, gameStore, cfg.DataDir, logger)
 	}
 
 	// Load worker TLS config from config file or auto-discovery
@@ -438,14 +441,14 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 	}
 	// Add auth interceptor when running as controller (registry present)
 	if registry != nil {
-		opts = append(opts, grpc.UnaryInterceptor(worker.WorkerAuthInterceptor()))
+		opts = append(opts, grpc.UnaryInterceptor(agent.WorkerAuthInterceptor()))
 	}
 	grpcServer := grpc.NewServer(opts...)
 
 	// Register WorkerService if we have a local worker (worker or controller+worker mode)
 	if w != nil {
-		agent := worker.NewAgent(w, gameStore, dataDir, logger)
-		pb.RegisterWorkerServiceServer(grpcServer, agent)
+		agentSvc := agent.New(w, gameStore, dataDir, logger)
+		pb.RegisterWorkerServiceServer(grpcServer, agentSvc)
 	}
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)

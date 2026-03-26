@@ -1,31 +1,33 @@
-package worker
+package local
 
 import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // --- Volume-level backup operations ---
 
 func (w *LocalWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return backupVolumeDirect(w.resolve, ctx, volumeName)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.BackupVolumeDirect(w.Resolve, ctx, volumeName)
 	}
 	return w.backupVolumeSidecar(ctx, volumeName)
 }
 
 func (w *LocalWorker) backupVolumeSidecar(ctx context.Context, volumeName string) (io.ReadCloser, error) {
-	sidecarID, err := w.ensureSidecar(ctx, volumeName)
+	sidecarID, err := w.EnsureSidecar(ctx, volumeName)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring sidecar for backup: %w", err)
 	}
-	return w.docker.CopyDirFromContainer(ctx, sidecarID, "/data")
+	return w.Docker.CopyDirFromContainer(ctx, sidecarID, "/data")
 }
 
 func (w *LocalWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
-	if w.hasDirectAccess(ctx, volumeName) {
-		return restoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.RestoreVolumeDirect(w.Resolve, ctx, volumeName, tarStream)
 	}
 	return w.restoreVolumeSidecar(ctx, volumeName, tarStream)
 }
@@ -40,10 +42,10 @@ func (w *LocalWorker) restoreVolumeSidecar(ctx context.Context, volumeName strin
 	}
 
 	// Get a fresh sidecar with the new volume
-	sidecarID, err := w.ensureSidecar(ctx, volumeName)
+	sidecarID, err := w.EnsureSidecar(ctx, volumeName)
 	if err != nil {
 		return fmt.Errorf("ensuring sidecar for restore: %w", err)
 	}
 
-	return w.docker.CopyTarToContainer(ctx, sidecarID, "/", tarStream)
+	return w.Docker.CopyTarToContainer(ctx, sidecarID, "/", tarStream)
 }

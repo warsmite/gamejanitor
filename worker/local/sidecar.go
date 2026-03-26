@@ -1,7 +1,6 @@
-package worker
+package local
 
 import (
-	"github.com/warsmite/gamejanitor/model"
 	"context"
 	"fmt"
 	"os"
@@ -10,7 +9,9 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/docker"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 const fileopsImage = "alpine:latest"
@@ -19,41 +20,41 @@ const fileopsImage = "alpine:latest"
 // Used when direct volume access is unavailable (e.g., running inside Docker).
 // Creates a lazy Alpine container per volume on first access.
 
-func (w *LocalWorker) ensureSidecar(ctx context.Context, volumeName string) (string, error) {
-	w.sidecarMu.Lock()
-	defer w.sidecarMu.Unlock()
+func (w *LocalWorker) EnsureSidecar(ctx context.Context, volumeName string) (string, error) {
+	w.SidecarMu.Lock()
+	defer w.SidecarMu.Unlock()
 
-	if id, ok := w.sidecarCache[volumeName]; ok {
+	if id, ok := w.SidecarCache[volumeName]; ok {
 		// Verify it's still running
-		info, err := w.docker.InspectContainer(ctx, id)
+		info, err := w.Docker.InspectContainer(ctx, id)
 		if err == nil && info.State == "running" {
 			return id, nil
 		}
 		// Gone or stopped — remove from cache and recreate
-		w.docker.RemoveContainer(ctx, id)
-		delete(w.sidecarCache, volumeName)
+		w.Docker.RemoveContainer(ctx, id)
+		delete(w.SidecarCache, volumeName)
 	}
 
 	// Also try by name in case a previous run left one behind
 	containerName := naming.FileopsContainerName(volumeName)
-	info, err := w.docker.InspectContainer(ctx, containerName)
+	info, err := w.Docker.InspectContainer(ctx, containerName)
 	if err == nil {
 		if info.State == "running" {
-			w.sidecarCache[volumeName] = info.ID
+			w.SidecarCache[volumeName] = info.ID
 			return info.ID, nil
 		}
-		if startErr := w.docker.StartContainer(ctx, info.ID); startErr == nil {
-			w.sidecarCache[volumeName] = info.ID
+		if startErr := w.Docker.StartContainer(ctx, info.ID); startErr == nil {
+			w.SidecarCache[volumeName] = info.ID
 			return info.ID, nil
 		}
-		w.docker.RemoveContainer(ctx, info.ID)
+		w.Docker.RemoveContainer(ctx, info.ID)
 	}
 
-	if err := w.docker.PullImage(ctx, fileopsImage); err != nil {
+	if err := w.Docker.PullImage(ctx, fileopsImage); err != nil {
 		return "", fmt.Errorf("pulling fileops image %s: %w", fileopsImage, err)
 	}
 
-	containerID, err := w.docker.CreateContainer(ctx, docker.ContainerOptions{
+	containerID, err := w.Docker.CreateContainer(ctx, docker.ContainerOptions{
 		Name:       containerName,
 		Image:      fileopsImage,
 		Env:        []string{},
@@ -64,40 +65,40 @@ func (w *LocalWorker) ensureSidecar(ctx context.Context, volumeName string) (str
 		return "", fmt.Errorf("creating fileops sidecar for volume %s: %w", volumeName, err)
 	}
 
-	if err := w.docker.StartContainer(ctx, containerID); err != nil {
-		w.docker.RemoveContainer(ctx, containerID)
+	if err := w.Docker.StartContainer(ctx, containerID); err != nil {
+		w.Docker.RemoveContainer(ctx, containerID)
 		return "", fmt.Errorf("starting fileops sidecar for volume %s: %w", volumeName, err)
 	}
 
-	w.log.Info("created fileops sidecar", "volume", volumeName, "container_id", containerID[:12])
-	w.sidecarCache[volumeName] = containerID
+	w.Log.Info("created fileops sidecar", "volume", volumeName, "container_id", containerID[:12])
+	w.SidecarCache[volumeName] = containerID
 	return containerID, nil
 }
 
-func (w *LocalWorker) removeSidecar(ctx context.Context, volumeName string) {
-	w.sidecarMu.Lock()
-	id, ok := w.sidecarCache[volumeName]
-	delete(w.sidecarCache, volumeName)
-	w.sidecarMu.Unlock()
+func (w *LocalWorker) RemoveSidecar(ctx context.Context, volumeName string) {
+	w.SidecarMu.Lock()
+	id, ok := w.SidecarCache[volumeName]
+	delete(w.SidecarCache, volumeName)
+	w.SidecarMu.Unlock()
 
 	if ok {
-		if err := w.docker.RemoveContainer(ctx, id); err != nil {
-			w.log.Debug("failed to remove sidecar by id", "volume", volumeName, "error", err)
+		if err := w.Docker.RemoveContainer(ctx, id); err != nil {
+			w.Log.Debug("failed to remove sidecar by id", "volume", volumeName, "error", err)
 		}
 	}
 	// Also try by name
 	containerName := naming.FileopsContainerName(volumeName)
-	if err := w.docker.RemoveContainer(ctx, containerName); err != nil {
-		w.log.Debug("no sidecar to remove by name", "volume", volumeName)
+	if err := w.Docker.RemoveContainer(ctx, containerName); err != nil {
+		w.Log.Debug("no sidecar to remove by name", "volume", volumeName)
 	}
 }
 
-func (w *LocalWorker) sidecarExec(ctx context.Context, volumeName string, cmd []string) (int, string, string, error) {
-	containerID, err := w.ensureSidecar(ctx, volumeName)
+func (w *LocalWorker) SidecarExec(ctx context.Context, volumeName string, cmd []string) (int, string, string, error) {
+	containerID, err := w.EnsureSidecar(ctx, volumeName)
 	if err != nil {
 		return -1, "", "", err
 	}
-	return w.docker.Exec(ctx, containerID, cmd)
+	return w.Docker.Exec(ctx, containerID, cmd)
 }
 
 // sidecarPath resolves a relative path to an absolute container path within /data.
@@ -110,7 +111,7 @@ func sidecarPath(relPath string) (string, error) {
 	return resolved, nil
 }
 
-func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
+func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
 	containerPath, err := sidecarPath(path)
 	if err != nil {
 		return nil, err
@@ -118,7 +119,7 @@ func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, p
 	// Use stat with pipe-delimited format for reliable parsing (no locale/year issues)
 	// sh -c is needed for the glob expansion
 	cmd := []string{"sh", "-c", fmt.Sprintf(`stat -c '%%n|%%s|%%f|%%Y|%%F' %s/* %s/.* 2>/dev/null || true`, containerPath, containerPath)}
-	exitCode, stdout, stderr, err := w.sidecarExec(ctx, volumeName, cmd)
+	exitCode, stdout, stderr, err := w.SidecarExec(ctx, volumeName, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("listing directory %s: %w", path, err)
 	}
@@ -129,7 +130,7 @@ func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, p
 }
 
 func (w *LocalWorker) readFileSidecar(ctx context.Context, volumeName string, path string) ([]byte, error) {
-	containerID, err := w.ensureSidecar(ctx, volumeName)
+	containerID, err := w.EnsureSidecar(ctx, volumeName)
 	if err != nil {
 		return nil, err
 	}
@@ -137,11 +138,11 @@ func (w *LocalWorker) readFileSidecar(ctx context.Context, volumeName string, pa
 	if err != nil {
 		return nil, err
 	}
-	return w.docker.CopyFromContainer(ctx, containerID, containerPath)
+	return w.Docker.CopyFromContainer(ctx, containerID, containerPath)
 }
 
 func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, path string, content []byte) error {
-	containerID, err := w.ensureSidecar(ctx, volumeName)
+	containerID, err := w.EnsureSidecar(ctx, volumeName)
 	if err != nil {
 		return err
 	}
@@ -149,11 +150,11 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 	if err != nil {
 		return err
 	}
-	if err := w.docker.CopyToContainer(ctx, containerID, containerPath, content); err != nil {
+	if err := w.Docker.CopyToContainer(ctx, containerID, containerPath, content); err != nil {
 		return err
 	}
 	// Sidecar runs as root — chown so game server can access the file
-	w.sidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", model.GameserverUID, model.GameserverGID), containerPath})
+	w.SidecarExec(ctx, volumeName, []string{"chown", fmt.Sprintf("%d:%d", model.GameserverUID, model.GameserverGID), containerPath})
 	return nil
 }
 
@@ -162,7 +163,7 @@ func (w *LocalWorker) deletePathSidecar(ctx context.Context, volumeName string, 
 	if err != nil {
 		return err
 	}
-	exitCode, _, stderr, err := w.sidecarExec(ctx, volumeName, []string{"rm", "-rf", containerPath})
+	exitCode, _, stderr, err := w.SidecarExec(ctx, volumeName, []string{"rm", "-rf", containerPath})
 	if err != nil {
 		return fmt.Errorf("deleting %s: %w", path, err)
 	}
@@ -177,7 +178,7 @@ func (w *LocalWorker) createDirectorySidecar(ctx context.Context, volumeName str
 	if err != nil {
 		return err
 	}
-	exitCode, _, stderr, err := w.sidecarExec(ctx, volumeName, []string{"mkdir", "-p", containerPath})
+	exitCode, _, stderr, err := w.SidecarExec(ctx, volumeName, []string{"mkdir", "-p", containerPath})
 	if err != nil {
 		return fmt.Errorf("creating directory %s: %w", path, err)
 	}
@@ -185,14 +186,14 @@ func (w *LocalWorker) createDirectorySidecar(ctx context.Context, volumeName str
 		return fmt.Errorf("creating directory %s: %s", path, stderr)
 	}
 	// Sidecar runs as root — chown so game server (1001:1001) can access the directory
-	w.sidecarExec(ctx, volumeName, []string{"chown", "1001:1001", containerPath})
+	w.SidecarExec(ctx, volumeName, []string{"chown", "1001:1001", containerPath})
 	return nil
 }
 
 func (w *LocalWorker) renamePathSidecar(ctx context.Context, volumeName string, from string, to string) error {
 	fromPath := filepath.Join("/data", from)
 	toPath := filepath.Join("/data", to)
-	exitCode, _, stderr, err := w.sidecarExec(ctx, volumeName, []string{"mv", fromPath, toPath})
+	exitCode, _, stderr, err := w.SidecarExec(ctx, volumeName, []string{"mv", fromPath, toPath})
 	if err != nil {
 		return fmt.Errorf("renaming %s to %s: %w", from, to, err)
 	}
@@ -204,9 +205,9 @@ func (w *LocalWorker) renamePathSidecar(ctx context.Context, volumeName string, 
 
 // parseStatOutput parses `stat -c '%n|%s|%f|%Y|%F'` output into FileEntry structs.
 // Format: fullpath|size|hex_mode|unix_epoch|file_type
-func parseStatOutput(output string) []FileEntry {
+func parseStatOutput(output string) []worker.FileEntry {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var entries []FileEntry
+	var entries []worker.FileEntry
 
 	for _, line := range lines {
 		if line == "" {
@@ -234,7 +235,7 @@ func parseStatOutput(output string) []FileEntry {
 
 		isDir := parts[4] == "directory"
 
-		entries = append(entries, FileEntry{
+		entries = append(entries, worker.FileEntry{
 			Name:        name,
 			IsDir:       isDir,
 			Size:        fileSize,
@@ -243,6 +244,6 @@ func parseStatOutput(output string) []FileEntry {
 		})
 	}
 
-	sortFileEntries(entries)
+	worker.SortFileEntries(entries)
 	return entries
 }

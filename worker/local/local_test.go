@@ -1,6 +1,6 @@
 //go:build integration
 
-package worker_test
+package local_test
 
 import (
 	"bytes"
@@ -16,9 +16,10 @@ import (
 
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/local"
 )
 
-func newTestLocalWorker(t *testing.T) *worker.LocalWorker {
+func newTestLocalWorker(t *testing.T) *local.LocalWorker {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	dockerClient, err := docker.New(log, "")
@@ -26,7 +27,7 @@ func newTestLocalWorker(t *testing.T) *worker.LocalWorker {
 		t.Skipf("Docker not available: %v", err)
 	}
 	dataDir := t.TempDir()
-	return worker.NewLocalWorker(dockerClient, nil, dataDir, log)
+	return local.New(dockerClient, nil, dataDir, log)
 }
 
 // Unique names to avoid collisions with other test runs

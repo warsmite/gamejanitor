@@ -1,4 +1,4 @@
-package worker
+package agent
 
 import (
 	"context"
@@ -56,13 +56,13 @@ func WorkerAuthInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-// Returns the raw token string set by WorkerAuthInterceptor.
+// TokenFromContext returns the raw token string set by WorkerAuthInterceptor.
 func TokenFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(tokenCtxKey).(string)
 	return v
 }
 
-// workerCredentials implements grpc.PerRPCCredentials to attach a Bearer token
+// WorkerCredentials implements grpc.PerRPCCredentials to attach a Bearer token
 // to every outgoing gRPC call from a worker.
 type WorkerCredentials struct {
 	Token      string
