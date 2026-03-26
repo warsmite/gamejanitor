@@ -190,13 +190,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	eventType := event.EventType()
 
 	for _, ep := range endpoints {
-		var events []string
-		if err := json.Unmarshal([]byte(ep.Events), &events); err != nil {
-			w.log.Warn("webhook: invalid events filter", "endpoint_id", ep.ID, "error", err)
-			continue
-		}
-
-		if !matchEventFilter(eventType, events) {
+		if !matchEventFilter(eventType, []string(ep.Events)) {
 			continue
 		}
 

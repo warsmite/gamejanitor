@@ -19,7 +19,7 @@ func TestWebhookEndpoint_CreateAndGet(t *testing.T) {
 		Description: "Test Endpoint",
 		URL:         "https://example.com/webhook",
 		Secret:      "s3cret",
-		Events:      `["*"]`,
+		Events:      model.StringSlice{"*"},
 		Enabled:     true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
@@ -34,7 +34,7 @@ func TestWebhookEndpoint_CreateAndGet(t *testing.T) {
 	assert.Equal(t, "Test Endpoint", got.Description)
 	assert.Equal(t, "https://example.com/webhook", got.URL)
 	assert.Equal(t, "s3cret", got.Secret)
-	assert.Equal(t, `["*"]`, got.Events)
+	assert.Equal(t, model.StringSlice{"*"}, got.Events)
 	assert.True(t, got.Enabled)
 }
 
@@ -54,7 +54,7 @@ func TestWebhookEndpoint_Update(t *testing.T) {
 	ep := &model.WebhookEndpoint{
 		Description: "Original",
 		URL:         "https://example.com/original",
-		Events:      `["*"]`,
+		Events:      model.StringSlice{"*"},
 		Enabled:     true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
@@ -87,7 +87,7 @@ func TestWebhookEndpoint_Delete(t *testing.T) {
 
 	ep := &model.WebhookEndpoint{
 		URL:     "https://example.com/delete",
-		Events:  `["*"]`,
+		Events:  model.StringSlice{"*"},
 		Enabled: true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
@@ -111,8 +111,8 @@ func TestWebhookEndpoint_List(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: `["*"]`, Enabled: true}
-	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: `["*"]`, Enabled: false}
+	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: model.StringSlice{"*"}, Enabled: true}
+	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: model.StringSlice{"*"}, Enabled: false}
 	require.NoError(t, db.CreateWebhookEndpoint(ep1))
 	require.NoError(t, db.CreateWebhookEndpoint(ep2))
 
@@ -125,9 +125,9 @@ func TestWebhookEndpoint_ListEnabled(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: `["*"]`, Enabled: true}
-	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: `["*"]`, Enabled: false}
-	ep3 := &model.WebhookEndpoint{URL: "https://c.com", Events: `["*"]`, Enabled: true}
+	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: model.StringSlice{"*"}, Enabled: true}
+	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: model.StringSlice{"*"}, Enabled: false}
+	ep3 := &model.WebhookEndpoint{URL: "https://c.com", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep1))
 	require.NoError(t, db.CreateWebhookEndpoint(ep2))
 	require.NoError(t, db.CreateWebhookEndpoint(ep3))
@@ -146,7 +146,7 @@ func TestWebhookDelivery_CreateAndListByEndpoint(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -172,7 +172,7 @@ func TestWebhookDelivery_ListByEndpoint_FilterByState(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -198,7 +198,7 @@ func TestWebhookDelivery_MarkSuccess(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -218,7 +218,7 @@ func TestWebhookDelivery_MarkRetry(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -239,7 +239,7 @@ func TestWebhookDelivery_MarkFailed(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -259,7 +259,7 @@ func TestWebhookDelivery_CascadeOnEndpointDelete(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
@@ -278,7 +278,7 @@ func TestWebhookDelivery_GetPending(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()

@@ -50,16 +50,12 @@ type WebhookEndpointView struct {
 }
 
 func toEndpointView(e *model.WebhookEndpoint) WebhookEndpointView {
-	var events []string
-	if err := json.Unmarshal([]byte(e.Events), &events); err != nil {
-		events = []string{}
-	}
 	return WebhookEndpointView{
 		ID:          e.ID,
 		Description: e.Description,
 		URL:         e.URL,
 		SecretSet:   e.Secret != "",
-		Events:      events,
+		Events:      []string(e.Events),
 		Enabled:     e.Enabled,
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,
@@ -113,8 +109,7 @@ func (s *WebhookEndpointService) Create(rawURL, description, secret string, even
 		return nil, err
 	}
 
-	eventsJSON, _ := json.Marshal(events)
-	ep.Events = string(eventsJSON)
+	ep.Events = model.StringSlice(events)
 	if err := s.store.CreateWebhookEndpoint(ep); err != nil {
 		return nil, err
 	}
@@ -177,8 +172,7 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 		if err := ValidateEventFilter(events); err != nil {
 			return nil, err
 		}
-		eventsJSON, _ := json.Marshal(events)
-		ep.Events = string(eventsJSON)
+		ep.Events = model.StringSlice(events)
 	}
 	if enabled != nil {
 		ep.Enabled = *enabled

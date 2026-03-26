@@ -39,7 +39,7 @@ func TestWebhookDelivery_CreateAndListPending(t *testing.T) {
 
 	ep := &model.WebhookEndpoint{
 		ID: "ep-1", URL: "http://example.com/hook",
-		Secret: "test-secret", Events: `["*"]`, Enabled: true,
+		Secret: "test-secret", Events: model.StringSlice{"*"}, Enabled: true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
@@ -85,7 +85,7 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 		ID:      "ep-hmac",
 		URL:     srv.URL,
 		Secret:  secret,
-		Events:  `["*"]`,
+		Events:  model.StringSlice{"*"},
 		Enabled: true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
@@ -142,7 +142,7 @@ func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 	ep := &model.WebhookEndpoint{
 		ID:      "ep-ns",
 		URL:     "http://example.com/hook",
-		Events:  `["gameserver.*"]`,
+		Events:  model.StringSlice{"gameserver.*"},
 		Enabled: true,
 	}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
@@ -170,7 +170,7 @@ func TestWebhookDelivery_DeliveryStateTransitions(t *testing.T) {
 	rawDB := testutil.NewTestDB(t)
 	db := store.New(rawDB)
 
-	ep := &model.WebhookEndpoint{ID: "ep-state", URL: "http://example.com", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{ID: "ep-state", URL: "http://example.com", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	d := &model.WebhookDelivery{
@@ -206,7 +206,7 @@ func TestWebhookDelivery_FailedAfterMaxAttempts(t *testing.T) {
 	rawDB := testutil.NewTestDB(t)
 	db := store.New(rawDB)
 
-	ep := &model.WebhookEndpoint{ID: "ep-fail", URL: "http://example.com", Events: `["*"]`, Enabled: true}
+	ep := &model.WebhookEndpoint{ID: "ep-fail", URL: "http://example.com", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	d := &model.WebhookDelivery{
