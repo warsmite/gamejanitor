@@ -369,10 +369,16 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		logger.Info("registered with controller", "controller", cfg.ControllerAddress)
 		backoff = time.Second // reset on success
 
-		// Heartbeat loop
+		// Heartbeat loop — send first heartbeat immediately so the controller
+		// can establish dial-back without waiting for the ticker interval.
 		ticker := time.NewTicker(10 * time.Second)
 		heartbeatFailed := false
-		for range ticker.C {
+		firstHeartbeat := true
+		for {
+			if !firstHeartbeat {
+				<-ticker.C
+			}
+			firstHeartbeat = false
 			hbReq := buildHeartbeatRequest(workerID, netInfo)
 			resp, err := client.Heartbeat(ctx, hbReq)
 			if err != nil {
