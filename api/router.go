@@ -218,14 +218,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
-		})
-
-		r.Route("/worker-tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermTokensManage))
-			r.Get("/", authHandlers.ListWorkerTokens)
-			r.Post("/", authHandlers.CreateWorkerToken)
-			r.Post("/rotate", authHandlers.RotateWorkerToken)
-			r.Delete("/{tokenId}", authHandlers.DeleteWorkerToken)
+			r.With(requireAdmin).Post("/{tokenId}/rotate", authHandlers.RotateToken)
 		})
 	})
 

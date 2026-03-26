@@ -279,7 +279,7 @@ type Token struct {
 // CreateTokenRequest is the request body for creating an API token.
 type CreateTokenRequest struct {
 	Name          string   `json:"name"`
-	Scope         string   `json:"scope"` // "admin" or "custom"
+	Scope         string   `json:"scope"` // "admin", "custom", or "worker"
 	GameserverIDs []string `json:"gameserver_ids,omitempty"`
 	Permissions   []string `json:"permissions,omitempty"`
 	ExpiresIn     string   `json:"expires_in,omitempty"` // Go duration string, e.g. "720h"
@@ -291,16 +291,6 @@ type CreateTokenResponse struct {
 	TokenID string `json:"token_id"`
 	Name    string `json:"name"`
 	Exists  bool   `json:"exists,omitempty"`
-}
-
-// CreateWorkerTokenRequest is the request body for creating a worker token.
-type CreateWorkerTokenRequest struct {
-	Name string `json:"name"`
-}
-
-// RotateWorkerTokenRequest is the request body for rotating a worker token.
-type RotateWorkerTokenRequest struct {
-	Name string `json:"name"`
 }
 
 // --- Webhooks ---

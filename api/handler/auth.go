@@ -21,9 +21,17 @@ func NewAuthHandlers(authSvc *auth.AuthService, log *slog.Logger) *AuthHandlers 
 }
 
 func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
-	tokens, err := h.authSvc.ListTokens()
+	scope := r.URL.Query().Get("scope")
+
+	var tokens []model.Token
+	var err error
+	if scope != "" {
+		tokens, err = h.authSvc.ListTokensByScope(scope)
+	} else {
+		tokens, err = h.authSvc.ListTokens()
+	}
 	if err != nil {
-		h.log.Error("listing tokens", "error", err)
+		h.log.Error("listing tokens", "scope", scope, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -49,8 +57,31 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	if req.Scope == "" {
 		req.Scope = "custom"
 	}
-	if req.Scope != "admin" && req.Scope != "custom" {
-		respondError(w, http.StatusBadRequest, "scope must be \"admin\" or \"custom\"")
+	if req.Scope != "admin" && req.Scope != "custom" && req.Scope != "worker" {
+		respondError(w, http.StatusBadRequest, "scope must be \"admin\", \"custom\", or \"worker\"")
+		return
+	}
+
+	if req.Scope == "worker" {
+		rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
+		if err != nil {
+			h.log.Error("creating worker token", "error", err)
+			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+			return
+		}
+		if rawToken == "" {
+			respondOK(w, map[string]any{
+				"token_id": token.ID,
+				"name":     token.Name,
+				"exists":   true,
+			})
+			return
+		}
+		respondCreated(w, map[string]any{
+			"token":    rawToken,
+			"token_id": token.ID,
+			"name":     token.Name,
+		})
 		return
 	}
 
@@ -112,80 +143,21 @@ func (h *AuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	respondNoContent(w)
 }
 
-func (h *AuthHandlers) ListWorkerTokens(w http.ResponseWriter, r *http.Request) {
-	tokens, err := h.authSvc.ListTokensByScope("worker")
-	if err != nil {
-		h.log.Error("listing worker tokens", "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	if tokens == nil {
-		tokens = []model.Token{}
-	}
-	respondOK(w, tokens)
-}
-
-func (h *AuthHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-
-	rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
-	if err != nil {
-		h.log.Error("creating worker token", "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-
-	if rawToken == "" {
-		respondOK(w, map[string]any{
-			"token_id": token.ID,
-			"name":     token.Name,
-			"exists":   true,
-		})
-		return
-	}
-
-	respondCreated(w, map[string]any{
-		"token":    rawToken,
-		"token_id": token.ID,
-		"name":     token.Name,
-	})
-}
-
-func (h *AuthHandlers) RotateWorkerToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-
-	rawToken, token, err := h.authSvc.RotateWorkerToken(req.Name)
-	if err != nil {
-		h.log.Error("rotating worker token", "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-
-	respondOK(w, map[string]any{
-		"token":    rawToken,
-		"token_id": token.ID,
-		"name":     token.Name,
-	})
-}
-
-func (h *AuthHandlers) DeleteWorkerToken(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) RotateToken(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tokenId")
-	if err := h.authSvc.DeleteToken(id); err != nil {
-		h.log.Error("deleting worker token", "id", id, "error", err)
+	token, err := h.authSvc.GetToken(id)
+	if err != nil || token == nil {
+		respondError(w, 404, "token not found")
+		return
+	}
+	if token.Scope != "worker" {
+		respondError(w, 400, "only worker tokens can be rotated")
+		return
+	}
+	rawToken, newToken, err := h.authSvc.RotateWorkerToken(token.Name)
+	if err != nil {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondNoContent(w)
+	respondOK(w, map[string]any{"token": rawToken, "token_id": newToken.ID, "name": newToken.Name})
 }

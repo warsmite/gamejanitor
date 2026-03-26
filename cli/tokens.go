@@ -22,6 +22,8 @@ func init() {
 	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable). Examples: gameserver.start, gameserver.stop, gameserver.configure.name, backup.read, schedule.read. Run 'gamejanitor tokens permissions' to list all.")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
 
+	tokensListCmd.Flags().String("scope", "", "Filter by scope: admin, custom, or worker")
+
 	tokensRotateCmd.Flags().String("name", "", "Worker token name to rotate (required)")
 
 	tokensCmd.AddCommand(tokensListCmd, tokensCreateCmd, tokensDeleteCmd, tokensRotateCmd, tokensPermissionsCmd)
@@ -31,7 +33,11 @@ var tokensListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tokens",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiGet("/api/tokens")
+		path := "/api/tokens"
+		if scope, _ := cmd.Flags().GetString("scope"); scope != "" {
+			path += "?scope=" + scope
+		}
+		resp, err := apiGet(path)
 		if err != nil {
 			return exitError(err)
 		}
@@ -88,9 +94,8 @@ var tokensCreateCmd = &cobra.Command{
 
 		scope, _ := cmd.Flags().GetString("scope")
 
-		// Worker tokens use a separate API endpoint
 		if scope == "worker" {
-			resp, err := apiPost("/api/worker-tokens", map[string]any{"name": name})
+			resp, err := apiPost("/api/tokens", map[string]any{"name": name, "scope": "worker"})
 			if err != nil {
 				return exitError(err)
 			}
@@ -190,7 +195,30 @@ var tokensRotateCmd = &cobra.Command{
 			return exitError(fmt.Errorf("--name is required"))
 		}
 
-		resp, err := apiPost("/api/worker-tokens/rotate", map[string]any{"name": name})
+		// Resolve worker token name to ID
+		listResp, err := apiGet("/api/tokens?scope=worker")
+		if err != nil {
+			return exitError(err)
+		}
+		var tokens []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(listResp.Data, &tokens); err != nil {
+			return fmt.Errorf("parsing token list: %w", err)
+		}
+		var tokenID string
+		for _, t := range tokens {
+			if t.Name == name {
+				tokenID = t.ID
+				break
+			}
+		}
+		if tokenID == "" {
+			return exitError(fmt.Errorf("worker token %q not found", name))
+		}
+
+		resp, err := apiPost("/api/tokens/"+tokenID+"/rotate", nil)
 		if err != nil {
 			return exitError(err)
 		}
