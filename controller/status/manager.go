@@ -109,7 +109,7 @@ func (m *StatusManager) Stop() {
 // Any gameserver not in a terminal state (stopped/error) is checked against
 // the actual Docker container and corrected.
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
-	m.log.Info("recovering gameserver status from docker state")
+	m.log.Info("recovering gameserver status from container state")
 
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
