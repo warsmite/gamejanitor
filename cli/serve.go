@@ -16,6 +16,7 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/controller/warning"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
@@ -192,6 +193,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	svcs.WebhookWorker.Start(ctx)
 	defer svcs.WebhookWorker.Stop()
+
+	warningSubscriber := warning.New(svcs.Broadcaster, svcs.SettingsSvc, logger)
+	warningSubscriber.Start(ctx)
+	defer warningSubscriber.Stop()
 
 	// Prune old activities on startup, then hourly
 	go func() {

@@ -56,6 +56,7 @@ const (
 	EventScheduleTaskMissed     = "schedule.task.missed"
 	EventGameserverStats        = "gameserver.stats"
 	EventGameserverQuery        = "gameserver.query"
+	EventGameserverWarning      = "gameserver.warning"
 )
 
 // AllEventTypes is every event type, used for webhook endpoint validation.
@@ -81,6 +82,8 @@ var AllEventTypes = []string{
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,
 	EventScheduleTaskCompleted, EventScheduleTaskFailed, EventScheduleTaskMissed,
 	EventGameserverStats, EventGameserverQuery,
+	// Warnings
+	EventGameserverWarning,
 }
 
 // Lifecycle events — published by lifecycle code, consumed by StatusSubscriber to derive status.
@@ -205,6 +208,24 @@ func (e GameserverQueryEvent) EventType() string        { return EventGameserver
 func (e GameserverQueryEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverQueryEvent) EventGameserverID() string { return e.GameserverID }
 func (e GameserverQueryEvent) EventActor() Actor          { return SystemActor }
+
+// GameserverWarningEvent is a unified warning event. All warnings use the same
+// event type with category/level distinguishing them. This avoids event type
+// proliferation — businesses subscribe to "gameserver.warning" once and get
+// all current and future warning categories.
+type GameserverWarningEvent struct {
+	GameserverID string         `json:"gameserver_id"`
+	Category     string         `json:"category"`       // "storage", "memory", "cpu", etc.
+	Level        string         `json:"level"`           // "warning", "critical", "resolved"
+	Message      string         `json:"message"`
+	Data         map[string]any `json:"data,omitempty"`  // category-specific details
+	Timestamp    time.Time      `json:"timestamp"`
+}
+
+func (e GameserverWarningEvent) EventType() string        { return EventGameserverWarning }
+func (e GameserverWarningEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e GameserverWarningEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverWarningEvent) EventActor() Actor         { return SystemActor }
 
 // Actor represents who/what initiated an action.
 type Actor struct {

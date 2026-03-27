@@ -36,7 +36,9 @@ const (
 	SettingEventRetention      = "event_retention_days"
 	SettingRequireMemoryLimit  = "require_memory_limit"
 	SettingRequireCPULimit     = "require_cpu_limit"
-	SettingRequireStorageLimit = "require_storage_limit"
+	SettingRequireStorageLimit      = "require_storage_limit"
+	SettingStorageWarningThreshold = "storage_warning_threshold"
+	SettingStorageCriticalThreshold = "storage_critical_threshold"
 )
 
 // Mode constants for selecting default profiles.
@@ -64,7 +66,9 @@ var Defaults = map[string]any{
 	SettingEventRetention:      30,
 	SettingRequireMemoryLimit:  false,
 	SettingRequireCPULimit:     false,
-	SettingRequireStorageLimit: false,
+	SettingRequireStorageLimit:      false,
+	SettingStorageWarningThreshold: 90,
+	SettingStorageCriticalThreshold: 100,
 }
 
 // BusinessOverrides are applied on top of Defaults when mode is "business".
