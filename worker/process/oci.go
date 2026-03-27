@@ -129,16 +129,22 @@ func updateImageIndex(imagesDir string, imageName string, relDir string) error {
 }
 
 // ociTransport returns an HTTP transport with a fallback DNS resolver.
-// On Android/Termux, /etc/resolv.conf is empty so Go's default resolver fails.
+// Uses the system resolver by default. Falls back to public DNS (8.8.8.8)
+// when the system resolver fails — needed on Android/Termux where
+// /etc/resolv.conf is empty.
 func ociTransport() http.RoundTripper {
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 		Resolver: &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				// Always use public DNS — the system resolver may be broken
-				// (empty /etc/resolv.conf on Android, localhost-only on some setups)
 				d := net.Dialer{Timeout: 5 * time.Second}
+				// Try system resolver first
+				conn, err := d.DialContext(ctx, network, address)
+				if err == nil {
+					return conn, nil
+				}
+				// Fall back to public DNS (Android/Termux, broken resolv.conf)
 				return d.DialContext(ctx, "udp", "8.8.8.8:53")
 			},
 		},
