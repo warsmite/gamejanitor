@@ -145,18 +145,22 @@ func printSDKGameDetails(g *gamejanitor.Game) {
 		w := newTabWriter()
 		for _, e := range visible {
 			def := e.Default
-			if def == "" {
+			if def == "" && e.Autogenerate != "" {
+				def = "(auto)"
+			} else if def == "" {
 				def = "(none)"
 			}
-			required := ""
-			if e.Required || e.ConsentRequired {
-				required = " *"
+			note := ""
+			if e.ConsentRequired {
+				note = " (required, must accept)"
+			} else if e.Required {
+				note = " (required)"
 			}
 			opts := ""
 			if len(e.Options) > 0 {
 				opts = "[" + joinStrings(e.Options) + "]"
 			}
-			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, required)
+			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, note)
 		}
 		w.Flush()
 	}
@@ -194,18 +198,22 @@ func printLocalGameDetails(g *games.Game) {
 		w := newTabWriter()
 		for _, e := range visible {
 			def := e.Default
-			if def == "" {
+			if def == "" && e.Autogenerate != "" {
+				def = "(auto)"
+			} else if def == "" {
 				def = "(none)"
 			}
-			required := ""
-			if e.Required || e.ConsentRequired {
-				required = " *"
+			note := ""
+			if e.ConsentRequired {
+				note = " (required, must accept)"
+			} else if e.Required {
+				note = " (required)"
 			}
 			opts := ""
 			if len(e.Options) > 0 {
 				opts = "[" + strings.Join(e.Options, ", ") + "]"
 			}
-			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, required)
+			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, note)
 		}
 		w.Flush()
 	}
