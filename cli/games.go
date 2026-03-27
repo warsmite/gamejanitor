@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/games"
+	gamejanitor "github.com/warsmite/gamejanitor/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -33,25 +35,15 @@ var gamesListCmd = &cobra.Command{
 			w := newTabWriter()
 			fmt.Fprintln(w, "ID\tNAME\tALIASES")
 			for _, g := range gameList {
-				aliases := ""
-				if len(g.Aliases) > 0 {
-					for i, a := range g.Aliases {
-						if i > 0 { aliases += ", " }
-						aliases += a
-					}
-				}
-				fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, aliases)
+				fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, joinStrings(g.Aliases))
 			}
 			w.Flush()
 			return nil
 		}
 
 		// Fallback: load embedded game store locally
-		log := slog.New(slog.NewTextHandler(io.Discard, nil))
-		dataDir := config.DefaultConfig().DataDir
-		store, storeErr := games.NewGameStore(dataDir+"/games", log)
-		if storeErr != nil {
-			// Return original API error if local fallback also fails
+		store := loadLocalGameStore()
+		if store == nil {
 			return exitError(err)
 		}
 
@@ -64,12 +56,7 @@ var gamesListCmd = &cobra.Command{
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tALIASES")
 		for _, g := range allGames {
-			aliases := ""
-			for i, a := range g.Aliases {
-				if i > 0 { aliases += ", " }
-				aliases += a
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, aliases)
+			fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, joinStrings(g.Aliases))
 		}
 		w.Flush()
 		return nil
@@ -77,24 +64,164 @@ var gamesListCmd = &cobra.Command{
 }
 
 var gamesGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a game by ID",
-	Args:  cobra.ExactArgs(1),
+	Use:     "get <id>",
+	Short:   "Get game details (ports, env vars, mod support)",
+	Example: `  gamejanitor games get mc`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Try API first
 		game, err := getClient().Games.Get(ctx(), args[0])
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSON(game)
+		if err == nil {
+			if jsonOutput {
+				printJSON(game)
+				return nil
+			}
+			printSDKGameDetails(game)
 			return nil
 		}
 
-		fmt.Printf("ID:                  %s\n", game.ID)
-		fmt.Printf("Name:                %s\n", game.Name)
-		fmt.Printf("Image:               %s\n", game.BaseImage)
-		fmt.Printf("Recommended Memory:  %s\n", formatMemory(game.RecommendedMemoryMB))
+		// Fallback: local game store
+		store := loadLocalGameStore()
+		if store == nil {
+			return exitError(err)
+		}
+
+		id := store.ResolveGameID(args[0])
+		g := store.GetGame(id)
+		if g == nil {
+			return exitError(fmt.Errorf("game %q not found", args[0]))
+		}
+
+		if jsonOutput {
+			printJSON(g)
+			return nil
+		}
+
+		printLocalGameDetails(g)
 		return nil
 	},
+}
+
+func loadLocalGameStore() *games.GameStore {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dataDir := config.DefaultConfig().DataDir
+	store, err := games.NewGameStore(dataDir+"/games", log)
+	if err != nil {
+		return nil
+	}
+	return store
+}
+
+func printSDKGameDetails(g *gamejanitor.Game) {
+	fmt.Printf("ID:                  %s\n", g.ID)
+	fmt.Printf("Name:                %s\n", g.Name)
+	if g.Description != "" {
+		fmt.Printf("Description:         %s\n", g.Description)
+	}
+	if len(g.Aliases) > 0 {
+		fmt.Printf("Aliases:             %s\n", joinStrings(g.Aliases))
+	}
+	fmt.Printf("Image:               %s\n", g.BaseImage)
+	fmt.Printf("Recommended Memory:  %s\n", formatMemory(g.RecommendedMemoryMB))
+
+	if len(g.DefaultPorts) > 0 {
+		fmt.Println()
+		fmt.Println("Ports:")
+		for _, p := range g.DefaultPorts {
+			fmt.Printf("  %-10s %d/%s\n", p.Name, p.Port, p.Protocol)
+		}
+	}
+
+	// Show user-configurable env vars (not system/hidden)
+	var visible []gamejanitor.GameEnvVar
+	for _, e := range g.DefaultEnv {
+		if !e.System && !e.Hidden {
+			visible = append(visible, e)
+		}
+	}
+	if len(visible) > 0 {
+		fmt.Println()
+		fmt.Println("Settings:")
+		for _, e := range visible {
+			label := e.Label
+			if label == "" {
+				label = e.Key
+			}
+			def := e.Default
+			if def == "" {
+				def = "(none)"
+			}
+			required := ""
+			if e.Required || e.ConsentRequired {
+				required = " [required]"
+			}
+			if len(e.Options) > 0 {
+				fmt.Printf("  %-24s default: %-14s options: %s%s\n", label, def, joinStrings(e.Options), required)
+			} else {
+				fmt.Printf("  %-24s default: %s%s\n", label, def, required)
+			}
+		}
+	}
+}
+
+func printLocalGameDetails(g *games.Game) {
+	fmt.Printf("ID:                  %s\n", g.ID)
+	fmt.Printf("Name:                %s\n", g.Name)
+	if g.Description != "" {
+		fmt.Printf("Description:         %s\n", g.Description)
+	}
+	if len(g.Aliases) > 0 {
+		fmt.Printf("Aliases:             %s\n", joinStrings(g.Aliases))
+	}
+	fmt.Printf("Image:               %s\n", g.BaseImage)
+	fmt.Printf("Recommended Memory:  %s\n", formatMemory(g.RecommendedMemoryMB))
+
+	if len(g.DefaultPorts) > 0 {
+		fmt.Println()
+		fmt.Println("Ports:")
+		for _, p := range g.DefaultPorts {
+			fmt.Printf("  %-10s %d/%s\n", p.Name, p.Port, p.Protocol)
+		}
+	}
+
+	var visible []games.EnvVar
+	for _, e := range g.DefaultEnv {
+		if !e.System && !e.Hidden {
+			visible = append(visible, e)
+		}
+	}
+	if len(visible) > 0 {
+		fmt.Println()
+		fmt.Println("Settings:")
+		for _, e := range visible {
+			label := e.Label
+			if label == "" {
+				label = e.Key
+			}
+			def := e.Default
+			if def == "" {
+				def = "(none)"
+			}
+			required := ""
+			if e.Required || e.ConsentRequired {
+				required = " [required]"
+			}
+			if len(e.Options) > 0 {
+				fmt.Printf("  %-24s default: %-14s options: %s%s\n", label, def, strings.Join(e.Options, ", "), required)
+			} else {
+				fmt.Printf("  %-24s default: %s%s\n", label, def, required)
+			}
+		}
+	}
+}
+
+func joinStrings(s []string) string {
+	result := ""
+	for i, v := range s {
+		if i > 0 {
+			result += ", "
+		}
+		result += v
+	}
+	return result
 }
