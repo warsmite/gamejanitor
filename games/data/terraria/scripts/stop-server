@@ -1,0 +1,7 @@
+#!/bin/bash
+echo "[stop-server] saving before shutdown"
+echo "say Server shutting down in 5 seconds..." > /tmp/cmd-input 2>/dev/null || true
+sleep 5
+echo "save" > /tmp/cmd-input 2>/dev/null || true
+sleep 2
+echo "[stop-server] save complete, ready for shutdown"

@@ -1,0 +1,8 @@
+#!/bin/bash
+echo "[stop-server] announcing shutdown"
+echo "say Server shutting down in 5 seconds..." > /tmp/cmd-input 2>/dev/null || true
+sleep 5
+echo "save hold" > /tmp/cmd-input 2>/dev/null || true
+sleep 2
+echo "save resume" > /tmp/cmd-input 2>/dev/null || true
+echo "[stop-server] save complete, ready for shutdown"

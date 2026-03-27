@@ -47,6 +47,10 @@ container:
       default: "true"
       label: "Easy Anti-Cheat (EAC)"
       type: boolean
+    - key: SERVER_IDENTITY
+      default: "gamejanitor"
+      label: "Server Identity"
+      group: server
     - key: SERVER_PORT
       default: "28015"
       system: true

@@ -240,6 +240,11 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		if w == nil {
 			s.log.Warn("worker unavailable during stop, skipping container cleanup", "id", id)
 		} else {
+			// Run stop-server script if it exists — announces shutdown, saves world
+			_, _, _, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/stop-server"})
+			if execErr != nil {
+				s.log.Debug("stop-server script not available or failed, proceeding with container stop", "id", id, "error", execErr)
+			}
 			if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
 				s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
 			}

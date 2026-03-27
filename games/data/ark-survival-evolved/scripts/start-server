@@ -35,4 +35,4 @@ exec ./ShooterGame/Binaries/Linux/ShooterGameServer \
     "${MAP}?listen?SessionName=${SESSION_NAME}?ServerAdminPassword=${ADMIN_PASSWORD}${PASSWORD_PARAM}?Port=${GAME_PORT}?QueryPort=${QUERY_PORT}?RCONPort=${RCON_PORT}?RCONEnabled=True?MaxPlayers=${MAX_PLAYERS}" \
     -server \
     -log \
-    -NoBattlEye
+    $([ "${ENABLE_BATTLEYE:-false}" = "true" ] || echo "-NoBattlEye")

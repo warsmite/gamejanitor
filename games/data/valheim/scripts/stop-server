@@ -1,0 +1,3 @@
+#!/bin/bash
+# Valheim has no RCON or command interface. Server auto-saves on SIGTERM.
+echo "[stop-server] Valheim auto-saves on shutdown, no action needed"

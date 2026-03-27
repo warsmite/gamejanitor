@@ -45,6 +45,11 @@ container:
       label: "Map"
       type: select
       options: ["TheIsland", "TheCenter", "ScorchedEarth_P", "Ragnarok", "Aberration_P", "Extinction", "Valguero_P", "Genesis", "CrystalIsles", "LostIsland", "Fjordur"]
+    - key: ENABLE_BATTLEYE
+      default: "false"
+      label: "BattlEye Anti-Cheat"
+      type: boolean
+      notice: "Enable BattlEye anti-cheat. Players must have BattlEye installed to connect."
     - key: GAME_PORT
       default: "7777"
       system: true

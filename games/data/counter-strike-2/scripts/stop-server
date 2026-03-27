@@ -1,0 +1,9 @@
+#!/bin/bash
+RCON_PORT="${RCON_PORT:-27015}"
+RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+RCON_HOST=$(hostname -i 2>/dev/null | cut -d' ' -f1 || echo "localhost")
+
+echo "[stop-server] announcing shutdown"
+rcon -a "${RCON_HOST}:${RCON_PORT}" -p "$RCON_PASSWORD" "say Server shutting down..." 2>/dev/null || true
+sleep 3
+echo "[stop-server] ready for shutdown"

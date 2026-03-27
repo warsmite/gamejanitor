@@ -31,6 +31,11 @@ container:
     - key: SERVER_PASSWORD
       default: ""
       label: "Server Password"
+    - key: PUBLIC_SERVER
+      default: "true"
+      label: "Public Server"
+      type: boolean
+      notice: "When enabled, server appears in the public server list."
     - key: GAME_PORT
       default: "2456"
       system: true

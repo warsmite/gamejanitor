@@ -1,0 +1,16 @@
+#!/bin/bash
+TELNET_PORT="${TELNET_PORT:-8081}"
+TELNET_PASSWORD="${TELNET_PASSWORD:-changeme}"
+
+echo "[stop-server] saving world before shutdown"
+{
+    sleep 0.5
+    echo "$TELNET_PASSWORD"
+    sleep 0.5
+    echo "say \"Server shutting down in 5 seconds...\""
+    sleep 5
+    echo "saveworld"
+    sleep 2
+    echo "exit"
+} | curl -s telnet://localhost:${TELNET_PORT} 2>/dev/null || true
+echo "[stop-server] save complete, ready for shutdown"

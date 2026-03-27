@@ -16,7 +16,7 @@ echo "[start-server] config: worldsize=${SERVER_WORLDSIZE} port=${SERVER_PORT} q
 export LD_LIBRARY_PATH="/data/server/RustDedicated_Data/Plugins/x86_64:${LD_LIBRARY_PATH}"
 
 # Write EAC settings to server.cfg
-CFG_DIR="/data/server/server/gamejanitor/cfg"
+CFG_DIR="/data/server/server/${SERVER_IDENTITY:-gamejanitor}/cfg"
 mkdir -p "$CFG_DIR"
 CFG_FILE="${CFG_DIR}/server.cfg"
 touch "$CFG_FILE"
@@ -48,7 +48,7 @@ exec ./RustDedicated -batchmode \
     +server.hostname "$SERVER_HOSTNAME" \
     +server.maxplayers "$SERVER_MAXPLAYERS" \
     +server.worldsize "$SERVER_WORLDSIZE" \
-    +server.identity "gamejanitor" \
+    +server.identity "${SERVER_IDENTITY:-gamejanitor}" \
     +server.queryport "$QUERY_PORT" \
     +rcon.port "$RCON_PORT" \
     +rcon.password "$RCON_PASSWORD" \

@@ -1,0 +1,3 @@
+#!/bin/bash
+# Satisfactory has no RCON or command interface. Saves are managed in-game.
+echo "[stop-server] no remote save available, relying on auto-save"
