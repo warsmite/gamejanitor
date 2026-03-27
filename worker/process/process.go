@@ -53,11 +53,14 @@ type managedProcess struct {
 
 // processManifest is persisted to disk so StartContainer can find the config.
 type processManifest struct {
-	Name       string   `json:"name"`
-	Image      string   `json:"image"`
-	Env        []string `json:"env"`
-	VolumeName string   `json:"volume_name"`
-	Binds      []string `json:"binds"`
+	Name          string              `json:"name"`
+	Image         string              `json:"image"`
+	Env           []string            `json:"env"`
+	Ports         []worker.PortBinding `json:"ports"`
+	VolumeName    string              `json:"volume_name"`
+	MemoryLimitMB int                 `json:"memory_limit_mb"`
+	CPULimit      float64             `json:"cpu_limit"`
+	Binds         []string            `json:"binds"`
 }
 
 func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *ProcessWorker {
@@ -73,8 +76,10 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *ProcessW
 
 	if runtime.GOARCH == "arm64" {
 		log.Info("using process runtime (ARM — will use Box64 for x86 images)")
+	} else if hasSystemdRun() {
+		log.Info("using process runtime (bwrap + systemd-run — processes survive restarts)")
 	} else {
-		log.Info("using process runtime (bwrap sandbox)")
+		log.Info("using process runtime (bwrap sandbox — no systemd, processes die with parent)")
 	}
 	return w
 }
@@ -113,11 +118,14 @@ func (w *ProcessWorker) CreateContainer(ctx context.Context, opts worker.Contain
 	}
 
 	manifest := processManifest{
-		Name:       opts.Name,
-		Image:      opts.Image,
-		Env:        opts.Env,
-		VolumeName: opts.VolumeName,
-		Binds:      opts.Binds,
+		Name:          opts.Name,
+		Image:         opts.Image,
+		Env:           opts.Env,
+		Ports:         opts.Ports,
+		VolumeName:    opts.VolumeName,
+		MemoryLimitMB: opts.MemoryLimitMB,
+		CPULimit:      opts.CPULimit,
+		Binds:         opts.Binds,
 	}
 	data, err := json.Marshal(manifest)
 	if err != nil {
@@ -171,7 +179,23 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 		bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.resolvConf)
 		bwrapArgs = append(bwrapArgs, "--")
 		bwrapArgs = append(bwrapArgs, cmdArgs...)
-		cmd = exec.Command("bwrap", bwrapArgs...)
+
+		if hasSystemdRun() {
+			// Wrap bwrap in systemd-run --user --scope so the game server
+			// survives gamejanitor restarts and gets cgroup resource limits.
+			sdArgs := []string{"--user", "--scope", "--unit=gj-" + id}
+			if manifest.MemoryLimitMB > 0 {
+				sdArgs = append(sdArgs, fmt.Sprintf("--property=MemoryMax=%dM", manifest.MemoryLimitMB))
+			}
+			if manifest.CPULimit > 0 {
+				sdArgs = append(sdArgs, fmt.Sprintf("--property=CPUQuota=%d%%", int(manifest.CPULimit*100)))
+			}
+			sdArgs = append(sdArgs, "--", "bwrap")
+			sdArgs = append(sdArgs, bwrapArgs...)
+			cmd = exec.Command("systemd-run", sdArgs...)
+		} else {
+			cmd = exec.Command("bwrap", bwrapArgs...)
+		}
 	}
 
 	// Set up log file
@@ -188,6 +212,10 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 		logFile.Close()
 		return fmt.Errorf("starting process: %w", err)
 	}
+
+	// Write PID file for process discovery after restarts
+	pidPath := filepath.Join(dir, "pid")
+	os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0644)
 
 	proc := &managedProcess{
 		cmd:       cmd,
@@ -209,6 +237,7 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 		proc.exitCode = cmd.ProcessState.ExitCode()
 		proc.exited = true
 		logFile.Close()
+		os.Remove(pidPath)
 
 		w.log.Info("process exited", "id", id, "exit_code", proc.exitCode)
 		close(proc.done)
@@ -550,9 +579,55 @@ func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserv
 	return worker.PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
-// ListGameserverContainers is not applicable for the process runtime — no containers.
+// ListGameserverContainers scans the processes directory for gameservers and checks
+// whether their PIDs are still alive. This allows recovery after gamejanitor restarts.
 func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
-	return nil, nil
+	processesDir := filepath.Join(w.dataDir, "processes")
+	entries, err := os.ReadDir(processesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading processes dir: %w", err)
+	}
+
+	var containers []worker.GameserverContainer
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		id := entry.Name()
+
+		manifestData, err := os.ReadFile(filepath.Join(processesDir, id, "manifest.json"))
+		if err != nil {
+			continue
+		}
+		var manifest processManifest
+		if err := json.Unmarshal(manifestData, &manifest); err != nil {
+			continue
+		}
+
+		// Check if a PID file exists and the process is alive
+		state := "exited"
+		pidData, err := os.ReadFile(filepath.Join(processesDir, id, "pid"))
+		if err == nil {
+			pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+			if err == nil {
+				if err := syscall.Kill(pid, 0); err == nil {
+					state = "running"
+				}
+			}
+		}
+
+		containers = append(containers, worker.GameserverContainer{
+			ContainerID:   id,
+			ContainerName: manifest.Name,
+			GameserverID:  id,
+			State:         state,
+		})
+	}
+
+	return containers, nil
 }
 
 // --- Helpers ---
@@ -666,7 +741,12 @@ func buildBwrapArgs(rootFS string, manifest processManifest, imgCfg *imageConfig
 		"--dev", "/dev",
 		"--proc", "/proc",
 		"--tmpfs", "/tmp",
-		"--die-with-parent",
+	}
+
+	// When systemd-run manages the process lifecycle, we don't need --die-with-parent.
+	// Without systemd, use it as a safety net so orphan game servers don't linger.
+	if !hasSystemdRun() {
+		args = append(args, "--die-with-parent")
 	}
 
 	// Bind DNS config into the sandbox
@@ -859,6 +939,22 @@ func readProcCPU(pid int) (float64, error) {
 	}
 
 	return (totalTime / elapsed) * 100, nil
+}
+
+// hasSystemdRun checks if systemd-run --user is available.
+// Cached after first call since this doesn't change at runtime.
+var systemdRunAvailable *bool
+
+func hasSystemdRun() bool {
+	if systemdRunAvailable != nil {
+		return *systemdRunAvailable
+	}
+	// Probe: run a no-op scope to confirm systemd user session works
+	cmd := exec.Command("systemd-run", "--user", "--scope", "--unit=gj-probe", "--", "true")
+	err := cmd.Run()
+	result := err == nil
+	systemdRunAvailable = &result
+	return result
 }
 
 // tarDirectory creates a tar stream from a directory.
