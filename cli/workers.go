@@ -115,6 +115,9 @@ var workersGetCmd = &cobra.Command{
 var workersSetCmd = &cobra.Command{
 	Use:   "set <worker-id>",
 	Short: "Configure worker limits and tags",
+	Example: `  gamejanitor workers set w-abc123 --memory 16384 --cpu 8
+  gamejanitor workers set w-abc123 --name "US-East-1"
+  gamejanitor workers set w-abc123 --port-range-start 27000 --port-range-end 27999`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req := &gamejanitor.UpdateWorkerRequest{}

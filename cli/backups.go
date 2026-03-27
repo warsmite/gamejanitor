@@ -55,9 +55,10 @@ var backupsListCmd = &cobra.Command{
 }
 
 var backupsCreateCmd = &cobra.Command{
-	Use:   "create <gameserver>",
-	Short: "Create a backup",
-	Args:  cobra.ExactArgs(1),
+	Use:     "create <gameserver>",
+	Short:   "Create a backup",
+	Example: `  gamejanitor backups create "My Server"`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {

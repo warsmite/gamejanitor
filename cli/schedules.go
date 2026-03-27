@@ -71,6 +71,8 @@ var schedulesListCmd = &cobra.Command{
 var schedulesCreateCmd = &cobra.Command{
 	Use:   "create <gameserver>",
 	Short: "Create a schedule",
+	Example: `  gamejanitor schedules create "My Server" --type backup --cron "0 4 * * *" --name "Daily Backup"
+  gamejanitor schedules create "My Server" --type restart --cron "0 6 * * 1" --name "Weekly Restart"`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])

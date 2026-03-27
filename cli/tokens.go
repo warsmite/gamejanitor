@@ -71,6 +71,9 @@ var tokensListCmd = &cobra.Command{
 var tokensCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a token",
+	Example: `  gamejanitor tokens create --name admin-key --scope admin
+  gamejanitor tokens create --name worker-1 --scope worker
+  gamejanitor tokens create --name panel --scope custom --gameserver "My Server" --permission start,stop,logs`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		if name == "" {

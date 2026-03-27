@@ -227,6 +227,7 @@ var deleteCmd = &cobra.Command{
 var editCmd = &cobra.Command{
 	Use:   "edit <name-or-id>",
 	Short: "Edit a gameserver's configuration (must be stopped)",
+	Example: `  gamejanitor edit "My Server" --env MAX_PLAYERS=50 --memory 4g`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])

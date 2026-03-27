@@ -10,31 +10,35 @@ import (
 // --- Start / Stop / Restart ---
 
 var startCmd = &cobra.Command{
-	Use:   "start <name-or-id>",
-	Short: "Start a gameserver",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runAction("start", "Starting"),
+	Use:     "start <name-or-id>",
+	Short:   "Start a gameserver",
+	Example: `  gamejanitor start "My Server"`,
+	Args:    cobra.MaximumNArgs(1),
+	RunE:    runAction("start", "Starting"),
 }
 
 var stopCmd = &cobra.Command{
-	Use:   "stop <name-or-id>",
-	Short: "Stop a gameserver",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runAction("stop", "Stopping"),
+	Use:     "stop <name-or-id>",
+	Short:   "Stop a gameserver",
+	Example: `  gamejanitor stop "My Server"`,
+	Args:    cobra.MaximumNArgs(1),
+	RunE:    runAction("stop", "Stopping"),
 }
 
 var restartCmd = &cobra.Command{
-	Use:   "restart <name-or-id>",
-	Short: "Restart a gameserver",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runAction("restart", "Restarting"),
+	Use:     "restart <name-or-id>",
+	Short:   "Restart a gameserver",
+	Example: `  gamejanitor restart "My Server"`,
+	Args:    cobra.MaximumNArgs(1),
+	RunE:    runAction("restart", "Restarting"),
 }
 
 var updateGameCmd = &cobra.Command{
-	Use:   "update-game <name-or-id>",
-	Short: "Update a gameserver's game to the latest version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAction("update-game", "Updating game for"),
+	Use:     "update-game <name-or-id>",
+	Short:   "Update a gameserver's game to the latest version",
+	Example: `  gamejanitor update-game "My Server"`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    runAction("update-game", "Updating game for"),
 }
 
 func init() {
@@ -157,6 +161,8 @@ var statusCmd = &cobra.Command{
 	Use:     "status [name-or-id]",
 	Aliases: []string{"ps"},
 	Short:   "Show gameserver or cluster status",
+	Example: `  gamejanitor status              # all gameservers
+  gamejanitor status "My Server"  # single gameserver`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No argument: cluster overview (list all gameservers with status)
@@ -220,6 +226,9 @@ func runStatusOverview() error {
 var logsCmd = &cobra.Command{
 	Use:   "logs <name-or-id>",
 	Short: "Show gameserver or service logs",
+	Example: `  gamejanitor logs "My Server"
+  gamejanitor logs "My Server" -f    # follow live
+  gamejanitor logs --service         # gamejanitor service logs`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		isService, _ := cmd.Flags().GetBool("service")
@@ -283,9 +292,10 @@ func runServiceLogs(cmd *cobra.Command) error {
 // --- Command ---
 
 var commandCmd = &cobra.Command{
-	Use:   "command <name-or-id> <command>",
-	Short: "Send a console command to a gameserver",
-	Args:  cobra.ExactArgs(2),
+	Use:     "command <name-or-id> <command>",
+	Short:   "Send a console command to a gameserver",
+	Example: `  gamejanitor command "My Server" "say Hello everyone!"`,
+	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
@@ -352,9 +362,10 @@ var reinstallCmd = &cobra.Command{
 // --- Migrate ---
 
 var migrateCmd = &cobra.Command{
-	Use:   "migrate <name-or-id>",
-	Short: "Migrate a gameserver to another node",
-	Args:  cobra.ExactArgs(1),
+	Use:     "migrate <name-or-id>",
+	Short:   "Migrate a gameserver to another node",
+	Example: `  gamejanitor migrate "My Server" --node worker-2`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
