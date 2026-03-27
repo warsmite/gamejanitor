@@ -27,7 +27,7 @@ type EnvVar struct {
 	Group           string          `yaml:"group,omitempty" json:"group,omitempty"`
 	Options         []string        `yaml:"options,omitempty" json:"options,omitempty"`
 	DynamicOptions  *DynamicOptions `yaml:"dynamic_options,omitempty" json:"dynamic_options,omitempty"`
-	Required        bool            `yaml:"required,omitempty" json:"required,omitempty"`
+	Required        bool            `yaml:"required,omitempty" json:"required,omitempty"` // unused by built-in games — all have defaults. For custom games needing user-provided values (e.g. FiveM license key).
 	ConsentRequired bool            `yaml:"consent_required,omitempty" json:"consent_required,omitempty"`
 	Notice          string          `yaml:"notice,omitempty" json:"notice,omitempty"`
 	Autogenerate    string          `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
