@@ -5,7 +5,7 @@ if [ -z "$1" ]; then
 fi
 
 GAME_PORT="${GAME_PORT:-27015}"
-RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+RCON_PASSWORD="${RCON_PASSWORD}"
 
 # CS2 binds RCON to the container's IP, not localhost
 RCON_HOST=$(hostname -i | cut -d' ' -f1)

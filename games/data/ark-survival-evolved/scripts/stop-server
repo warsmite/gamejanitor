@@ -1,6 +1,6 @@
 #!/bin/bash
 RCON_PORT="${RCON_PORT:-27020}"
-RCON_PASSWORD="${ADMIN_PASSWORD:-changeme}"
+RCON_PASSWORD="${ADMIN_PASSWORD}"
 
 echo "[stop-server] announcing shutdown"
 rcon -a "localhost:${RCON_PORT}" -p "$RCON_PASSWORD" "ServerChat Server shutting down in 5 seconds..." 2>/dev/null || true

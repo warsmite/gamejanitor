@@ -5,6 +5,6 @@ if [ -z "$1" ]; then
 fi
 
 RCON_PORT="${RCON_PORT:-25575}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 
 rcon -a "localhost:${RCON_PORT}" -p "$ADMIN_PASSWORD" "$1"

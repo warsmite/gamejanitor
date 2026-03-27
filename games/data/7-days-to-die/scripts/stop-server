@@ -1,6 +1,6 @@
 #!/bin/bash
 TELNET_PORT="${TELNET_PORT:-8081}"
-TELNET_PASSWORD="${TELNET_PASSWORD:-changeme}"
+TELNET_PASSWORD="${TELNET_PASSWORD}"
 
 echo "[stop-server] saving world before shutdown"
 {
