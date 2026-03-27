@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -144,4 +145,152 @@ func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
 	err := svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker unavailable")
+}
+
+// ── Multi-node / auto-migration on start ──
+
+func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	fw2 := testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
+	ctx := testutil.TestContext()
+
+	// Create gameserver on small-node with 256MB (fits fine)
+	gs := &model.Gameserver{
+		Name:          "Auto Migrate Test",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 256,
+		NodeID:        testutil.StrPtr("small-node"),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
+	require.Equal(t, "small-node", *gs.NodeID)
+
+	// Bump memory in DB to exceed small-node's capacity (simulates resource
+	// upgrade where async migration failed, or admin reduced node capacity)
+	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
+	require.NoError(t, err)
+
+	// Start should detect overcommit and auto-migrate to big-node
+	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	require.NoError(t, err)
+
+	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "big-node", *fetched.NodeID, "should have auto-migrated to big-node")
+	assert.Greater(t, fw2.ContainerCount(), 0, "container should be on big-node")
+}
+
+func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	fw1 := testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithMaxMemoryMB(8192))
+	testutil.RegisterFakeWorker(t, svc, "worker-2", testutil.WithMaxMemoryMB(8192))
+	ctx := testutil.TestContext()
+
+	gs := &model.Gameserver{
+		Name:          "No Migration Needed",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 512,
+		NodeID:        testutil.StrPtr("worker-1"),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
+
+	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	require.NoError(t, err)
+
+	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "worker-1", *fetched.NodeID, "should stay on original node")
+	assert.Greater(t, fw1.ContainerCount(), 0, "container should be on worker-1")
+}
+
+func TestLifecycle_Start_FailsWhenNoNodeHasCapacity(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "node-a", testutil.WithMaxMemoryMB(1024))
+	testutil.RegisterFakeWorker(t, svc, "node-b", testutil.WithMaxMemoryMB(1024))
+	ctx := testutil.TestContext()
+
+	// Create gameserver with 256MB on node-a (fits fine)
+	gs := &model.Gameserver{
+		Name:          "No Capacity Anywhere",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 256,
+		NodeID:        testutil.StrPtr("node-a"),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
+
+	// Bump memory in DB beyond what any node can fit
+	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
+	require.NoError(t, err)
+
+	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lacks capacity")
+}
+
+func TestLifecycle_Start_AutoMigrateAfterResourceUpgrade(t *testing.T) {
+	// Simulates the failed auto-migration race: resources updated in DB but
+	// migration failed. Next start should auto-migrate instead of overcommitting.
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
+	ctx := testutil.TestContext()
+
+	gs := &model.Gameserver{
+		Name:          "Resource Upgrade Migration",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 512,
+		NodeID:        testutil.StrPtr("small-node"),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
+
+	// Simulate: DB has upgraded resources but gameserver is still on small-node
+	// (as if auto-migration on update failed)
+	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
+	require.NoError(t, err)
+
+	// Start should detect overcommit and auto-migrate
+	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	require.NoError(t, err)
+
+	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "big-node", *fetched.NodeID, "should have migrated to big-node")
+}
+
+func TestLifecycle_Start_SkipsCapacityCheckWithZeroLimits(t *testing.T) {
+	// Gameservers with no memory limit set should start without capacity checks
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	fw := testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithMaxMemoryMB(1024))
+	ctx := testutil.TestContext()
+
+	gs := &model.Gameserver{
+		Name:          "No Limits",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 0,
+		NodeID:        testutil.StrPtr("worker-1"),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
+
+	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	require.NoError(t, err)
+
+	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "worker-1", *fetched.NodeID)
+	assert.Greater(t, fw.ContainerCount(), 0)
 }
