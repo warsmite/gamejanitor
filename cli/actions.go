@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	gamejanitor "github.com/warsmite/gamejanitor/sdk"
@@ -187,11 +188,10 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Status: %s\n", colorStatus(status.Status))
-		if status.Container != nil {
-			fmt.Printf("Container:\n")
-			fmt.Printf("  State:      %s\n", status.Container.State)
-			fmt.Printf("  Started:    %s\n", status.Container.StartedAt)
+		fmt.Printf("Status:      %s\n", colorStatus(status.Status))
+		if status.Container != nil && !status.Container.StartedAt.IsZero() {
+			d := time.Since(status.Container.StartedAt)
+			fmt.Printf("Uptime:      %s\n", formatDuration(d))
 		}
 
 		// Show live query data if the server is running
@@ -422,4 +422,19 @@ var migrateCmd = &cobra.Command{
 		fmt.Printf("Gameserver %s migrated to node %s.\n", name, nodeID)
 		return nil
 	},
+}
+
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		return fmt.Sprintf("%dd %dh", days, hours)
+	}
 }
