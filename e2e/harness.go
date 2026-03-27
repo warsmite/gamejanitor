@@ -36,6 +36,7 @@ func Start(t *testing.T) *Harness {
 	dataDir := t.TempDir()
 	port := freePort(t)
 	grpcPort := freePort(t)
+	workerGRPCPort := freePort(t)
 
 	// Copy the test game definition into the data dir so gamejanitor loads it as a local override
 	copyTestGame(t, dataDir)
@@ -57,6 +58,7 @@ func Start(t *testing.T) *Harness {
 		"--bind", "127.0.0.1",
 		"--port", fmt.Sprintf("%d", port),
 		"--grpc-port", fmt.Sprintf("%d", grpcPort),
+		"--worker-grpc-port", fmt.Sprintf("%d", workerGRPCPort),
 		"--sftp-port", "0",
 		"--data-dir", dataDir,
 		"--controller",
