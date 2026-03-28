@@ -15,6 +15,9 @@
   let loading = $state(true);
   let activeCategory = $state('');
 
+  // Browse loader — local filter, doesn't change the server's actual loader
+  let browseLoader = $state('');
+
   // Search
   let searchQuery = $state('');
   let searchResults = $state<ModSearchResult[]>([]);
@@ -67,8 +70,13 @@
       ]);
       config = cfg;
       installed = mods;
+      if (cfg.loader) {
+        browseLoader = cfg.loader.current;
+      }
       if (cfg.categories.length > 0) {
         activeCategory = cfg.categories[0].name;
+        // Load default/popular results
+        loadDefaultResults(cfg.categories[0].name);
       }
 
       // Check for updates (non-blocking)
@@ -97,10 +105,29 @@
     await checkAndApplyEnvChange(env);
   }
 
-  async function changeLoader(newValue: string) {
-    if (!config?.loader || !gameserver) return;
-    const env = { ...gameserver.env, [config.loader.env]: newValue };
-    await checkAndApplyEnvChange(env);
+  function setBrowseLoader(newValue: string) {
+    browseLoader = newValue;
+    // Refresh search with new loader filter
+    if (searchQuery.trim()) {
+      doSearch();
+    } else {
+      loadDefaultResults(activeCategory);
+    }
+  }
+
+  async function loadDefaultResults(category: string) {
+    if (!category) return;
+    searching = true;
+    try {
+      const resp = await api.mods.search(gsId, category, '', 0, 20);
+      searchResults = resp.results;
+      searchTotal = resp.total;
+    } catch {
+      // Non-critical — empty state is fine
+      searchResults = [];
+    } finally {
+      searching = false;
+    }
   }
 
   async function checkAndApplyEnvChange(newEnv: Record<string, string>) {
@@ -143,12 +170,15 @@
 
   function handleSearchInput() {
     clearTimeout(searchDebounce);
-    if (!searchQuery.trim()) { searchResults = []; return; }
+    if (!searchQuery.trim()) {
+      searchDebounce = setTimeout(() => loadDefaultResults(activeCategory), 300);
+      return;
+    }
     searchDebounce = setTimeout(() => doSearch(), 300);
   }
 
   async function doSearch() {
-    if (!searchQuery.trim() || !activeCategory) return;
+    if (!activeCategory) return;
     searching = true;
     try {
       const resp = await api.mods.search(gsId, activeCategory, searchQuery.trim(), 0, 20);
@@ -310,9 +340,9 @@
           {#if config.loader.options.length === 2 && config.loader.options.includes('true') && config.loader.options.includes('false')}
             <!-- Boolean toggle -->
             <button
-              class="toggle" class:on={config.loader.current === 'true'}
+              class="toggle" class:on={browseLoader === 'true'}
               disabled={changingConfig}
-              onclick={() => changeLoader(config!.loader!.current === 'true' ? 'false' : 'true')}
+              onclick={() => setBrowseLoader(browseLoader === 'true' ? 'false' : 'true')}
             ></button>
           {:else}
             <!-- Multi-option selector -->
@@ -320,9 +350,9 @@
               {#each config.loader.options as opt}
                 <button
                   class="loader-pill"
-                  class:active={config.loader.current === opt}
+                  class:active={browseLoader === opt}
                   disabled={changingConfig}
-                  onclick={() => changeLoader(opt)}
+                  onclick={() => setBrowseLoader(opt)}
                 >{opt}</button>
               {/each}
             </div>
@@ -347,7 +377,7 @@
         <button
           class="cat-tab"
           class:active={activeCategory === cat.name}
-          onclick={() => { activeCategory = cat.name; searchResults = []; searchQuery = ''; }}
+          onclick={() => { activeCategory = cat.name; searchQuery = ''; loadDefaultResults(cat.name); }}
         >{cat.name}</button>
       {/each}
     </div>
@@ -494,7 +524,7 @@
       {#if searchTotal > searchResults.length}
         <p class="results-more">Showing {searchResults.length} of {searchTotal}</p>
       {/if}
-    {:else if searchQuery && !searching}
+    {:else if searchQuery.trim() && !searching}
       <p class="empty-state">No results for "{searchQuery}"</p>
     {/if}
   </section>
