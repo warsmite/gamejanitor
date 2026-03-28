@@ -28,6 +28,8 @@ type Store interface {
 	CreatePackExclusion(e *model.PackExclusion) error
 	SetModPackID(modID, packID string) error
 	UpdateModVersion(modID, versionID, version string) error
+	UpdateModFileHash(modID, hash string) error
+	UpdateModDownloadURL(modID, url string) error
 }
 
 // FileOperator is a narrow interface for file operations the mod service needs.
@@ -490,8 +492,12 @@ func (s *ModService) Update(ctx context.Context, gameserverID, modID string) (*m
 
 	mod.Version = latest.Version
 	mod.VersionID = latest.VersionID
+	mod.DownloadURL = latest.DownloadURL
 	if err := s.store.UpdateModVersion(modID, latest.VersionID, latest.Version); err != nil {
 		return nil, fmt.Errorf("updating mod record: %w", err)
+	}
+	if latest.DownloadURL != "" {
+		s.store.UpdateModDownloadURL(modID, latest.DownloadURL)
 	}
 
 	return mod, nil
@@ -829,6 +835,7 @@ func (s *ModService) newInstalledMod(gameserverID, source, sourceID, category st
 		Name:          version.FileName,
 		Version:       version.Version,
 		VersionID:     version.VersionID,
+		DownloadURL:   version.DownloadURL,
 		Delivery:      delivery,
 		AutoInstalled: autoInstalled,
 		PackID:        packID,

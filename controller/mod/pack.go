@@ -61,7 +61,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, fmt.Errorf("installing modpack: %w", err)
 	}
 
-	// Record the modpack itself
+	// Record the modpack itself — store the .mrpack download URL for reconciliation
 	pack := &model.InstalledMod{
 		ID:           uuid.New().String(),
 		GameserverID: gameserverID,
@@ -71,6 +71,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		Name:         version.FileName,
 		Version:      version.Version,
 		VersionID:    version.VersionID,
+		DownloadURL:  version.DownloadURL,
 		Delivery:     "pack",
 		Metadata:     json.RawMessage(`{}`),
 		InstalledAt:  time.Now(),
@@ -102,6 +103,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 			VersionID:    pm.SHA512,
 			FilePath:     pm.FilePath,
 			FileName:     pm.FileName,
+			DownloadURL:  pm.DownloadURL,
 			Delivery:     "file",
 			PackID:       &pack.ID,
 			Metadata:     json.RawMessage(`{}`),
@@ -227,6 +229,7 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 			VersionID:    newMod.SHA512,
 			FilePath:     newMod.FilePath,
 			FileName:     newMod.FileName,
+			DownloadURL:  newMod.DownloadURL,
 			Delivery:     "file",
 			PackID:       &pack.ID,
 			Metadata:     json.RawMessage(`{}`),
