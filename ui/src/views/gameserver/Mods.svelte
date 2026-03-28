@@ -282,9 +282,69 @@
     }
   }
 
-  // Install — with loader switch prompt if needed
+  // Install — handles loader switching, modpack version requirements, and restart
   async function installMod(result: ModSearchResult) {
-    // Check if the current loader supports this mod's source
+    const isPack = activeCategoryIsPack();
+
+    // For modpacks: fetch version info to check game version + loader requirements
+    if (isPack) {
+      const packReqs = await resolvePackRequirements(result);
+      if (!packReqs) return; // user cancelled or error
+
+      const { envChanges, descriptions, needsRestart } = packReqs;
+
+      // Build combined confirmation message
+      const actions: string[] = [];
+      for (const desc of descriptions) actions.push(desc);
+      actions.push('Download and install all mods in the pack');
+      actions.push('May overwrite config files with pack defaults');
+      if (needsRestart) actions.push('Restart the server to apply changes');
+
+      const message = `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `  - ${a}`).join('\n')}`;
+      const accepted = await confirm({ title: 'Install Modpack', message, confirmLabel: 'Install' });
+      if (!accepted) return;
+
+      // Apply env changes (version + loader) before installing
+      if (Object.keys(envChanges).length > 0) {
+        try {
+          const currentEnv = typeof gameserver!.env === 'string' ? JSON.parse(gameserver!.env) : { ...gameserver!.env };
+          await api.gameservers.update(id, { env: { ...currentEnv, ...envChanges } });
+          await loadConfig();
+        } catch (e: any) {
+          toast(`Failed to update configuration: ${e.message}`, 'error');
+          return;
+        }
+      }
+
+      // Install the pack
+      const key = `${result.source}:${result.source_id}`;
+      installingIds = new Set([...installingIds, key]);
+      try {
+        await api.mods.installPack(id, { source: result.source, pack_id: result.source_id });
+        toast(`Installed ${result.name}`, 'success');
+        await loadInstalled();
+        checkForUpdates();
+
+        // Trigger update-game to install the loader on next start
+        if (needsRestart) {
+          try {
+            await api.gameservers.updateGame(id);
+            toast('Server update started — loader will install on restart', 'info');
+          } catch (e: any) {
+            toast(`Pack installed, but failed to trigger update: ${e.message}. Manually update the game to apply.`, 'error');
+          }
+        }
+      } catch (e: any) {
+        toast(`Failed to install ${result.name}: ${e.message}`, 'error');
+      } finally {
+        const next = new Set(installingIds);
+        next.delete(key);
+        installingIds = next;
+      }
+      return;
+    }
+
+    // Single mod install — check loader compatibility
     if (!currentLoaderSupportsSource(result.source)) {
       const compatible = loadersForSource(result.source);
       if (compatible.length === 0) {
@@ -294,12 +354,11 @@
       const loaderName = compatible[0];
       const accepted = await confirm({
         title: 'Loader Required',
-        message: `${result.name} requires ${loaderName}. Switch to ${loaderName}?`,
+        message: `${result.name} requires ${loaderName}. Switch to ${loaderName}?\n\nThe server will need a restart to apply.`,
         confirmLabel: `Switch to ${loaderName}`,
       });
       if (!accepted) return;
 
-      // Switch loader, then continue with install
       if (!gameserver || !config?.loader) return;
       const currentEnv = typeof gameserver.env === 'string' ? JSON.parse(gameserver.env) : { ...gameserver.env };
       const newEnv = { ...currentEnv, [config.loader.env]: loaderName };
@@ -312,24 +371,11 @@
       }
     }
 
-    // Modpack confirmation
-    if (activeCategoryIsPack()) {
-      const accepted = await confirm({
-        title: 'Install Modpack',
-        message: `Install "${result.name}"? This will download all mods in the pack and may overwrite config files.`,
-        confirmLabel: 'Install',
-      });
-      if (!accepted) return;
-    }
-
+    // Install the mod
     const key = `${result.source}:${result.source_id}`;
     installingIds = new Set([...installingIds, key]);
     try {
-      if (activeCategoryIsPack()) {
-        await api.mods.installPack(id, { source: result.source, pack_id: result.source_id });
-      } else {
-        await api.mods.install(id, { category: activeCategory, source: result.source, source_id: result.source_id });
-      }
+      await api.mods.install(id, { category: activeCategory, source: result.source, source_id: result.source_id });
       toast(`Installed ${result.name}`, 'success');
       await loadInstalled();
       checkForUpdates();
@@ -340,6 +386,66 @@
       next.delete(key);
       installingIds = next;
     }
+  }
+
+  // Resolve what env changes a modpack needs before installation.
+  // Returns null if the user should not proceed (error case).
+  async function resolvePackRequirements(result: ModSearchResult): Promise<{
+    envChanges: Record<string, string>;
+    descriptions: string[];
+    needsRestart: boolean;
+  } | null> {
+    if (!gameserver || !config) return null;
+
+    const envChanges: Record<string, string> = {};
+    const descriptions: string[] = [];
+    let needsRestart = false;
+
+    // Fetch the latest version to get game_version and loader
+    let versions;
+    try {
+      versions = await api.mods.versions(id, { category: 'Modpacks', source: result.source, source_id: result.source_id });
+    } catch (e: any) {
+      toast(`Failed to fetch pack info: ${e.message}`, 'error');
+      return null;
+    }
+    if (!versions || versions.length === 0) {
+      toast('No versions available for this modpack', 'error');
+      return null;
+    }
+
+    const packVersion = versions[0];
+
+    // Check game version
+    if (packVersion.game_version && config.version) {
+      const current = config.version.current;
+      if (current !== packVersion.game_version) {
+        envChanges[config.version.env] = packVersion.game_version;
+        descriptions.push(`Switch Minecraft from ${current || 'latest'} to ${packVersion.game_version}`);
+        needsRestart = true;
+      }
+    }
+
+    // Check loader
+    if (packVersion.loader && config.loader) {
+      const current = config.loader.current;
+      if (current !== packVersion.loader) {
+        // Find the loader option that matches — Modrinth returns "fabric", our options have the value
+        const matchingOption = config.loader.options.find(o =>
+          o.value === packVersion.loader || o.value.toLowerCase() === packVersion.loader.toLowerCase()
+        );
+        if (matchingOption) {
+          envChanges[config.loader.env] = matchingOption.value;
+          descriptions.push(`Switch loader from ${current || 'none'} to ${matchingOption.value}`);
+          needsRestart = true;
+        }
+      }
+    } else if (packVersion.loader && !config.loader) {
+      // Game has no loader config but pack requires one — unusual, just note it
+      descriptions.push(`Requires ${packVersion.loader} (not configurable for this game)`);
+    }
+
+    return { envChanges, descriptions, needsRestart };
   }
 
   // Uninstall
