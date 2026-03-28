@@ -94,10 +94,10 @@ async function putRaw(url: string, content: string): Promise<void> {
   }
 }
 
-async function uploadFile(path: string, filePath: string, file: File): Promise<void> {
+async function uploadFile(path: string, filePath: string, file: File, filename?: string): Promise<void> {
   const form = new FormData();
   form.append('path', filePath);
-  form.append('file', file);
+  form.append('file', file, filename || file.name);
 
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -350,7 +350,7 @@ export const api = {
     delete: (gsId: string, path: string) => del(`/api/gameservers/${gsId}/files`, { path }),
     mkdir: (gsId: string, path: string) => post(`/api/gameservers/${gsId}/files/mkdir`, { path }),
     rename: (gsId: string, from: string, to: string) => post(`/api/gameservers/${gsId}/files/rename`, { from, to }),
-    upload: (gsId: string, path: string, file: File) => uploadFile(`/api/gameservers/${gsId}/files/upload`, path, file),
+    upload: (gsId: string, path: string, file: File, filename?: string) => uploadFile(`/api/gameservers/${gsId}/files/upload`, path, file, filename),
     downloadUrl: (gsId: string, path: string) => `/api/gameservers/${gsId}/files/download?path=${encodeURIComponent(path)}`,
   },
 

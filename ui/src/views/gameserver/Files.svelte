@@ -18,8 +18,9 @@
   let renamingFile = $state('');
   let renameValue = $state('');
 
-  // Upload ref
+  // Upload refs
   let uploadInput: HTMLInputElement;
+  let folderInput: HTMLInputElement;
 
   function buildSegments(path: string): { name: string; path: string }[] {
     const parts = path.split('/').filter(Boolean);
@@ -173,22 +174,35 @@
     }
   }
 
-  async function uploadFile(e: Event) {
+  async function uploadFiles(e: Event) {
     const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-      await api.files.upload(id, apiPath(currentPath), file);
-      toast('File uploaded', 'success');
-      const existing = files.find(f => f.name === file.name);
-      if (existing) {
-        files = files.map(f => f.name === file.name ? { ...f, size: file.size, mod_time: new Date().toISOString() } : f);
-      } else {
-        files = [...files, { name: file.name, is_dir: false, size: file.size, mod_time: new Date().toISOString(), permissions: '' }];
+    const fileList = input.files;
+    if (!fileList || fileList.length === 0) return;
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const file of fileList) {
+      // For folder uploads, webkitRelativePath has the relative path (e.g. "mods/mymod.jar").
+      // The backend creates parent directories automatically.
+      const relativePath = (file as any).webkitRelativePath || '';
+      const filename = relativePath || file.name;
+
+      try {
+        await api.files.upload(id, apiPath(currentPath), file, filename);
+        succeeded++;
+      } catch {
+        failed++;
       }
-    } catch (e: any) {
-      toast(`Upload failed: ${(e as Error).message}`, 'error');
     }
+
+    if (succeeded > 0) {
+      toast(`Uploaded ${succeeded} file${succeeded > 1 ? 's' : ''}${failed > 0 ? ` (${failed} failed)` : ''}`, succeeded > 0 && failed === 0 ? 'success' : 'warning');
+      await loadFiles(currentPath);
+    } else {
+      toast('Upload failed', 'error');
+    }
+
     input.value = '';
   }
 
@@ -258,7 +272,11 @@
     <div class="files-actions">
       <button class="btn-accent" onclick={() => uploadInput.click()} style="font-size:0.78rem; padding:6px 12px;">
         <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>
-        Upload
+        Upload Files
+      </button>
+      <button class="btn-accent" onclick={() => folderInput.click()} style="font-size:0.78rem; padding:6px 12px;">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>
+        Upload Folder
       </button>
       <button class="btn-accent" onclick={createFile} style="font-size:0.78rem; padding:6px 12px;">
         <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
@@ -269,7 +287,8 @@
         New Folder
       </button>
     </div>
-    <input type="file" bind:this={uploadInput} onchange={uploadFile} style="display:none;">
+    <input type="file" multiple bind:this={uploadInput} onchange={uploadFiles} style="display:none;">
+    <input type="file" bind:this={folderInput} onchange={uploadFiles} style="display:none;" webkitdirectory>
   </div>
 
   <div class="file-panel">

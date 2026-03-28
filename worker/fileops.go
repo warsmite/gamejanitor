@@ -74,6 +74,9 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(filepath.Dir(hostPath), 0755); err != nil {
+		return fmt.Errorf("creating parent directory: %w", err)
+	}
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
