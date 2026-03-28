@@ -16,6 +16,7 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/controller/browser"
 	"github.com/warsmite/gamejanitor/controller/warning"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
@@ -197,6 +198,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	warningSubscriber := warning.New(svcs.Broadcaster, svcs.SettingsSvc, logger)
 	warningSubscriber.Start(ctx)
 	defer warningSubscriber.Stop()
+
+	reachabilityChecker := browser.New(svcs.Broadcaster, svcs.SettingsSvc, db, logger)
+	reachabilityChecker.Start(ctx)
+	defer reachabilityChecker.Stop()
 
 	// Prune old activities on startup, then hourly
 	go func() {

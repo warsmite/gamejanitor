@@ -57,6 +57,7 @@ const (
 	EventGameserverStats        = "gameserver.stats"
 	EventGameserverQuery        = "gameserver.query"
 	EventGameserverWarning      = "gameserver.warning"
+	EventGameserverReachable    = "gameserver.reachable"
 )
 
 // AllEventTypes is every event type, used for webhook endpoint validation.
@@ -82,8 +83,9 @@ var AllEventTypes = []string{
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,
 	EventScheduleTaskCompleted, EventScheduleTaskFailed, EventScheduleTaskMissed,
 	EventGameserverStats, EventGameserverQuery,
-	// Warnings
+	// Warnings & checks
 	EventGameserverWarning,
+	EventGameserverReachable,
 }
 
 // Lifecycle events — published by lifecycle code, consumed by StatusSubscriber to derive status.
@@ -226,6 +228,22 @@ func (e GameserverWarningEvent) EventType() string        { return EventGameserv
 func (e GameserverWarningEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverWarningEvent) EventGameserverID() string { return e.GameserverID }
 func (e GameserverWarningEvent) EventActor() Actor         { return SystemActor }
+
+// GameserverReachableEvent is emitted after probing a gameserver's public
+// reachability via the gamejanitor browser service.
+type GameserverReachableEvent struct {
+	GameserverID string `json:"gameserver_id"`
+	Reachable    bool   `json:"reachable"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Registered   bool   `json:"registered,omitempty"` // added to server browser
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+func (e GameserverReachableEvent) EventType() string        { return EventGameserverReachable }
+func (e GameserverReachableEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e GameserverReachableEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverReachableEvent) EventActor() Actor         { return SystemActor }
 
 // Actor represents who/what initiated an action.
 type Actor struct {

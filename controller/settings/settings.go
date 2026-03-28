@@ -39,6 +39,7 @@ const (
 	SettingRequireStorageLimit      = "require_storage_limit"
 	SettingStorageWarningThreshold = "storage_warning_threshold"
 	SettingStorageCriticalThreshold = "storage_critical_threshold"
+	SettingRegisterWithBrowser     = "register_with_browser"
 )
 
 // Mode constants for selecting default profiles.
@@ -69,6 +70,7 @@ var Defaults = map[string]any{
 	SettingRequireStorageLimit:      false,
 	SettingStorageWarningThreshold: 90,
 	SettingStorageCriticalThreshold: 100,
+	SettingRegisterWithBrowser:     false,
 }
 
 // BusinessOverrides are applied on top of Defaults when mode is "business".
