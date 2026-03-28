@@ -23,6 +23,7 @@ const standardPatterns: { name: string; pattern: RegExp; paramNames: string[] }[
   { name: 'gameserverFiles', pattern: /^\/gameservers\/([^/]+)\/files$/, paramNames: ['id'] },
   { name: 'gameserverBackups', pattern: /^\/gameservers\/([^/]+)\/backups$/, paramNames: ['id'] },
   { name: 'gameserverSchedules', pattern: /^\/gameservers\/([^/]+)\/schedules$/, paramNames: ['id'] },
+  { name: 'gameserverMods', pattern: /^\/gameservers\/([^/]+)\/mods$/, paramNames: ['id'] },
   { name: 'gameserverSettings', pattern: /^\/gameservers\/([^/]+)\/settings$/, paramNames: ['id'] },
   { name: 'gameserverOverview', pattern: /^\/gameservers\/([^/]+)$/, paramNames: ['id'] },
 ];
@@ -33,6 +34,7 @@ const embeddedPatterns: { name: string; pattern: RegExp; paramNames: string[] }[
   { name: 'gameserverFiles', pattern: /^\/files$/, paramNames: [] },
   { name: 'gameserverBackups', pattern: /^\/backups$/, paramNames: [] },
   { name: 'gameserverSchedules', pattern: /^\/schedules$/, paramNames: [] },
+  { name: 'gameserverMods', pattern: /^\/mods$/, paramNames: [] },
   { name: 'gameserverSettings', pattern: /^\/settings$/, paramNames: [] },
   { name: 'gameserverOverview', pattern: /^\/$/, paramNames: [] },
 ];

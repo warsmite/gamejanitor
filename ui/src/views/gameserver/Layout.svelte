@@ -21,6 +21,15 @@
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
   const activeOperation = $derived(gsState?.activeOperation ?? null);
 
+  // Mods tab visibility: fetch config to check if game supports mods
+  let hasModsSupport = $state(false);
+  $effect(() => {
+    if (!gameserver) return;
+    api.mods.config(id).then(cfg => {
+      hasModsSupport = (cfg?.categories?.length ?? 0) > 0;
+    }).catch(() => { hasModsSupport = false; });
+  });
+
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
   const isTransitioning = $derived(() => {
@@ -66,6 +75,7 @@
     ...(can('gameserver.files.read') ? [{ label: 'Files', path: '/files' }] : []),
     ...(can('backup.read') ? [{ label: 'Backups', path: '/backups' }] : []),
     ...(can('schedule.read') ? [{ label: 'Schedules', path: '/schedules' }] : []),
+    ...(hasModsSupport && can('gameserver.mods.read') ? [{ label: 'Mods', path: '/mods' }] : []),
     { label: 'Settings', path: '/settings' },
   ]);
 

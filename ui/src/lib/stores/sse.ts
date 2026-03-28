@@ -69,6 +69,7 @@ export function connect() {
     'schedule.create', 'schedule.update', 'schedule.delete',
     'schedule.task.completed', 'schedule.task.failed',
     'gameserver.stats', 'gameserver.query',
+    'mod.installed', 'mod.uninstalled',
   ];
 
   for (const type of eventTypes) {
