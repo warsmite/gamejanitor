@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"net/http"
@@ -310,9 +311,9 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	}
 
 	var w io.Writer = f
-	var hasher *sha512Hasher
+	var hasher hash.Hash
 	if expectedHash != "" {
-		hasher = &sha512Hasher{}
+		hasher = sha512.New()
 		w = io.MultiWriter(f, hasher)
 	}
 
@@ -328,7 +329,7 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	}
 
 	if hasher != nil {
-		actual := hasher.hexSum()
+		actual := hex.EncodeToString(hasher.Sum(nil))
 		if actual != expectedHash {
 			os.Remove(hostPath)
 			return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actual)
@@ -337,26 +338,6 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 
 	os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
 	return nil
-}
-
-type sha512Hasher struct {
-	h [sha512.Size]byte
-	w io.Writer
-}
-
-func (h *sha512Hasher) Write(p []byte) (int, error) {
-	if h.w == nil {
-		hash := sha512.New()
-		h.w = hash
-	}
-	return h.w.Write(p)
-}
-
-func (h *sha512Hasher) hexSum() string {
-	if hw, ok := h.w.(interface{ Sum([]byte) []byte }); ok {
-		return hex.EncodeToString(hw.Sum(nil))
-	}
-	return ""
 }
 
 // DownloadToMemory downloads a URL to []byte with hash verification.
