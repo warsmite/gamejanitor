@@ -190,6 +190,7 @@ container:
               project_type: mod
 
       - name: Resource Packs
+        always_available: true
         sources:
           - name: modrinth
             delivery: file
@@ -198,6 +199,7 @@ container:
               project_type: resourcepack
 
       - name: Modpacks
+        always_available: true
         sources:
           - name: modrinth
             delivery: pack

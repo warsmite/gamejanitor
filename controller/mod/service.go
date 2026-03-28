@@ -639,6 +639,10 @@ func (s *ModService) availableCategories(game *games.Game, env model.Env) []game
 
 	var result []games.ModCategoryDef
 	for _, cat := range game.Mods.Categories {
+		if cat.AlwaysAvailable {
+			result = append(result, cat)
+			continue
+		}
 		var filtered []games.ModCategorySource
 		for _, src := range cat.Sources {
 			if allowedSources[src.Name] {
@@ -646,7 +650,7 @@ func (s *ModService) availableCategories(game *games.Game, env model.Env) []game
 			}
 		}
 		if len(filtered) > 0 {
-			result = append(result, games.ModCategoryDef{Name: cat.Name, Sources: filtered})
+			result = append(result, games.ModCategoryDef{Name: cat.Name, AlwaysAvailable: cat.AlwaysAvailable, Sources: filtered})
 		}
 	}
 	return result

@@ -76,9 +76,14 @@ type ModLoaderOption struct {
 }
 
 // ModCategoryDef defines a tab in the mod UI (e.g., "Mods", "Resource Packs", "Modpacks").
+// ModCategoryDef defines a tab in the mod UI (e.g., "Mods", "Resource Packs", "Modpacks").
+// AlwaysAvailable categories are shown regardless of the current loader (e.g., resource packs
+// work on vanilla Minecraft). Loader-gated categories (default) are only shown when the
+// loader allows their sources.
 type ModCategoryDef struct {
-	Name    string             `yaml:"name" json:"name"`
-	Sources []ModCategorySource `yaml:"sources" json:"sources"`
+	Name            string             `yaml:"name" json:"name"`
+	AlwaysAvailable bool               `yaml:"always_available,omitempty" json:"always_available,omitempty"`
+	Sources         []ModCategorySource `yaml:"sources" json:"sources"`
 }
 
 // ModCategorySource configures one mod source within a category.
