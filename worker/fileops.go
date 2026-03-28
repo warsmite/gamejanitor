@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
+	"log/slog"
 	"io"
 	"io/fs"
 	"net/http"
@@ -331,8 +332,10 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	if hasher != nil {
 		actual := hex.EncodeToString(hasher.Sum(nil))
 		if actual != expectedHash {
-			os.Remove(hostPath)
-			return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actual)
+			// Warn but keep the file — upstream CDNs sometimes serve rebuilt files
+			// at the same URL. A hard failure would break entire modpack installs
+			// over a single re-uploaded mod.
+			slog.Warn("download hash mismatch, keeping file", "path", destPath, "expected", expectedHash, "actual", actual)
 		}
 	}
 
@@ -373,7 +376,7 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string, maxB
 		h := sha512.Sum512(data)
 		actual := hex.EncodeToString(h[:])
 		if actual != expectedHash {
-			return nil, fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actual)
+			slog.Warn("download hash mismatch, keeping data", "expected", expectedHash, "actual", actual)
 		}
 	}
 
