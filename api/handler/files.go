@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 
 	"github.com/warsmite/gamejanitor/controller/gameserver"
@@ -112,7 +113,7 @@ func (h *FileHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := path.Base(filePath)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename*=UTF-8''%s`, url.PathEscape(filename)))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 	w.Write(content)
