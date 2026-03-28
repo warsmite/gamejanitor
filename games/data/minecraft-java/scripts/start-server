@@ -42,26 +42,10 @@ update_property "rcon.password" "${RCON_PASSWORD}"                 "$PROPS"
 echo "[start-server] config: gamemode=${GAMEMODE:-survival} difficulty=${DIFFICULTY:-normal} max_players=${MAX_PLAYERS:-20} port=${SERVER_PORT:-25565}"
 echo "[start-server] updated server.properties and eula.txt"
 
-# Select Java binary based on version resolved during install
-JAVA_MAJOR=$(cat /data/.java_version 2>/dev/null || echo "21")
-
-# Map major version to the closest installed JRE (8, 17, 21, 25)
-if [ "$JAVA_MAJOR" -le 8 ]; then
-    JAVA_USE=8
-elif [ "$JAVA_MAJOR" -le 17 ]; then
-    JAVA_USE=17
-elif [ "$JAVA_MAJOR" -le 21 ]; then
-    JAVA_USE=21
-else
-    JAVA_USE=25
-fi
-
-JAVA_BIN="/usr/lib/jvm/java-${JAVA_USE}-openjdk-amd64/bin/java"
-if [ ! -x "$JAVA_BIN" ]; then
-    echo "[start-server] ERROR: Java $JAVA_USE not found at $JAVA_BIN"
-    exit 1
-fi
-echo "[start-server] using Java $JAVA_USE ($JAVA_BIN) for Minecraft requiring Java $JAVA_MAJOR"
+# Java version is resolved by the controller via image variants —
+# this container has exactly one JDK on the PATH.
+JAVA_BIN="java"
+echo "[start-server] using $(java -version 2>&1 | head -1)"
 
 # Calculate JVM heap from MEMORY_LIMIT_MB (leave ~15% for GC overhead)
 MEMORY_LIMIT_MB="${MEMORY_LIMIT_MB:-1024}"
