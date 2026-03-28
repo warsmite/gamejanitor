@@ -65,7 +65,7 @@ query:
 
 # Container config — used by gamejanitor for hosting (omit for query-only games)
 container:
-  image: ghcr.io/warsmite/gamejanitor/java
+  image: ghcr.io/warsmite/gamejanitor/java17
   recommended_memory_mb: 2048
   ready_pattern: 'Done \(\d+\.\d+s\)!'
   disabled_capabilities: []            # e.g. ["command", "save"]
@@ -202,7 +202,10 @@ echo "[start-server] ERROR: <what went wrong>"
 |-------|----------|---------|
 | `ghcr.io/warsmite/gamejanitor/base` | Ubuntu 24.04, curl, wget, rcon-cli, entrypoint | Minecraft Bedrock |
 | `ghcr.io/warsmite/gamejanitor/steamcmd` | base + SteamCMD, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
-| `ghcr.io/warsmite/gamejanitor/java` | base + OpenJDK 8, 17, 21, 25 | Minecraft Java |
+| `ghcr.io/warsmite/gamejanitor/java8` | base + OpenJDK 8 | Minecraft (pre-1.17) |
+| `ghcr.io/warsmite/gamejanitor/java17` | base + OpenJDK 17 | Minecraft 1.17–1.20 |
+| `ghcr.io/warsmite/gamejanitor/java21` | base + OpenJDK 21 | Minecraft 1.21+ |
+| `ghcr.io/warsmite/gamejanitor/java25` | base + OpenJDK 25 | Minecraft (future) |
 | `ghcr.io/warsmite/gamejanitor/dotnet` | base + .NET 9 | Terraria |
 
 ## Adding a Custom Game

@@ -17,7 +17,10 @@ jobs:
     outputs:
       base: ${{ steps.filter.outputs.base }}
       steamcmd: ${{ steps.filter.outputs.steamcmd }}
-      java: ${{ steps.filter.outputs.java }}
+      java8: ${{ steps.filter.outputs.java8 }}
+      java17: ${{ steps.filter.outputs.java17 }}
+      java21: ${{ steps.filter.outputs.java21 }}
+      java25: ${{ steps.filter.outputs.java25 }}
       dotnet: ${{ steps.filter.outputs.dotnet }}
     steps:
       - uses: actions/checkout@v4
@@ -29,8 +32,14 @@ jobs:
               - 'images/base/**'
             steamcmd:
               - 'images/steamcmd/**'
-            java:
-              - 'images/java/**'
+            java8:
+              - 'images/java8/**'
+            java17:
+              - 'images/java17/**'
+            java21:
+              - 'images/java21/**'
+            java25:
+              - 'images/java25/**'
             dotnet:
               - 'images/dotnet/**'
 
@@ -76,11 +85,11 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/steamcmd:latest
 
-  java:
+  java8:
     needs: [changes, base]
     if: >-
       always() && needs.base.result != 'failure' &&
-      (needs.changes.outputs.java == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
+      (needs.changes.outputs.java8 == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,9 +103,75 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: images/java
+          context: images/java8
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/java:latest
+          tags: ${{ env.IMAGE_PREFIX }}/java8:latest
+
+  java17:
+    needs: [changes, base]
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.java17 == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/java17
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/java17:latest
+
+  java21:
+    needs: [changes, base]
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.java21 == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/java21
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/java21:latest
+
+  java25:
+    needs: [changes, base]
+    if: >-
+      always() && needs.base.result != 'failure' &&
+      (needs.changes.outputs.java25 == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/java25
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/java25:latest
 
   dotnet:
     needs: [changes, base]
