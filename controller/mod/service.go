@@ -12,6 +12,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // Store abstracts DB operations needed by the mod service.
@@ -32,8 +33,10 @@ type Store interface {
 // FileOperator is a narrow interface for file operations the mod service needs.
 type FileOperator interface {
 	WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error
+	ReadFile(ctx context.Context, gameserverID string, filePath string) ([]byte, error)
 	DeletePath(ctx context.Context, gameserverID string, targetPath string) error
 	CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error
+	ListDirectory(ctx context.Context, gameserverID string, dirPath string) ([]worker.FileEntry, error)
 	DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error
 }
 
