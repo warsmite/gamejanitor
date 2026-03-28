@@ -50,6 +50,9 @@ type Config struct {
 	// Backup storage
 	BackupStore *BackupStoreConfig `yaml:"backup_store"`
 
+	// Third-party API keys
+	SteamAPIKey string `yaml:"steam_api_key"`
+
 	// Runtime settings (written to DB on every startup)
 	Settings map[string]any `yaml:"settings"`
 
@@ -158,6 +161,9 @@ func (c *Config) applyEnvSecrets() {
 	}
 	if v := os.Getenv("GJ_BACKUP_STORE_SECRET_KEY"); v != "" {
 		c.BackupStore.SecretKey = v
+	}
+	if v := os.Getenv("GJ_STEAM_API_KEY"); v != "" {
+		c.SteamAPIKey = v
 	}
 }
 

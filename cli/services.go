@@ -113,8 +113,13 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
 	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
 	workerNodeSvc := orchestrator.NewWorkerNodeService(db, registry, broadcaster, logger)
-	optionsRegistry := games.NewOptionsRegistry(logger)
-	modSvc := mod.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
+	modSvc := mod.NewModService(db, fileSvc, gameStore, broadcaster, logger)
+
+	// Register mod catalogs — stateless query engines, game-specific config
+	// (uMod category, Workshop appID) comes from game YAML via CatalogFilters.Extra
+	modSvc.RegisterCatalog("modrinth", mod.NewModrinthCatalog(logger.With("catalog", "modrinth")))
+	modSvc.RegisterCatalog("umod", mod.NewUmodCatalog(logger.With("catalog", "umod")))
+	modSvc.RegisterCatalog("workshop", mod.NewWorkshopCatalog(cfg.SteamAPIKey, logger.With("catalog", "workshop")))
 
 	return &Services{
 		Broadcaster:     broadcaster,

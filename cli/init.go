@@ -70,6 +70,11 @@ const newbieConfig = `# Gamejanitor configuration
 #   # Set access/secret keys via environment variables:
 #   #   GJ_BACKUP_STORE_ACCESS_KEY and GJ_BACKUP_STORE_SECRET_KEY
 
+# Third-party API keys
+# steam_api_key: ""           # Steam Web API key (for Workshop mod search)
+#                              # Get one at: https://steamcommunity.com/dev/apikey
+#                              # Or set via: GJ_STEAM_API_KEY env var
+
 # Runtime settings — these are written to the database on startup.
 # You can also change them at any time via the web UI or API.
 # settings:

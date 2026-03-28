@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -34,21 +33,25 @@ type FileOperator interface {
 
 type ModService struct {
 	catalogs    map[string]ModCatalog
+	fileDel     *FileDelivery
+	manifestDel *ManifestDelivery
+	packDel     *PackDelivery
 	store       Store
 	fileSvc     FileOperator
 	gameStore   *games.GameStore
-	settingsSvc *settings.SettingsService
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	return &ModService{
 		catalogs:    make(map[string]ModCatalog),
+		fileDel:     NewFileDelivery(fileSvc, log),
+		manifestDel: NewManifestDelivery(fileSvc, log),
+		packDel:     NewPackDelivery(fileSvc, log),
 		store:       store,
 		fileSvc:     fileSvc,
 		gameStore:   gameStore,
-		settingsSvc: settingsSvc,
 		broadcaster: broadcaster,
 		log:         log,
 	}

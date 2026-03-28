@@ -15,16 +15,14 @@ import (
 )
 
 type UmodCatalog struct {
-	client   *http.Client
-	log      *slog.Logger
-	category string // game-specific: "rust", "hurtworld", etc.
+	client *http.Client
+	log    *slog.Logger
 }
 
-func NewUmodCatalog(category string, log *slog.Logger) *UmodCatalog {
+func NewUmodCatalog(log *slog.Logger) *UmodCatalog {
 	return &UmodCatalog{
-		client:   &http.Client{Timeout: 15 * time.Second},
-		log:      log,
-		category: category,
+		client: &http.Client{Timeout: 15 * time.Second},
+		log:    log,
 	}
 }
 
@@ -70,8 +68,8 @@ func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogF
 		"sort":    {"title"},
 		"sortdir": {"asc"},
 	}
-	if c.category != "" {
-		params.Set("categories", c.category)
+	if cat := filters.Extra["category"]; cat != "" {
+		params.Set("categories", cat)
 	}
 
 	reqURL := "https://umod.org/plugins/search.json?" + params.Encode()

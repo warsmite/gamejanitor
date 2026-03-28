@@ -16,21 +16,19 @@ import (
 type WorkshopCatalog struct {
 	client *http.Client
 	log    *slog.Logger
-	apiKey func() string // retrieves Steam API key from settings
-	appID  string        // Steam app ID for this game
+	apiKey string // Steam API key from config (global, not per-game)
 }
 
-func NewWorkshopCatalog(appID string, apiKey func() string, log *slog.Logger) *WorkshopCatalog {
+func NewWorkshopCatalog(apiKey string, log *slog.Logger) *WorkshopCatalog {
 	return &WorkshopCatalog{
 		client: &http.Client{Timeout: 15 * time.Second},
 		log:    log,
 		apiKey: apiKey,
-		appID:  appID,
 	}
 }
 
 func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters CatalogFilters) ([]ModResult, int, error) {
-	key := c.apiKey()
+	key := c.apiKey
 	if key == "" {
 		return nil, 0, controller.ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
 	}
@@ -44,8 +42,8 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 		"cursor":                   {"*"},
 		"query_type":               {"1"},
 	}
-	if c.appID != "" {
-		params.Set("appid", c.appID)
+	if appID := filters.Extra["app_id"]; appID != "" {
+		params.Set("appid", appID)
 	}
 
 	reqURL := "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/?" + params.Encode()
