@@ -421,13 +421,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 		logger.Warn("running in foreground — closing this terminal will stop scheduled backups, restarts, and status monitoring. Your gameservers will keep running, but gamejanitor won't be managing them. Run as a systemd service to keep it running in the background.")
 	}
 
-	// Auto-open browser for interactive users (not systemd, has a TTY)
+	// Auto-open browser for interactive users (not systemd, has a TTY).
+	// Marker in /tmp avoids tab spam during hot reload — survives process
+	// restarts but is cleaned on reboot.
+	browserMarker := filepath.Join(os.TempDir(), fmt.Sprintf("gamejanitor-browser-%d", cfg.Port))
 	if os.Getenv("INVOCATION_ID") == "" && isTTY() {
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			url := fmt.Sprintf("http://localhost:%d", cfg.Port)
-			openBrowser(url)
-		}()
+		if _, err := os.Stat(browserMarker); errors.Is(err, os.ErrNotExist) {
+			os.WriteFile(browserMarker, nil, 0644)
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				url := fmt.Sprintf("http://localhost:%d", cfg.Port)
+				openBrowser(url)
+			}()
+		}
 	}
 
 	srv := &http.Server{
