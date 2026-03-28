@@ -21,6 +21,7 @@ type CatalogFilters struct {
 
 type ModResult struct {
 	SourceID    string `json:"source_id"`
+	Source      string `json:"source"` // set by the service, not by the catalog
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
 	Author      string `json:"author"`
