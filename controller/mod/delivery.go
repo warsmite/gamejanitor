@@ -14,10 +14,11 @@ import (
 	"time"
 )
 
-// Mod download limits
+// Size limits for in-memory reads (ZIP entry extraction, .mrpack manifests).
+// File downloads to disk have no artificial limit — storage quota is the real constraint.
 const (
-	MaxModDownloadBytes  = 100 * 1024 * 1024 // 100 MB
-	MaxPackDownloadBytes = 500 * 1024 * 1024  // 500 MB for modpacks
+	maxOverrideBytes     = 50 * 1024 * 1024  // 50 MB per override file
+	maxPackManifestBytes = 500 * 1024 * 1024  // 500 MB for .mrpack ZIP (manifest + overrides, not mod files)
 )
 
 // --- FileDelivery ---
@@ -41,7 +42,7 @@ func (d *FileDelivery) Install(ctx context.Context, gameserverID, installPath, d
 	}
 
 	fullPath := path.Join(installPath, fileName)
-	if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, "", MaxModDownloadBytes); err != nil {
+	if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, "", 0); err != nil {
 		return fmt.Errorf("downloading mod %s: %w", fileName, err)
 	}
 
@@ -171,7 +172,7 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		fullPath := path.Join(installPath, fileName)
 		expectedHash := f.Hashes["sha512"]
 
-		if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, expectedHash, MaxModDownloadBytes); err != nil {
+		if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, expectedHash, 0); err != nil {
 			return nil, fmt.Errorf("downloading pack mod %s: %w", fileName, err)
 		}
 
@@ -204,7 +205,7 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		if err != nil {
 			return nil, fmt.Errorf("opening override %s: %w", relPath, err)
 		}
-		content, err := io.ReadAll(io.LimitReader(rc, MaxModDownloadBytes))
+		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes))
 		rc.Close()
 		if err != nil {
 			return nil, fmt.Errorf("reading override %s: %w", relPath, err)
@@ -239,7 +240,7 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		if err != nil {
 			continue
 		}
-		content, err := io.ReadAll(io.LimitReader(rc, MaxModDownloadBytes))
+		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes))
 		rc.Close()
 		if err != nil {
 			continue
@@ -315,6 +316,6 @@ func (d *PackDelivery) download(ctx context.Context, downloadURL string) ([]byte
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(io.LimitReader(resp.Body, MaxPackDownloadBytes))
+	return io.ReadAll(io.LimitReader(resp.Body, maxPackManifestBytes))
 }
 

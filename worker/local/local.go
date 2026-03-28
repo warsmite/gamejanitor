@@ -213,7 +213,7 @@ func (w *LocalWorker) DownloadFile(ctx context.Context, volumeName string, url s
 	}
 	// Sidecar fallback: download to memory, write via sidecar
 	// This path is rare (no direct volume access) and bounded by maxBytes
-	content, err := worker.DownloadToMemory(ctx, url, expectedHash, maxBytes)
+	content, err := worker.DownloadToMemory(ctx, url, expectedHash)
 	if err != nil {
 		return err
 	}

@@ -19,10 +19,8 @@ const (
 	PaginationDefaultLogTail  = 100
 	PaginationDefaultModLimit = 20
 
-	MaxFileWriteBytes    = 10 * 1024 * 1024  // 10 MB — inline file writes via API
-	MaxFileUploadBytes   = 100 * 1024 * 1024 // 100 MB — multipart file uploads
-	MaxModDownloadBytes  = 100 * 1024 * 1024 // 100 MB — mod downloads (Modrinth, Workshop, generic)
-	MaxUmodDownloadBytes = 50 * 1024 * 1024  // 50 MB — uMod plugin downloads
+	MaxFileWriteBytes  = 10 * 1024 * 1024  // 10 MB — inline file writes via API
+	MaxFileUploadBytes = 100 * 1024 * 1024 // 100 MB — multipart file uploads
 )
 
 type envelope struct {

@@ -271,9 +271,7 @@ func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName st
 	return total, err
 }
 
-const defaultMaxDownloadBytes int64 = 100 * 1024 * 1024 // 100 MB
-
-var downloadClient = &http.Client{Timeout: 5 * time.Minute}
+var downloadClient = &http.Client{Timeout: 10 * time.Minute}
 
 func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, destPath)
@@ -285,17 +283,12 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
 
-	limit := maxBytes
-	if limit <= 0 {
-		limit = defaultMaxDownloadBytes
-	}
-
 	// Try up to 2 attempts — first failure on hash mismatch could be a transient
 	// network issue (truncated response). Second failure is likely a genuine CDN
 	// rebuild, so we warn and keep the file.
 	const maxAttempts = 2
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		hashOK, err := downloadToFile(ctx, url, hostPath, expectedHash, limit)
+		hashOK, err := downloadToFile(ctx, url, hostPath, expectedHash)
 		if err != nil {
 			return err
 		}
@@ -315,7 +308,7 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 
 // downloadToFile downloads a URL to a file, optionally verifying SHA-512.
 // Returns (hashMatched, error). If no hash is expected, hashMatched is true.
-func downloadToFile(ctx context.Context, url string, hostPath string, expectedHash string, limit int64) (bool, error) {
+func downloadToFile(ctx context.Context, url string, hostPath string, expectedHash string) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false, fmt.Errorf("creating download request: %w", err)
@@ -344,7 +337,7 @@ func downloadToFile(ctx context.Context, url string, hostPath string, expectedHa
 		w = io.MultiWriter(f, hasher)
 	}
 
-	_, err = io.Copy(w, io.LimitReader(resp.Body, limit))
+	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		f.Close()
 		os.Remove(hostPath)
@@ -365,8 +358,11 @@ func downloadToFile(ctx context.Context, url string, hostPath string, expectedHa
 }
 
 // DownloadToMemory downloads a URL to []byte with hash verification.
-// Used as a fallback when direct filesystem access is unavailable.
-func DownloadToMemory(ctx context.Context, url string, expectedHash string, maxBytes int64) ([]byte, error) {
+// Used as a fallback when direct filesystem access is unavailable (sidecar mode).
+// Has a 500MB memory safety limit since this buffers into RAM.
+func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]byte, error) {
+	const memoryLimit int64 = 500 * 1024 * 1024
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating download request: %w", err)
@@ -383,12 +379,7 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string, maxB
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	limit := maxBytes
-	if limit <= 0 {
-		limit = defaultMaxDownloadBytes
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, memoryLimit))
 	if err != nil {
 		return nil, fmt.Errorf("reading download: %w", err)
 	}
