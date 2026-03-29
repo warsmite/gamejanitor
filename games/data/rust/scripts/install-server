@@ -30,7 +30,6 @@ install_oxide() {
     echo "[install-server] extracting Oxide into server directory"
     unzip -qo /tmp/oxide.zip -d /data/server/
     rm -f /tmp/oxide.zip
-    chown -R gameserver:gameserver /data/server/oxide
 
     echo "[install-server] Oxide.Rust $TAG installed"
 }
@@ -53,7 +52,6 @@ install_carbon() {
     echo "[install-server] extracting Carbon into server directory"
     tar -xzf /tmp/carbon.tar.gz -C /data/server/
     rm -f /tmp/carbon.tar.gz
-    chown -R gameserver:gameserver /data/server/carbon
 
     echo "[install-server] Carbon $TAG installed"
 }

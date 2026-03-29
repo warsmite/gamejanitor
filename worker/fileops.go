@@ -409,6 +409,7 @@ func chownToGameserver(dir string) {
 	for p := dir; p != "/" && p != "."; p = filepath.Dir(p) {
 		info, err := os.Stat(p)
 		if err != nil {
+			slog.Warn("chownToGameserver: stat failed", "path", p, "error", err)
 			break
 		}
 		if !info.IsDir() {
@@ -418,7 +419,11 @@ func chownToGameserver(dir string) {
 		if ok && stat.Uid == uint32(model.GameserverUID) {
 			break // already owned by gameserver user, parents should be too
 		}
-		os.Chown(p, model.GameserverUID, model.GameserverGID)
+		if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
+			slog.Warn("chownToGameserver: chown failed", "path", p, "error", err)
+		} else {
+			slog.Debug("chownToGameserver: chowned", "path", p, "from_uid", stat.Uid)
+		}
 	}
 }
 
