@@ -43,6 +43,7 @@ type RouterOptions struct {
 	WebhookSvc      *webhook.WebhookEndpointService
 	EventHistorySvc *event.EventHistoryService
 	ActivityStore   handler.ActivityStore
+	StatsHistory    handler.StatsHistoryQuerier
 	Broadcaster     *controller.EventBus
 	Log             *slog.Logger
 	WebUI           fs.FS // embedded UI static files (nil to disable)
@@ -81,7 +82,7 @@ func NewRouter(opts RouterOptions) *Router {
 
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
-	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
+	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Log)
 	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
@@ -151,6 +152,7 @@ func NewRouter(opts RouterOptions) *Router {
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
 				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
+				r.With(requireAccess).Get("/stats/history", gameserverHandlers.StatsHistory)
 				r.With(requireLogs).Get("/logs", gameserverHandlers.Logs)
 				r.With(requireLogs).Get("/logs/sessions", gameserverHandlers.LogSessions)
 				r.With(requireLogs).Get("/logs/stream", gameserverHandlers.StreamLogs)

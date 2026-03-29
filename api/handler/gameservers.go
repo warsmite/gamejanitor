@@ -18,16 +18,22 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// StatsHistoryQuerier reads historical stats from the database.
+type StatsHistoryQuerier interface {
+	QueryHistory(gameserverID string, period model.StatsPeriod) ([]model.StatsSample, error)
+}
+
 type GameserverHandlers struct {
 	svc          *gameserver.GameserverService
 	consoleSvc   *gameserver.ConsoleService
 	querySvc     *status.QueryService
 	statsPoller  *status.StatsPoller
+	statsHistory StatsHistoryQuerier
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, consoleSvc *gameserver.ConsoleService, querySvc *status.QueryService, statsPoller *status.StatsPoller, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, log: log}
+func NewGameserverHandlers(svc *gameserver.GameserverService, consoleSvc *gameserver.ConsoleService, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -542,4 +548,57 @@ func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondOK(w, map[string]string{"output": output})
+}
+
+func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	periodStr := r.URL.Query().Get("period")
+	if periodStr == "" {
+		periodStr = "1h"
+	}
+	period, ok := model.ValidStatsPeriod(periodStr)
+	if !ok {
+		respondError(w, http.StatusBadRequest, "invalid period: must be 1h, 24h, or 7d")
+		return
+	}
+
+	samples, err := h.statsHistory.QueryHistory(id, period)
+	if err != nil {
+		h.log.Error("querying stats history", "gameserver", id, "period", period, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+
+	// Compute net I/O rates (bytes/sec) from cumulative counters
+	type statsPoint struct {
+		Timestamp       time.Time `json:"timestamp"`
+		CPUPercent      float64   `json:"cpu_percent"`
+		MemoryUsageMB   int       `json:"memory_usage_mb"`
+		MemoryLimitMB   int       `json:"memory_limit_mb"`
+		NetRxBytesPerSec float64  `json:"net_rx_bytes_per_sec"`
+		NetTxBytesPerSec float64  `json:"net_tx_bytes_per_sec"`
+		VolumeSizeBytes int64     `json:"volume_size_bytes"`
+	}
+
+	points := make([]statsPoint, len(samples))
+	for i, s := range samples {
+		points[i] = statsPoint{
+			Timestamp:       s.Timestamp,
+			CPUPercent:      s.CPUPercent,
+			MemoryUsageMB:   s.MemoryUsageMB,
+			MemoryLimitMB:   s.MemoryLimitMB,
+			VolumeSizeBytes: s.VolumeSizeBytes,
+		}
+		if i > 0 {
+			prev := samples[i-1]
+			dt := s.Timestamp.Sub(prev.Timestamp).Seconds()
+			if dt > 0 && s.NetRxBytes >= prev.NetRxBytes {
+				points[i].NetRxBytesPerSec = float64(s.NetRxBytes-prev.NetRxBytes) / dt
+				points[i].NetTxBytesPerSec = float64(s.NetTxBytes-prev.NetTxBytes) / dt
+			}
+		}
+	}
+
+	respondOK(w, points)
 }

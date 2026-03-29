@@ -8,9 +8,16 @@ import (
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 const statsPollInterval = 5 * time.Second
+const statsFlushInterval = 30 * time.Second
+
+// StatsHistoryWriter is the interface the poller needs to persist stats samples.
+type StatsHistoryWriter interface {
+	InsertBatch(samples []model.StatsSample) error
+}
 
 // StatsPoller polls container stats for running gameservers and publishes
 // controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
@@ -23,13 +30,21 @@ type StatsPoller struct {
 	mu          sync.RWMutex
 	pollers     map[string]context.CancelFunc
 	cache       map[string]*controller.GameserverStatsEvent
+
+	// Stats history persistence
+	statsWriter StatsHistoryWriter
+	bufMu       sync.Mutex
+	statsBuf    []model.StatsSample
+	flusherWg   sync.WaitGroup
+	flusherStop context.CancelFunc
 }
 
-func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, statsWriter StatsHistoryWriter, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
 		store:       store,
 		dispatcher:  dispatcher,
 		broadcaster: broadcaster,
+		statsWriter: statsWriter,
 		log:         log,
 		pollers:     make(map[string]context.CancelFunc),
 		cache:       make(map[string]*controller.GameserverStatsEvent),
@@ -70,14 +85,60 @@ func (s *StatsPoller) StopPolling(gameserverID string) {
 
 func (s *StatsPoller) StopAll() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	for id, cancel := range s.pollers {
 		cancel()
 		delete(s.pollers, id)
 	}
 	s.cache = make(map[string]*controller.GameserverStatsEvent)
+	s.mu.Unlock()
+
+	// Stop the flusher and wait for final flush
+	if s.flusherStop != nil {
+		s.flusherStop()
+		s.flusherWg.Wait()
+	}
+
 	s.log.Info("all stats pollers stopped")
+}
+
+// StartFlusher begins the background goroutine that periodically writes buffered
+// stats samples to the database. Call after services are started.
+func (s *StatsPoller) StartFlusher(ctx context.Context) {
+	if s.statsWriter == nil {
+		return
+	}
+	ctx, s.flusherStop = context.WithCancel(ctx)
+	s.flusherWg.Add(1)
+	go func() {
+		defer s.flusherWg.Done()
+		ticker := time.NewTicker(statsFlushInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				s.flushStats()
+				return
+			case <-ticker.C:
+				s.flushStats()
+			}
+		}
+	}()
+}
+
+func (s *StatsPoller) flushStats() {
+	s.bufMu.Lock()
+	if len(s.statsBuf) == 0 {
+		s.bufMu.Unlock()
+		return
+	}
+	batch := s.statsBuf
+	s.statsBuf = nil
+	s.bufMu.Unlock()
+
+	if err := s.statsWriter.InsertBatch(batch); err != nil {
+		s.log.Error("failed to flush stats history", "samples", len(batch), "error", err)
+	}
 }
 
 func (s *StatsPoller) pollLoop(ctx context.Context, gameserverID string) {
@@ -145,5 +206,22 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 	s.mu.Unlock()
 
 	s.broadcaster.Publish(event)
+
+	// Buffer for history persistence
+	if s.statsWriter != nil {
+		s.bufMu.Lock()
+		s.statsBuf = append(s.statsBuf, model.StatsSample{
+			GameserverID:    gameserverID,
+			Timestamp:       event.Timestamp,
+			CPUPercent:      event.CPUPercent,
+			MemoryUsageMB:   event.MemoryUsageMB,
+			MemoryLimitMB:   event.MemoryLimitMB,
+			NetRxBytes:      event.NetRxBytes,
+			NetTxBytes:      event.NetTxBytes,
+			VolumeSizeBytes: event.VolumeSizeBytes,
+		})
+		s.bufMu.Unlock()
+	}
+
 	return true
 }

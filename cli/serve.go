@@ -215,6 +215,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	reachabilityChecker.Start(ctx)
 	defer reachabilityChecker.Stop()
 
+	svcs.StatsPoller.StartFlusher(ctx)
+
 	// Prune old activities on startup, then hourly
 	var bgWg sync.WaitGroup
 	bgWg.Add(1)
@@ -242,6 +244,36 @@ func runServe(cmd *cobra.Command, args []string) error {
 					} else if pruned > 0 {
 						logger.Info("pruned old activities", "count", pruned, "retention_days", days)
 					}
+				}
+			}
+		}
+	}()
+
+	// Downsample and prune stats history hourly
+	bgWg.Add(1)
+	go func() {
+		defer bgWg.Done()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n, err := db.GameserverStatsStore.Downsample("raw", "1m", time.Hour, 60); err != nil {
+					logger.Error("stats downsample raw→1m failed", "error", err)
+				} else if n > 0 {
+					logger.Info("stats downsampled raw→1m", "deleted", n)
+				}
+				if n, err := db.GameserverStatsStore.Downsample("1m", "5m", 24*time.Hour, 300); err != nil {
+					logger.Error("stats downsample 1m→5m failed", "error", err)
+				} else if n > 0 {
+					logger.Info("stats downsampled 1m→5m", "deleted", n)
+				}
+				if n, err := db.GameserverStatsStore.Prune("5m", 7*24*time.Hour); err != nil {
+					logger.Error("stats prune 5m failed", "error", err)
+				} else if n > 0 {
+					logger.Info("stats pruned 5m", "deleted", n)
 				}
 			}
 		}
@@ -377,6 +409,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WebhookSvc:      svcs.WebhookSvc,
 		EventHistorySvc: svcs.EventHistorySvc,
 		ActivityStore:   db,
+		StatsHistory:    db.GameserverStatsStore,
 		Broadcaster:     svcs.Broadcaster,
 		ModSvc:          svcs.ModSvc,
 		Log:             logger,

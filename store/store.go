@@ -14,18 +14,20 @@ type DB struct {
 	*WorkerNodeStore
 	*ModStore
 	*SettingStore
+	*GameserverStatsStore
 }
 
 func New(db *sql.DB) *DB {
 	return &DB{
-		GameserverStore: NewGameserverStore(db),
-		BackupStore:     NewBackupStore(db),
-		ActivityStore:   NewActivityStore(db),
-		ScheduleStore:   NewScheduleStore(db),
-		TokenStore:      NewTokenStore(db),
-		WebhookStore:    NewWebhookStore(db),
-		WorkerNodeStore: NewWorkerNodeStore(db),
-		ModStore:        NewModStore(db),
-		SettingStore:    NewSettingStore(db),
+		GameserverStore:      NewGameserverStore(db),
+		BackupStore:          NewBackupStore(db),
+		ActivityStore:        NewActivityStore(db),
+		ScheduleStore:        NewScheduleStore(db),
+		TokenStore:           NewTokenStore(db),
+		WebhookStore:         NewWebhookStore(db),
+		WorkerNodeStore:      NewWorkerNodeStore(db),
+		ModStore:             NewModStore(db),
+		SettingStore:         NewSettingStore(db),
+		GameserverStatsStore: NewGameserverStatsStore(db),
 	}
 }

@@ -174,3 +174,20 @@ CREATE TABLE pack_exclusions (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pack_exclusions_unique ON pack_exclusions(pack_mod_id, source_id);
+
+-- Time-series stats for resource usage graphs. Downsampled in tiers:
+-- raw (5s) retained 1 hour, 1m averages retained 24 hours, 5m averages retained 7 days.
+CREATE TABLE gameserver_stats (
+    gameserver_id     TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
+    resolution        TEXT NOT NULL DEFAULT 'raw',
+    timestamp         DATETIME NOT NULL,
+    cpu_percent       REAL NOT NULL,
+    memory_usage_mb   INTEGER NOT NULL,
+    memory_limit_mb   INTEGER NOT NULL,
+    net_rx_bytes      INTEGER NOT NULL DEFAULT 0,
+    net_tx_bytes      INTEGER NOT NULL DEFAULT 0,
+    volume_size_bytes INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_gs_stats_query ON gameserver_stats(gameserver_id, resolution, timestamp);
+CREATE INDEX IF NOT EXISTS idx_gs_stats_downsample ON gameserver_stats(resolution, timestamp);
