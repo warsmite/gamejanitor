@@ -46,8 +46,8 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
-            (cd ui && npm run build) 2>&1 | head -5
-            exec sudo go run . serve -d /tmp/gamejanitor-data "$@"
+            (cd ui && npm run build)
+            exec sudo -E go run . serve -d /tmp/gamejanitor-data "$@"
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''
