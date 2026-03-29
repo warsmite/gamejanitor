@@ -95,6 +95,7 @@
     font-size: 0.84rem; color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 16px;
+    white-space: pre-line;
   }
 
   .modal-input {

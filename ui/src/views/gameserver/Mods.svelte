@@ -320,7 +320,7 @@
         // Version downgrade — show warning with reinstall option
         const choice = await confirm({
           title: 'Version Change Warning',
-          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `  - ${a}`).join('\n')}\n\nYour server has existing world data from ${currentVersion}. Changing to ${packVersion!.game_version} may make it incompatible. You should reinstall the server after installing this pack for a clean start.`,
+          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `• ${a}`).join('\n')}\n\nYour server has existing world data from ${currentVersion}. Changing to ${packVersion!.game_version} may make it incompatible. You should reinstall the server after installing this pack for a clean start.`,
           confirmLabel: 'Install Anyway',
           danger: true,
         });
@@ -328,7 +328,7 @@
       } else {
         const accepted = await confirm({
           title: 'Install Modpack',
-          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `  - ${a}`).join('\n')}`,
+          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `• ${a}`).join('\n')}`,
           confirmLabel: 'Install',
         });
         if (!accepted) return;
