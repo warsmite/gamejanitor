@@ -105,18 +105,19 @@ func (h *FileHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := h.svc.ReadFile(r.Context(), id, filePath)
+	reader, size, err := h.svc.OpenFile(r.Context(), id, filePath)
 	if err != nil {
 		h.log.Error("downloading file", "gameserver_id", id, "path", filePath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
+	defer reader.Close()
 
 	filename := path.Base(filePath)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename*=UTF-8''%s`, url.PathEscape(filename)))
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
-	w.Write(content)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+	io.Copy(w, reader)
 }
 
 func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {

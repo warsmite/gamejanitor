@@ -74,6 +74,29 @@ func ReadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName stri
 	return os.ReadFile(hostPath)
 }
 
+// OpenFileDirect opens a file for streaming reads without loading it into memory.
+// Returns the file handle, file size, and any error. Caller must close the reader.
+func OpenFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
+	if err != nil {
+		return nil, 0, err
+	}
+	f, err := os.Open(hostPath)
+	if err != nil {
+		return nil, 0, err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, 0, err
+	}
+	if stat.IsDir() {
+		f.Close()
+		return nil, 0, fmt.Errorf("path is a directory, not a file")
+	}
+	return f, stat.Size(), nil
+}
+
 func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	mountpoint, err := resolve(ctx, volumeName)
 	if err != nil {

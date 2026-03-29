@@ -180,6 +180,17 @@ func (w *RemoteWorker) ReadFile(ctx context.Context, volumeName string, path str
 	return resp.Content, nil
 }
 
+// OpenFile falls back to ReadFile for remote workers — the file bytes cross gRPC
+// as a single message. Streaming file downloads over gRPC would require a new
+// server-streaming RPC, which can be added later for large file support.
+func (w *RemoteWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	data, err := w.ReadFile(ctx, volumeName, path)
+	if err != nil {
+		return nil, 0, err
+	}
+	return io.NopCloser(bytes.NewReader(data)), int64(len(data)), nil
+}
+
 func (w *RemoteWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	_, err := w.client.WriteFile(ctx, &pb.WriteFileRequest{
 		VolumeName: volumeName,

@@ -475,6 +475,10 @@ func (w *ProcessWorker) ReadFile(ctx context.Context, volumeName string, path st
 	return worker.ReadFileDirect(w.resolve, ctx, volumeName, path)
 }
 
+func (w *ProcessWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	return worker.OpenFileDirect(w.resolve, ctx, volumeName, path)
+}
+
 func (w *ProcessWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	return worker.WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 }

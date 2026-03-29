@@ -164,6 +164,10 @@ func (w *LocalWorker) ReadFile(ctx context.Context, volumeName string, path stri
 	return worker.ReadFileDirect(w.Resolve, ctx, volumeName, path)
 }
 
+func (w *LocalWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	return worker.OpenFileDirect(w.Resolve, ctx, volumeName, path)
+}
+
 func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	return worker.WriteFileDirect(w.Resolve, ctx, volumeName, path, content, perm)
 }

@@ -3,6 +3,7 @@ package gameserver
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"path"
 	"strings"
@@ -162,9 +163,25 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 	return w.RenamePath(ctx, gs.VolumeName, oldRel, newRel)
 }
 
-// DownloadFile returns file contents for download — same as ReadFile but named for clarity in handler.
-func (s *FileService) DownloadFile(ctx context.Context, gameserverID string, filePath string) ([]byte, error) {
-	return s.ReadFile(ctx, gameserverID, filePath)
+// OpenFile returns a streaming reader for file downloads without loading the
+// entire file into memory. Caller must close the reader.
+func (s *FileService) OpenFile(ctx context.Context, gameserverID string, filePath string) (io.ReadCloser, int64, error) {
+	filePath, err := validatePath(filePath)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	relPath := strings.TrimPrefix(filePath, "/data")
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return nil, 0, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.OpenFile(ctx, gs.VolumeName, relPath)
 }
 
 // DownloadToVolume tells the worker to download a URL directly to the gameserver volume.

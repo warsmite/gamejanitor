@@ -385,6 +385,26 @@ func (w *FakeWorker) ReadFile(ctx context.Context, volumeName string, path strin
 	return os.ReadFile(fullPath)
 }
 
+func (w *FakeWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	if err := w.popFailure("OpenFile"); err != nil {
+		return nil, 0, err
+	}
+	fullPath, err := w.volumePath(volumeName, path)
+	if err != nil {
+		return nil, 0, err
+	}
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return nil, 0, err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, 0, err
+	}
+	return f, stat.Size(), nil
+}
+
 func (w *FakeWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
 	if err := w.popFailure("WriteFile"); err != nil {
 		return err

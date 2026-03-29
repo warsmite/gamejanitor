@@ -29,6 +29,7 @@ type Worker interface {
 	// Volume file operations (direct filesystem access)
 	ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error)
 	ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error)
+	OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error)
 	WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error
 	DeletePath(ctx context.Context, volumeName string, path string) error
 	CreateDirectory(ctx context.Context, volumeName string, path string) error
