@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -177,10 +179,50 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		}
 	}
 
+	// Track override mods — .jar files extracted from overrides/mods/ that aren't in the files array
+	overrideModCount := 0
+	for _, overridePath := range contents.Overrides {
+		if !strings.HasSuffix(overridePath, ".jar") {
+			continue
+		}
+		fileName := path.Base(overridePath)
+
+		// Skip if already tracked from the files array
+		alreadyTracked := false
+		for _, pm := range contents.Mods {
+			if pm.FileName == fileName {
+				alreadyTracked = true
+				break
+			}
+		}
+		if alreadyTracked {
+			continue
+		}
+
+		modRecord := &model.InstalledMod{
+			ID:           uuid.New().String(),
+			GameserverID: gameserverID,
+			Source:       "pack-override",
+			SourceID:     overridePath,
+			Category:     "Mods",
+			Name:         fileName,
+			FilePath:     overridePath,
+			FileName:     fileName,
+			Delivery:     "file",
+			PackID:       &pack.ID,
+			Metadata:     json.RawMessage(`{}`),
+			InstalledAt:  time.Now(),
+		}
+		if err := s.store.CreateInstalledMod(modRecord); err != nil {
+			s.log.Warn("failed to record override mod", "file", fileName, "error", err)
+		}
+		overrideModCount++
+	}
+
 	s.publishEvent(ctx, gameserverID, pack, controller.EventModInstalled)
 
 	result.Pack = pack
-	result.ModCount = len(contents.Mods)
+	result.ModCount = len(contents.Mods) + overrideModCount
 	result.Overrides = contents.Overrides
 	return result, nil
 }
