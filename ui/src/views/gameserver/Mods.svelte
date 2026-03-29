@@ -63,22 +63,33 @@
   );
 
   // Derived: group installed into packs + standalone
+  // Pack headers may be in a different category (e.g., "Modpacks") than their children ("Mods"),
+  // so we look up pack headers from all installed mods, not just the active category.
   const groupedInstalled = $derived(() => {
     const packs = new Map<string, { packMod: InstalledMod; children: InstalledMod[] }>();
     const standalone: InstalledMod[] = [];
 
+    // Index all pack headers across all categories
+    const packHeaders = new Map<string, InstalledMod>();
+    for (const mod of installedMods) {
+      if (mod.delivery === 'pack' && !mod.pack_id) {
+        packHeaders.set(mod.id, mod);
+      }
+    }
+
     for (const mod of categoryMods) {
       if (mod.delivery === 'pack' && !mod.pack_id) {
-        // Pack header
+        // Pack header in this category
         if (!packs.has(mod.id)) {
           packs.set(mod.id, { packMod: mod, children: [] });
         } else {
           packs.get(mod.id)!.packMod = mod;
         }
       } else if (mod.pack_id) {
-        // Child of a pack
+        // Child of a pack — look up the pack header from all mods
         if (!packs.has(mod.pack_id)) {
-          packs.set(mod.pack_id, { packMod: null!, children: [mod] });
+          const header = packHeaders.get(mod.pack_id);
+          packs.set(mod.pack_id, { packMod: header ?? null!, children: [mod] });
         } else {
           packs.get(mod.pack_id)!.children.push(mod);
         }

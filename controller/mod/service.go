@@ -545,8 +545,8 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 
 	var updates []ModUpdate
 	for _, mod := range installed {
-		if mod.Delivery == "manifest" || mod.AutoInstalled {
-			continue // Workshop auto-updates, deps update with parent
+		if mod.Delivery == "manifest" || mod.AutoInstalled || mod.PackID != nil {
+			continue // Workshop auto-updates, deps update with parent, pack mods update via UpdatePack
 		}
 
 		catalog, ok := s.catalogs[mod.Source]
