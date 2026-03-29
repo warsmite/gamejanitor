@@ -10,9 +10,9 @@ steamcmd-retry \
 
 echo "[install-server] Rust dedicated server installed"
 
-OXIDE_ENABLED="${OXIDE_ENABLED:-false}"
+MOD_FRAMEWORK="${MOD_FRAMEWORK:-none}"
 
-if [ "$OXIDE_ENABLED" = "true" ]; then
+install_oxide() {
     echo "[install-server] fetching latest Oxide.Rust release from GitHub"
     RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/OxideMod/Oxide.Rust/releases/latest")
 
@@ -32,11 +32,54 @@ if [ "$OXIDE_ENABLED" = "true" ]; then
     rm -f /tmp/oxide.zip
 
     echo "[install-server] Oxide.Rust $TAG installed"
-else
-    # oxide/ dir is created at runtime, DLLs are from the zip
+}
+
+install_carbon() {
+    echo "[install-server] fetching latest Carbon release from GitHub"
+    RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/CarbonCommunity/Carbon/releases/latest")
+
+    ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name == "Carbon.Linux.Release.tar.gz") | .browser_download_url')
+    TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+
+    if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+        echo "[install-server] ERROR: could not find Carbon.Linux.Release.tar.gz in latest release"
+        exit 1
+    fi
+
+    echo "[install-server] downloading Carbon $TAG"
+    curl -fsSL -o /tmp/carbon.tar.gz -L "$ASSET_URL"
+
+    echo "[install-server] extracting Carbon into server directory"
+    tar -xzf /tmp/carbon.tar.gz -C /data/server/
+    rm -f /tmp/carbon.tar.gz
+
+    echo "[install-server] Carbon $TAG installed"
+}
+
+remove_frameworks() {
     if [ -d "/data/server/oxide" ] || ls /data/server/RustDedicated_Data/Managed/Oxide.*.dll >/dev/null 2>&1; then
-        echo "[install-server] OXIDE_ENABLED=false, removing Oxide files"
+        echo "[install-server] removing Oxide files"
         rm -rf /data/server/oxide
         rm -f /data/server/RustDedicated_Data/Managed/Oxide.*.dll
     fi
-fi
+    if [ -d "/data/server/carbon" ] || [ -f "/data/server/doorstop_config.ini" ]; then
+        echo "[install-server] removing Carbon files"
+        rm -rf /data/server/carbon
+        rm -f /data/server/doorstop_config.ini
+        rm -f /data/server/RustDedicated_Data/Managed/Carbon.*.dll
+    fi
+}
+
+case "$MOD_FRAMEWORK" in
+    oxide)
+        remove_frameworks
+        install_oxide
+        ;;
+    carbon)
+        remove_frameworks
+        install_carbon
+        ;;
+    *)
+        remove_frameworks
+        ;;
+esac

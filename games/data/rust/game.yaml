@@ -40,8 +40,8 @@ container:
       default: ""
       label: "RCON Password"
       autogenerate: password
-    - key: OXIDE_ENABLED
-      default: "false"
+    - key: MOD_FRAMEWORK
+      default: "none"
       hidden: true
     - key: EAC_ENABLED
       default: "true"
@@ -65,11 +65,13 @@ container:
       system: true
   mods:
     loader:
-      env: OXIDE_ENABLED
+      env: MOD_FRAMEWORK
       options:
-        "false":
+        none:
           mod_sources: []
-        "true":
+        oxide:
+          mod_sources: [umod]
+        carbon:
           mod_sources: [umod]
 
     categories:
