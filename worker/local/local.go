@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,14 +25,6 @@ type LocalWorker struct {
 	DataDir   string
 	Resolve   worker.VolumeResolver
 
-	// Direct volume access detection (probed once on first file op)
-	DirectAccessOnce sync.Once
-	DirectAccess     bool
-
-	// Lazy sidecar containers for when direct volume access is unavailable
-	SidecarMu    sync.Mutex
-	SidecarCache map[string]string // volume name -> container ID
-
 	// Volume size cache (120s staleness)
 	VolumeSizeMu    sync.Mutex
 	VolumeSizeCache map[string]*VolumeSizeEntry
@@ -50,7 +41,6 @@ func New(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string
 		Log:             log,
 		GameStore:       gameStore,
 		DataDir:         dataDir,
-		SidecarCache:    make(map[string]string),
 		VolumeSizeCache: make(map[string]*VolumeSizeEntry),
 	}
 	w.Resolve = w.DockerVolumeResolver()
@@ -128,11 +118,9 @@ func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 	}
 	// Set ownership so the gameserver user (1001) can write before the container starts.
 	// Docker creates volumes as root, but mods may be installed before first start.
-	if w.HasDirectAccess(ctx, name) {
-		mountpoint, err := w.Resolve(ctx, name)
-		if err == nil {
-			os.Chown(mountpoint, model.GameserverUID, model.GameserverGID)
-		}
+	mountpoint, err := w.Resolve(ctx, name)
+	if err == nil {
+		os.Chown(mountpoint, model.GameserverUID, model.GameserverGID)
 	}
 	return nil
 }
@@ -141,8 +129,6 @@ func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {
 	w.VolumeSizeMu.Lock()
 	delete(w.VolumeSizeCache, name)
 	w.VolumeSizeMu.Unlock()
-
-	w.RemoveSidecar(context.Background(), name)
 
 	return w.Docker.RemoveVolume(ctx, name)
 }
@@ -156,94 +142,46 @@ func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64,
 	}
 	w.VolumeSizeMu.Unlock()
 
-	// Try direct measurement first, fall back to sidecar
-	if w.HasDirectAccess(ctx, volumeName) {
-		size, err := worker.VolumeSizeDirect(w.Resolve, ctx, volumeName)
-		if err == nil {
-			w.VolumeSizeMu.Lock()
-			w.VolumeSizeCache[volumeName] = &VolumeSizeEntry{SizeBytes: size, MeasuredAt: time.Now()}
-			w.VolumeSizeMu.Unlock()
-			return size, nil
-		}
-	}
-
-	exitCode, stdout, stderr, err := w.SidecarExec(ctx, volumeName, []string{"du", "-sb", "/data"})
+	size, err := worker.VolumeSizeDirect(w.Resolve, ctx, volumeName)
 	if err != nil {
 		return 0, fmt.Errorf("measuring volume size: %w", err)
 	}
-	if exitCode != 0 {
-		return 0, fmt.Errorf("measuring volume size: %s", stderr)
-	}
-
-	var sizeBytes int64
-	if _, err := fmt.Sscanf(strings.TrimSpace(stdout), "%d", &sizeBytes); err != nil {
-		return 0, fmt.Errorf("parsing volume size from %q: %w", stdout, err)
-	}
 
 	w.VolumeSizeMu.Lock()
-	w.VolumeSizeCache[volumeName] = &VolumeSizeEntry{SizeBytes: sizeBytes, MeasuredAt: time.Now()}
+	w.VolumeSizeCache[volumeName] = &VolumeSizeEntry{SizeBytes: size, MeasuredAt: time.Now()}
 	w.VolumeSizeMu.Unlock()
 
-	return sizeBytes, nil
+	return size, nil
 }
 
-// --- Volume file operations ---
-// Uses direct filesystem access when the host volume mountpoints are accessible,
-// falls back to a lazy sidecar container when running inside Docker.
+// --- Volume file operations (always direct filesystem access) ---
 
 func (w *LocalWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.ListFilesDirect(w.Resolve, ctx, volumeName, path)
-	}
-	return w.listFilesSidecar(ctx, volumeName, path)
+	return worker.ListFilesDirect(w.Resolve, ctx, volumeName, path)
 }
 
 func (w *LocalWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.ReadFileDirect(w.Resolve, ctx, volumeName, path)
-	}
-	return w.readFileSidecar(ctx, volumeName, path)
+	return worker.ReadFileDirect(w.Resolve, ctx, volumeName, path)
 }
 
 func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.WriteFileDirect(w.Resolve, ctx, volumeName, path, content, perm)
-	}
-	return w.writeFileSidecar(ctx, volumeName, path, content)
+	return worker.WriteFileDirect(w.Resolve, ctx, volumeName, path, content, perm)
 }
 
 func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.DeletePathDirect(w.Resolve, ctx, volumeName, path)
-	}
-	return w.deletePathSidecar(ctx, volumeName, path)
+	return worker.DeletePathDirect(w.Resolve, ctx, volumeName, path)
 }
 
 func (w *LocalWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.DownloadFileDirect(w.Resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
-	}
-	// Sidecar fallback: download to memory, write via sidecar
-	// This path is rare (no direct volume access) and bounded by maxBytes
-	content, err := worker.DownloadToMemory(ctx, url, expectedHash)
-	if err != nil {
-		return err
-	}
-	return w.writeFileSidecar(ctx, volumeName, destPath, content)
+	return worker.DownloadFileDirect(w.Resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
 }
 
 func (w *LocalWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.CreateDirectoryDirect(w.Resolve, ctx, volumeName, path)
-	}
-	return w.createDirectorySidecar(ctx, volumeName, path)
+	return worker.CreateDirectoryDirect(w.Resolve, ctx, volumeName, path)
 }
 
 func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
-	if w.HasDirectAccess(ctx, volumeName) {
-		return worker.RenamePathDirect(w.Resolve, ctx, volumeName, from, to)
-	}
-	return w.renamePathSidecar(ctx, volumeName, from, to)
+	return worker.RenamePathDirect(w.Resolve, ctx, volumeName, from, to)
 }
 
 func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {

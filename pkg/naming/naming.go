@@ -16,10 +16,6 @@ func UpdateContainerName(gameserverID string) string {
 	return UpdateContainerPrefix + gameserverID
 }
 
-func FileopsContainerName(volumeName string) string {
-	return FileopsContainerPrefix + volumeName
-}
-
 func VolumeName(gameserverID string) string {
 	return ContainerPrefix + gameserverID
 }

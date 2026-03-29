@@ -25,9 +25,8 @@ func TestNaming_ContainerName(t *testing.T) {
 		})
 	}
 
-	// Update and fileops container names use distinct prefixes
+	// Update container names use a distinct prefix
 	assert.Equal(t, "gamejanitor-update-abc-123", UpdateContainerName("abc-123"))
-	assert.Equal(t, "gamejanitor-fileops-vol-123", FileopsContainerName("vol-123"))
 }
 
 func TestNaming_VolumeName(t *testing.T) {
