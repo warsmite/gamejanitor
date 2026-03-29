@@ -47,7 +47,7 @@
         let
           dev = pkgs.writeShellScriptBin "dev" ''
             (cd ui && npm run build)
-            exec sudo -E go run . serve -d /tmp/gamejanitor-data "$@"
+            exec sudo -E go run -mod=mod . serve -d /tmp/gamejanitor-data "$@"
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''
