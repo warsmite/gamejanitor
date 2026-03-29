@@ -26,7 +26,7 @@
   $effect(() => {
     if (!gameserver) return;
     api.mods.config(id).then(cfg => {
-      hasModsSupport = (cfg?.categories?.length ?? 0) > 0;
+      hasModsSupport = (cfg?.categories?.length ?? 0) > 0 || !!cfg?.loader || !!cfg?.version;
     }).catch(() => { hasModsSupport = false; });
   });
 

@@ -538,7 +538,7 @@
 
 {#if configLoading}
   <p class="loading-text">Loading...</p>
-{:else if !config || config.categories.length === 0}
+{:else if !config || (config.categories.length === 0 && !config.loader && !config.version)}
   <p class="loading-text">Mods not available for this game.</p>
 {:else}
   <div class="mods-page">
