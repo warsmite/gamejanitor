@@ -8,20 +8,10 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// Reconcile ensures all DB-tracked mods exist on the gameserver volume.
-// Called automatically before container start as a safety net.
-// Downloads missing files, regenerates manifests. Non-fatal — logs warnings for
-// unrecoverable mods (uploads, detected files) but never blocks server start.
-func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
-	mods, err := s.store.ListInstalledMods(gameserverID)
-	if err != nil {
-		return fmt.Errorf("listing installed mods: %w", err)
-	}
-	if len(mods) == 0 {
-		return nil
-	}
-
-	// Group file-delivery mods by parent directory to batch ListDirectory calls
+// volumeState cross-references DB-tracked file-delivery mods against what's actually on disk.
+// Groups mods by parent directory and batches ListDirectory calls for efficiency.
+// Returns: filesOnDisk (dir → filename set), modsByDir (dir → mod indices into the slice).
+func (s *ModService) volumeState(ctx context.Context, gameserverID string, mods []model.InstalledMod) (map[string]map[string]bool, map[string][]int) {
 	dirFiles := make(map[string]map[string]bool) // dir → set of filenames on disk
 	modsByDir := make(map[string][]int)           // dir → indices into mods slice
 
@@ -35,8 +25,8 @@ func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
 		if _, listed := dirFiles[dir]; !listed {
 			entries, err := s.fileSvc.ListDirectory(ctx, gameserverID, dir)
 			if err != nil {
-				s.log.Warn("reconcile: cannot list directory", "dir", dir, "error", err)
-				dirFiles[dir] = make(map[string]bool) // empty — all mods in this dir will be "missing"
+				s.log.Debug("volumeState: cannot list directory", "dir", dir, "error", err)
+				dirFiles[dir] = make(map[string]bool)
 				continue
 			}
 			names := make(map[string]bool, len(entries))
@@ -48,6 +38,23 @@ func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
 			dirFiles[dir] = names
 		}
 	}
+	return dirFiles, modsByDir
+}
+
+// Reconcile ensures all DB-tracked mods exist on the gameserver volume.
+// Called automatically before container start as a safety net.
+// Downloads missing files, regenerates manifests. Non-fatal — logs warnings for
+// unrecoverable mods (uploads, detected files) but never blocks server start.
+func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
+	mods, err := s.store.ListInstalledMods(gameserverID)
+	if err != nil {
+		return fmt.Errorf("listing installed mods: %w", err)
+	}
+	if len(mods) == 0 {
+		return nil
+	}
+
+	dirFiles, modsByDir := s.volumeState(ctx, gameserverID, mods)
 
 	// Check each file-delivery mod
 	var recovered, failed int
