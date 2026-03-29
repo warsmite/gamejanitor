@@ -564,12 +564,29 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 		}
 
 		filters := s.buildFilters(*src, gameVersion, loaderID)
+		if mod.Delivery == "pack" {
+			filters.ServerPack = true
+		}
 		versions, err := catalog.GetVersions(ctx, mod.SourceID, filters)
 		if err != nil || len(versions) == 0 {
 			continue
 		}
 
+		// For packs, only offer updates to versions with server files
 		latest := versions[0]
+		if mod.Delivery == "pack" {
+			found := false
+			for i := range versions {
+				if versions[i].HasServerFile && versions[i].VersionID != mod.VersionID {
+					latest = versions[i]
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue // no newer version with a server file
+			}
+		}
 		if latest.VersionID != mod.VersionID {
 			updates = append(updates, ModUpdate{
 				ModID:          mod.ID,
