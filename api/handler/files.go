@@ -65,9 +65,13 @@ func (h *FileHandlers) Write(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := io.ReadAll(io.LimitReader(r.Body, MaxFileWriteBytes))
+	content, err := io.ReadAll(io.LimitReader(r.Body, MaxFileWriteBytes+1))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	if int64(len(content)) > MaxFileWriteBytes {
+		respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds %d MB limit, use SFTP for large files", MaxFileWriteBytes/(1024*1024)))
 		return
 	}
 
@@ -152,11 +156,15 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		content, err := io.ReadAll(io.LimitReader(f, MaxFileUploadBytes))
+		content, err := io.ReadAll(io.LimitReader(f, MaxFileUploadBytes+1))
 		f.Close()
 		if err != nil {
 			h.log.Error("reading uploaded file", "filename", fh.Filename, "error", err)
 			respondError(w, http.StatusInternalServerError, "failed to read uploaded file: "+fh.Filename)
+			return
+		}
+		if int64(len(content)) > MaxFileUploadBytes {
+			respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("%s exceeds %d MB limit, use SFTP for large files", fh.Filename, MaxFileUploadBytes/(1024*1024)))
 			return
 		}
 

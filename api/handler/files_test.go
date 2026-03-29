@@ -72,11 +72,7 @@ func TestFiles_Write_SizeLimit(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, api.Services)
 
-	// LimitReader in the handler caps at MaxFileWriteBytes (10 MB).
-	// Sending more than that means the body is silently truncated by io.LimitReader,
-	// so the write itself succeeds with truncated content. The handler uses
-	// io.LimitReader, not a size check — verify the write doesn't crash and that
-	// only MaxFileWriteBytes worth of data is written.
+	// Sending more than MaxFileWriteBytes (10 MB) should be rejected with 413.
 	bigBody := strings.Repeat("A", 11*1024*1024) // 11 MB
 
 	req, err := http.NewRequest("PUT", api.Server.URL+"/api/gameservers/"+gs.ID+"/files/content?path=/data/big.txt", bytes.NewReader([]byte(bigBody)))
@@ -87,7 +83,5 @@ func TestFiles_Write_SizeLimit(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	// The handler uses io.LimitReader which truncates — the write succeeds with capped content.
-	// This is a valid behavior: no crash, no unbounded memory allocation.
-	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
 }
