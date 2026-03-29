@@ -58,14 +58,13 @@ install_carbon() {
 }
 
 remove_frameworks() {
-    if [ -d "/data/server/oxide" ] || ls /data/server/RustDedicated_Data/Managed/Oxide.*.dll >/dev/null 2>&1; then
-        echo "[update-server] removing Oxide files"
-        rm -rf /data/server/oxide
+    # Remove framework binaries but preserve user data (plugins, configs, data)
+    if ls /data/server/RustDedicated_Data/Managed/Oxide.*.dll >/dev/null 2>&1; then
+        echo "[update-server] removing Oxide framework files"
         rm -f /data/server/RustDedicated_Data/Managed/Oxide.*.dll
     fi
-    if [ -d "/data/server/carbon" ] || [ -f "/data/server/doorstop_config.ini" ]; then
-        echo "[update-server] removing Carbon files"
-        rm -rf /data/server/carbon
+    if [ -f "/data/server/doorstop_config.ini" ] || ls /data/server/RustDedicated_Data/Managed/Carbon.*.dll >/dev/null 2>&1; then
+        echo "[update-server] removing Carbon framework files"
         rm -f /data/server/doorstop_config.ini
         rm -f /data/server/RustDedicated_Data/Managed/Carbon.*.dll
     fi
