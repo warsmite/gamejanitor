@@ -40,6 +40,7 @@ const (
 	SettingStorageWarningThreshold = "storage_warning_threshold"
 	SettingStorageCriticalThreshold = "storage_critical_threshold"
 	SettingRegisterWithBrowser     = "register_with_browser"
+	SettingRestrictDownloadURLs     = "restrict_download_urls"
 	SettingSteamAPIKey             = "steam_api_key"
 )
 
@@ -72,6 +73,7 @@ var Defaults = map[string]any{
 	SettingStorageWarningThreshold: 90,
 	SettingStorageCriticalThreshold: 100,
 	SettingRegisterWithBrowser:     false,
+	SettingRestrictDownloadURLs:     false,
 	SettingSteamAPIKey:             "",
 }
 
@@ -83,7 +85,8 @@ var BusinessOverrides = map[string]any{
 	SettingRateLimitEnabled:    true,
 	SettingRequireMemoryLimit:  true,
 	SettingRequireCPULimit:     true,
-	SettingRequireStorageLimit: true,
+	SettingRequireStorageLimit:  true,
+	SettingRestrictDownloadURLs: true,
 }
 
 // DefaultsForMode returns the full defaults map for a given mode.

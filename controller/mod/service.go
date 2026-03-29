@@ -57,6 +57,10 @@ type ModService struct {
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 
+	// ValidateURL is called before any external download. Returns an error if the
+	// URL is not allowed (e.g., private IP in restricted mode). Nil means no validation.
+	ValidateURL func(string) error
+
 	// Per-gameserver locks to prevent concurrent mod operations on the same server.
 	// Install, uninstall, update, and reconcile all acquire this before modifying state.
 	locks   map[string]*sync.Mutex
@@ -77,6 +81,14 @@ func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore
 		broadcaster: broadcaster,
 		log:         log,
 	}
+}
+
+// SetURLValidator sets the URL validation function for external downloads.
+// When set, all mod download URLs and modpack manifest URLs are validated
+// before fetching. Used by business mode to block private IP ranges.
+func (s *ModService) SetURLValidator(fn func(string) error) {
+	s.ValidateURL = fn
+	s.packDel.ValidateURL = fn
 }
 
 // RegisterCatalog adds a mod catalog (source) to the service.
@@ -380,6 +392,11 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 
 // InstallFromURL downloads a mod from a plain URL (no catalog).
 func (s *ModService) InstallFromURL(ctx context.Context, gameserverID, category, name, downloadURL string) (*model.InstalledMod, error) {
+	if s.ValidateURL != nil {
+		if err := s.ValidateURL(downloadURL); err != nil {
+			return nil, controller.ErrBadRequestf("blocked download URL: %v", err)
+		}
+	}
 	defer s.lockGameserver(gameserverID)()
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {

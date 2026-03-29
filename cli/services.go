@@ -18,6 +18,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/pkg/netutil"
 	"github.com/warsmite/gamejanitor/store"
 )
 
@@ -111,6 +112,12 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	eventHistorySvc := event.NewEventHistoryService(db)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
+	webhookWorker.ValidateURL = func(rawURL string) error {
+		if !settingsSvc.GetBool(settings.SettingRestrictDownloadURLs) {
+			return nil
+		}
+		return netutil.ValidateWebhookURL(rawURL)
+	}
 	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
 	workerNodeSvc := orchestrator.NewWorkerNodeService(db, registry, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
@@ -122,6 +129,12 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	modSvc.RegisterCatalog("umod", mod.NewUmodCatalog(logger.With("catalog", "umod")))
 	modSvc.RegisterCatalog("workshop", mod.NewWorkshopCatalog(settingsSvc, logger.With("catalog", "workshop")))
 	modSvc.ValidateCatalogs()
+	modSvc.SetURLValidator(func(rawURL string) error {
+		if !settingsSvc.GetBool(settings.SettingRestrictDownloadURLs) {
+			return nil
+		}
+		return netutil.ValidateExternalURL(rawURL)
+	})
 	gameserverSvc.SetModReconciler(modSvc)
 
 	return &Services{

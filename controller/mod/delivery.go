@@ -99,9 +99,10 @@ func (d *ManifestDelivery) Uninstall(ctx context.Context, gameserverID, manifest
 
 // PackDelivery installs a modpack (.mrpack) — a bundle of mods + config overrides.
 type PackDelivery struct {
-	fileSvc FileOperator
-	client  *http.Client
-	log     *slog.Logger
+	fileSvc     FileOperator
+	client      *http.Client
+	log         *slog.Logger
+	ValidateURL func(string) error
 }
 
 func NewPackDelivery(fileSvc FileOperator, log *slog.Logger) *PackDelivery {
@@ -158,6 +159,12 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		// Filter: skip client-only mods
 		if f.ServerSide == "unsupported" {
 			continue
+		}
+
+		if d.ValidateURL != nil {
+			if err := d.ValidateURL(f.DownloadURL); err != nil {
+				return nil, fmt.Errorf("blocked download URL in modpack: %v", err)
+			}
 		}
 
 		fileName := path.Base(f.Path)

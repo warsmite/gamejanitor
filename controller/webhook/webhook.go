@@ -70,6 +70,10 @@ type WebhookWorker struct {
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	wake        chan struct{} // signals deliverLoop to process immediately
+
+	// ValidateURL is called before each webhook delivery. Returns an error if the
+	// URL is not allowed (e.g., private IP in restricted mode). Nil means no validation.
+	ValidateURL func(string) error
 }
 
 func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
@@ -352,6 +356,12 @@ func (w *WebhookWorker) processPendingDeliveries() {
 }
 
 func (w *WebhookWorker) deliver(url string, body []byte, secret string) (int, error) {
+	if w.ValidateURL != nil {
+		if err := w.ValidateURL(url); err != nil {
+			return 0, fmt.Errorf("blocked webhook URL: %v", err)
+		}
+	}
+
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("creating request: %w", err)
