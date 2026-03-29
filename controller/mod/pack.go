@@ -18,6 +18,7 @@ type PackInstallResult struct {
 	Pack             *model.InstalledMod `json:"pack"`
 	ModCount         int                 `json:"mod_count"`
 	Overrides        []string            `json:"overrides"`
+	Warnings         []string            `json:"warnings,omitempty"`          // non-fatal issues during install
 	VersionChanged   string              `json:"version_changed,omitempty"`   // new version if changed
 	LoaderChanged    string              `json:"loader_changed,omitempty"`    // new loader if changed
 	NeedsRestart     bool                `json:"needs_restart"`               // true if server needs restart/start to apply
@@ -102,17 +103,10 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		}
 	}
 
-	// Now find the Modpacks category with the updated env
-	cat := s.findCategory(game, gs.Env, "Modpacks")
-	if cat == nil {
-		return nil, controller.ErrBadRequest("modpacks not available for this game")
-	}
-	src := findSource(cat, sourceName)
-	if src == nil {
-		return nil, controller.ErrBadRequestf("source %q not available for modpacks", sourceName)
-	}
-	if src.Delivery != "pack" {
-		return nil, controller.ErrBadRequest("source does not support pack delivery")
+	// Find the category and source that supports pack delivery
+	cat, src := s.findPackSource(game, gs.Env, sourceName)
+	if cat == nil || src == nil {
+		return nil, controller.ErrBadRequest("pack delivery not available for this game")
 	}
 
 	// Download and parse the pack
@@ -134,7 +128,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		GameserverID: gameserverID,
 		Source:       sourceName,
 		SourceID:     packID,
-		Category:     "Modpacks",
+		Category:     cat.Name,
 		Name:         version.FileName,
 		Version:      version.Version,
 		VersionID:    version.VersionID,
@@ -148,6 +142,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 	}
 
 	// Record each individual mod, linked to the pack
+	var warnings []string
 	for _, pm := range contents.Mods {
 		existing, _ := s.store.GetInstalledModBySource(gameserverID, sourceName, pm.SourceID)
 		if existing != nil {
@@ -177,6 +172,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		}
 		if err := s.store.CreateInstalledMod(modRecord); err != nil {
 			s.log.Warn("failed to record pack mod", "file", pm.FileName, "error", err)
+			warnings = append(warnings, fmt.Sprintf("failed to track %s: %v", pm.FileName, err))
 		}
 	}
 
@@ -216,6 +212,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		}
 		if err := s.store.CreateInstalledMod(modRecord); err != nil {
 			s.log.Warn("failed to record override mod", "file", fileName, "error", err)
+			warnings = append(warnings, fmt.Sprintf("failed to track override %s: %v", fileName, err))
 		}
 		overrideModCount++
 	}
@@ -225,6 +222,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 	result.Pack = pack
 	result.ModCount = len(contents.Mods) + overrideModCount
 	result.Overrides = contents.Overrides
+	result.Warnings = warnings
 	return result, nil
 }
 
@@ -280,13 +278,9 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
-	cat := s.findCategory(game, gs.Env, "Modpacks")
-	if cat == nil {
-		return nil, controller.ErrBadRequest("modpacks not available")
-	}
-	src := findSource(cat, pack.Source)
-	if src == nil {
-		return nil, controller.ErrBadRequest("source not available")
+	cat, src := s.findPackSource(game, gs.Env, pack.Source)
+	if cat == nil || src == nil {
+		return nil, controller.ErrBadRequest("pack delivery not available")
 	}
 
 	loaderID := s.resolveLoaderID(game, gs.Env)

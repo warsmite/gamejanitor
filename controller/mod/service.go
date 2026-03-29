@@ -84,6 +84,20 @@ func (s *ModService) RegisterCatalog(name string, catalog ModCatalog) {
 	s.catalogs[name] = catalog
 }
 
+// ValidateCatalogs logs warnings for game YAML sources that reference unregistered catalogs.
+// Called after all catalogs are registered during startup.
+func (s *ModService) ValidateCatalogs() {
+	for _, game := range s.gameStore.ListGames() {
+		for _, cat := range game.Mods.Categories {
+			for _, src := range cat.Sources {
+				if _, ok := s.catalogs[src.Name]; !ok {
+					s.log.Warn("game references unregistered mod catalog", "game", game.ID, "category", cat.Name, "source", src.Name)
+				}
+			}
+		}
+	}
+}
+
 // --- Query methods ---
 
 // ModTabConfig is everything the mods tab needs in one call.
@@ -887,6 +901,27 @@ func (s *ModService) CheckCompatibility(ctx context.Context, gameserverID string
 		}
 	}
 
+	return nil, nil
+}
+
+// findPackSource searches all categories for a source with pack delivery.
+// Returns the category and source, or nil if not found.
+func (s *ModService) findPackSource(game *games.Game, env model.Env, sourceName string) (*games.ModCategoryDef, *games.ModCategorySource) {
+	for _, cat := range s.availableCategories(game, env) {
+		for i := range cat.Sources {
+			if cat.Sources[i].Delivery == "pack" && (sourceName == "" || cat.Sources[i].Name == sourceName) {
+				return &cat, &cat.Sources[i]
+			}
+		}
+	}
+	// Fall back to all categories (not just available ones)
+	for _, cat := range game.Mods.Categories {
+		for i := range cat.Sources {
+			if cat.Sources[i].Delivery == "pack" && (sourceName == "" || cat.Sources[i].Name == sourceName) {
+				return &cat, &cat.Sources[i]
+			}
+		}
+	}
 	return nil, nil
 }
 
