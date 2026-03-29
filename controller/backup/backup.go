@@ -57,6 +57,11 @@ type ActivityTracker interface {
 	Fail(activityID string, reason error)
 }
 
+// maxConcurrentBackups limits how many backup/restore operations can run simultaneously.
+// Prevents CPU saturation (gzip) and memory pressure (tar streaming) under load.
+// Additional backups queue until a slot opens (up to the operation timeout).
+const maxConcurrentBackups = 3
+
 type BackupService struct {
 	store         Store
 	dispatcher    *orchestrator.Dispatcher
@@ -67,6 +72,7 @@ type BackupService struct {
 	broadcaster   *controller.EventBus
 	activity      ActivityTracker
 	log           *slog.Logger
+	sem           chan struct{} // concurrency limiter for backup/restore goroutines
 }
 
 func (s *BackupService) SetActivityTracker(tracker ActivityTracker) {
@@ -98,7 +104,17 @@ func (s *BackupService) failActivityRecord(activityID string, reason error) {
 }
 
 func NewBackupService(store Store, dispatcher *orchestrator.Dispatcher, gameserverSvc GameserverLifecycle, gameStore *games.GameStore, storage Storage, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
-	return &BackupService{store: store, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, storage: storage, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
+	return &BackupService{
+		store:         store,
+		dispatcher:    dispatcher,
+		gameserverSvc: gameserverSvc,
+		gameStore:     gameStore,
+		storage:       storage,
+		settingsSvc:   settingsSvc,
+		broadcaster:   broadcaster,
+		log:           log,
+		sem:           make(chan struct{}, maxConcurrentBackups),
+	}
 }
 
 func (s *BackupService) ListBackups(filter model.BackupFilter) ([]model.Backup, error) {
@@ -191,6 +207,16 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model.Gameserver, actor controller.Actor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+
+	// Wait for a backup slot. Queued backups show as "in progress" to the user
+	// and start once a slot frees up. The context timeout prevents infinite waits.
+	select {
+	case s.sem <- struct{}{}:
+		defer func() { <-s.sem }()
+	case <-ctx.Done():
+		s.failBackup(ctx, gameserverID, backupID, name, actor, "backup queue timeout — too many concurrent backups")
+		return
+	}
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -336,6 +362,14 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeName string, wasRunning bool, actor controller.Actor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+
+	select {
+	case s.sem <- struct{}{}:
+		defer func() { <-s.sem }()
+	case <-ctx.Done():
+		s.failRestore(gameserverID, backupID, backupName, actor, "restore queue timeout — too many concurrent backups")
+		return
+	}
 
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
