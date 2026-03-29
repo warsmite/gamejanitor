@@ -120,7 +120,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	// (uMod category, Workshop appID) comes from game YAML via CatalogFilters.Extra
 	modSvc.RegisterCatalog("modrinth", mod.NewModrinthCatalog(logger.With("catalog", "modrinth")))
 	modSvc.RegisterCatalog("umod", mod.NewUmodCatalog(logger.With("catalog", "umod")))
-	modSvc.RegisterCatalog("workshop", mod.NewWorkshopCatalog(cfg.SteamAPIKey, logger.With("catalog", "workshop")))
+	modSvc.RegisterCatalog("workshop", mod.NewWorkshopCatalog(settingsSvc, logger.With("catalog", "workshop")))
 	gameserverSvc.SetModReconciler(modSvc)
 
 	return &Services{

@@ -40,6 +40,7 @@ const (
 	SettingStorageWarningThreshold = "storage_warning_threshold"
 	SettingStorageCriticalThreshold = "storage_critical_threshold"
 	SettingRegisterWithBrowser     = "register_with_browser"
+	SettingSteamAPIKey             = "steam_api_key"
 )
 
 // Mode constants for selecting default profiles.
@@ -71,6 +72,7 @@ var Defaults = map[string]any{
 	SettingStorageWarningThreshold: 90,
 	SettingStorageCriticalThreshold: 100,
 	SettingRegisterWithBrowser:     false,
+	SettingSteamAPIKey:             "",
 }
 
 // BusinessOverrides are applied on top of Defaults when mode is "business".

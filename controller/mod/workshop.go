@@ -11,24 +11,25 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 type WorkshopCatalog struct {
-	client *http.Client
-	log    *slog.Logger
-	apiKey string // Steam API key from config (global, not per-game)
+	client      *http.Client
+	log         *slog.Logger
+	settingsSvc *settings.SettingsService
 }
 
-func NewWorkshopCatalog(apiKey string, log *slog.Logger) *WorkshopCatalog {
+func NewWorkshopCatalog(settingsSvc *settings.SettingsService, log *slog.Logger) *WorkshopCatalog {
 	return &WorkshopCatalog{
-		client: &http.Client{Timeout: 15 * time.Second},
-		log:    log,
-		apiKey: apiKey,
+		client:      &http.Client{Timeout: 15 * time.Second},
+		log:         log,
+		settingsSvc: settingsSvc,
 	}
 }
 
 func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters CatalogFilters, offset, limit int) ([]ModResult, int, error) {
-	key := c.apiKey
+	key := c.settingsSvc.GetString(settings.SettingSteamAPIKey)
 	if key == "" {
 		return nil, 0, controller.ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
 	}
