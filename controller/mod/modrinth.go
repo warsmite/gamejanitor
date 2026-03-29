@@ -98,6 +98,8 @@ func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters Cata
 	if filters.Loader != "" {
 		facets = append(facets, fmt.Sprintf(`["categories:%s"]`, filters.Loader))
 	}
+	// Exclude client-only projects — they don't work on dedicated servers
+	facets = append(facets, `["server_side:required","server_side:optional"]`)
 
 	facetStr := "[" + strings.Join(facets, ",") + "]"
 
