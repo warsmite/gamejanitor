@@ -239,18 +239,26 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 
 		rc, err := zf.Open()
 		if err != nil {
+			d.log.Warn("failed to open override file", "path", relPath, "error", err)
 			continue
 		}
 		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes))
 		rc.Close()
 		if err != nil {
+			d.log.Warn("failed to read override file", "path", relPath, "error", err)
 			continue
 		}
 
 		fullPath := path.Join(overridesPath, relPath)
 		dir := path.Dir(fullPath)
-		d.fileSvc.CreateDirectory(ctx, gameserverID, dir)
-		d.fileSvc.WriteFile(ctx, gameserverID, fullPath, content)
+		if err := d.fileSvc.CreateDirectory(ctx, gameserverID, dir); err != nil {
+			d.log.Warn("failed to create override directory", "dir", dir, "error", err)
+			continue
+		}
+		if err := d.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
+			d.log.Warn("failed to write override file", "path", relPath, "error", err)
+			continue
+		}
 		overrides = append(overrides, fullPath)
 	}
 
