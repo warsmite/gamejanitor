@@ -94,7 +94,8 @@ func (h *ModHandlers) Versions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	versions, err := h.svc.GetVersions(r.Context(), gsID, category, source, sourceID)
+	unfiltered := q.Get("unfiltered") == "true"
+	versions, err := h.svc.GetVersions(r.Context(), gsID, category, source, sourceID, unfiltered)
 	if err != nil {
 		h.log.Error("getting mod versions", "gameserver_id", gsID, "source", source, "source_id", sourceID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

@@ -532,7 +532,7 @@ export const api = {
     list: (gsId: string) => get<InstalledMod[]>(`/api/gameservers/${gsId}/mods`),
     search: (gsId: string, params: { category: string; q?: string; version?: string; loader?: string; sort?: string; offset?: number; limit?: number }) =>
       get<ModSearchResults>(`/api/gameservers/${gsId}/mods/search`, params),
-    versions: (gsId: string, params: { category: string; source: string; source_id: string }) =>
+    versions: (gsId: string, params: { category: string; source: string; source_id: string; unfiltered?: string }) =>
       get<ModVersion[]>(`/api/gameservers/${gsId}/mods/versions`, params),
     updates: (gsId: string) => get<ModUpdate[]>(`/api/gameservers/${gsId}/mods/updates`),
     install: (gsId: string, data: { category: string; source: string; source_id: string; version_id?: string }) =>

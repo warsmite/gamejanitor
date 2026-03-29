@@ -244,7 +244,8 @@ func (s *ModService) Search(ctx context.Context, gameserverID, category, query s
 }
 
 // GetVersions returns versions for a specific mod from a specific source.
-func (s *ModService) GetVersions(ctx context.Context, gameserverID, category, sourceName, sourceID string) ([]ModVersion, error) {
+// If unfiltered is true, skips game version filtering (used for pre-install checks).
+func (s *ModService) GetVersions(ctx context.Context, gameserverID, category, sourceName, sourceID string, unfiltered bool) ([]ModVersion, error) {
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -271,6 +272,9 @@ func (s *ModService) GetVersions(ctx context.Context, gameserverID, category, so
 
 	loaderID := s.resolveLoaderID(game, gs.Env)
 	gameVersion := s.resolveGameVersion(game, gs.Env)
+	if unfiltered {
+		gameVersion = ""
+	}
 	filters := s.buildFilters(*src, gameVersion, loaderID)
 
 	return catalog.GetVersions(ctx, sourceID, filters)

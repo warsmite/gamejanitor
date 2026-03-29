@@ -299,7 +299,7 @@
       // Pre-check: fetch pack version to detect version/loader changes before installing
       let packVersion: { game_version: string; loader: string } | null = null;
       try {
-        const versions = await api.mods.versions(id, { category: activeCategory, source: result.source, source_id: result.source_id });
+        const versions = await api.mods.versions(id, { category: activeCategory, source: result.source, source_id: result.source_id, unfiltered: 'true' });
         if (versions?.length > 0) packVersion = versions[0];
       } catch { /* non-critical — proceed with generic confirmation */ }
 
