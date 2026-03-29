@@ -48,3 +48,8 @@ container:
     - key: QUERY_PORT
       default: "27016"
       system: true
+
+  mods:
+    categories:
+      - name: Mods
+        install_path: /data/mods
