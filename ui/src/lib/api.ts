@@ -414,6 +414,19 @@ export interface ModIssue {
   reason: string;
 }
 
+export interface ScanResult {
+  tracked: InstalledMod[];
+  untracked: UntrackedFile[];
+  missing: InstalledMod[];
+}
+
+export interface UntrackedFile {
+  name: string;
+  path: string;
+  size: number;
+  category: string;
+}
+
 // ── API ──
 
 export const api = {
@@ -519,6 +532,27 @@ export const api = {
     updateAll: (gsId: string) => post<ModUpdate[]>(`/api/gameservers/${gsId}/mods/update-all`),
     checkCompatibility: (gsId: string, env: Record<string, string>) =>
       post<ModIssue[]>(`/api/gameservers/${gsId}/mods/check-compatibility`, { env }),
+    scan: (gsId: string) => post<ScanResult>(`/api/gameservers/${gsId}/mods/scan`),
+    trackFile: (gsId: string, data: { category: string; name: string; path: string }) =>
+      post<InstalledMod>(`/api/gameservers/${gsId}/mods/track`, data),
+    installURL: (gsId: string, data: { category: string; name: string; url: string }) =>
+      post<InstalledMod>(`/api/gameservers/${gsId}/mods/url`, data),
+    upload: async (gsId: string, category: string, name: string, file: File): Promise<InstalledMod> => {
+      const form = new FormData();
+      form.append('category', category);
+      form.append('name', name);
+      form.append('file', file, file.name);
+      const headers: Record<string, string> = {};
+      const token = getToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const resp = await fetch(basePath + `/api/gameservers/${gsId}/mods/upload`, { method: 'POST', headers, body: form });
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({ error: 'Upload failed' }));
+        throw new ApiClientError(resp.status, json.error || 'Upload failed');
+      }
+      const json = await resp.json();
+      return json.data as InstalledMod;
+    },
   },
 
   events: {

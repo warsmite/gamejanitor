@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { api, type ModTabConfig, type InstalledMod, type ModSearchResult, type ModUpdate, type ModIssue } from '$lib/api';
+  import { api, type ModTabConfig, type InstalledMod, type ModSearchResult, type ModUpdate, type ModIssue, type ScanResult, type UntrackedFile } from '$lib/api';
   import { gameserverStore, toast, confirm } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
 
@@ -43,6 +43,19 @@
   // Pack collapse state
   let collapsedPacks = $state<Set<string>>(new Set());
   let expandedPacks = $state<Set<string>>(new Set());
+
+  // Scan state
+  let scanResult = $state<ScanResult | null>(null);
+  let scanning = $state(false);
+
+  // URL install state
+  let showURLForm = $state(false);
+  let urlInput = $state('');
+  let urlNameInput = $state('');
+  let installingURL = $state(false);
+
+  // Upload state
+  let uploadInput: HTMLInputElement | null = null;
 
   // Derived: filter installed by active category
   const categoryMods = $derived(
@@ -554,6 +567,67 @@
     }
     return groups;
   }
+
+  // Scan
+  async function runScan() {
+    scanning = true;
+    try {
+      scanResult = await api.mods.scan(id);
+    } catch (e: any) {
+      toast(`Scan failed: ${e.message}`, 'error');
+    } finally {
+      scanning = false;
+    }
+  }
+
+  async function trackFile(file: UntrackedFile) {
+    try {
+      await api.mods.trackFile(id, { category: file.category, name: file.name, path: file.path });
+      toast(`Tracking ${file.name}`, 'success');
+      await loadInstalled();
+      await runScan();
+    } catch (e: any) {
+      toast(`Failed to track: ${e.message}`, 'error');
+    }
+  }
+
+  function dismissScan() {
+    scanResult = null;
+  }
+
+  // URL install
+  async function installFromURL() {
+    if (!urlInput || !urlNameInput) return;
+    installingURL = true;
+    try {
+      await api.mods.installURL(id, { category: activeCategory, name: urlNameInput, url: urlInput });
+      toast(`Installed ${urlNameInput}`, 'success');
+      urlInput = '';
+      urlNameInput = '';
+      showURLForm = false;
+      await loadInstalled();
+    } catch (e: any) {
+      toast(`Failed to install from URL: ${e.message}`, 'error');
+    } finally {
+      installingURL = false;
+    }
+  }
+
+  // Upload
+  async function handleUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      await api.mods.upload(id, activeCategory, file.name, file);
+      toast(`Uploaded ${file.name}`, 'success');
+      await loadInstalled();
+    } catch (err: any) {
+      toast(`Upload failed: ${err.message}`, 'error');
+    } finally {
+      input.value = '';
+    }
+  }
 </script>
 
 {#if configLoading}
@@ -634,15 +708,76 @@
     {/if}
 
     <!-- Installed Section -->
-    {#if categoryMods.length > 0}
-      <div class="section-header">
-        <span class="section-label">Installed ({categoryMods.length})</span>
+    <div class="section-header">
+      <span class="section-label">Installed ({categoryMods.length})</span>
+      <div class="section-actions">
+        <button class="btn-scan" onclick={runScan} disabled={scanning}>
+          {scanning ? 'Scanning...' : 'Scan Volume'}
+        </button>
         {#if canWrite && updatableCount > 0}
           <button class="btn-update-all" onclick={updateAllMods} disabled={updatingAll}>
             {updatingAll ? 'Updating...' : `Update All (${updatableCount})`}
           </button>
         {/if}
       </div>
+    </div>
+
+    <!-- Scan Results -->
+    {#if scanResult}
+      <div class="scan-panel">
+        <div class="scan-header">
+          <span class="section-label">Scan Results</span>
+          <button class="mod-act" onclick={dismissScan}>Dismiss</button>
+        </div>
+        {#if scanResult.untracked.length > 0}
+          <div class="scan-group">
+            <div class="scan-group-label">Untracked ({scanResult.untracked.length})</div>
+            {#each scanResult.untracked as file}
+              <div class="mod-row">
+                <div class="mod-info">
+                  <div class="mod-name-row">
+                    <span class="mod-name">{file.name}</span>
+                    <span class="mod-version">{file.category}</span>
+                  </div>
+                  <div class="mod-meta">{file.path}</div>
+                </div>
+                {#if canWrite}
+                  <div class="mod-actions" style="opacity:1;">
+                    <button class="btn-install" onclick={() => trackFile(file)}>Track</button>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if scanResult.missing.length > 0}
+          <div class="scan-group">
+            <div class="scan-group-label">Missing ({scanResult.missing.length})</div>
+            {#each scanResult.missing as mod}
+              <div class="mod-row">
+                <div class="mod-info">
+                  <div class="mod-name-row">
+                    <span class="mod-name">{mod.name}</span>
+                    <span class="source-badge">{mod.source}</span>
+                  </div>
+                  <div class="mod-meta">{mod.file_path}</div>
+                </div>
+                {#if canWrite}
+                  <div class="mod-actions" style="opacity:1;">
+                    <button class="mod-act danger" onclick={() => uninstallMod(mod)}>Remove</button>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if scanResult.untracked.length === 0 && scanResult.missing.length === 0}
+          <div class="mod-row"><span class="mod-name" style="color:var(--text-tertiary)">All mods accounted for</span></div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if categoryMods.length > 0}
       <div class="mods-panel">
         <!-- Pack groups -->
         {#each groupedInstalled().packs as pack (pack.packMod.id)}
@@ -745,7 +880,27 @@
     <!-- Browse/Search Section -->
     <div class="section-header browse-header">
       <span class="section-label">Browse</span>
+      {#if canWrite}
+        <div class="section-actions">
+          <button class="btn-scan" onclick={() => showURLForm = !showURLForm}>
+            {showURLForm ? 'Cancel' : 'Install from URL'}
+          </button>
+          <button class="btn-scan" onclick={() => uploadInput?.click()}>Upload</button>
+          <input type="file" bind:this={uploadInput} onchange={handleUpload} style="display:none;" />
+        </div>
+      {/if}
     </div>
+
+    {#if showURLForm}
+      <div class="url-form">
+        <input class="input" type="text" placeholder="Mod name" bind:value={urlNameInput} />
+        <input class="input" type="url" placeholder="https://example.com/mod.jar" bind:value={urlInput} />
+        <button class="btn-install" onclick={installFromURL} disabled={installingURL || !urlInput || !urlNameInput}>
+          {installingURL ? 'Installing...' : 'Install'}
+        </button>
+      </div>
+    {/if}
+
     <div class="search-bar">
       <input class="input" type="text" placeholder="Search mods..."
         value={searchQuery}
@@ -1082,5 +1237,52 @@
     .mod-actions { opacity: 1; }
     .mod-name-row { flex-wrap: wrap; }
     .search-result { flex-wrap: wrap; }
+    .section-actions { flex-wrap: wrap; }
+    .url-form { flex-direction: column; }
   }
+
+  /* Scan */
+  .section-actions { display: flex; gap: 6px; align-items: center; }
+  .btn-scan {
+    padding: 4px 10px; border-radius: 4px;
+    font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--text-tertiary); background: var(--bg-elevated);
+    border: 1px solid var(--border-dim);
+    cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-scan:hover { color: var(--text-secondary); border-color: var(--border); }
+  .btn-scan:disabled { opacity: 0.5; pointer-events: none; }
+
+  .scan-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .scan-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-dim);
+  }
+  .scan-group { border-top: 1px solid var(--border-dim); }
+  .scan-group:first-child { border-top: none; }
+  .scan-group-label {
+    padding: 8px 18px;
+    font-size: 0.68rem; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    background: var(--bg-inset);
+  }
+
+  /* URL install form */
+  .url-form {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+  }
+  .url-form .input { flex: 1; }
 </style>
