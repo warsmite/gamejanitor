@@ -118,6 +118,13 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, fmt.Errorf("installing modpack: %w", err)
 	}
 
+	// Store override paths in metadata so we can clean them up on uninstall
+	packMeta := map[string]any{}
+	if len(contents.Overrides) > 0 {
+		packMeta["overrides"] = contents.Overrides
+	}
+	metaJSON, _ := json.Marshal(packMeta)
+
 	// Record the modpack itself
 	pack := &model.InstalledMod{
 		ID:           uuid.New().String(),
@@ -130,7 +137,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		VersionID:    version.VersionID,
 		DownloadURL:  version.DownloadURL,
 		Delivery:     "pack",
-		Metadata:     json.RawMessage(`{}`),
+		Metadata:     metaJSON,
 		InstalledAt:  time.Now(),
 	}
 	if err := s.store.CreateInstalledMod(pack); err != nil {

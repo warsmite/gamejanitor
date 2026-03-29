@@ -520,9 +520,9 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID, modID string) 
 		})
 	}
 
-	// If this is a modpack itself, remove all mods linked to it
+	// If this is a modpack itself, remove all mods linked to it + override files
 	if mod.Delivery == "pack" {
-		if err := s.uninstallPackMods(ctx, gameserverID, modID); err != nil {
+		if err := s.uninstallPackMods(ctx, gameserverID, mod); err != nil {
 			return err
 		}
 	}
@@ -1061,8 +1061,8 @@ func (s *ModService) publishEvent(ctx context.Context, gameserverID string, mod 
 	})
 }
 
-func (s *ModService) uninstallPackMods(ctx context.Context, gameserverID, packModID string) error {
-	mods, err := s.store.ListModsByPackID(gameserverID, packModID)
+func (s *ModService) uninstallPackMods(ctx context.Context, gameserverID string, packMod *model.InstalledMod) error {
+	mods, err := s.store.ListModsByPackID(gameserverID, packMod.ID)
 	if err != nil {
 		return fmt.Errorf("listing pack mods: %w", err)
 	}
@@ -1071,6 +1071,18 @@ func (s *ModService) uninstallPackMods(ctx context.Context, gameserverID, packMo
 			s.fileDel.Uninstall(ctx, gameserverID, mod.FilePath)
 		}
 		s.store.DeleteInstalledMod(mod.ID)
+	}
+
+	// Delete override files (mods and configs extracted from the .mrpack overrides/ directory)
+	var meta map[string]any
+	if err := json.Unmarshal(packMod.Metadata, &meta); err == nil {
+		if overrides, ok := meta["overrides"].([]any); ok {
+			for _, o := range overrides {
+				if path, ok := o.(string); ok {
+					s.fileSvc.DeletePath(ctx, gameserverID, path)
+				}
+			}
+		}
 	}
 	return nil
 }
