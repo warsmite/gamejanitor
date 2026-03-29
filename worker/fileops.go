@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -277,7 +276,11 @@ func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName st
 	return total, err
 }
 
-var downloadClient = &http.Client{Timeout: 10 * time.Minute}
+// No fixed timeout on the download client. Game images can be 50GB+ and mod
+// files can be large on slow home networks. The caller's context controls
+// cancellation (e.g., process shutdown). Connection-level timeouts are handled
+// by the default transport's dial and TLS handshake timeouts.
+var downloadClient = &http.Client{}
 
 func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	mountpoint, err := resolve(ctx, volumeName)

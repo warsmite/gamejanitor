@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 )
 
 // Size limit for in-memory reads of individual override files from ZIP entries.
@@ -108,7 +107,9 @@ type PackDelivery struct {
 func NewPackDelivery(fileSvc FileOperator, log *slog.Logger) *PackDelivery {
 	return &PackDelivery{
 		fileSvc: fileSvc,
-		client:  &http.Client{Timeout: 5 * time.Minute},
+		// No fixed timeout — modpack downloads can be large on slow networks.
+		// The caller's context handles cancellation.
+		client:  &http.Client{},
 		log:     log,
 	}
 }

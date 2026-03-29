@@ -212,9 +212,10 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	ctx = controller.SetActorInContext(ctx, controller.Actor{Type: "schedule", ScheduleID: scheduleID})
+	// No operation timeout. Scheduled tasks include game updates (50GB+ image pulls)
+	// and backups (500GB+ volumes) that can legitimately run for hours on slow
+	// networks. The cron library won't fire the next run until this one completes.
+	ctx := controller.SetActorInContext(context.Background(), controller.Actor{Type: "schedule", ScheduleID: scheduleID})
 	s.log.Info("executing scheduled task", "schedule_id", scheduleID, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
 
 	var taskErr error
