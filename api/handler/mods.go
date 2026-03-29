@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -143,7 +144,9 @@ func (h *ModHandlers) InstallPack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.InstallPack(r.Context(), gsID, req.Source, req.PackID, req.VersionID)
+	// Detach from HTTP request context — modpack installs can take minutes
+	// downloading hundreds of mods and must not cancel when the request ends.
+	result, err := h.svc.InstallPack(context.Background(), gsID, req.Source, req.PackID, req.VersionID)
 	if err != nil {
 		h.log.Error("installing modpack", "gameserver_id", gsID, "source", req.Source, "pack_id", req.PackID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
