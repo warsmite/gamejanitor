@@ -194,6 +194,17 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("Uptime:      %s\n", formatDuration(d))
 		}
 
+		// Show live resource stats
+		stats, err := getClient().Gameservers.Stats(ctx(), gsID)
+		if err == nil {
+			fmt.Printf("CPU:         %.1f%%\n", stats.CPUPercent)
+			fmt.Printf("Memory:      %s / %s\n", formatMemory(int(stats.MemoryUsageMB)), formatMemory(int(stats.MemoryLimitMB)))
+			if stats.NetRxBytes > 0 || stats.NetTxBytes > 0 {
+				fmt.Printf("Network:     %s rx / %s tx\n", formatBytes(stats.NetRxBytes), formatBytes(stats.NetTxBytes))
+			}
+			fmt.Printf("Storage:     %s\n", formatBytes(stats.VolumeSizeBytes))
+		}
+
 		// Show live query data if the server is running
 		query, err := getClient().Gameservers.Query(ctx(), gsID)
 		if err == nil && query.PlayersOnline >= 0 {
