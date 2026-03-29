@@ -37,21 +37,21 @@ type umodSearchResponse struct {
 type umodPlugin struct {
 	Name             string `json:"name"`
 	Title            string `json:"title"`
-	Description      string `json:"description_short"`
+	Description      string `json:"description"`
 	Author           string `json:"author"`
 	IconURL          string `json:"icon_url"`
 	LatestReleaseAt  string `json:"latest_release_at"`
-	DownloadsTotal   int    `json:"downloads_total"`
+	Downloads        int    `json:"downloads"`
 	LatestReleaseVer string `json:"latest_release_version"`
 }
 
 type umodPluginDetail struct {
 	Name             string `json:"name"`
 	Title            string `json:"title"`
-	Description      string `json:"description_short"`
+	Description      string `json:"description"`
 	Author           string `json:"author"`
 	IconURL          string `json:"icon_url"`
-	DownloadsTotal   int    `json:"downloads_total"`
+	Downloads        int    `json:"downloads"`
 	LatestReleaseAt  string `json:"latest_release_at"`
 	LatestReleaseVer string `json:"latest_release_version"`
 	DownloadURL      string `json:"download_url"`
@@ -67,8 +67,8 @@ func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogF
 	params := url.Values{
 		"query":   {query},
 		"page":    {strconv.Itoa(page)},
-		"sort":    {"title"},
-		"sortdir": {"asc"},
+		"sort":    {"downloads"},
+		"sortdir": {"desc"},
 	}
 	if cat := filters.Extra["category"]; cat != "" {
 		params.Set("categories", cat)
@@ -105,7 +105,7 @@ func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogF
 			Author:      p.Author,
 			Description: p.Description,
 			IconURL:     p.IconURL,
-			Downloads:   p.DownloadsTotal,
+			Downloads:   p.Downloads,
 			UpdatedAt:   p.LatestReleaseAt,
 		})
 	}
@@ -124,7 +124,7 @@ func (c *UmodCatalog) GetDetails(ctx context.Context, modID string) (*ModDetails
 		Description: detail.Description,
 		Author:      detail.Author,
 		IconURL:     detail.IconURL,
-		Downloads:   detail.DownloadsTotal,
+		Downloads:   detail.Downloads,
 	}, nil
 }
 
