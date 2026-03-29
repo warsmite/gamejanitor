@@ -305,8 +305,14 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 	}
 
 	// Load current pack mods and exclusions
-	currentMods, _ := s.store.ListModsByPackID(gameserverID, packModID)
-	exclusions, _ := s.store.GetPackExclusions(packModID)
+	currentMods, err := s.store.ListModsByPackID(gameserverID, packModID)
+	if err != nil {
+		return nil, fmt.Errorf("listing current pack mods: %w", err)
+	}
+	exclusions, err := s.store.GetPackExclusions(packModID)
+	if err != nil {
+		return nil, fmt.Errorf("loading pack exclusions: %w", err)
+	}
 
 	// Build lookup of new pack's mods by filename (source ID might not be available for pack mods)
 	newModSet := make(map[string]*PackMod)
@@ -318,7 +324,9 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 	for _, current := range currentMods {
 		if _, inNew := newModSet[current.FileName]; !inNew {
 			s.fileDel.Uninstall(ctx, gameserverID, current.FilePath)
-			s.store.DeleteInstalledMod(current.ID)
+			if err := s.store.DeleteInstalledMod(current.ID); err != nil {
+				return nil, fmt.Errorf("removing dropped pack mod %s: %w", current.Name, err)
+			}
 		}
 	}
 
@@ -344,7 +352,9 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 		if found != nil {
 			// Version changed — update
 			s.fileDel.Uninstall(ctx, gameserverID, found.FilePath)
-			s.store.DeleteInstalledMod(found.ID)
+			if err := s.store.DeleteInstalledMod(found.ID); err != nil {
+				return nil, fmt.Errorf("removing outdated pack mod %s: %w", found.Name, err)
+			}
 		}
 
 		// Record new/updated mod
@@ -364,11 +374,15 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 			Metadata:     json.RawMessage(`{}`),
 			InstalledAt:  time.Now(),
 		}
-		s.store.CreateInstalledMod(modRecord)
+		if err := s.store.CreateInstalledMod(modRecord); err != nil {
+			return nil, fmt.Errorf("recording pack mod %s: %w", newMod.FileName, err)
+		}
 	}
 
 	// Update pack record
-	s.store.UpdateModVersion(packModID, latest.VersionID, latest.Version)
+	if err := s.store.UpdateModVersion(packModID, latest.VersionID, latest.Version); err != nil {
+		return nil, fmt.Errorf("updating pack version: %w", err)
+	}
 
 	return &PackInstallResult{
 		Pack:      pack,
