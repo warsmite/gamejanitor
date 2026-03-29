@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path"
 	"strings"
 	"time"
 
@@ -322,6 +323,150 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 
 	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
 	return mod, nil
+}
+
+// InstallFromURL downloads a mod from a plain URL (no catalog).
+func (s *ModService) InstallFromURL(ctx context.Context, gameserverID, category, name, downloadURL string) (*model.InstalledMod, error) {
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return nil, err
+	}
+	game := s.gameStore.GetGame(gs.GameID)
+	if game == nil {
+		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
+	}
+
+	installPath := s.resolveInstallPath(game, gs.Env, category)
+	if installPath == "" {
+		return nil, controller.ErrBadRequestf("no install path for category %q", category)
+	}
+
+	// Derive filename from URL
+	fileName := sanitizeFileName(path.Base(downloadURL))
+	if fileName == "" || fileName == "." || fileName == "/" {
+		return nil, controller.ErrBadRequest("cannot determine filename from URL")
+	}
+
+	fullPath := path.Join(installPath, fileName)
+
+	// Check duplicate
+	existing, _ := s.store.GetInstalledModBySource(gameserverID, "url", downloadURL)
+	if existing != nil {
+		return nil, controller.ErrConflictf("mod from this URL is already installed")
+	}
+
+	// Download
+	if err := s.fileSvc.CreateDirectory(ctx, gameserverID, installPath); err != nil {
+		return nil, fmt.Errorf("creating install directory: %w", err)
+	}
+	if err := s.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, "", 0); err != nil {
+		return nil, fmt.Errorf("downloading from URL: %w", err)
+	}
+
+	mod := &model.InstalledMod{
+		ID:           uuid.New().String(),
+		GameserverID: gameserverID,
+		Source:       "url",
+		SourceID:     downloadURL,
+		Category:     category,
+		Name:         name,
+		FilePath:     fullPath,
+		FileName:     fileName,
+		DownloadURL:  downloadURL,
+		Delivery:     "file",
+		Metadata:     json.RawMessage(`{}`),
+		InstalledAt:  time.Now(),
+	}
+	if err := s.store.CreateInstalledMod(mod); err != nil {
+		return nil, fmt.Errorf("saving mod record: %w", err)
+	}
+
+	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	return mod, nil
+}
+
+// InstallFromUpload writes an uploaded file to the volume and tracks it.
+func (s *ModService) InstallFromUpload(ctx context.Context, gameserverID, category, name, fileName string, content []byte) (*model.InstalledMod, error) {
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return nil, err
+	}
+	game := s.gameStore.GetGame(gs.GameID)
+	if game == nil {
+		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
+	}
+
+	installPath := s.resolveInstallPath(game, gs.Env, category)
+	if installPath == "" {
+		return nil, controller.ErrBadRequestf("no install path for category %q", category)
+	}
+
+	fileName = sanitizeFileName(fileName)
+	if fileName == "" {
+		return nil, controller.ErrBadRequest("invalid filename")
+	}
+
+	fullPath := path.Join(installPath, fileName)
+
+	if err := s.fileSvc.CreateDirectory(ctx, gameserverID, installPath); err != nil {
+		return nil, fmt.Errorf("creating install directory: %w", err)
+	}
+	if err := s.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
+		return nil, fmt.Errorf("writing uploaded file: %w", err)
+	}
+
+	modID := uuid.New().String()
+	mod := &model.InstalledMod{
+		ID:           modID,
+		GameserverID: gameserverID,
+		Source:       "upload",
+		SourceID:     modID,
+		Category:     category,
+		Name:         name,
+		FilePath:     fullPath,
+		FileName:     fileName,
+		Delivery:     "file",
+		Metadata:     json.RawMessage(`{}`),
+		InstalledAt:  time.Now(),
+	}
+	if err := s.store.CreateInstalledMod(mod); err != nil {
+		return nil, fmt.Errorf("saving mod record: %w", err)
+	}
+
+	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	return mod, nil
+}
+
+// resolveInstallPath finds the install path for a category from the game definition.
+func (s *ModService) resolveInstallPath(game *games.Game, env model.Env, categoryName string) string {
+	for _, cat := range s.availableCategories(game, env) {
+		if cat.Name == categoryName {
+			if cat.InstallPath != "" {
+				return cat.InstallPath
+			}
+			for _, src := range cat.Sources {
+				ip := cat.ResolveInstallPath(&src)
+				if ip != "" {
+					return ip
+				}
+			}
+		}
+	}
+	// Fallback: check all categories (not just available ones)
+	for _, cat := range game.Mods.Categories {
+		if cat.Name == categoryName {
+			if cat.InstallPath != "" {
+				return cat.InstallPath
+			}
+			for _, src := range cat.Sources {
+				ip := cat.ResolveInstallPath(&src)
+				if ip != "" {
+					return ip
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // --- Uninstall ---
