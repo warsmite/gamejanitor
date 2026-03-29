@@ -125,6 +125,7 @@ func (s *ModService) Scan(ctx context.Context, gameserverID string) (*ScanResult
 
 // TrackFile creates a DB record for an untracked file found on disk.
 func (s *ModService) TrackFile(ctx context.Context, gameserverID, category, filePath, name string) (*model.InstalledMod, error) {
+	defer s.lockGameserver(gameserverID)()
 	if name == "" {
 		name = path.Base(filePath)
 	}

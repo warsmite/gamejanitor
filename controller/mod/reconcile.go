@@ -46,6 +46,7 @@ func (s *ModService) volumeState(ctx context.Context, gameserverID string, mods 
 // Downloads missing files, regenerates manifests. Non-fatal — logs warnings for
 // unrecoverable mods (uploads, detected files) but never blocks server start.
 func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
+	defer s.lockGameserver(gameserverID)()
 	mods, err := s.store.ListInstalledMods(gameserverID)
 	if err != nil {
 		return fmt.Errorf("listing installed mods: %w", err)

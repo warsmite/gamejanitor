@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,11 +56,17 @@ type ModService struct {
 	options     *games.OptionsRegistry
 	broadcaster *controller.EventBus
 	log         *slog.Logger
+
+	// Per-gameserver locks to prevent concurrent mod operations on the same server.
+	// Install, uninstall, update, and reconcile all acquire this before modifying state.
+	locks   map[string]*sync.Mutex
+	locksMu sync.Mutex
 }
 
 func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, options *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	return &ModService{
 		catalogs:    make(map[string]ModCatalog),
+		locks:       make(map[string]*sync.Mutex),
 		fileSvc:     fileSvc,
 		fileDel:     NewFileDelivery(fileSvc, log),
 		manifestDel: NewManifestDelivery(fileSvc, log),
@@ -283,6 +290,7 @@ func (s *ModService) GetVersions(ctx context.Context, gameserverID, category, so
 // --- Install ---
 
 func (s *ModService) Install(ctx context.Context, gameserverID, category, sourceName, sourceID, versionID string) (*model.InstalledMod, error) {
+	defer s.lockGameserver(gameserverID)()
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -358,6 +366,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 
 // InstallFromURL downloads a mod from a plain URL (no catalog).
 func (s *ModService) InstallFromURL(ctx context.Context, gameserverID, category, name, downloadURL string) (*model.InstalledMod, error) {
+	defer s.lockGameserver(gameserverID)()
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -418,6 +427,7 @@ func (s *ModService) InstallFromURL(ctx context.Context, gameserverID, category,
 
 // InstallFromUpload writes an uploaded file to the volume and tracks it.
 func (s *ModService) InstallFromUpload(ctx context.Context, gameserverID, category, name, fileName string, content []byte) (*model.InstalledMod, error) {
+	defer s.lockGameserver(gameserverID)()
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -503,6 +513,7 @@ func (s *ModService) resolveInstallPath(game *games.Game, env model.Env, categor
 // --- Uninstall ---
 
 func (s *ModService) Uninstall(ctx context.Context, gameserverID, modID string) error {
+	defer s.lockGameserver(gameserverID)()
 	mod, err := s.store.GetInstalledMod(modID)
 	if err != nil {
 		return fmt.Errorf("getting installed mod: %w", err)
@@ -635,6 +646,7 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 }
 
 func (s *ModService) Update(ctx context.Context, gameserverID, modID string) (*model.InstalledMod, error) {
+	defer s.lockGameserver(gameserverID)()
 	mod, err := s.store.GetInstalledMod(modID)
 	if err != nil || mod == nil {
 		return nil, controller.ErrNotFound("mod not found")
@@ -704,6 +716,7 @@ func (s *ModService) Update(ctx context.Context, gameserverID, modID string) (*m
 }
 
 func (s *ModService) UpdateAll(ctx context.Context, gameserverID string) ([]ModUpdate, error) {
+	defer s.lockGameserver(gameserverID)()
 	updates, err := s.CheckForUpdates(ctx, gameserverID)
 	if err != nil {
 		return nil, err
@@ -829,6 +842,19 @@ func (s *ModService) CheckCompatibility(ctx context.Context, gameserverID string
 	}
 
 	return nil, nil
+}
+
+// lockGameserver acquires a per-gameserver mutex. Returns the unlock function.
+func (s *ModService) lockGameserver(gameserverID string) func() {
+	s.locksMu.Lock()
+	mu, ok := s.locks[gameserverID]
+	if !ok {
+		mu = &sync.Mutex{}
+		s.locks[gameserverID] = mu
+	}
+	s.locksMu.Unlock()
+	mu.Lock()
+	return mu.Unlock
 }
 
 // --- Internal helpers ---

@@ -25,6 +25,7 @@ type PackInstallResult struct {
 }
 
 func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, packID, versionID string) (*PackInstallResult, error) {
+	defer s.lockGameserver(gameserverID)()
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -256,6 +257,7 @@ func (s *ModService) resolvePackVersion(ctx context.Context, catalog ModCatalog,
 }
 
 func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID string) (*PackInstallResult, error) {
+	defer s.lockGameserver(gameserverID)()
 	pack, err := s.store.GetInstalledMod(packModID)
 	if err != nil || pack == nil {
 		return nil, controller.ErrNotFound("modpack not found")

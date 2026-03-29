@@ -72,6 +72,15 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID, pare
 // removeOrphanedDependencies removes auto-installed mods that were dependencies
 // of the removed mod and aren't needed by any other installed mod.
 func (s *ModService) removeOrphanedDependencies(ctx context.Context, gameserverID, removedModID string) {
+	s.removeOrphanedDepsInner(ctx, gameserverID, removedModID, make(map[string]bool))
+}
+
+func (s *ModService) removeOrphanedDepsInner(ctx context.Context, gameserverID, removedModID string, visited map[string]bool) {
+	if visited[removedModID] {
+		return
+	}
+	visited[removedModID] = true
+
 	installed, err := s.store.ListInstalledMods(gameserverID)
 	if err != nil {
 		return
@@ -101,8 +110,7 @@ func (s *ModService) removeOrphanedDependencies(ctx context.Context, gameserverI
 
 		if !stillNeeded {
 			// Recursively remove this dep's own orphaned dependencies
-			s.removeOrphanedDependencies(ctx, gameserverID, dep.ID)
-
+			s.removeOrphanedDepsInner(ctx, gameserverID, dep.ID, visited)
 			if dep.Delivery == "file" {
 				s.fileDel.Uninstall(ctx, gameserverID, dep.FilePath)
 			}
