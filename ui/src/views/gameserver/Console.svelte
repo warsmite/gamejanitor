@@ -15,6 +15,10 @@
   let commandHistory = $state<string[]>([]);
   let historyIndex = $state(-1);
 
+  // Session history
+  let sessions = $state<{ index: number; mod_time: string }[]>([]);
+  let activeSession = $state<number | null>(null); // null = live, number = historical
+
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let backoff = 1000;
@@ -26,15 +30,15 @@
     ['installing', 'starting', 'started', 'running', 'stopping'].includes(status)
   );
 
-  // Auto-connect/reconnect when status becomes streamable
+  // Auto-connect/reconnect when status becomes streamable and viewing live
   $effect(() => {
-    if (isStreamable && !eventSource && !destroyed) {
+    if (isStreamable && !eventSource && !destroyed && activeSession === null) {
       connectStream();
     }
   });
 
   onMount(async () => {
-    // Load historical logs first (works even when server is stopped)
+    await loadSessions();
     await loadHistoricalLogs();
     if (isStreamable) connectStream();
     inputEl?.focus();
@@ -45,23 +49,47 @@
     disconnect();
   });
 
-  async function loadHistoricalLogs() {
+  async function loadSessions() {
     try {
-      const result = await api.gameservers.logs(id, 200);
+      sessions = await api.gameservers.logSessions(id);
+    } catch {
+      sessions = [];
+    }
+  }
+
+  async function loadHistoricalLogs(session?: number) {
+    try {
+      const result = await api.gameservers.logs(id, { tail: 500, session });
       if (result.lines && result.lines.length > 0) {
         lines = result.lines;
         await tick();
         scrollToBottom();
       }
     } catch {
-      // Server may not have logs yet — not an error
+      // Server may not have logs yet
+    }
+  }
+
+  async function switchSession(session: number | null) {
+    if (session === activeSession) return;
+
+    activeSession = session;
+    lines = [];
+
+    if (session === null) {
+      // Back to live
+      await loadHistoricalLogs();
+      if (isStreamable) connectStream();
+    } else {
+      // View historical session
+      disconnect();
+      await loadHistoricalLogs(session);
     }
   }
 
   function connectStream() {
-    if (eventSource || destroyed) return;
+    if (eventSource || destroyed || activeSession !== null) return;
 
-    // On reconnect, only request tail if we have no lines yet (avoid duplicates)
     const tail = lines.length === 0 ? 200 : 0;
     const url = basePath + `/api/gameservers/${id}/logs/stream?tail=${tail}`;
     eventSource = new EventSource(url);
@@ -74,7 +102,6 @@
 
     eventSource.onmessage = async (e) => {
       lines.push(e.data);
-      // Prevent unbounded memory growth
       if (lines.length > 2000) lines = lines.slice(-1500);
       if (autoScroll) {
         await tick();
@@ -94,13 +121,17 @@
       eventSource = null;
     }
     connected = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
   }
 
   function scheduleReconnect() {
-    if (destroyed || reconnectTimer) return;
+    if (destroyed || reconnectTimer || activeSession !== null) return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      if (!destroyed && isStreamable) connectStream();
+      if (!destroyed && isStreamable && activeSession === null) connectStream();
     }, backoff);
     backoff = Math.min(backoff * 2, 15000);
   }
@@ -157,6 +188,10 @@
     lines = [];
   }
 
+  function formatSessionTime(iso: string): string {
+    return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
   function lineClass(line: string): string {
     const lower = line.toLowerCase();
     if (lower.includes('warn') || lower.includes("can't keep up")) return 'log-warn';
@@ -171,7 +206,26 @@
 
 <div class="console-wrap">
   <div class="console-header">
-    <span class="console-status" class:live={connected}>{connected ? 'Live' : 'Disconnected'}</span>
+    <div class="header-left">
+      {#if activeSession === null}
+        <span class="console-status" class:live={connected}>{connected ? 'Live' : 'Disconnected'}</span>
+      {:else}
+        <span class="console-status">Session {activeSession}</span>
+      {/if}
+      {#if sessions.length > 0}
+        <select class="session-select" value={activeSession ?? 'live'} onchange={(e) => {
+          const v = (e.target as HTMLSelectElement).value;
+          switchSession(v === 'live' ? null : parseInt(v));
+        }}>
+          <option value="live">Live</option>
+          {#each sessions as s}
+            <option value={s.index}>
+              {s.index === 0 ? 'Current' : `Session ${s.index}`} — {formatSessionTime(s.mod_time)}
+            </option>
+          {/each}
+        </select>
+      {/if}
+    </div>
     <button class="console-clear" onclick={clearConsole}>Clear</button>
   </div>
   <div class="console-output" bind:this={consoleEl} onscroll={handleScroll}>
@@ -190,6 +244,7 @@
       bind:value={command}
       bind:this={inputEl}
       onkeydown={handleKeydown}
+      disabled={activeSession !== null}
     >
   </div>
 </div>
@@ -215,6 +270,9 @@
     border-bottom: 1px solid var(--border-dim);
     flex-shrink: 0;
   }
+  .header-left {
+    display: flex; align-items: center; gap: 12px;
+  }
   .console-status {
     font-family: var(--font-mono);
     font-size: 0.66rem;
@@ -223,6 +281,20 @@
     color: var(--text-tertiary);
   }
   .console-status.live { color: var(--live); }
+
+  .session-select {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
+    cursor: pointer;
+    outline: none;
+  }
+  .session-select:hover { border-color: var(--border); }
+  .session-select:focus { border-color: var(--accent); }
 
   .console-output {
     flex: 1;
@@ -272,6 +344,7 @@
     color: var(--text-primary);
   }
   .console-input::placeholder { color: var(--text-tertiary); opacity: 0.4; }
+  .console-input:disabled { opacity: 0.3; }
 
   .console-clear {
     padding: 4px 10px;

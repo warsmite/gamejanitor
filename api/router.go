@@ -141,6 +141,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
 				r.With(requireLogs).Get("/logs", gameserverHandlers.Logs)
+				r.With(requireLogs).Get("/logs/sessions", gameserverHandlers.LogSessions)
 				r.With(requireLogs).Get("/logs/stream", gameserverHandlers.StreamLogs)
 				r.With(requireCommands).Post("/command", gameserverHandlers.SendCommand)
 

@@ -457,7 +457,8 @@ export const api = {
     status: (id: string) => get<GameserverStatus>(`/api/gameservers/${id}/status`),
     stats: (id: string) => get<GameserverStats>(`/api/gameservers/${id}/stats`),
     query: (id: string) => get<QueryData>(`/api/gameservers/${id}/query`),
-    logs: (id: string, tail?: number) => get<{ lines: string[]; historical?: boolean }>(`/api/gameservers/${id}/logs`, { tail }),
+    logs: (id: string, opts?: { tail?: number; session?: number }) => get<{ lines: string[]; historical?: boolean; session?: number }>(`/api/gameservers/${id}/logs`, opts),
+    logSessions: (id: string) => get<{ index: number; mod_time: string }[]>(`/api/gameservers/${id}/logs/sessions`),
     command: (id: string, command: string) => post<{ output: string }>(`/api/gameservers/${id}/command`, { command }),
   },
 

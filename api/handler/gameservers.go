@@ -422,6 +422,25 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Specific historical session requested
+	if v := r.URL.Query().Get("session"); v != "" {
+		session, err := strconv.Atoi(v)
+		if err != nil || session < 0 {
+			respondError(w, http.StatusBadRequest, "invalid session number")
+			return
+		}
+		lines, err := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, session, tail)
+		if err != nil {
+			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+			return
+		}
+		if lines == nil {
+			lines = []string{}
+		}
+		respondOK(w, map[string]any{"lines": lines, "historical": true, "session": session})
+		return
+	}
+
 	reader, err := h.svc.GetContainerLogs(r.Context(), id, tail)
 	if err != nil {
 		// Fall back to historical logs from volume
@@ -441,6 +460,19 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 
 	lines := logparse.ParseLogLines(reader)
 	respondOK(w, map[string]any{"lines": lines})
+}
+
+func (h *GameserverHandlers) LogSessions(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	sessions, err := h.consoleSvc.ListLogSessions(r.Context(), id)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	if sessions == nil {
+		sessions = []gameserver.LogSession{}
+	}
+	respondOK(w, sessions)
 }
 
 func (h *GameserverHandlers) StreamLogs(w http.ResponseWriter, r *http.Request) {
