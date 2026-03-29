@@ -44,13 +44,14 @@ type ModDetails struct {
 }
 
 type ModVersion struct {
-	VersionID    string   `json:"version_id"`
-	Version      string   `json:"version"`
-	FileName     string   `json:"file_name"`
-	DownloadURL  string   `json:"download_url"`
-	GameVersion  string   `json:"game_version"`
-	GameVersions []string `json:"game_versions,omitempty"`
-	Loader       string   `json:"loader"`
+	VersionID     string   `json:"version_id"`
+	Version       string   `json:"version"`
+	FileName      string   `json:"file_name"`
+	DownloadURL   string   `json:"download_url"`
+	GameVersion   string   `json:"game_version"`
+	GameVersions  []string `json:"game_versions,omitempty"`
+	Loader        string   `json:"loader"`
+	HasServerFile bool     `json:"has_server_file,omitempty"`
 }
 
 type ModDependency struct {

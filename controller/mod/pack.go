@@ -37,9 +37,10 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, controller.ErrBadRequestf("unknown source: %s", sourceName)
 	}
 
-	// Resolve the pack version first (with empty filters — we need the version to know
-	// what game_version and loader the pack requires, before we can filter properly).
-	version, err := s.resolveVersion(ctx, catalog, packID, versionID, CatalogFilters{ServerPack: true})
+	// Resolve the pack version. Prefer versions with a dedicated server pack file.
+	// If a specific versionID is requested, use that. Otherwise pick the latest
+	// version that has a server file, falling back to the latest version overall.
+	version, err := s.resolvePackVersion(ctx, catalog, packID, versionID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +164,34 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 	result.ModCount = len(contents.Mods)
 	result.Overrides = contents.Overrides
 	return result, nil
+}
+
+// resolvePackVersion picks the best version for a server-side modpack install.
+// If versionID is specified, uses that exact version. Otherwise prefers the latest
+// version that has a dedicated server pack file, falling back to latest overall.
+func (s *ModService) resolvePackVersion(ctx context.Context, catalog ModCatalog, packID, versionID string) (*ModVersion, error) {
+	if versionID != "" {
+		return s.resolveVersion(ctx, catalog, packID, versionID, CatalogFilters{ServerPack: true})
+	}
+
+	versions, err := catalog.GetVersions(ctx, packID, CatalogFilters{ServerPack: true})
+	if err != nil {
+		return nil, fmt.Errorf("getting versions: %w", err)
+	}
+	if len(versions) == 0 {
+		return nil, controller.ErrBadRequest("no versions available for this modpack")
+	}
+
+	// Prefer a version with a dedicated server file
+	for i := range versions {
+		if versions[i].HasServerFile {
+			s.log.Info("pack version: using version with server file", "version", versions[i].Version)
+			return &versions[i], nil
+		}
+	}
+
+	// No version has a server file — use the latest (common for Fabric packs)
+	return &versions[0], nil
 }
 
 func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID string) (*PackInstallResult, error) {

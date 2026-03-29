@@ -186,13 +186,16 @@ func (c *ModrinthCatalog) GetVersions(ctx context.Context, modID string, filters
 			ldr = v.Loaders[0]
 		}
 
+		hasServer := serverPackFile(v.Files) != primaryFile(v.Files)
+
 		versions = append(versions, ModVersion{
-			VersionID:    v.ID,
-			Version:      v.VersionNumber,
-			FileName:     file.Filename,
-			DownloadURL:  file.URL,
-			GameVersion:  gv,
-			GameVersions: v.GameVersions,
+			VersionID:     v.ID,
+			Version:       v.VersionNumber,
+			FileName:      file.Filename,
+			DownloadURL:   file.URL,
+			GameVersion:   gv,
+			GameVersions:  v.GameVersions,
+			HasServerFile: hasServer,
 			Loader:       ldr,
 		})
 	}
