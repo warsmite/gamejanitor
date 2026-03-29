@@ -44,6 +44,7 @@ type FileOperator interface {
 
 type ModService struct {
 	catalogs    map[string]ModCatalog
+	fileSvc     FileOperator
 	fileDel     *FileDelivery
 	manifestDel *ManifestDelivery
 	packDel     *PackDelivery
@@ -57,6 +58,7 @@ type ModService struct {
 func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, options *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	return &ModService{
 		catalogs:    make(map[string]ModCatalog),
+		fileSvc:     fileSvc,
 		fileDel:     NewFileDelivery(fileSvc, log),
 		manifestDel: NewManifestDelivery(fileSvc, log),
 		packDel:     NewPackDelivery(fileSvc, log),

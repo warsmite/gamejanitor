@@ -164,6 +164,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
+	// Reconcile mods — ensure DB-tracked mods exist on the volume before starting.
+	// Non-fatal: missing mods are logged but don't block the start.
+	if s.modReconciler != nil {
+		if err := s.modReconciler.Reconcile(ctx, id); err != nil {
+			s.log.Warn("mod reconciliation had errors, continuing with start", "gameserver", id, "error", err)
+		}
+	}
+
 	binds := []string{
 		scriptDir + ":/scripts:ro",
 	}

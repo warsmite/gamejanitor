@@ -59,25 +59,35 @@ type BackupStore interface {
 	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
 }
 
+// ModReconciler verifies DB-tracked mods exist on the volume before start.
+type ModReconciler interface {
+	Reconcile(ctx context.Context, gameserverID string) error
+}
+
 type GameserverService struct {
-	store        Store
-	dispatcher   *orchestrator.Dispatcher
-	log          *slog.Logger
-	broadcaster  *controller.EventBus
-	readyWatcher ReadyWatcher
-	settingsSvc  *settings.SettingsService
-	gameStore    *games.GameStore
-	backupStore  BackupStore
-	dataDir      string
-	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
-	portProbe func(int) bool // nil uses default net.Listen probe
-	activity  *ActivityTracker
+	store           Store
+	dispatcher      *orchestrator.Dispatcher
+	log             *slog.Logger
+	broadcaster     *controller.EventBus
+	readyWatcher    ReadyWatcher
+	modReconciler   ModReconciler
+	settingsSvc     *settings.SettingsService
+	gameStore       *games.GameStore
+	backupStore     BackupStore
+	dataDir         string
+	placementMu     sync.Mutex // serializes port allocation + gameserver creation to prevent races
+	portProbe    func(int) bool // nil uses default net.Listen probe
+	activity     *ActivityTracker
 }
 
 // SetPortProbe overrides the host port availability check. Used in tests
 // where net.Listen probes would interfere with port allocation.
 func (s *GameserverService) SetPortProbe(fn func(int) bool) {
 	s.portProbe = fn
+}
+
+func (s *GameserverService) SetModReconciler(r ModReconciler) {
+	s.modReconciler = r
 }
 
 func (s *GameserverService) SetActivityTracker(tracker *ActivityTracker) {
