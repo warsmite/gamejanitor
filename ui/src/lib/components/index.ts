@@ -8,3 +8,4 @@ export { default as ConfirmModal } from './ConfirmModal.svelte';
 export { default as EnvEditor } from './EnvEditor.svelte';
 export { default as ResourceSlider } from './ResourceSlider.svelte';
 export { default as GameserverForm } from './GameserverForm.svelte';
+export { default as StatsChart } from './StatsChart.svelte';

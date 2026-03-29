@@ -161,6 +161,16 @@ export interface GameserverStats {
   storage_limit_mb?: number;
 }
 
+export interface StatsHistoryPoint {
+  timestamp: string;
+  cpu_percent: number;
+  memory_usage_mb: number;
+  memory_limit_mb: number;
+  net_rx_bytes_per_sec: number;
+  net_tx_bytes_per_sec: number;
+  volume_size_bytes: number;
+}
+
 export interface QueryData {
   players_online: number;
   max_players: number;
@@ -458,6 +468,8 @@ export const api = {
     regenerateSftpPassword: (id: string) => post<{ sftp_password: string }>(`/api/gameservers/${id}/regenerate-sftp-password`),
     status: (id: string) => get<GameserverStatus>(`/api/gameservers/${id}/status`),
     stats: (id: string) => get<GameserverStats>(`/api/gameservers/${id}/stats`),
+    statsHistory: (id: string, period: '1h' | '24h' | '7d' = '1h') =>
+      get<StatsHistoryPoint[]>(`/api/gameservers/${id}/stats/history`, { period }),
     query: (id: string) => get<QueryData>(`/api/gameservers/${id}/query`),
     logs: (id: string, opts?: { tail?: number; session?: number }) => get<{ lines: string[]; historical?: boolean; session?: number }>(`/api/gameservers/${id}/logs`, opts),
     logSessions: (id: string) => get<{ index: number; mod_time: string }[]>(`/api/gameservers/${id}/logs/sessions`),

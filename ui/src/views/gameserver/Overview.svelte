@@ -3,7 +3,7 @@
   import { api, type Activity } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
-  import { CopyBlock, TelemetryCell } from '$lib/components';
+  import { CopyBlock, TelemetryCell, StatsChart } from '$lib/components';
   import { embedded } from '$lib/base';
 
   let { id }: { id: string } = $props();
@@ -158,6 +158,11 @@
           color={hasStorageLimit ? 'accent' : 'live'}
         />
       </div>
+    </div>
+
+    <!-- Resource history charts -->
+    <div class="panel full-width">
+      <StatsChart {id} />
     </div>
 
     <!-- Query data -->
