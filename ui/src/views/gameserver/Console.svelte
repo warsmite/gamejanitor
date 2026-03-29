@@ -24,6 +24,10 @@
   let backoff = 1000;
   let destroyed = false;
 
+  // Batch incoming lines to avoid per-message DOM updates during log floods
+  let pendingLines: string[] = [];
+  let flushScheduled = false;
+
   const gsState = $derived(gameserverStore.getState(id));
   const status = $derived(gsState?.gameserver?.status ?? 'stopped');
   const isStreamable = $derived(
@@ -103,12 +107,11 @@
       backoff = 1000;
     };
 
-    eventSource.onmessage = async (e) => {
-      lines.push(e.data);
-      if (lines.length > 2000) lines = lines.slice(-1500);
-      if (autoScroll) {
-        await tick();
-        scrollToBottom();
+    eventSource.onmessage = (e) => {
+      pendingLines.push(e.data);
+      if (!flushScheduled) {
+        flushScheduled = true;
+        requestAnimationFrame(flushLines);
       }
     };
 
@@ -120,6 +123,23 @@
       // if it stopped, the $effect handles reconnection when it starts again.
       if (isStreamable) scheduleReconnect();
     };
+  }
+
+  async function flushLines() {
+    flushScheduled = false;
+    if (pendingLines.length === 0) return;
+
+    // Apply all pending lines in one batch
+    const batch = pendingLines;
+    pendingLines = [];
+
+    lines.push(...batch);
+    if (lines.length > 2000) lines = lines.slice(-1500);
+
+    if (autoScroll) {
+      await tick();
+      scrollToBottom();
+    }
   }
 
   function disconnect() {
