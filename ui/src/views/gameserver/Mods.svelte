@@ -665,7 +665,7 @@
       <span class="section-label">Installed ({categoryMods.length})</span>
       <div class="section-actions">
         <button class="btn-scan" onclick={runScan} disabled={scanning}>
-          {scanning ? 'Scanning...' : 'Scan Volume'}
+          {scanning ? 'Scanning...' : 'Scan for local mods'}
         </button>
         {#if canWrite && updatableCount > 0}
           <button class="btn-update-all" onclick={updateAllMods} disabled={updatingAll}>
