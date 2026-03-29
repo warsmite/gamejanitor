@@ -472,6 +472,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	svcs.QuerySvc.StopAll()
 	svcs.ReadyWatcher.StopAll()
 	svcs.AuthSvc.Stop()
+	router.Stop()
 
 	// Give in-flight HTTP requests time to finish (SSE streams, file downloads).
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

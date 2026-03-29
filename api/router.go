@@ -48,7 +48,18 @@ type RouterOptions struct {
 	WebUI           fs.FS // embedded UI static files (nil to disable)
 }
 
-func NewRouter(opts RouterOptions) http.Handler {
+// Router wraps the HTTP handler and background resources that need cleanup.
+type Router struct {
+	http.Handler
+	rateLimiter *RateLimitStore
+}
+
+// Stop cleans up background goroutines owned by the router.
+func (rt *Router) Stop() {
+	rt.rateLimiter.Stop()
+}
+
+func NewRouter(opts RouterOptions) *Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
@@ -241,7 +252,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 		r.Get("/*", spaHandler(opts.WebUI))
 	}
 
-	return r
+	return &Router{Handler: r, rateLimiter: rateLimitStore}
 }
 
 // spaHandler serves static files from the embedded FS, falling back to

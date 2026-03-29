@@ -26,12 +26,17 @@ type RateLimitStore struct {
 	loginLimiters sync.Map
 	settingsSvc   *settings.SettingsService
 	log           *slog.Logger
+	stop          chan struct{}
 }
 
 func NewRateLimitStore(settingsSvc *settings.SettingsService, log *slog.Logger) *RateLimitStore {
-	s := &RateLimitStore{settingsSvc: settingsSvc, log: log}
+	s := &RateLimitStore{settingsSvc: settingsSvc, log: log, stop: make(chan struct{})}
 	go s.cleanup()
 	return s
+}
+
+func (s *RateLimitStore) Stop() {
+	close(s.stop)
 }
 
 func (s *RateLimitStore) clientIP(r *http.Request) string {
@@ -167,7 +172,12 @@ func (s *RateLimitStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-s.stop:
+			return
+		case <-ticker.C:
+		}
 		cutoff := time.Now().Add(-10 * time.Minute)
 		cleaned := 0
 
