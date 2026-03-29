@@ -41,7 +41,7 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 		"return_previews":          {"true"},
 		"numperpage":               {fmt.Sprintf("%d", limit)},
 		"cursor":                   {"*"},
-		"query_type":               {"1"},
+		"query_type":               {"9"},
 	}
 	if appID := filters.Extra["app_id"]; appID != "" {
 		params.Set("appid", appID)
@@ -87,7 +87,7 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 			SourceID:    f.PublishedFileID,
 			Name:        f.Title,
 			Slug:        f.PublishedFileID,
-			Author:      f.Creator,
+			Author:      "", // Steam API returns creator as Steam ID, not username
 			Description: f.ShortDesc,
 			IconURL:     f.PreviewURL,
 			Downloads:   f.Subscriptions,
