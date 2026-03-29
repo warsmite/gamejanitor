@@ -381,6 +381,8 @@ export interface ModSearchResult {
   icon_url: string;
   downloads: number;
   updated_at: string;
+  loaders?: string[];
+  game_versions?: string[];
 }
 
 export interface ModSearchResults {

@@ -24,15 +24,17 @@ type CatalogFilters struct {
 }
 
 type ModResult struct {
-	SourceID    string `json:"source_id"`
-	Source      string `json:"source"` // set by the service, not by the catalog
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Author      string `json:"author"`
-	Description string `json:"description"`
-	IconURL     string `json:"icon_url"`
-	Downloads   int    `json:"downloads"`
-	UpdatedAt   string `json:"updated_at"`
+	SourceID     string   `json:"source_id"`
+	Source       string   `json:"source"` // set by the service, not by the catalog
+	Name         string   `json:"name"`
+	Slug         string   `json:"slug"`
+	Author       string   `json:"author"`
+	Description  string   `json:"description"`
+	IconURL      string   `json:"icon_url"`
+	Downloads    int      `json:"downloads"`
+	UpdatedAt    string   `json:"updated_at"`
+	Loaders      []string `json:"loaders,omitempty"`
+	GameVersions []string `json:"game_versions,omitempty"`
 }
 
 type ModDetails struct {

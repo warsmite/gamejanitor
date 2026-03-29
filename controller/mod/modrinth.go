@@ -39,16 +39,18 @@ type modrinthSearchResponse struct {
 }
 
 type modrinthHit struct {
-	ProjectID    string `json:"project_id"`
-	Slug         string `json:"slug"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	Author       string `json:"author"`
-	IconURL      string `json:"icon_url"`
-	Downloads    int    `json:"downloads"`
-	DateModified string `json:"date_modified"`
-	ProjectType  string `json:"project_type"`
-	ServerSide   string `json:"server_side"`
+	ProjectID    string   `json:"project_id"`
+	Slug         string   `json:"slug"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Author       string   `json:"author"`
+	Categories   []string `json:"categories"`
+	Versions     []string `json:"versions"`
+	IconURL      string   `json:"icon_url"`
+	Downloads    int      `json:"downloads"`
+	DateModified string   `json:"date_modified"`
+	ProjectType  string   `json:"project_type"`
+	ServerSide   string   `json:"server_side"`
 }
 
 type modrinthVersion struct {
@@ -132,15 +134,25 @@ func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters Cata
 		if h.ServerSide == "unsupported" {
 			continue
 		}
+		// Extract loaders from categories (known loader names)
+		var loaders []string
+		for _, cat := range h.Categories {
+			switch cat {
+			case "fabric", "forge", "neoforge", "quilt", "paper", "spigot", "bukkit", "purpur", "folia":
+				loaders = append(loaders, cat)
+			}
+		}
 		results = append(results, ModResult{
-			SourceID:    h.ProjectID,
-			Name:        h.Title,
-			Slug:        h.Slug,
-			Author:      h.Author,
-			Description: h.Description,
-			IconURL:     h.IconURL,
-			Downloads:   h.Downloads,
-			UpdatedAt:   h.DateModified,
+			SourceID:     h.ProjectID,
+			Name:         h.Title,
+			Slug:         h.Slug,
+			Author:       h.Author,
+			Description:  h.Description,
+			IconURL:      h.IconURL,
+			Downloads:    h.Downloads,
+			UpdatedAt:    h.DateModified,
+			Loaders:      loaders,
+			GameVersions: h.Versions,
 		})
 	}
 	return results, searchResp.TotalHits, nil

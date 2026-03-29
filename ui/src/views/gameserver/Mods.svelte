@@ -866,7 +866,17 @@
                 <span class="mod-downloads">{formatDownloads(result.downloads)}</span>
               </div>
               <div class="mod-meta">
-                by {result.author}
+                {#if result.author}by {result.author}{/if}
+                {#if result.loaders?.length}
+                  {#if result.author}<span class="mod-meta-sep">·</span>{/if}
+                  {#each result.loaders as loader}
+                    <span class="loader-badge">{loader}</span>
+                  {/each}
+                {/if}
+                {#if result.game_versions?.length}
+                  <span class="mod-meta-sep">·</span>
+                  <span class="version-info">{result.game_versions.slice(0, 3).join(', ')}{result.game_versions.length > 3 ? ` +${result.game_versions.length - 3}` : ''}</span>
+                {/if}
               </div>
               {#if result.description}
                 <div class="mod-description">{result.description.length > 120 ? result.description.slice(0, 120) + '...' : result.description}</div>
@@ -1235,4 +1245,17 @@
     font-family: var(--font-body); font-size: 0.78rem; outline: none;
   }
   .filter-select:focus { border-color: var(--accent-border); }
+
+  .loader-badge {
+    display: inline-block;
+    padding: 0 5px; border-radius: 3px;
+    font-size: 0.62rem; font-family: var(--font-mono);
+    background: var(--bg-elevated); border: 1px solid var(--border-dim);
+    color: var(--text-tertiary);
+  }
+  .version-info {
+    font-size: 0.66rem; font-family: var(--font-mono);
+    color: var(--text-tertiary); opacity: 0.8;
+  }
+  .mod-meta-sep { opacity: 0.3; font-size: 0.72rem; }
 </style>
