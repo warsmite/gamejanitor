@@ -30,10 +30,13 @@
     ['installing', 'starting', 'started', 'running', 'stopping'].includes(status)
   );
 
-  // Auto-connect/reconnect when status becomes streamable and viewing live
+  // React to status changes: connect when streamable, disconnect when not
   $effect(() => {
-    if (isStreamable && !eventSource && !destroyed && activeSession === null) {
+    if (destroyed || activeSession !== null) return;
+    if (isStreamable && !eventSource) {
       connectStream();
+    } else if (!isStreamable && eventSource) {
+      disconnect();
     }
   });
 
@@ -109,9 +112,13 @@
       }
     };
 
+    // EventSource fires onerror on both network failure and server-side close.
+    // Either way, disconnect and let the $effect reconnect when status is streamable.
     eventSource.onerror = () => {
       disconnect();
-      scheduleReconnect();
+      // Only schedule reconnect if server is still supposed to be running —
+      // if it stopped, the $effect handles reconnection when it starts again.
+      if (isStreamable) scheduleReconnect();
     };
   }
 
