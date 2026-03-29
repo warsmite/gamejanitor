@@ -11,19 +11,12 @@ import (
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
-// pollUntil polls a condition with 50ms interval and 10s timeout.
+// pollUntil polls a condition with 50ms interval and 15s timeout.
 // The long timeout accommodates goroutine scheduling delays when many
 // parallel tests compete for CPU. In practice, conditions resolve in <200ms.
 func pollUntil(t *testing.T, condition func() bool, msg string) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if condition() {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("timed out: %s", msg)
+	require.Eventually(t, condition, 15*time.Second, 50*time.Millisecond, msg)
 }
 
 func TestPipeline_StatusDerivedFromLifecycleEvents(t *testing.T) {

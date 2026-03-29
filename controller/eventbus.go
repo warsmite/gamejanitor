@@ -47,7 +47,11 @@ func (b *EventBus) Subscribe() (<-chan WebhookEvent, func()) {
 
 	id := b.nextID
 	b.nextID++
-	ch := make(chan WebhookEvent, 64)
+	// Large buffer so slow subscribers (webhook delivery, SSE clients) don't
+	// cause event drops under load. At 1000 gameservers with stats polling,
+	// ~300 events/sec flow through the bus. 4096 slots gives ~13 seconds of
+	// slack before drops. Memory cost: ~2MB per subscriber (negligible).
+	ch := make(chan WebhookEvent, 4096)
 	b.subscribers[id] = ch
 
 	unsubscribe := func() {

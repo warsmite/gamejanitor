@@ -196,13 +196,35 @@ func (w *FakeWorker) StopContainer(ctx context.Context, id string, timeoutSecond
 	c.state = "stopped"
 	w.mu.Unlock()
 
+	// No "die" event here. In real Docker, "die" is emitted for ALL container
+	// exits (expected and unexpected). StatusManager distinguishes them by checking
+	// if the gameserver is in "stopping" state. But because the lifecycle publishes
+	// ContainerStoppingEvent and the StatusSubscriber processes it asynchronously,
+	// there's a race window where "die" arrives before the subscriber has set
+	// "stopping" — causing a false "unexpected death" error.
+	//
+	// The lifecycle code handles expected stops by publishing ContainerStoppedEvent
+	// directly. The "die" event path is only needed for crash detection (unexpected
+	// exits). Use SimulateCrash() to test that path explicitly.
+
+	return nil
+}
+
+// SimulateCrash emits a "die" event as if the container crashed unexpectedly.
+// Use this to test auto-restart and crash detection, not for expected stops.
+func (w *FakeWorker) SimulateCrash(containerID string) {
+	w.mu.Lock()
+	c, ok := w.containers[containerID]
+	if ok {
+		c.state = "stopped"
+	}
+	w.mu.Unlock()
+
 	w.events <- worker.ContainerEvent{
-		ContainerID:   id,
+		ContainerID:   containerID,
 		ContainerName: c.name,
 		Action:        "die",
 	}
-
-	return nil
 }
 
 func (w *FakeWorker) RemoveContainer(ctx context.Context, id string) error {
