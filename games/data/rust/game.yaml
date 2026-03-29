@@ -21,7 +21,7 @@ query:
 
 container:
   image: ghcr.io/warsmite/gamejanitor/steamcmd
-  recommended_memory_mb: 6144
+  recommended_memory_mb: 8192
   ready_pattern: 'Server startup complete'
   disabled_capabilities: []
   env:
