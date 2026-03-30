@@ -44,18 +44,14 @@ type FileOperator interface {
 	CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error
 	ListDirectory(ctx context.Context, gameserverID string, dirPath string) ([]worker.FileEntry, error)
 	DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error
-}
-
-// WorkshopDownloader downloads Steam Workshop UGC items via the depot downloader.
-// The implementation resolves the gameserver's volume and writes directly to it.
-type WorkshopDownloader interface {
+	// DownloadWorkshopItem downloads a Steam Workshop UGC item to the gameserver volume.
+	// Only needed for UGC depot items (no file_url). May return an error if not supported.
 	DownloadWorkshopItem(ctx context.Context, gameserverID string, appID uint32, hcontentFile uint64, installPath string) error
 }
 
 type ModService struct {
 	catalogs    map[string]ModCatalog
 	fileSvc     FileOperator
-	workshopDl  WorkshopDownloader
 	fileDel     *FileDelivery
 	manifestDel *ManifestDelivery
 	packDel     *PackDelivery
@@ -89,11 +85,6 @@ func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore
 		broadcaster: broadcaster,
 		log:         log,
 	}
-}
-
-// SetWorkshopDownloader sets the Steam Workshop UGC download handler.
-func (s *ModService) SetWorkshopDownloader(dl WorkshopDownloader) {
-	s.workshopDl = dl
 }
 
 // SetURLValidator sets the URL validation function for external downloads.
@@ -1138,10 +1129,6 @@ func (s *ModService) deliver(ctx context.Context, gameserverID string, src games
 // deliverWorkshopUGC downloads a Steam Workshop UGC item via the depot downloader.
 // The download URL has the format: steam://ugc/{app_id}/{hcontent_file}
 func (s *ModService) deliverWorkshopUGC(ctx context.Context, gameserverID, installPath string, version *ModVersion) error {
-	if s.workshopDl == nil {
-		return fmt.Errorf("workshop UGC downloads not available (no Steam credentials configured)")
-	}
-
 	// Parse steam://ugc/{app_id}/{hcontent_file}
 	parts := strings.Split(strings.TrimPrefix(version.DownloadURL, "steam://ugc/"), "/")
 	if len(parts) != 2 {
@@ -1159,7 +1146,7 @@ func (s *ModService) deliverWorkshopUGC(ctx context.Context, gameserverID, insta
 	}
 
 	destPath := path.Join(installPath, version.VersionID)
-	return s.workshopDl.DownloadWorkshopItem(ctx, gameserverID, uint32(appID), hcontentFile, destPath)
+	return s.fileSvc.DownloadWorkshopItem(ctx, gameserverID, uint32(appID), hcontentFile, destPath)
 }
 
 func (s *ModService) allManifestIDs(gameserverID, sourceName, newID string) []string {

@@ -3502,6 +3502,110 @@ func (x *EnsureDepotProgress) GetTotalChunks() int32 {
 	return 0
 }
 
+type DownloadWorkshopItemRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeName    string                 `protobuf:"bytes,1,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
+	AppId         uint32                 `protobuf:"varint,2,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
+	HcontentFile  uint64                 `protobuf:"varint,3,opt,name=hcontent_file,json=hcontentFile,proto3" json:"hcontent_file,omitempty"`
+	InstallPath   string                 `protobuf:"bytes,4,opt,name=install_path,json=installPath,proto3" json:"install_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadWorkshopItemRequest) Reset() {
+	*x = DownloadWorkshopItemRequest{}
+	mi := &file_worker_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadWorkshopItemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadWorkshopItemRequest) ProtoMessage() {}
+
+func (x *DownloadWorkshopItemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_worker_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadWorkshopItemRequest.ProtoReflect.Descriptor instead.
+func (*DownloadWorkshopItemRequest) Descriptor() ([]byte, []int) {
+	return file_worker_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *DownloadWorkshopItemRequest) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
+	}
+	return ""
+}
+
+func (x *DownloadWorkshopItemRequest) GetAppId() uint32 {
+	if x != nil {
+		return x.AppId
+	}
+	return 0
+}
+
+func (x *DownloadWorkshopItemRequest) GetHcontentFile() uint64 {
+	if x != nil {
+		return x.HcontentFile
+	}
+	return 0
+}
+
+func (x *DownloadWorkshopItemRequest) GetInstallPath() string {
+	if x != nil {
+		return x.InstallPath
+	}
+	return ""
+}
+
+type DownloadWorkshopItemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadWorkshopItemResponse) Reset() {
+	*x = DownloadWorkshopItemResponse{}
+	mi := &file_worker_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadWorkshopItemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadWorkshopItemResponse) ProtoMessage() {}
+
+func (x *DownloadWorkshopItemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_worker_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadWorkshopItemResponse.ProtoReflect.Descriptor instead.
+func (*DownloadWorkshopItemResponse) Descriptor() ([]byte, []int) {
+	return file_worker_proto_rawDescGZIP(), []int{66}
+}
+
 var File_worker_proto protoreflect.FileDescriptor
 
 const file_worker_proto_rawDesc = "" +
@@ -3739,7 +3843,14 @@ const file_worker_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x05 \x01(\x04R\n" +
 	"totalBytes\x12)\n" +
 	"\x10completed_chunks\x18\x06 \x01(\x05R\x0fcompletedChunks\x12!\n" +
-	"\ftotal_chunks\x18\a \x01(\x05R\vtotalChunks2\x8f\x12\n" +
+	"\ftotal_chunks\x18\a \x01(\x05R\vtotalChunks\"\x9d\x01\n" +
+	"\x1bDownloadWorkshopItemRequest\x12\x1f\n" +
+	"\vvolume_name\x18\x01 \x01(\tR\n" +
+	"volumeName\x12\x15\n" +
+	"\x06app_id\x18\x02 \x01(\rR\x05appId\x12#\n" +
+	"\rhcontent_file\x18\x03 \x01(\x04R\fhcontentFile\x12!\n" +
+	"\finstall_path\x18\x04 \x01(\tR\vinstallPath\"\x1e\n" +
+	"\x1cDownloadWorkshopItemResponse2\xf2\x12\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
@@ -3773,7 +3884,8 @@ const file_worker_proto_rawDesc = "" +
 	"\x18ListGameserverContainers\x12'.worker.ListGameserverContainersRequest\x1a(.worker.ListGameserverContainersResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
 	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse\x12H\n" +
-	"\vEnsureDepot\x12\x1a.worker.EnsureDepotRequest\x1a\x1b.worker.EnsureDepotProgress0\x012\xde\x01\n" +
+	"\vEnsureDepot\x12\x1a.worker.EnsureDepotRequest\x1a\x1b.worker.EnsureDepotProgress0\x01\x12a\n" +
+	"\x14DownloadWorkshopItem\x12#.worker.DownloadWorkshopItemRequest\x1a$.worker.DownloadWorkshopItemResponse2\xde\x01\n" +
 	"\x11ControllerService\x12=\n" +
 	"\bRegister\x12\x17.worker.RegisterRequest\x1a\x18.worker.RegisterResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12H\n" +
@@ -3791,7 +3903,7 @@ func file_worker_proto_rawDescGZIP() []byte {
 	return file_worker_proto_rawDescData
 }
 
-var file_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 65)
+var file_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
 var file_worker_proto_goTypes = []any{
 	(*DataChunk)(nil),                        // 0: worker.DataChunk
 	(*PullImageRequest)(nil),                 // 1: worker.PullImageRequest
@@ -3858,6 +3970,8 @@ var file_worker_proto_goTypes = []any{
 	(*PrepareGameScriptsResponse)(nil),       // 62: worker.PrepareGameScriptsResponse
 	(*EnsureDepotRequest)(nil),               // 63: worker.EnsureDepotRequest
 	(*EnsureDepotProgress)(nil),              // 64: worker.EnsureDepotProgress
+	(*DownloadWorkshopItemRequest)(nil),      // 65: worker.DownloadWorkshopItemRequest
+	(*DownloadWorkshopItemResponse)(nil),     // 66: worker.DownloadWorkshopItemResponse
 }
 var file_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
@@ -3893,44 +4007,46 @@ var file_worker_proto_depIdxs = []int32{
 	52, // 30: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
 	61, // 31: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
 	63, // 32: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
-	54, // 33: worker.ControllerService.Register:input_type -> worker.RegisterRequest
-	52, // 34: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	56, // 35: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
-	2,  // 36: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 37: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
-	7,  // 38: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
-	9,  // 39: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
-	11, // 40: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
-	13, // 41: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
-	15, // 42: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 43: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
-	18, // 44: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
-	20, // 45: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
-	22, // 46: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
-	24, // 47: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
-	0,  // 48: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
-	27, // 49: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
-	30, // 50: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
-	32, // 51: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
-	34, // 52: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
-	36, // 53: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
-	38, // 54: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
-	40, // 55: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
-	42, // 56: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
-	44, // 57: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
-	46, // 58: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
-	0,  // 59: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
-	49, // 60: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
-	51, // 61: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
-	59, // 62: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
-	53, // 63: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	62, // 64: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
-	64, // 65: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
-	55, // 66: worker.ControllerService.Register:output_type -> worker.RegisterResponse
-	53, // 67: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	57, // 68: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
-	36, // [36:69] is the sub-list for method output_type
-	3,  // [3:36] is the sub-list for method input_type
+	65, // 33: worker.WorkerService.DownloadWorkshopItem:input_type -> worker.DownloadWorkshopItemRequest
+	54, // 34: worker.ControllerService.Register:input_type -> worker.RegisterRequest
+	52, // 35: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	56, // 36: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
+	2,  // 37: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
+	5,  // 38: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
+	7,  // 39: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
+	9,  // 40: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
+	11, // 41: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
+	13, // 42: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
+	15, // 43: worker.WorkerService.Exec:output_type -> worker.ExecResponse
+	0,  // 44: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
+	18, // 45: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
+	20, // 46: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
+	22, // 47: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
+	24, // 48: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
+	0,  // 49: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
+	27, // 50: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
+	30, // 51: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
+	32, // 52: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
+	34, // 53: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
+	36, // 54: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
+	38, // 55: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
+	40, // 56: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
+	42, // 57: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
+	44, // 58: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
+	46, // 59: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
+	0,  // 60: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
+	49, // 61: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
+	51, // 62: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
+	59, // 63: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
+	53, // 64: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	62, // 65: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
+	64, // 66: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
+	66, // 67: worker.WorkerService.DownloadWorkshopItem:output_type -> worker.DownloadWorkshopItemResponse
+	55, // 68: worker.ControllerService.Register:output_type -> worker.RegisterResponse
+	53, // 69: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	57, // 70: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
+	37, // [37:71] is the sub-list for method output_type
+	3,  // [3:37] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -3947,7 +4063,7 @@ func file_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_worker_proto_rawDesc), len(file_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   65,
+			NumMessages:   67,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

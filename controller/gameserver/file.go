@@ -205,6 +205,21 @@ func (s *FileService) DownloadToVolume(ctx context.Context, gameserverID string,
 	return w.DownloadFile(ctx, gs.VolumeName, url, relPath, expectedHash, maxBytes)
 }
 
+// DownloadWorkshopItem downloads a Steam Workshop UGC item to the gameserver volume.
+func (s *FileService) DownloadWorkshopItem(ctx context.Context, gameserverID string, appID uint32, hcontentFile uint64, installPath string) error {
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return err
+	}
+
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+
+	return w.DownloadWorkshopItem(ctx, gs.VolumeName, appID, hcontentFile, installPath)
+}
+
 // UploadFile writes an uploaded file to the gameserver volume.
 func (s *FileService) UploadFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
 	return s.WriteFile(ctx, gameserverID, filePath, content)

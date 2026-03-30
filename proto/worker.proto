@@ -54,6 +54,9 @@ service WorkerService {
 
     // Steam depot — worker downloads game files, streams progress back
     rpc EnsureDepot(EnsureDepotRequest) returns (stream EnsureDepotProgress);
+
+    // Steam Workshop — download a UGC item to a volume path
+    rpc DownloadWorkshopItem(DownloadWorkshopItemRequest) returns (DownloadWorkshopItemResponse);
 }
 
 // ControllerService runs on the controller and accepts worker registrations/heartbeats.
@@ -380,3 +383,11 @@ message EnsureDepotProgress {
     int32 completed_chunks = 6;
     int32 total_chunks = 7;
 }
+
+message DownloadWorkshopItemRequest {
+    string volume_name = 1;
+    uint32 app_id = 2;
+    uint64 hcontent_file = 3;
+    string install_path = 4;
+}
+message DownloadWorkshopItemResponse {}

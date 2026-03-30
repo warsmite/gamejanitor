@@ -433,6 +433,13 @@ func (a *Agent) EnsureDepot(req *pb.EnsureDepotRequest, stream pb.WorkerService_
 	})
 }
 
+func (a *Agent) DownloadWorkshopItem(ctx context.Context, req *pb.DownloadWorkshopItemRequest) (*pb.DownloadWorkshopItemResponse, error) {
+	if err := a.worker.DownloadWorkshopItem(ctx, req.VolumeName, req.AppId, req.HcontentFile, req.InstallPath); err != nil {
+		return nil, err
+	}
+	return &pb.DownloadWorkshopItemResponse{}, nil
+}
+
 func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {
 	containers, err := a.worker.ListGameserverContainers(ctx)
 	if err != nil {

@@ -416,6 +416,16 @@ func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, ac
 	}
 }
 
+func (w *RemoteWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
+	_, err := w.client.DownloadWorkshopItem(ctx, &pb.DownloadWorkshopItemRequest{
+		VolumeName:    volumeName,
+		AppId:         appID,
+		HcontentFile:  hcontentFile,
+		InstallPath:   installPath,
+	})
+	return err
+}
+
 func (w *RemoteWorker) Sendbeat(ctx context.Context, req *pb.HeartbeatRequest) error {
 	_, err := w.client.Heartbeat(ctx, req)
 	return err

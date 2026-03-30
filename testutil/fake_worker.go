@@ -593,6 +593,10 @@ func (w *FakeWorker) EnsureDepot(ctx context.Context, appID uint32, branch, acco
 	return &worker.DepotResult{DepotDir: depotDir, Cached: true}, nil
 }
 
+func (w *FakeWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
+	return nil
+}
+
 func (w *FakeWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
 	return nil, nil
 }

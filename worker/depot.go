@@ -38,6 +38,16 @@ func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID ui
 	}, nil
 }
 
+// DownloadWorkshopItem downloads a Steam Workshop UGC item to destDir.
+// Uses anonymous login (Workshop content is publicly accessible).
+func DownloadWorkshopItem(ctx context.Context, dataDir string, log *slog.Logger, appID uint32, hcontentFile uint64, destDir string) error {
+	creds := &staticCredentials{} // anonymous
+	svc := steam.NewService(log, dataDir, creds)
+	defer svc.Close()
+
+	return svc.DownloadWorkshopItem(ctx, appID, hcontentFile, destDir)
+}
+
 // staticCredentials provides credentials passed from the controller via gRPC.
 type staticCredentials struct {
 	account string

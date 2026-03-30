@@ -989,3 +989,8 @@ func extractTar(destPath string, content io.Reader) error {
 	}
 	return worker.RestoreVolumeDirect(resolve, context.Background(), "", content)
 }
+
+func (w *ProcessWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
+	volumePath := filepath.Join(w.dataDir, "volumes", volumeName)
+	return worker.DownloadWorkshopItem(ctx, w.dataDir, w.log, appID, hcontentFile, filepath.Join(volumePath, installPath))
+}

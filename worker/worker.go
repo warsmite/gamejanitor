@@ -58,4 +58,7 @@ type Worker interface {
 	// Steam depot — download game files to local cache, return host path and download info.
 	// onProgress is called during download with progress updates. May be nil.
 	EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error)
+
+	// Steam Workshop — download a UGC item to a volume path.
+	DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error
 }
