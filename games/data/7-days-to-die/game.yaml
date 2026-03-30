@@ -3,6 +3,7 @@ name: "7 Days to Die"
 aliases: [7dtd, 7d2d]
 description: "Open-world zombie survival with base building and horde nights"
 app_id: 251570
+server_app_id: 294420
 
 ports:
   - name: game
@@ -17,7 +18,7 @@ query:
   supports: [players, rules, keywords]
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'GameServer.Init successful'
   disabled_capabilities: []

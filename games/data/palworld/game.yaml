@@ -3,6 +3,7 @@ name: "Palworld"
 aliases: [pw]
 description: "Open-world survival with creature collecting, base building, and multiplayer"
 
+server_app_id: 2394010
 ports:
   - name: game
     port: 8211
@@ -27,7 +28,7 @@ query:
       version: VERSION_s
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Setting breakpad minidump AppID'
   disabled_capabilities: []

@@ -3,6 +3,7 @@ name: "ARK: Survival Evolved"
 aliases: [ark, ase]
 description: "Dinosaur survival sandbox with taming, building, and massive maps"
 app_id: 346110
+server_app_id: 376030
 
 ports:
   - name: game
@@ -21,7 +22,7 @@ query:
   notes: "Player list and max players may be inaccurate"
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Full Startup:'
   disabled_capabilities: []

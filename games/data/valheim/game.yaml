@@ -3,6 +3,7 @@ name: "Valheim"
 aliases: []
 description: "Viking-themed survival and exploration in a procedurally generated world"
 app_id: 892970
+server_app_id: 896660
 
 ports:
   - name: game
@@ -17,7 +18,7 @@ query:
   supports: [players, rules, keywords]
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 2048
   ready_pattern: 'Game server connected'
   disabled_capabilities: ["command"]

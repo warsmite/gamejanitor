@@ -3,6 +3,7 @@ name: "Satisfactory"
 aliases: []
 description: "First-person factory building and automation in an alien world"
 app_id: 526870
+server_app_id: 1690800
 
 ports:
   - name: game
@@ -18,7 +19,7 @@ ports:
 # No query section — Satisfactory has no standard query protocol
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Server Start Completed'
   disabled_capabilities: ["command", "save"]

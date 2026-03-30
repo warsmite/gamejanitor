@@ -1,11 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "[install-server] downloading 7 Days to Die dedicated server via SteamCMD (app 294420)"
-steamcmd-retry \
-    +force_install_dir /data/server \
-    +login anonymous \
-    +app_update 294420 validate \
-    +quit
-
-echo "[install-server] 7 Days to Die dedicated server installed"
+if [ -d "/depot" ]; then
+    echo "[install-server] copying pre-downloaded game files from depot cache"
+    mkdir -p /data/server
+    cp -a /depot/. /data/server/
+    echo "[install-server] 7 Days to Die dedicated server installed from depot"
+else
+    echo "[install-server] downloading 7 Days to Die dedicated server via SteamCMD (app 294420)"
+    steamcmd-retry \
+        +force_install_dir /data/server \
+        +login anonymous \
+        +app_update 294420 validate \
+        +quit
+    echo "[install-server] 7 Days to Die dedicated server installed"
+fi

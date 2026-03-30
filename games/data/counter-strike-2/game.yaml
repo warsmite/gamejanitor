@@ -17,7 +17,7 @@ query:
   supports: [players, keywords]
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 1024
   ready_pattern: 'GC Connection established'
   disabled_capabilities: []

@@ -25,7 +25,7 @@ query:
   supports: [players, rules, keywords]
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 4096
   ready_pattern: 'SERVER STARTED'
   disabled_capabilities: []
