@@ -8,6 +8,15 @@
 
   const connAddr = $derived(gameserverStore.connectionAddress(id));
 
+  let addrCopied = $state(false);
+  function copyAddr() {
+    if (!connAddr) return;
+    navigator.clipboard.writeText(connAddr).then(() => {
+      addrCopied = true;
+      setTimeout(() => addrCopied = false, 1500);
+    });
+  }
+
   function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -181,7 +190,9 @@
               <span class="srv-game">{game?.name || gameserver.game_id}</span>
               {#if connAddr}
                 <span class="srv-meta-sep">·</span>
-                <span class="srv-addr">{connAddr}</span>
+                <button class="srv-addr" onclick={(e) => { e.stopPropagation(); copyAddr(); }}>
+                  {addrCopied ? 'Copied!' : connAddr}
+                </button>
               {/if}
             </div>
           </div>
@@ -315,7 +326,12 @@
   .srv-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   .srv-meta-sep { color: var(--text-tertiary); opacity: 0.3; font-size: 0.78rem; }
   .srv-game { font-size: 0.8rem; color: var(--text-tertiary); }
-  .srv-addr { font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-tertiary); }
+  .srv-addr {
+    font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-tertiary);
+    background: none; border: none; padding: 0; cursor: pointer;
+    transition: color 0.15s;
+  }
+  .srv-addr:hover { color: var(--accent); }
   .srv-id-right { display: flex; align-items: center; gap: 8px; }
   .node-badge {
     font-size: 0.66rem; font-family: var(--font-mono);
