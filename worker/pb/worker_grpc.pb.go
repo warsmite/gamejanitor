@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.5
-// source: proto/worker.proto
+// source: worker.proto
 
 package pb
 
@@ -48,6 +48,7 @@ const (
 	WorkerService_ListGameserverContainers_FullMethodName = "/worker.WorkerService/ListGameserverContainers"
 	WorkerService_Heartbeat_FullMethodName                = "/worker.WorkerService/Heartbeat"
 	WorkerService_PrepareGameScripts_FullMethodName       = "/worker.WorkerService/PrepareGameScripts"
+	WorkerService_EnsureDepot_FullMethodName              = "/worker.WorkerService/EnsureDepot"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -94,6 +95,8 @@ type WorkerServiceClient interface {
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
 	PrepareGameScripts(ctx context.Context, in *PrepareGameScriptsRequest, opts ...grpc.CallOption) (*PrepareGameScriptsResponse, error)
+	// Steam depot — worker downloads game files for auth-required games
+	EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (*EnsureDepotResponse, error)
 }
 
 type workerServiceClient struct {
@@ -436,6 +439,16 @@ func (c *workerServiceClient) PrepareGameScripts(ctx context.Context, in *Prepar
 	return out, nil
 }
 
+func (c *workerServiceClient) EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (*EnsureDepotResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnsureDepotResponse)
+	err := c.cc.Invoke(ctx, WorkerService_EnsureDepot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
 // for forward compatibility.
@@ -480,6 +493,8 @@ type WorkerServiceServer interface {
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
 	PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error)
+	// Steam depot — worker downloads game files for auth-required games
+	EnsureDepot(context.Context, *EnsureDepotRequest) (*EnsureDepotResponse, error)
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -576,6 +591,9 @@ func (UnimplementedWorkerServiceServer) Heartbeat(context.Context, *HeartbeatReq
 }
 func (UnimplementedWorkerServiceServer) PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareGameScripts not implemented")
+}
+func (UnimplementedWorkerServiceServer) EnsureDepot(context.Context, *EnsureDepotRequest) (*EnsureDepotResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnsureDepot not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -1070,6 +1088,24 @@ func _WorkerService_PrepareGameScripts_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerService_EnsureDepot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureDepotRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).EnsureDepot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_EnsureDepot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).EnsureDepot(ctx, req.(*EnsureDepotRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1169,6 +1205,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "PrepareGameScripts",
 			Handler:    _WorkerService_PrepareGameScripts_Handler,
 		},
+		{
+			MethodName: "EnsureDepot",
+			Handler:    _WorkerService_EnsureDepot_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1202,7 +1242,7 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }
 
 const (
@@ -1384,5 +1424,5 @@ var ControllerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }

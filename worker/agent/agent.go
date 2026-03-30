@@ -401,6 +401,14 @@ func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScrip
 	return resp, nil
 }
 
+func (a *Agent) EnsureDepot(ctx context.Context, req *pb.EnsureDepotRequest) (*pb.EnsureDepotResponse, error) {
+	depotDir, err := worker.EnsureDepot(ctx, a.dataDir, a.log, req.AppId, req.Branch, req.AccountName, req.RefreshToken)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.EnsureDepotResponse{DepotDir: depotDir}, nil
+}
+
 func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {
 	containers, err := a.worker.ListGameserverContainers(ctx)
 	if err != nil {

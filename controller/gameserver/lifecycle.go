@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
@@ -132,11 +133,12 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Download depot for games that require authenticated Steam downloads.
-	// This fetches game files to a shared cache before the container starts,
-	// so the container can skip the SteamCMD install step.
+	// The worker downloads game files to its local cache so no cross-network transfer is needed.
 	var depotDir string
 	if game.SteamLogin.RequiresAuth() && game.AppID != 0 {
-		if s.steamDepot == nil || !s.steamDepot.HasCredentials() {
+		accountName := s.settingsSvc.GetString(settings.SettingSteamAccountName)
+		refreshToken := s.settingsSvc.GetString(settings.SettingSteamRefreshToken)
+		if refreshToken == "" {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{
 				GameserverID: id,
 				Reason:       "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.",
@@ -147,7 +149,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 
 		s.log.Info("downloading authenticated depot", "gameserver_id", id, "app_id", game.AppID)
 		var depotErr error
-		depotDir, depotErr = s.steamDepot.EnsureDepot(ctx, game.AppID, "public")
+		depotDir, depotErr = w.EnsureDepot(ctx, game.AppID, "public", accountName, refreshToken)
 		if depotErr != nil {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{
 				GameserverID: id,

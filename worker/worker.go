@@ -54,4 +54,7 @@ type Worker interface {
 
 	// Game scripts — extract to local filesystem, return host paths for bind-mounts
 	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
+
+	// Steam depot — download auth-required game files to local cache, return host path
+	EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (depotDir string, err error)
 }

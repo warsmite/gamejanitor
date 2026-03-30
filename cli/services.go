@@ -13,7 +13,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/steam"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/status"
@@ -138,13 +137,6 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	})
 	gameserverSvc.SetModReconciler(modSvc)
 
-	// Steam depot downloader — provides authenticated game file downloads
-	// for games that can't use anonymous SteamCMD.
-	// Credentials are read live from settings so `steam login` works without restart.
-	steamCreds := &steamCredentialAdapter{settings: settingsSvc}
-	steamSvc := steam.NewService(logger, cfg.DataDir, steamCreds)
-	gameserverSvc.SetSteamDepot(steamSvc)
-
 	return &Services{
 		Broadcaster:     broadcaster,
 		SettingsSvc:     settingsSvc,
@@ -188,16 +180,3 @@ func initBackupStorage(cfg config.Config, logger *slog.Logger) (backup.Storage, 
 	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)
 }
 
-// steamCredentialAdapter bridges the settings service to the steam.CredentialProvider interface.
-// Reads credentials live from the DB so `gamejanitor steam login` works without a server restart.
-type steamCredentialAdapter struct {
-	settings *settings.SettingsService
-}
-
-func (a *steamCredentialAdapter) SteamAccountName() string {
-	return a.settings.GetString(settings.SettingSteamAccountName)
-}
-
-func (a *steamCredentialAdapter) SteamRefreshToken() string {
-	return a.settings.GetString(settings.SettingSteamRefreshToken)
-}
