@@ -2,10 +2,13 @@
   import { onMount } from 'svelte';
   import { api, type Token, type WebhookEndpoint, type WorkerView, type Activity } from '$lib/api';
   import { toast, confirm, prompt, setToken } from '$lib/stores';
+  import { getRoute, navigate } from '$lib/router';
 
   let loading = $state(true);
   let saving = $state(false);
-  let activeSection = $state('general');
+  const validSections = ['general', 'security', 'tokens', 'webhooks', 'workers', 'events'];
+  const initialSection = getRoute().params.section || 'general';
+  let activeSection = $state(validSections.includes(initialSection) ? initialSection : 'general');
 
   // Settings state (editable only — read-only config comes from status)
   let settings = $state<Record<string, any>>({});
@@ -134,6 +137,11 @@
     } finally {
       loading = false;
     }
+
+    // Lazy-load initial section if deep-linked
+    if (activeSection !== 'general') {
+      switchSection(activeSection);
+    }
   });
 
   async function saveSettings() {
@@ -153,6 +161,7 @@
 
   async function switchSection(id: string) {
     activeSection = id;
+    window.history.replaceState(null, '', id === 'general' ? '/settings' : `/settings/${id}`);
     if (loadedSections.has(id)) return;
     loadedSections.add(id);
 
