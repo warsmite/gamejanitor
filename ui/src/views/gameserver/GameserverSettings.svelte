@@ -336,7 +336,8 @@
   .input-mono { font-family: var(--font-mono); }
 
   .form-row { margin-bottom: 18px; position: relative; z-index: 1; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+  .form-grid .form-row { margin-bottom: 0; }
 
   .input-with-suffix { position: relative; }
   .input-with-suffix input { padding-right: 50px; }
