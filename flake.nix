@@ -61,6 +61,123 @@
             exec sudo -E go run -mod=mod . serve -d /tmp/gamejanitor-data "$@"
           '';
 
+          # Deploy to homelab — build binary + UI, ship to all nodes, restart services.
+          # Usage: deploy (all nodes) | deploy sleepy (single node)
+          # Deploy to homelab — build binary + UI, ship to all nodes, restart with dev binary.
+          # Usage: deploy (all nodes) | deploy sleepy (single node)
+          # Stops the NixOS service and runs the dev binary directly so we skip Nix rebuilds.
+          # Use `deploy --restore` to go back to the NixOS-managed binary.
+          deploy = pkgs.writeShellScriptBin "deploy" ''
+            set -e
+            NODES=("sleepy" "dopey" "grumpy")
+            TARGETS=("''${@:-''${NODES[@]}}")
+
+            echo "Building UI..."
+            sudo rm -rf ui/dist
+            (cd ui && npm run build)
+
+            echo "Building binary..."
+            CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
+            echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
+
+            # Ship binary to all targets
+            for node in "''${TARGETS[@]}"; do
+              echo "Shipping binary to $node..."
+              scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy"
+              ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev"
+            done
+
+            # Start controller first (sleepy), create worker tokens
+            CONTROLLER="sleepy"
+            WORKERS=("dopey" "grumpy")
+
+            echo "Starting controller ($CONTROLLER)..."
+            ssh "$CONTROLLER" "
+              sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+              sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+              sudo systemctl stop gamejanitor 2>/dev/null || true
+              CONFIG=\$(sudo systemctl cat gamejanitor | grep -oP '(?<=--config )\S+')
+              sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
+                --property=SupplementaryGroups=docker \
+                /run/gamejanitor-dev serve --config \"\$CONFIG\"
+            "
+            echo "  $CONTROLLER: started"
+
+            # Wait for controller DB to be ready
+            sleep 2
+
+            # Create/rotate worker tokens on controller DB
+            for w in "''${WORKERS[@]}"; do
+              echo "Creating worker token for $w..."
+              TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline create --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null || true")
+              if [ -z "$TOKEN" ]; then
+                TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline rotate --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null")
+              fi
+              if [ -z "$TOKEN" ]; then
+                echo "  WARNING: failed to get token for $w, skipping"
+                continue
+              fi
+              echo "  token created for $w"
+
+              echo "Starting worker $w..."
+              ssh "$w" "
+                sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                sudo systemctl stop gamejanitor 2>/dev/null || true
+                CONFIG=\$(sudo systemctl cat gamejanitor | grep -oP '(?<=--config )\S+')
+                sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
+                  --property=SupplementaryGroups=docker \
+                  --setenv=GJ_WORKER_TOKEN='$TOKEN' \
+                  /run/gamejanitor-dev serve --config \"\$CONFIG\"
+              "
+              echo "  $w: started"
+            done
+
+            echo "Deployed to: ''${TARGETS[*]}"
+            echo "Run 'deploy-restore' to switch back to NixOS-managed binary"
+          '';
+
+          deploy-restore = pkgs.writeShellScriptBin "deploy-restore" ''
+            NODES=("sleepy" "dopey" "grumpy")
+            TARGETS=("''${@:-''${NODES[@]}}")
+            for node in "''${TARGETS[@]}"; do
+              echo "Restoring $node to NixOS service..."
+              ssh "$node" "sudo systemctl stop gamejanitor-dev 2>/dev/null; sudo rm -f /run/gamejanitor-dev; sudo systemctl start gamejanitor" || true
+              echo "  $node: restored"
+            done
+          '';
+
+          # Wipe everything on homelab nodes — DB, Docker containers/volumes, data dir.
+          # Usage: deploy-clean (all nodes) | deploy-clean sleepy
+          deploy-clean = pkgs.writeShellScriptBin "deploy-clean" ''
+            set -e
+            NODES=("sleepy" "dopey" "grumpy")
+            TARGETS=("''${@:-''${NODES[@]}}")
+
+            echo "This will DELETE all gamejanitor data on: ''${TARGETS[*]}"
+            echo "  - Database"
+            echo "  - Docker containers and volumes"
+            echo "  - Backups, game data, everything"
+            read -p "Are you sure? (y/N) " -n 1 -r
+            echo
+            [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+
+            for node in "''${TARGETS[@]}"; do
+              echo "Cleaning $node..."
+              ssh "$node" "
+                sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                sudo systemctl stop gamejanitor 2>/dev/null || true
+                sudo docker ps -a --filter name=gamejanitor- --format '{{.ID}}' | xargs -r sudo docker rm -f 2>/dev/null || true
+                sudo docker volume ls --filter name=gamejanitor- --format '{{.Name}}' | xargs -r sudo docker volume rm -f 2>/dev/null || true
+                sudo rm -rf /var/lib/gamejanitor/*
+                sudo rm -f /run/gamejanitor-dev
+              "
+              echo "  $node: clean"
+            done
+
+            echo "All clean. Run 'deploy' to start fresh."
+          '';
+
           cli = pkgs.writeShellScriptBin "cli" ''
             exec go run . "$@"
           '';
@@ -309,6 +426,9 @@
             pkgs.protoc-gen-go-grpc
             pkgs.nodejs
             dev
+            deploy
+            deploy-restore
+            deploy-clean
             cli
             build
             build-image
