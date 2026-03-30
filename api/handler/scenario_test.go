@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,14 +78,18 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 	req, _ := http.NewRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, nil)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
 
-	// 7. Verify it's gone
-	resp, err = http.Get(api.Server.URL + "/api/gameservers/" + gsID)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp.Body.Close()
+	// 7. Verify it's gone (async — wait for background cleanup)
+	require.Eventually(t, func() bool {
+		resp, err = http.Get(api.Server.URL + "/api/gameservers/" + gsID)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusNotFound
+	}, 5*time.Second, 50*time.Millisecond, "gameserver should be deleted")
 }
 
 func TestAPIScenario_Business_AuthEnforced(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,13 +155,17 @@ func TestAPI_DeleteGameserver_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer delResp.Body.Close()
 
-	assert.Equal(t, http.StatusNoContent, delResp.StatusCode)
+	assert.Equal(t, http.StatusAccepted, delResp.StatusCode)
 
-	// Verify it's actually gone
-	getResp, err := http.Get(api.Server.URL + "/api/gameservers/" + gsID)
-	require.NoError(t, err)
-	defer getResp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
+	// Delete is async — wait for cleanup to finish
+	require.Eventually(t, func() bool {
+		getResp, err := http.Get(api.Server.URL + "/api/gameservers/" + gsID)
+		if err != nil {
+			return false
+		}
+		defer getResp.Body.Close()
+		return getResp.StatusCode == http.StatusNotFound
+	}, 5*time.Second, 50*time.Millisecond, "gameserver should be deleted")
 }
 
 func TestAPI_ResponseEnvelope(t *testing.T) {

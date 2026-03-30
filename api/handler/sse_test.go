@@ -144,16 +144,16 @@ func TestSSE_TypeFilter(t *testing.T) {
 		})
 	}, 300*time.Millisecond)
 
-	var hasStatus, hasStats bool
+	var hasReady, hasStats bool
 	for _, line := range received {
-		if strings.Contains(line, "stopped") && strings.Contains(line, "running") {
-			hasStatus = true
+		if strings.Contains(line, gsA) && !strings.Contains(line, "cpu_percent") {
+			hasReady = true
 		}
 		if strings.Contains(line, "cpu_percent") {
 			hasStats = true
 		}
 	}
-	assert.True(t, hasStatus, "gameserver.ready event should pass the type filter")
+	assert.True(t, hasReady, "gameserver.ready event should pass the type filter")
 	assert.False(t, hasStats, "gameserver.stats event should be filtered out")
 }
 
