@@ -212,8 +212,11 @@ func generateSignedCert(dir, name string, caCert *x509.Certificate, caKey *ecdsa
 	if isServer {
 		template.KeyUsage = x509.KeyUsageDigitalSignature
 		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-		// SANs for local development + all detected IPs
+		// SANs: localhost, machine hostname, and all detected IPs
 		template.DNSNames = []string{"localhost"}
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			template.DNSNames = append(template.DNSNames, hostname)
+		}
 		template.IPAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
 		if addrs, err := net.InterfaceAddrs(); err == nil {
 			for _, addr := range addrs {

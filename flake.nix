@@ -73,7 +73,7 @@
             TARGETS=("''${@:-''${NODES[@]}}")
 
             echo "Building UI..."
-            sudo rm -rf ui/dist
+            rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
             (cd ui && npm run build)
 
             echo "Building binary..."
