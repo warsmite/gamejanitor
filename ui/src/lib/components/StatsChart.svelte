@@ -269,9 +269,13 @@
       </div>
 
       <!-- Timestamp -->
-      {#if hoverData}
-        <div class="chart-timestamp">{formatTime(hoverData.timestamp)}</div>
-      {/if}
+      <div class="chart-timestamp">
+        {#if hoverData}
+          {formatTime(hoverData.timestamp)}
+        {:else if data.length}
+          {formatTime(data[data.length - 1].timestamp)}
+        {/if}
+      </div>
 
       <!-- Legend for net -->
       <div class="chart-legend">
