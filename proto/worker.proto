@@ -368,4 +368,6 @@ message EnsureDepotRequest {
 }
 message EnsureDepotResponse {
     string depot_dir = 1;
+    bool cached = 2;
+    uint64 bytes_downloaded = 3;
 }

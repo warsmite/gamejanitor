@@ -31,6 +31,10 @@ const (
 
 // Lifecycle outcome events — system, drive status changes
 const (
+	EventDepotDownloading  = "gameserver.depot_downloading"
+	EventDepotProgress     = "gameserver.depot_progress"
+	EventDepotComplete     = "gameserver.depot_complete"
+	EventDepotCached       = "gameserver.depot_cached"
 	EventImagePulling      = "gameserver.image_pulling"
 	EventImagePulled       = "gameserver.image_pulled"
 	EventContainerCreating = "gameserver.container_creating"
@@ -70,6 +74,7 @@ var AllEventTypes = []string{
 	EventScheduleCreate, EventScheduleUpdate, EventScheduleDelete,
 	EventModInstalled, EventModUninstalled,
 	// Lifecycle outcomes
+	EventDepotDownloading, EventDepotProgress, EventDepotComplete, EventDepotCached,
 	EventImagePulling, EventImagePulled,
 	EventContainerCreating, EventContainerStarted,
 	EventGameserverReady,
@@ -89,6 +94,57 @@ var AllEventTypes = []string{
 }
 
 // Lifecycle events — published by lifecycle code, consumed by StatusSubscriber to derive status.
+
+type DepotDownloadingEvent struct {
+	GameserverID string    `json:"gameserver_id"`
+	AppID        uint32    `json:"app_id"`
+	TotalBytes   uint64    `json:"total_bytes"`
+	TotalChunks  int       `json:"total_chunks"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+func (e DepotDownloadingEvent) EventType() string        { return EventDepotDownloading }
+func (e DepotDownloadingEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e DepotDownloadingEvent) EventGameserverID() string { return e.GameserverID }
+func (e DepotDownloadingEvent) EventActor() Actor         { return SystemActor }
+
+type DepotProgressEvent struct {
+	GameserverID   string    `json:"gameserver_id"`
+	AppID          uint32    `json:"app_id"`
+	CompletedBytes uint64    `json:"completed_bytes"`
+	TotalBytes     uint64    `json:"total_bytes"`
+	Percent        float64   `json:"percent"`
+	Timestamp      time.Time `json:"timestamp"`
+}
+
+func (e DepotProgressEvent) EventType() string        { return EventDepotProgress }
+func (e DepotProgressEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e DepotProgressEvent) EventGameserverID() string { return e.GameserverID }
+func (e DepotProgressEvent) EventActor() Actor         { return SystemActor }
+
+type DepotCompleteEvent struct {
+	GameserverID    string    `json:"gameserver_id"`
+	AppID           uint32    `json:"app_id"`
+	BytesDownloaded uint64    `json:"bytes_downloaded"`
+	IsDelta         bool      `json:"is_delta"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
+func (e DepotCompleteEvent) EventType() string        { return EventDepotComplete }
+func (e DepotCompleteEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e DepotCompleteEvent) EventGameserverID() string { return e.GameserverID }
+func (e DepotCompleteEvent) EventActor() Actor         { return SystemActor }
+
+type DepotCachedEvent struct {
+	GameserverID string    `json:"gameserver_id"`
+	AppID        uint32    `json:"app_id"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+func (e DepotCachedEvent) EventType() string        { return EventDepotCached }
+func (e DepotCachedEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e DepotCachedEvent) EventGameserverID() string { return e.GameserverID }
+func (e DepotCachedEvent) EventActor() Actor         { return SystemActor }
 
 type ImagePullingEvent struct {
 	GameserverID string    `json:"gameserver_id"`

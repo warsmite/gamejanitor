@@ -582,15 +582,15 @@ func (w *FakeWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverI
 	return scriptDir, "", nil
 }
 
-func (w *FakeWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (string, error) {
+func (w *FakeWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
 	if err := w.popFailure("EnsureDepot"); err != nil {
-		return "", err
+		return nil, err
 	}
 	depotDir := filepath.Join(w.tmpDir, "depot", fmt.Sprintf("%d", appID))
 	if err := os.MkdirAll(depotDir, 0755); err != nil {
-		return "", err
+		return nil, err
 	}
-	return depotDir, nil
+	return &worker.DepotResult{DepotDir: depotDir, Cached: true}, nil
 }
 
 func (w *FakeWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {

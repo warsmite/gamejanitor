@@ -3407,10 +3407,12 @@ func (x *EnsureDepotRequest) GetRefreshToken() string {
 }
 
 type EnsureDepotResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DepotDir      string                 `protobuf:"bytes,1,opt,name=depot_dir,json=depotDir,proto3" json:"depot_dir,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	DepotDir        string                 `protobuf:"bytes,1,opt,name=depot_dir,json=depotDir,proto3" json:"depot_dir,omitempty"`
+	Cached          bool                   `protobuf:"varint,2,opt,name=cached,proto3" json:"cached,omitempty"`
+	BytesDownloaded uint64                 `protobuf:"varint,3,opt,name=bytes_downloaded,json=bytesDownloaded,proto3" json:"bytes_downloaded,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EnsureDepotResponse) Reset() {
@@ -3448,6 +3450,20 @@ func (x *EnsureDepotResponse) GetDepotDir() string {
 		return x.DepotDir
 	}
 	return ""
+}
+
+func (x *EnsureDepotResponse) GetCached() bool {
+	if x != nil {
+		return x.Cached
+	}
+	return false
+}
+
+func (x *EnsureDepotResponse) GetBytesDownloaded() uint64 {
+	if x != nil {
+		return x.BytesDownloaded
+	}
+	return 0
 }
 
 var File_worker_proto protoreflect.FileDescriptor
@@ -3678,9 +3694,11 @@ const file_worker_proto_rawDesc = "" +
 	"\x06app_id\x18\x01 \x01(\rR\x05appId\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12!\n" +
 	"\faccount_name\x18\x03 \x01(\tR\vaccountName\x12#\n" +
-	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\"2\n" +
+	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\"u\n" +
 	"\x13EnsureDepotResponse\x12\x1b\n" +
-	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir2\x8d\x12\n" +
+	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir\x12\x16\n" +
+	"\x06cached\x18\x02 \x01(\bR\x06cached\x12)\n" +
+	"\x10bytes_downloaded\x18\x03 \x01(\x04R\x0fbytesDownloaded2\x8d\x12\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +

@@ -2,6 +2,13 @@ package worker
 
 import "time"
 
+// DepotResult contains information about a completed depot download.
+type DepotResult struct {
+	DepotDir        string
+	Cached          bool   // true if depot was already up-to-date (no download)
+	BytesDownloaded uint64 // 0 if cached
+}
+
 type ContainerOptions struct {
 	Name          string
 	Image         string

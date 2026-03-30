@@ -591,7 +591,7 @@ func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserv
 	return worker.PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
-func (w *ProcessWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (string, error) {
+func (w *ProcessWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
 	return worker.EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken)
 }
 

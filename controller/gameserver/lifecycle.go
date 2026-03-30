@@ -153,9 +153,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 			}
 		}
 
-		s.log.Info("downloading game depot", "gameserver_id", id, "app_id", depotAppID, "auth", game.SteamLogin.RequiresAuth())
-		var depotErr error
-		depotDir, depotErr = w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken)
+		s.broadcaster.Publish(controller.DepotDownloadingEvent{
+			GameserverID: id,
+			AppID:        depotAppID,
+			Timestamp:    time.Now(),
+		})
+
+		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken)
 		if depotErr != nil {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{
 				GameserverID: id,
@@ -163,6 +167,23 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 				Timestamp:    time.Now(),
 			})
 			return fmt.Errorf("depot download for gameserver %s: %w", id, depotErr)
+		}
+
+		depotDir = depotResult.DepotDir
+
+		if depotResult.Cached {
+			s.broadcaster.Publish(controller.DepotCachedEvent{
+				GameserverID: id,
+				AppID:        depotAppID,
+				Timestamp:    time.Now(),
+			})
+		} else {
+			s.broadcaster.Publish(controller.DepotCompleteEvent{
+				GameserverID: id,
+				AppID:           depotAppID,
+				BytesDownloaded: depotResult.BytesDownloaded,
+				Timestamp:       time.Now(),
+			})
 		}
 	}
 

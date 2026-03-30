@@ -377,7 +377,7 @@ func (w *RemoteWorker) PrepareGameScripts(ctx context.Context, gameID, gameserve
 	return resp.ScriptDir, resp.DefaultsDir, nil
 }
 
-func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (string, error) {
+func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
 	resp, err := w.client.EnsureDepot(ctx, &pb.EnsureDepotRequest{
 		AppId:        appID,
 		Branch:       branch,
@@ -385,9 +385,13 @@ func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, ac
 		RefreshToken: refreshToken,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return resp.DepotDir, nil
+	return &worker.DepotResult{
+		DepotDir:        resp.DepotDir,
+		Cached:          resp.Cached,
+		BytesDownloaded: resp.BytesDownloaded,
+	}, nil
 }
 
 func (w *RemoteWorker) Sendbeat(ctx context.Context, req *pb.HeartbeatRequest) error {

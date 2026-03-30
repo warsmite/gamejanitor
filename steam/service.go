@@ -47,32 +47,41 @@ func (s *Service) HasCredentials() bool {
 	return s.creds.SteamRefreshToken() != ""
 }
 
+// EnsureDepotResult contains the outcome of an EnsureDepot call.
+type EnsureDepotResult struct {
+	DepotDir        string
+	Cached          bool   // true if all depots were already up-to-date
+	BytesDownloaded uint64
+}
+
 // EnsureDepot downloads a depot if not already cached or if a newer version is available.
 // Returns the path to the cached game files directory, ready to be bind-mounted.
-func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) (string, error) {
+func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) (*EnsureDepotResult, error) {
 	if branch == "" {
 		branch = "public"
 	}
 
 	client, downloader, err := s.getOrConnect(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Resolve app info to find depot IDs and current manifest
 	appInfo, err := client.GetAppInfo(ctx, appID, branch)
 	if err != nil {
-		return "", fmt.Errorf("resolve app %d: %w", appID, err)
+		return nil, fmt.Errorf("resolve app %d: %w", appID, err)
 	}
 
 	if len(appInfo.Depots) == 0 {
-		return "", fmt.Errorf("no depots found for app %d branch %q", appID, branch)
+		return nil, fmt.Errorf("no depots found for app %d branch %q", appID, branch)
 	}
 
 	// All depots merge into one directory — games expect a single installation.
 	mergedDir := s.cache.AppFilesDir(appID)
 
 	// Download each depot
+	allCached := true
+	var totalBytesDownloaded uint64
 	for _, depot := range appInfo.Depots {
 		// Skip shared depots (depotfromapp) — these reference content from another app
 		if depot.DepotFromApp != 0 {
@@ -108,7 +117,7 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) 
 		// Get depot key for decryption
 		depotKey, err := client.GetDepotDecryptionKey(ctx, depot.DepotID, appID)
 		if err != nil {
-			return "", fmt.Errorf("get depot key for %d: %w", depot.DepotID, err)
+			return nil, fmt.Errorf("get depot key for %d: %w", depot.DepotID, err)
 		}
 
 		// Load old manifest for delta update
@@ -137,7 +146,7 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) 
 			},
 		})
 		if err != nil {
-			return "", fmt.Errorf("download depot %d: %w", depot.DepotID, err)
+			return nil, fmt.Errorf("download depot %d: %w", depot.DepotID, err)
 		}
 
 		// Save manifest and metadata for future delta updates
@@ -151,6 +160,9 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) 
 			s.log.Warn("failed to save cache metadata", "error", err)
 		}
 
+		allCached = false
+		totalBytesDownloaded += result.BytesDownloaded
+
 		s.log.Info("depot download complete",
 			"app_id", appID,
 			"depot_id", depot.DepotID,
@@ -159,7 +171,11 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) 
 		)
 	}
 
-	return mergedDir, nil
+	return &EnsureDepotResult{
+		DepotDir:        mergedDir,
+		Cached:          allCached,
+		BytesDownloaded: totalBytesDownloaded,
+	}, nil
 }
 
 // CacheDir returns the path to cached files for an app's first depot.
