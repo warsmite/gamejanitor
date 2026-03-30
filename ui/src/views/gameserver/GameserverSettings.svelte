@@ -10,11 +10,13 @@
   const gsId = id;
 
   const can = (p: string) => gameserverStore.can(p);
+  const isRunning = $derived(gameserverStore.isRunning(id));
 
   let gameserver = $state<Gameserver | null>(null);
   let game = $state<Game | null>(null);
   let loading = $state(true);
   let saving = $state(false);
+  let restartRequired = $state(false);
 
   // Form state
   let serverName = $state('');
@@ -82,7 +84,7 @@
     }
   });
 
-  async function saveAll() {
+  async function saveAll(andRestart = false) {
     saving = true;
     try {
       const update: Record<string, any> = {};
@@ -99,7 +101,15 @@
 
       await api.gameservers.update(gsId, update);
       gameserver = await api.gameservers.get(gsId);
-      toast('Settings saved', 'success');
+      restartRequired = gameserver.restart_required ?? false;
+
+      if (andRestart && isRunning) {
+        await api.gameservers.restart(gsId);
+        restartRequired = false;
+        toast('Settings saved, restarting...', 'success');
+      } else {
+        toast('Settings saved', 'success');
+      }
     } catch (e: any) {
       toast(`Failed to save: ${e.message}`, 'error');
     } finally {
@@ -241,9 +251,19 @@
 
     {#if canEditAnything}
       <div class="save-row">
-        <button class="btn-solid" onclick={saveAll} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
+        {#if restartRequired}
+          <span class="restart-hint">Restart required to apply changes</span>
+        {/if}
+        <div class="save-buttons">
+          <button class="btn-accent" onclick={() => saveAll(false)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          {#if isRunning && can('gameserver.restart')}
+            <button class="btn-solid" onclick={() => saveAll(true)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+              {saving ? 'Saving...' : 'Save & Restart'}
+            </button>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -344,11 +364,16 @@
   }
 
   .save-row {
-    display: flex; justify-content: flex-end;
+    display: flex; align-items: center; justify-content: flex-end; gap: 12px;
     position: relative; z-index: 1;
     margin: 20px 0 28px;
     padding-top: 20px;
     border-top: 1px solid var(--border-dim);
+  }
+  .save-buttons { display: flex; gap: 8px; }
+  .restart-hint {
+    font-size: 0.74rem; font-family: var(--font-mono);
+    color: var(--caution); margin-right: auto;
   }
 
   .s-section { position: relative; z-index: 1; margin-bottom: 28px; }
@@ -361,14 +386,6 @@
     border-bottom: 1px solid var(--border-dim);
   }
 
-  .s-mono-value {
-    font-family: var(--font-mono); font-size: 0.85rem;
-    color: var(--text-secondary);
-    padding: 9px 14px;
-    background: var(--bg-inset); border: 1px solid var(--border-dim);
-    border-radius: var(--radius-sm);
-  }
-
   .danger-zone { background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: var(--radius); padding: 20px; }
   .danger-zone .s-title { color: var(--danger); border-bottom-color: rgba(239, 68, 68, 0.12); }
   .danger-item { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 0; gap: 16px; }
@@ -379,7 +396,6 @@
 
   @media (max-width: 700px) {
     .settings-panel { padding: 18px; }
-    .sftp-row { flex-direction: column; align-items: flex-start; }
     .danger-item { flex-direction: column; }
   }
 </style>
