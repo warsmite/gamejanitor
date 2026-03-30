@@ -120,8 +120,9 @@ type Game struct {
 	Name                 string        `json:"name"`
 	Aliases              []string      `json:"aliases,omitempty"`
 	Description          string        `json:"description,omitempty"`
-	AppID                uint32        `json:"app_id,omitempty"`
-	BaseImage            string        `json:"base_image"`
+	AppID                uint32         `json:"app_id,omitempty"`
+	SteamLogin           SteamLoginType `json:"steam_login,omitempty"`
+	BaseImage            string         `json:"base_image"`
 	Runtime              RuntimeConfig `json:"runtime,omitempty"`
 	IconPath             string        `json:"icon_path"`
 	DefaultPorts         []Port        `json:"default_ports"`
@@ -314,6 +315,7 @@ func defToGame(def *GameDef) *Game {
 		Aliases:              aliases,
 		Description:          def.Description,
 		AppID:                def.AppID,
+		SteamLogin:           def.SteamLogin,
 		BaseImage:            c.Image,
 		Runtime:              runtime,
 		RecommendedMemoryMB:  c.RecommendedMemoryMB,

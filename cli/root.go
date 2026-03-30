@@ -60,6 +60,9 @@ func init() {
 	rootCmd.AddCommand(webhooksCmd)
 	rootCmd.AddCommand(eventsCmd)
 
+	// Steam
+	rootCmd.AddCommand(steamCmd)
+
 	// Server
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(genWorkerCertCmd)
@@ -140,6 +143,7 @@ func customHelp(cmd *cobra.Command, args []string) {
 				{"settings", "View and configure settings"},
 				{"webhooks", "Manage webhook endpoints"},
 				{"events", "Query or stream events"},
+				{"steam", "Manage Steam account for game downloads"},
 			},
 		},
 		{

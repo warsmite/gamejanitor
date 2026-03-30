@@ -42,6 +42,8 @@ const (
 	SettingRegisterWithBrowser     = "register_with_browser"
 	SettingRestrictDownloadURLs     = "restrict_download_urls"
 	SettingSteamAPIKey             = "steam_api_key"
+	SettingSteamRefreshToken       = "steam_refresh_token"
+	SettingSteamAccountName        = "steam_account_name"
 )
 
 // Mode constants for selecting default profiles.
@@ -75,6 +77,8 @@ var Defaults = map[string]any{
 	SettingRegisterWithBrowser:     false,
 	SettingRestrictDownloadURLs:     false,
 	SettingSteamAPIKey:             "",
+	SettingSteamRefreshToken:       "",
+	SettingSteamAccountName:        "",
 }
 
 // BusinessOverrides are applied on top of Defaults when mode is "business".

@@ -1,0 +1,5 @@
+#!/bin/bash
+# Project Zomboid responds to SIGTERM for graceful shutdown.
+# The entrypoint handles signal forwarding to the game process.
+echo "[stop-server] sending quit command"
+rcon-cli --port "${RCON_PORT:-27015}" --password "${RCON_PASSWORD:-}" "quit" 2>/dev/null || true

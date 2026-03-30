@@ -51,6 +51,9 @@ service WorkerService {
 
     // Game scripts — worker extracts scripts locally from embedded game data
     rpc PrepareGameScripts(PrepareGameScriptsRequest) returns (PrepareGameScriptsResponse);
+
+    // Steam depot — worker downloads game files for auth-required games
+    rpc EnsureDepot(EnsureDepotRequest) returns (EnsureDepotResponse);
 }
 
 // ControllerService runs on the controller and accepts worker registrations/heartbeats.
@@ -355,4 +358,14 @@ message PrepareGameScriptsRequest {
 message PrepareGameScriptsResponse {
     string script_dir = 1;
     string defaults_dir = 2;
+}
+
+message EnsureDepotRequest {
+    uint32 app_id = 1;
+    string branch = 2;
+    string account_name = 3;
+    string refresh_token = 4;
+}
+message EnsureDepotResponse {
+    string depot_dir = 1;
 }

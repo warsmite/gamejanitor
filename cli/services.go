@@ -179,3 +179,4 @@ func initBackupStorage(cfg config.Config, logger *slog.Logger) (backup.Storage, 
 
 	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)
 }
+
