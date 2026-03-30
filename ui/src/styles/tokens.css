@@ -15,17 +15,11 @@ nav {
 .n-left { display: flex; align-items: center; gap: 24px; }
 
 .brand {
-  display: flex; align-items: center; gap: 9px;
-  font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em;
+  display: flex; align-items: center;
+  font-weight: 700; font-size: 0.95rem; letter-spacing: -0.01em;
   color: var(--text-primary); text-decoration: none;
 }
-.brand-mark {
-  width: 26px; height: 26px;
-  background: linear-gradient(135deg, #f08840, var(--accent));
-  border-radius: 7px; display: grid; place-items: center;
-  box-shadow: 0 0 16px rgba(232, 114, 42, 0.25), 0 0 4px rgba(232, 114, 42, 0.15);
-}
-.brand-mark svg { width: 14px; height: 14px; fill: white; }
+.brand-accent { color: var(--accent); }
 
 .n-links { display: flex; gap: 2px; }
 .n-links a {

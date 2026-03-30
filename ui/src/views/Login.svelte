@@ -56,10 +56,7 @@
   <div class="login-wrap">
     <div class="login-card">
       <div class="login-brand">
-        <div class="brand-mark">
-          <svg viewBox="0 0 16 16"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-11zM6 4h4v1H6V4zm0 3h4v1H6V7zm0 3h3v1H6v-1z" fill="currentColor"/></svg>
-        </div>
-        <span>Gamejanitor</span>
+        <span class="brand">Game<span class="brand-accent">Janitor</span></span>
       </div>
 
       <h1>Sign in</h1>
@@ -114,15 +111,8 @@
   }
 
   .login-brand {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 28px; color: var(--text-tertiary);
-    font-size: 0.82rem; font-weight: 500;
+    margin-bottom: 28px;
   }
-  .brand-mark {
-    width: 22px; height: 22px; display: grid; place-items: center;
-    color: var(--accent);
-  }
-  .brand-mark svg { width: 18px; height: 18px; }
 
   h1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 6px; }
   .login-desc { font-size: 0.82rem; color: var(--text-tertiary); margin-bottom: 22px; }
