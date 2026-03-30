@@ -1,33 +1,18 @@
 #!/bin/bash
 set -e
 
-if [ -d "/depot" ]; then
-    # Game files pre-downloaded by the depot downloader (authenticated Steam download).
-    # Copy to /data/server so the game has a writable installation directory.
-    echo "[install-server] copying pre-downloaded game files from depot cache"
-    mkdir -p /data/server
-    cp -a /depot/. /data/server/
-    chmod +x /data/server/*.sh /data/server/ProjectZomboid* 2>/dev/null || true
-    # Bundled JRE and native binaries need execute permissions
-    find /data/server/jre64/bin -type f -exec chmod +x {} + 2>/dev/null || true
-    find /data/server/linux64 -type f -exec chmod +x {} + 2>/dev/null || true
+echo "[install-server] copying pre-downloaded game files from depot cache"
+mkdir -p /data/server
+cp -a /depot/. /data/server/
 
-    # PZ requires steamclient.so — find it from SteamCMD's pre-warmed files
-    mkdir -p /home/gameserver/.steam/sdk64
-    STEAMCLIENT=$(find /opt/steamcmd /home/gameserver -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
-    if [ -n "$STEAMCLIENT" ]; then
-        ln -sf "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
-        echo "[install-server] linked steamclient.so from $STEAMCLIENT"
-    else
-        echo "[install-server] WARNING: steamclient.so not found, Steam networking may fail"
-    fi
-    echo "[install-server] game files installed from depot"
+# PZ requires steamclient.so for Steam networking — look in the depot's bundled files
+mkdir -p /home/gameserver/.steam/sdk64
+STEAMCLIENT=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
+if [ -n "$STEAMCLIENT" ]; then
+    ln -sf "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
+    echo "[install-server] linked steamclient.so from $STEAMCLIENT"
 else
-    echo "[install-server] downloading Project Zomboid dedicated server via SteamCMD (app 380870)"
-    steamcmd-retry \
-        +force_install_dir /data/server \
-        +login anonymous \
-        +app_update 380870 validate \
-        +quit
-    echo "[install-server] Project Zomboid dedicated server installed"
+    echo "[install-server] WARNING: steamclient.so not found, Steam networking may fail"
 fi
+
+echo "[install-server] Project Zomboid dedicated server installed"

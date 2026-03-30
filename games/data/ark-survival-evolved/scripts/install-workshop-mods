@@ -1,25 +1,4 @@
 #!/bin/bash
-set -e
-
-WORKSHOP_FILE="/data/.gamejanitor/workshop_items.json"
-[ ! -f "$WORKSHOP_FILE" ] && exit 0
-
-ITEMS=$(jq -r '.[]' "$WORKSHOP_FILE" 2>/dev/null)
-[ -z "$ITEMS" ] && exit 0
-
-APP_ID="$1"
-COUNT=$(echo "$ITEMS" | wc -l)
-echo "[workshop] downloading $COUNT workshop items for app $APP_ID"
-
-WORKSHOP_ARGS=""
-for ID in $ITEMS; do
-    WORKSHOP_ARGS="$WORKSHOP_ARGS +workshop_download_item $APP_ID $ID"
-done
-
-steamcmd-retry \
-    +force_install_dir /data/server \
-    +login anonymous \
-    $WORKSHOP_ARGS \
-    +quit
-
-echo "[workshop] done"
+# TODO: Workshop mod downloads need to be implemented via the depot downloader.
+# SteamCMD is no longer available in the container.
+echo "[install-workshop-mods] skipped (not yet implemented without SteamCMD)"

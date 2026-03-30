@@ -1,11 +1,5 @@
 #!/bin/bash
 set -e
 
-echo "[update-server] updating Satisfactory dedicated server via SteamCMD"
-steamcmd-retry \
-    +force_install_dir /data/server \
-    +login anonymous \
-    +app_update 1690800 -beta public validate \
-    +quit
-
-echo "[update-server] update complete"
+echo "[update-server] re-running install to apply updated game files"
+exec /scripts/install-server

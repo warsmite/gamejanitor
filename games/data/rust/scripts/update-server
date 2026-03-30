@@ -1,16 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "[update-server] updating Rust dedicated server via SteamCMD"
-steamcmd-retry \
-    +force_install_dir /data/server \
-    +login anonymous \
-    +app_update 258550 validate \
-    +quit
+echo "[update-server] re-running install to apply updated game files"
+/scripts/install-server
 
-echo "[update-server] update complete"
-
-# Re-apply or clean up mod framework after SteamCMD validate (it may overwrite patched files)
+# Re-apply or clean up mod framework after update (it may overwrite patched files)
 MOD_FRAMEWORK="${MOD_FRAMEWORK:-none}"
 
 install_oxide() {

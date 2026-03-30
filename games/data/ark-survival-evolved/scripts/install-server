@@ -1,20 +1,10 @@
 #!/bin/bash
 set -e
 
-if [ -d "/depot" ]; then
-    echo "[install-server] copying pre-downloaded game files from depot cache"
-    mkdir -p /data/server
-    cp -a /depot/. /data/server/
-    echo "[install-server] ARK dedicated server installed from depot"
-else
-    echo "[install-server] downloading ARK dedicated server via SteamCMD (app 376030)"
-    steamcmd-retry \
-        +force_install_dir /data/server \
-        +login anonymous \
-        +app_update 376030 validate \
-        +quit
-    echo "[install-server] ARK dedicated server installed"
-fi
+echo "[install-server] copying pre-downloaded game files from depot cache"
+mkdir -p /data/server
+cp -a /depot/. /data/server/
+echo "[install-server] ARK dedicated server installed"
 
 # Download workshop mods if configured (ARK mods can be very large, do at install time)
 /scripts/install-workshop-mods 346110
