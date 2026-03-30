@@ -154,12 +154,29 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteGameserver(detachedCtx(r), id); err != nil {
+
+	// Validate the gameserver exists before accepting the delete
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondNoContent(w)
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+
+	// Run cleanup in background — return 202 immediately.
+	// The gameserver.delete event fires when cleanup finishes.
+	ctx := detachedCtx(r)
+	go func() {
+		if err := h.svc.DeleteGameserver(ctx, id); err != nil {
+			h.log.Error("background delete failed", "id", id, "error", err)
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {

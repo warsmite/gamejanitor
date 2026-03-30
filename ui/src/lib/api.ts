@@ -45,7 +45,7 @@ async function request<T>(method: string, path: string, body?: any, query?: Reco
 
   const resp = await fetch(url, opts);
 
-  if (resp.status === 204) return undefined as T;
+  if (resp.status === 204 || resp.status === 202) return undefined as T;
 
   if (resp.status === 401) {
     console.warn('api: 401 Unauthorized on', method, path);

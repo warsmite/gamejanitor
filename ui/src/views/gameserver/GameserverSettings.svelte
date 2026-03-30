@@ -143,10 +143,9 @@
   async function deleteServer() {
     if (!gameserver) return;
     if (!await confirm({ title: 'Delete Gameserver', message: `Permanently delete "${gameserver.name}" and all its data? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
-    deleting = true;
     try {
       await api.gameservers.delete(gsId);
-      toast('Gameserver deleted', 'info');
+      toast('Deleting gameserver...', 'info');
       if (embedded) {
         window.location.href = window.location.origin;
       } else {
@@ -154,8 +153,6 @@
       }
     } catch (e: any) {
       toast(`Failed: ${e.message}`, 'error');
-    } finally {
-      deleting = false;
     }
   }
 </script>
