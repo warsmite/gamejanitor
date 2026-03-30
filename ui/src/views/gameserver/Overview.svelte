@@ -39,7 +39,7 @@
 
     // SSE: activity feed only — stats/query/status handled by store
     unsub = onGameserverEvent(id, (data: any) => {
-      if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
+      if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query' || data.type === 'gameserver.depot_progress') return;
 
       const event: Activity = {
         id: crypto.randomUUID(),
