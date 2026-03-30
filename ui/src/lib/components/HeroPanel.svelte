@@ -26,15 +26,9 @@
     stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0
   );
   const cpuPercent = $derived(stats ? Math.round(stats.cpu_percent) : 0);
-
-  const playersText = $derived(
-    query ? `${query.players_online}` : '—'
-  );
-  const playersMax = $derived(
-    query ? ` / ${query.max_players}` : ''
-  );
-  const playerPercent = $derived(
-    query && query.max_players > 0 ? Math.round((query.players_online / query.max_players) * 100) : 0
+  const storageMB = $derived(stats ? Math.round(stats.volume_size_bytes / (1024 * 1024)) : 0);
+  const storagePercent = $derived(
+    stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : (stats ? 100 : 0)
   );
 </script>
 
@@ -66,13 +60,6 @@
     <!-- Telemetry -->
     <div class="telemetry">
       <TelemetryCell
-        label="Players"
-        value={playersText}
-        unit={playersMax}
-        percent={playerPercent}
-        color="live"
-      />
-      <TelemetryCell
         label="Memory"
         value={stats ? `${(stats.memory_usage_mb / 1024).toFixed(1)}` : '—'}
         unit={stats ? ' GB' : ''}
@@ -85,6 +72,14 @@
         value={stats ? `${cpuPercent}` : '—'}
         unit={stats ? '%' : ''}
         percent={cpuPercent}
+        color="accent"
+      />
+      <TelemetryCell
+        label="Storage"
+        value={stats ? `${storageMB < 1024 ? storageMB + '' : (storageMB / 1024).toFixed(1)}` : '—'}
+        unit={stats ? (storageMB < 1024 ? ' MB' : ' GB') : ''}
+        detail={stats?.storage_limit_mb ? `of ${(stats.storage_limit_mb / 1024).toFixed(0)} GB` : ''}
+        percent={storagePercent}
         color="accent"
       />
     </div>
