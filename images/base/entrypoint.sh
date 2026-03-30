@@ -25,10 +25,13 @@ if [ -d /defaults ]; then
 fi
 
 # Steam games expect steamclient.so at ~/.steam/sdk64/ for networking.
-# Find it in the game files (downloaded by the depot downloader) and symlink.
+# Prefer the game's bundled copy, fall back to the one in the base image.
+mkdir -p /home/gameserver/.steam/sdk64
 STEAMCLIENT=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
+if [ -z "$STEAMCLIENT" ] && [ -f /usr/lib/steam/steamclient.so ]; then
+    STEAMCLIENT=/usr/lib/steam/steamclient.so
+fi
 if [ -n "$STEAMCLIENT" ]; then
-    mkdir -p /home/gameserver/.steam/sdk64
     ln -sf "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
 fi
 
