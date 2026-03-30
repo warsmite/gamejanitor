@@ -159,9 +159,6 @@
   const gridYs = [0.25, 0.5, 0.75].map(f => H - f * (H - 4) - 2);
 </script>
 
-{#if !loading && data.length === 0}
-  <!-- no chart shown if no data -->
-{:else}
   <div class="stats-charts">
     <div class="chart-header">
       <span class="chart-title">Resource History</span>
@@ -178,6 +175,8 @@
 
     {#if loading}
       <div class="chart-loading">Loading...</div>
+    {:else if data.length === 0}
+      <div class="chart-loading">No data for this period yet.</div>
     {:else}
 
       <!-- CPU -->
@@ -285,7 +284,6 @@
 
     {/if}
   </div>
-{/if}
 
 <style>
   .stats-charts {
