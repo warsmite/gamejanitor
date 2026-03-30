@@ -96,10 +96,11 @@
               sudo systemctl stop gamejanitor-dev 2>/dev/null || true
               sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
               sudo systemctl stop gamejanitor 2>/dev/null || true
-              CONFIG=\$(sudo systemctl cat gamejanitor | grep -oP '(?<=--config )\S+')
               sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
                 --property=SupplementaryGroups=docker \
-                /run/gamejanitor-dev serve --config \"\$CONFIG\"
+                /run/gamejanitor-dev serve \
+                  --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
+                  -d /var/lib/gamejanitor
             "
             echo "  $CONTROLLER: started"
 
@@ -124,11 +125,14 @@
                 sudo systemctl stop gamejanitor-dev 2>/dev/null || true
                 sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
                 sudo systemctl stop gamejanitor 2>/dev/null || true
-                CONFIG=\$(sudo systemctl cat gamejanitor | grep -oP '(?<=--config )\S+')
                 sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
                   --property=SupplementaryGroups=docker \
-                  --setenv=GJ_WORKER_TOKEN='$TOKEN' \
-                  /run/gamejanitor-dev serve --config \"\$CONFIG\"
+                  /run/gamejanitor-dev serve \
+                    --worker --controller=false \
+                    --bind 0.0.0.0 --sftp-port 2222 \
+                    --controller-address $CONTROLLER:9090 \
+                    --worker-token '$TOKEN' \
+                    -d /var/lib/gamejanitor
               "
               echo "  $w: started"
             done
