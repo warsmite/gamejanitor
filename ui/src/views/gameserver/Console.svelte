@@ -255,12 +255,20 @@
     </div>
     <button class="console-clear" onclick={clearConsole}>Clear</button>
   </div>
-  <div class="console-output" bind:this={consoleEl} onscroll={handleScroll}>
-    {#each lines as line}
-      <div class="log-line {lineClass(line)}">{line}</div>
-    {:else}
-      <div class="log-empty">No log output yet. Start the server to see console output.</div>
-    {/each}
+  <div class="console-output-wrap">
+    <div class="console-output" bind:this={consoleEl} onscroll={handleScroll}>
+      {#each lines as line}
+        <div class="log-line {lineClass(line)}">{line}</div>
+      {:else}
+        <div class="log-empty">No log output yet. Start the server to see console output.</div>
+      {/each}
+    </div>
+    {#if !autoScroll}
+      <button class="scroll-bottom" onclick={() => { autoScroll = true; scrollToBottom(); }}>
+        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/></svg>
+        New lines
+      </button>
+    {/if}
   </div>
   <div class="console-input-bar">
     <span class="console-prompt">&gt;</span>
@@ -271,7 +279,7 @@
       bind:value={command}
       bind:this={inputEl}
       onkeydown={handleKeydown}
-      disabled={activeSession !== null}
+      disabled={activeSession !== null || !isStreamable}
     >
   </div>
 </div>
@@ -323,8 +331,13 @@
   .session-select:hover { border-color: var(--border); }
   .session-select:focus { border-color: var(--accent); }
 
-  .console-output {
+  .console-output-wrap {
     flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  .console-output {
+    height: 100%;
     overflow-y: auto;
     padding: 12px 18px;
     font-family: var(--font-mono);
@@ -384,6 +397,20 @@
     flex-shrink: 0;
   }
   .console-clear:hover { color: var(--text-secondary); border-color: var(--border); }
+
+  .scroll-bottom {
+    position: absolute; bottom: 12px; right: 16px;
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: 100px;
+    background: var(--bg-surface); border: 1px solid var(--border-dim);
+    color: var(--accent); font-family: var(--font-mono);
+    font-size: 0.66rem; font-weight: 500;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    animation: fade-up 0.2s ease-out;
+  }
+  .scroll-bottom:hover { border-color: var(--accent-border); box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+  .scroll-bottom svg { width: 12px; height: 12px; }
 
   @media (max-width: 700px) {
     .console-wrap { height: 400px; }
