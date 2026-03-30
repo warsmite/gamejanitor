@@ -105,7 +105,7 @@ func TestEventBus_EventTypes(t *testing.T) {
 	require.NotEmpty(t, controller.EventGameserverStart)
 	require.NotEmpty(t, controller.EventGameserverStop)
 	require.NotEmpty(t, controller.EventGameserverDelete)
-	require.NotEmpty(t, controller.EventStatusChanged)
+	require.NotEmpty(t, "status_changed")
 	require.NotEmpty(t, controller.EventBackupCreate)
 	require.NotEmpty(t, controller.EventScheduleCreate)
 }

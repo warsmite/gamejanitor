@@ -13,21 +13,6 @@ type WebhookEvent interface {
 	EventActor() Actor
 }
 
-type StatusEvent struct {
-	GameserverID string    `json:"gameserver_id"`
-	OldStatus    string    `json:"old_status"`
-	NewStatus    string    `json:"new_status"`
-	ErrorReason  string    `json:"error_reason,omitempty"`
-	Timestamp    time.Time `json:"timestamp"`
-}
-
-const EventStatusChanged = "status_changed"
-
-func (e StatusEvent) EventType() string        { return EventStatusChanged }
-func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e StatusEvent) EventGameserverID() string { return e.GameserverID }
-func (e StatusEvent) EventActor() Actor          { return SystemActor }
-
 type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[uint64]chan WebhookEvent

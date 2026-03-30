@@ -60,7 +60,7 @@ func SetGameserverStatus(t *testing.T, db *store.DB, gameserverID, newStatus str
 	a := &model.Activity{
 		ID:           uuid.New().String(),
 		GameserverID: &gameserverID,
-		Type:         controller.EventStatusChanged,
+		Type:         "status_changed",
 		Status:       model.ActivityCompleted,
 		Actor:        json.RawMessage(`{}`),
 		Data:         data,

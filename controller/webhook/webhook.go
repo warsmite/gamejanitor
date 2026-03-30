@@ -53,13 +53,6 @@ type WebhookPayload struct {
 
 // Payload data types -- one per event category.
 
-type statusChangedData struct {
-	GameserverID string           `json:"gameserver_id"`
-	OldStatus    string           `json:"old_status"`
-	NewStatus    string           `json:"new_status"`
-	ErrorReason  string           `json:"error_reason,omitempty"`
-	Gameserver   *model.Gameserver `json:"gameserver,omitempty"`
-}
 
 type WebhookWorker struct {
 	store       Store
@@ -125,11 +118,6 @@ func (w *WebhookWorker) subscribeLoop(ctx context.Context) {
 }
 
 func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
-	// Skip non-transition status events (e.g., query data refresh sends running->running)
-	if se, ok := event.(controller.StatusEvent); ok && se.OldStatus == se.NewStatus {
-		return
-	}
-
 	endpoints, err := w.store.ListEnabledWebhookEndpoints()
 	if err != nil {
 		w.log.Error("webhook: failed to list enabled endpoints", "error", err)
@@ -143,19 +131,6 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	// lifecycle events are lightweight with just IDs.
 	var payloadData any
 	switch ev := event.(type) {
-	case controller.StatusEvent:
-		gs, _ := w.gsLookup.GetGameserver(ev.GameserverID)
-		if gs != nil {
-			w.gsLookup.PopulateNode(gs)
-		}
-		payloadData = statusChangedData{
-			GameserverID: ev.GameserverID,
-			OldStatus:    ev.OldStatus,
-			NewStatus:    ev.NewStatus,
-			ErrorReason:  ev.ErrorReason,
-			Gameserver:   gs,
-		}
-
 	// Action events -- self-contained with full resource state
 	case controller.GameserverActionEvent:
 		payloadData = ev

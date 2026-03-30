@@ -64,7 +64,6 @@ export function connect() {
     'gameserver.container_creating', 'gameserver.container_started',
     'gameserver.ready', 'gameserver.container_stopping', 'gameserver.container_stopped',
     'gameserver.container_exited', 'gameserver.error',
-    'status_changed',
     'backup.create', 'backup.delete', 'backup.restore',
     'backup.completed', 'backup.failed',
     'backup.restore.completed', 'backup.restore.failed',

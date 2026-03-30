@@ -32,7 +32,6 @@ const (
 // Lifecycle outcome events — system, drive status changes
 const (
 	EventDepotDownloading  = "gameserver.depot_downloading"
-	EventDepotProgress     = "gameserver.depot_progress"
 	EventDepotComplete     = "gameserver.depot_complete"
 	EventDepotCached       = "gameserver.depot_cached"
 	EventImagePulling      = "gameserver.image_pulling"
@@ -75,7 +74,7 @@ var AllEventTypes = []string{
 	EventScheduleCreate, EventScheduleUpdate, EventScheduleDelete,
 	EventModInstalled, EventModUninstalled,
 	// Lifecycle outcomes
-	EventDepotDownloading, EventDepotProgress, EventDepotComplete, EventDepotCached,
+	EventDepotDownloading, EventDepotComplete, EventDepotCached,
 	EventImagePulling, EventImagePulled,
 	EventContainerCreating, EventContainerStarted,
 	EventGameserverReady,
@@ -83,7 +82,6 @@ var AllEventTypes = []string{
 	EventGameserverError,
 	EventGameserverOperation,
 	// Operation outcomes
-	EventStatusChanged,
 
 	EventBackupCompleted, EventBackupFailed,
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
@@ -109,20 +107,6 @@ func (e DepotDownloadingEvent) EventType() string        { return EventDepotDown
 func (e DepotDownloadingEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e DepotDownloadingEvent) EventGameserverID() string { return e.GameserverID }
 func (e DepotDownloadingEvent) EventActor() Actor         { return SystemActor }
-
-type DepotProgressEvent struct {
-	GameserverID   string    `json:"gameserver_id"`
-	AppID          uint32    `json:"app_id"`
-	CompletedBytes uint64    `json:"completed_bytes"`
-	TotalBytes     uint64    `json:"total_bytes"`
-	Percent        float64   `json:"percent"`
-	Timestamp      time.Time `json:"timestamp"`
-}
-
-func (e DepotProgressEvent) EventType() string        { return EventDepotProgress }
-func (e DepotProgressEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e DepotProgressEvent) EventGameserverID() string { return e.GameserverID }
-func (e DepotProgressEvent) EventActor() Actor         { return SystemActor }
 
 type DepotCompleteEvent struct {
 	GameserverID    string    `json:"gameserver_id"`

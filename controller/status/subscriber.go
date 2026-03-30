@@ -136,15 +136,6 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 	}
 
 	s.log.Info("gameserver status changed", "gameserver", gameserverID, "from", oldStatus, "to", newStatus)
-
-	// Publish derived status_changed event for webhook/SSE consumers
-	s.bus.Publish(controller.StatusEvent{
-		GameserverID: gameserverID,
-		OldStatus:    oldStatus,
-		NewStatus:    newStatus,
-		ErrorReason:  errorReason,
-		Timestamp:    time.Now(),
-	})
 }
 
 func (s *StatusSubscriber) startPolling(gameserverID string) {
@@ -177,7 +168,7 @@ func recordStatusActivity(store Store, gameserverID, newStatus, errorReason stri
 	a := &model.Activity{
 		ID:           uuid.New().String(),
 		GameserverID: &gameserverID,
-		Type:         controller.EventStatusChanged,
+		Type:         "status_changed",
 		Status:       model.ActivityCompleted,
 		Actor:        json.RawMessage(`{}`),
 		Data:         data,

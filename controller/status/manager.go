@@ -76,15 +76,13 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				statusEv, isStatus := ev.(controller.StatusEvent)
-				if !isStatus {
+				readyEv, isReady := ev.(controller.GameserverReadyEvent)
+				if !isReady {
 					continue
 				}
-				if statusEv.NewStatus == controller.StatusRunning {
-					m.crashMu.Lock()
-					delete(m.crashCounts, statusEv.GameserverID)
-					m.crashMu.Unlock()
-				}
+				m.crashMu.Lock()
+				delete(m.crashCounts, readyEv.GameserverID)
+				m.crashMu.Unlock()
 			}
 		}
 	}()

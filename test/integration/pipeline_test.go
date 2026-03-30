@@ -63,7 +63,7 @@ func TestPipeline_StatusChangedEventPublished(t *testing.T) {
 	for time.Now().Before(deadline) {
 		select {
 		case evt := <-ch:
-			if evt.EventType() == controller.EventStatusChanged {
+			if evt.EventType() == "status_changed" {
 				found = true
 			}
 		default:
