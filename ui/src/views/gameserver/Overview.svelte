@@ -101,7 +101,7 @@
 
   onMount(async () => {
     try {
-      const allEvents = await api.events.history({ gameserver_id: id, limit: 40 });
+      const allEvents = await api.events.history({ gameserver_id: id, limit: 200 });
       events = allEvents.filter(e => isRelevantEvent(e.type)).slice(0, 20);
     } catch (e) { console.warn('Overview: failed to load events', e); }
 
@@ -333,7 +333,7 @@
   .player-tag:hover { border-color: var(--border); }
 
   .feed-content { padding: 0 18px 14px; }
-  .feed-list { max-height: 280px; overflow-y: auto; }
+  .feed-list { max-height: 185px; overflow-y: auto; }
   .feed-list::-webkit-scrollbar { width: 4px; }
   .feed-list::-webkit-scrollbar-track { background: transparent; }
   .feed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
