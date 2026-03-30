@@ -4,6 +4,7 @@ set -e
 # Persist all output (install + start) to a log file on the volume
 LOG_DIR=/data/.gamejanitor/logs
 mkdir -p "$LOG_DIR"
+chown -R "$(id -u):$(id -g)" "$LOG_DIR" 2>/dev/null || true
 
 SESSION_LOG="$LOG_DIR/console.log"
 for i in 2 1 0; do
