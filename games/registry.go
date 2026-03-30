@@ -11,6 +11,24 @@ import (
 
 // ── Shared types — importable by gjq, gamejanitorbrowser, gamejanitorhosting ──
 
+// SteamLoginType describes what level of Steam authentication is required to download
+// a game's dedicated server files via SteamCMD/depot downloader.
+type SteamLoginType string
+
+const (
+	// SteamLoginAnonymous means no authentication is needed (default for most games).
+	SteamLoginAnonymous SteamLoginType = "anonymous"
+	// SteamLoginAccount means any authenticated Steam account can download the server files.
+	SteamLoginAccount SteamLoginType = "account"
+	// SteamLoginOwnership means the Steam account must own the game to download server files.
+	SteamLoginOwnership SteamLoginType = "ownership"
+)
+
+// RequiresAuth returns true if this game needs a Steam account to download.
+func (s SteamLoginType) RequiresAuth() bool {
+	return s == SteamLoginAccount || s == SteamLoginOwnership
+}
+
 // GameDef is the full YAML representation of a game definition.
 // All consumers parse the same YAML; each reads the sections it needs.
 type GameDef struct {
@@ -19,6 +37,7 @@ type GameDef struct {
 	Aliases     []string         `yaml:"aliases,omitempty" json:"aliases,omitempty"`
 	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
 	AppID       uint32           `yaml:"app_id,omitempty" json:"app_id,omitempty"`
+	SteamLogin  SteamLoginType   `yaml:"steam_login,omitempty" json:"steam_login,omitempty"`
 	Ports       []Port           `yaml:"ports" json:"ports"`
 	Query       *QueryConfig     `yaml:"query,omitempty" json:"query,omitempty"`
 	Container   *ContainerConfig `yaml:"container,omitempty" json:"container,omitempty"`

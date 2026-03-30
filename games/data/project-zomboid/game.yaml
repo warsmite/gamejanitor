@@ -1,13 +1,67 @@
 id: project-zomboid
 name: "Project Zomboid"
-aliases: [pz]
-app_id: 108600
+aliases: [pz, zomboid]
+description: "Open-world zombie survival with crafting, building, and permadeath"
+app_id: 380870
+steam_login: ownership
 
 ports:
   - name: game
     port: 16261
     protocol: udp
+  - name: game2
+    port: 16262
+    protocol: udp
+  - name: steam
+    port: 8766
+    protocol: udp
+  - name: steam2
+    port: 8767
+    protocol: udp
 
 query:
   protocol: source
+  port: 16261
   supports: [players, rules, keywords]
+
+container:
+  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  recommended_memory_mb: 4096
+  ready_pattern: 'SERVER STARTED'
+  disabled_capabilities: []
+  env:
+    - key: SERVER_NAME
+      default: "Gamejanitor PZ Server"
+      label: "Server Name"
+    - key: SERVER_PASSWORD
+      default: ""
+      label: "Server Password"
+    - key: MAX_PLAYERS
+      default: "16"
+      label: "Max Players"
+      type: number
+    - key: PUBLIC
+      default: "true"
+      label: "Public Server"
+      type: boolean
+      notice: "List this server in the public server browser."
+    - key: MAP
+      default: "Muldraugh, KY"
+      label: "Map"
+    - key: ADMIN_PASSWORD
+      default: ""
+      label: "Admin Password"
+      autogenerate: password
+    - key: MOD_IDS
+      default: ""
+      label: "Workshop Mod IDs"
+      notice: "Semicolon-separated list of Workshop mod IDs (e.g. 2392987599;2169435993)."
+    - key: GAME_PORT
+      default: "16261"
+      system: true
+    - key: SAVE_TIMEOUT_SECONDS
+      default: "10"
+      system: true
+
+assets:
+  icon: project-zomboid-icon.ico

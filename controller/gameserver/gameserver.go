@@ -64,6 +64,14 @@ type ModReconciler interface {
 	Reconcile(ctx context.Context, gameserverID string) error
 }
 
+// SteamDepotService downloads game files for games that require authenticated Steam downloads.
+type SteamDepotService interface {
+	// HasCredentials returns true if Steam credentials are configured.
+	HasCredentials() bool
+	// EnsureDepot downloads a depot if not cached or outdated. Returns the path to cached game files.
+	EnsureDepot(ctx context.Context, appID uint32, branch string) (string, error)
+}
+
 type GameserverService struct {
 	store           Store
 	dispatcher      *orchestrator.Dispatcher
@@ -71,6 +79,7 @@ type GameserverService struct {
 	broadcaster     *controller.EventBus
 	readyWatcher    ReadyWatcher
 	modReconciler   ModReconciler
+	steamDepot      SteamDepotService
 	settingsSvc     *settings.SettingsService
 	gameStore       *games.GameStore
 	backupStore     BackupStore
@@ -88,6 +97,10 @@ func (s *GameserverService) SetPortProbe(fn func(int) bool) {
 
 func (s *GameserverService) SetModReconciler(r ModReconciler) {
 	s.modReconciler = r
+}
+
+func (s *GameserverService) SetSteamDepot(svc SteamDepotService) {
+	s.steamDepot = svc
 }
 
 func (s *GameserverService) SetActivityTracker(tracker *ActivityTracker) {

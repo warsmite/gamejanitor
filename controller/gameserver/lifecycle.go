@@ -131,6 +131,33 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		}()
 	}
 
+	// Download depot for games that require authenticated Steam downloads.
+	// This fetches game files to a shared cache before the container starts,
+	// so the container can skip the SteamCMD install step.
+	var depotDir string
+	if game.SteamLogin.RequiresAuth() && game.AppID != 0 {
+		if s.steamDepot == nil || !s.steamDepot.HasCredentials() {
+			s.broadcaster.Publish(controller.GameserverErrorEvent{
+				GameserverID: id,
+				Reason:       "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.",
+				Timestamp:    time.Now(),
+			})
+			return fmt.Errorf("game %s requires Steam auth but no credentials configured", game.ID)
+		}
+
+		s.log.Info("downloading authenticated depot", "gameserver_id", id, "app_id", game.AppID)
+		var depotErr error
+		depotDir, depotErr = s.steamDepot.EnsureDepot(ctx, game.AppID, "public")
+		if depotErr != nil {
+			s.broadcaster.Publish(controller.GameserverErrorEvent{
+				GameserverID: id,
+				Reason:       "Failed to download game files from Steam. Check your Steam account credentials.",
+				Timestamp:    time.Now(),
+			})
+			return fmt.Errorf("depot download for gameserver %s: %w", id, depotErr)
+		}
+	}
+
 	// Pull image
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
@@ -177,6 +204,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 	if defaultsDir != "" {
 		binds = append(binds, defaultsDir+":/defaults:ro")
+	}
+	if depotDir != "" {
+		binds = append(binds, depotDir+":/depot:ro")
 	}
 
 	// Remove old container if exists (stale from prior run/crash).
