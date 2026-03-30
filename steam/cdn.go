@@ -129,6 +129,12 @@ func (c *CDNClient) DownloadChunksParallel(ctx context.Context, depotID uint32, 
 					return
 				}
 
+				if w.chunk.Checksum != 0 && adler32Seed0(data) != w.chunk.Checksum {
+					errCh <- fmt.Errorf("chunk %s: checksum mismatch", w.chunk.ChunkIDHex())
+					cancel()
+					return
+				}
+
 				if uint32(len(data)) != w.chunk.DecompressedSize {
 					errCh <- fmt.Errorf("chunk %s: size mismatch (got %d, want %d)", w.chunk.ChunkIDHex(), len(data), w.chunk.DecompressedSize)
 					cancel()
@@ -192,6 +198,18 @@ func isCDNHostError(err error) bool {
 		strings.Contains(msg, "certificate") ||
 		strings.Contains(msg, "connection refused") ||
 		strings.Contains(msg, "no such host")
+}
+
+// adler32Seed0 computes Adler32 with initial value 0.
+// Steam uses this variant (not the standard seed of 1) for chunk checksums.
+func adler32Seed0(data []byte) uint32 {
+	var a, b uint32 = 0, 0
+	const mod = 65521
+	for _, d := range data {
+		a = (a + uint32(d)) % mod
+		b = (b + a) % mod
+	}
+	return (b << 16) | a
 }
 
 func (c *CDNClient) doDownload(ctx context.Context, url string) ([]byte, error) {
