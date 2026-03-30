@@ -50,16 +50,63 @@
   let events = $state<Activity[]>([]);
   let unsub: (() => void) | null = null;
 
+  // Events worth showing in the activity feed — keyed by type with label and dot color.
+  // Anything not in this map is filtered out (status_changed, stats, query, operation,
+  // intermediate lifecycle steps like image_pulling, container_creating, etc.)
+  const activityEvents: Record<string, { label: string; color: string }> = {
+    // User actions
+    'gameserver.create':     { label: 'Created',                  color: 'green' },
+    'gameserver.start':      { label: 'Started',                  color: 'green' },
+    'gameserver.stop':       { label: 'Stopped',                  color: 'gray' },
+    'gameserver.restart':    { label: 'Restarted',                color: 'orange' },
+    'gameserver.update_game':{ label: 'Game updated',             color: 'orange' },
+    'gameserver.reinstall':  { label: 'Reinstalled',              color: 'orange' },
+    'gameserver.migrate':    { label: 'Migrated',                 color: 'orange' },
+    'gameserver.update':     { label: 'Settings changed',         color: 'gray' },
+    // Activity table short names
+    'start':                 { label: 'Started',                  color: 'green' },
+    'stop':                  { label: 'Stopped',                  color: 'gray' },
+    'restart':               { label: 'Restarted',                color: 'orange' },
+    'update_game':           { label: 'Game updated',             color: 'orange' },
+    'reinstall':             { label: 'Reinstalled',              color: 'orange' },
+    'migrate':               { label: 'Migrated',                 color: 'orange' },
+    'create_backup':         { label: 'Backup started',           color: 'orange' },
+    'restore_backup':        { label: 'Restore started',          color: 'orange' },
+    // Lifecycle milestones
+    'gameserver.ready':      { label: 'Ready — accepting players', color: 'green' },
+    'gameserver.container_exited': { label: 'Crashed',            color: 'red' },
+    'gameserver.error':      { label: 'Error',                    color: 'red' },
+    // Backups
+    'backup.create':         { label: 'Backup started',           color: 'orange' },
+    'backup.completed':      { label: 'Backup completed',         color: 'green' },
+    'backup.failed':         { label: 'Backup failed',            color: 'red' },
+    'backup.restore':        { label: 'Restore started',          color: 'orange' },
+    'backup.restore.completed': { label: 'Restore completed',     color: 'green' },
+    'backup.restore.failed': { label: 'Restore failed',           color: 'red' },
+    'backup.delete':         { label: 'Backup deleted',           color: 'gray' },
+    // Schedules
+    'schedule.create':       { label: 'Schedule created',         color: 'gray' },
+    'schedule.update':       { label: 'Schedule updated',         color: 'gray' },
+    'schedule.delete':       { label: 'Schedule deleted',         color: 'gray' },
+    'schedule.task.completed': { label: 'Scheduled task ran',     color: 'green' },
+    'schedule.task.failed':  { label: 'Scheduled task failed',    color: 'red' },
+    // Mods
+    'mod.installed':         { label: 'Mod installed',            color: 'green' },
+    'mod.uninstalled':       { label: 'Mod removed',              color: 'gray' },
+  };
+
+  function isRelevantEvent(type: string): boolean {
+    return type in activityEvents;
+  }
+
   onMount(async () => {
-    // Load activity feed
     try {
       const allEvents = await api.events.history({ gameserver_id: id, limit: 40 });
-      events = allEvents.slice(0, 20);
+      events = allEvents.filter(e => isRelevantEvent(e.type)).slice(0, 20);
     } catch (e) { console.warn('Overview: failed to load events', e); }
 
-    // SSE: activity feed only — stats/query/status handled by store
     unsub = onGameserverEvent(id, (data: any) => {
-      if (data.type === 'gameserver.stats' || data.type === 'gameserver.query' || data.type === 'gameserver.operation') return;
+      if (!isRelevantEvent(data.type)) return;
 
       const event: Activity = {
         id: crypto.randomUUID(),
@@ -82,60 +129,12 @@
   });
 
   function eventLabel(type: string, data?: any): string {
-    if (type === 'gameserver.error' && data?.reason) {
-      return `Error: ${data.reason}`;
-    }
-    const labels: Record<string, string> = {
-      'gameserver.create': 'Gameserver created',
-      'gameserver.start': 'Start requested',
-      'gameserver.stop': 'Stop requested',
-      'gameserver.restart': 'Restart requested',
-      'gameserver.update_game': 'Game update requested',
-      'gameserver.reinstall': 'Reinstall requested',
-      'gameserver.migrate': 'Migration requested',
-      // Activity table uses short names
-      'start': 'Start requested',
-      'stop': 'Stop requested',
-      'restart': 'Restart requested',
-      'update_game': 'Game update requested',
-      'reinstall': 'Reinstall requested',
-      'migrate': 'Migration requested',
-      'create_backup': 'Backup started',
-      'restore_backup': 'Restore started',
-      'gameserver.depot_downloading': 'Downloading game files...',
-      'gameserver.depot_complete': 'Game files downloaded',
-      'gameserver.depot_cached': 'Game files up to date',
-      'gameserver.image_pulling': 'Pulling image...',
-      'gameserver.image_pulled': 'Image pulled',
-      'gameserver.container_creating': 'Creating container',
-      'gameserver.container_started': 'Container started',
-      'gameserver.ready': 'Ready — accepting players',
-      'gameserver.container_stopping': 'Stopping container',
-      'gameserver.container_stopped': 'Container stopped',
-      'gameserver.container_exited': 'Container exited',
-      'gameserver.error': 'Error',
-      'backup.create': 'Backup started',
-      'backup.completed': 'Backup completed',
-      'backup.failed': 'Backup failed',
-      'backup.restore': 'Restore started',
-      'backup.restore.completed': 'Restore completed',
-      'backup.restore.failed': 'Restore failed',
-      'backup.delete': 'Backup deleted',
-      'schedule.create': 'Schedule created',
-      'schedule.update': 'Schedule updated',
-      'schedule.delete': 'Schedule deleted',
-      'schedule.task.completed': 'Scheduled task completed',
-      'schedule.task.failed': 'Scheduled task failed',
-    };
-    return labels[type] || type.replace(/\./g, ' ');
+    if (type === 'gameserver.error' && data?.reason) return `Error: ${data.reason}`;
+    return activityEvents[type]?.label || type.replace(/\./g, ' ');
   }
 
   function eventDotColor(type: string): string {
-    if (type.includes('ready') || type.includes('started') || type.includes('completed')) return 'green';
-    if (type.includes('error') || type.includes('failed') || type.includes('exited')) return 'red';
-    if (type.includes('pulling') || type.includes('creating') || type.includes('stopping') || type.includes('start') || type.includes('stop') || type.includes('restart') || type.includes('downloading')) return 'orange';
-    if (type.includes('cached')) return 'green';
-    return 'gray';
+    return activityEvents[type]?.color || 'gray';
   }
 
   function timeAgo(iso: string): string {
