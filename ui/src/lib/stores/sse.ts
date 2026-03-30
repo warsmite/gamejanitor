@@ -57,6 +57,8 @@ export function connect() {
     'gameserver.create', 'gameserver.update', 'gameserver.delete',
     'gameserver.start', 'gameserver.stop', 'gameserver.restart',
     'gameserver.update_game', 'gameserver.reinstall', 'gameserver.migrate',
+    'gameserver.depot_downloading', 'gameserver.depot_progress',
+    'gameserver.depot_complete', 'gameserver.depot_cached',
     'gameserver.image_pulling', 'gameserver.image_pulled',
     'gameserver.container_creating', 'gameserver.container_started',
     'gameserver.ready', 'gameserver.container_stopping', 'gameserver.container_stopped',

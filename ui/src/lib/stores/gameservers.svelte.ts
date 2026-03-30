@@ -16,6 +16,7 @@ export interface GameserverState {
 }
 
 const operationStartEvents: Record<string, string> = {
+  'gameserver.depot_downloading': 'Downloading game files...',
   'backup.create': 'Backing up...',
   'backup.restore': 'Restoring...',
   'gameserver.update_game': 'Updating...',
@@ -24,6 +25,7 @@ const operationStartEvents: Record<string, string> = {
 };
 
 const operationClearEvents: Record<string, string[]> = {
+  'gameserver.depot_downloading': ['gameserver.depot_complete', 'gameserver.depot_cached', 'gameserver.image_pulling', 'gameserver.error'],
   'backup.create': ['backup.completed', 'backup.failed'],
   'backup.restore': ['backup.restore.completed', 'backup.restore.failed', 'gameserver.ready', 'gameserver.error'],
   'gameserver.update_game': ['gameserver.ready', 'gameserver.error'],

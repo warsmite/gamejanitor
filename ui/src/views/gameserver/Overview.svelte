@@ -73,6 +73,10 @@
       'gameserver.update_game': 'Game update requested',
       'gameserver.reinstall': 'Reinstall requested',
       'gameserver.migrate': 'Migration requested',
+      'gameserver.depot_downloading': 'Downloading game files...',
+      'gameserver.depot_progress': 'Downloading game files...',
+      'gameserver.depot_complete': 'Game files downloaded',
+      'gameserver.depot_cached': 'Game files up to date',
       'gameserver.image_pulling': 'Pulling image...',
       'gameserver.image_pulled': 'Image pulled',
       'gameserver.container_creating': 'Creating container',
@@ -101,7 +105,8 @@
   function eventDotColor(type: string): string {
     if (type.includes('ready') || type.includes('started') || type.includes('completed')) return 'green';
     if (type.includes('error') || type.includes('failed') || type.includes('exited')) return 'red';
-    if (type.includes('pulling') || type.includes('creating') || type.includes('stopping') || type.includes('start') || type.includes('stop') || type.includes('restart')) return 'orange';
+    if (type.includes('pulling') || type.includes('creating') || type.includes('stopping') || type.includes('start') || type.includes('stop') || type.includes('restart') || type.includes('downloading')) return 'orange';
+    if (type.includes('cached')) return 'green';
     return 'gray';
   }
 
