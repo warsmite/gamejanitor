@@ -54,9 +54,13 @@ type EnsureDepotResult struct {
 	BytesDownloaded uint64
 }
 
+// OnProgressFunc is called during depot downloads with progress updates.
+type OnProgressFunc func(completedBytes, totalBytes uint64, completedChunks, totalChunks int)
+
 // EnsureDepot downloads a depot if not already cached or if a newer version is available.
 // Returns the path to the cached game files directory, ready to be bind-mounted.
-func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) (*EnsureDepotResult, error) {
+// onProgress is called during download. May be nil.
+func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, onProgress OnProgressFunc) (*EnsureDepotResult, error) {
 	if branch == "" {
 		branch = "public"
 	}
@@ -142,6 +146,9 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string) 
 						"chunks", fmt.Sprintf("%d/%d", p.CompletedChunks, p.TotalChunks),
 						"downloaded_mb", p.CompletedBytes/1024/1024,
 					)
+				}
+				if onProgress != nil {
+					onProgress(p.CompletedBytes, p.TotalBytes, p.CompletedChunks, p.TotalChunks)
 				}
 			},
 		})

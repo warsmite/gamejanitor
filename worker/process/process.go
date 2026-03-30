@@ -591,8 +591,8 @@ func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserv
 	return worker.PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
-func (w *ProcessWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
-	return worker.EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken)
+func (w *ProcessWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
+	return worker.EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken, onProgress)
 }
 
 // ListGameserverContainers scans the processes directory for gameservers and checks

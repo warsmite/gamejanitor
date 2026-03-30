@@ -4,6 +4,12 @@
 import { api, type Gameserver, type GameserverStats, type QueryData, type Game, type Backup, type Schedule } from '$lib/api';
 import { onEvent } from './sse';
 
+export interface DepotProgressData {
+  percent: number;
+  completedBytes: number;
+  totalBytes: number;
+}
+
 export interface GameserverState {
   gameserver: Gameserver;
   stats: GameserverStats | null;
@@ -11,6 +17,7 @@ export interface GameserverState {
   logLines: string[];
   containerStartedAt: string;
   activeOperation: string | null;
+  depotProgress: DepotProgressData | null;
   backups: Backup[] | null;       // null = not loaded yet
   schedules: Schedule[] | null;   // null = not loaded yet
 }
@@ -236,6 +243,18 @@ class GameserverStore {
         state.activeOperation = null;
       }
 
+      // Depot download progress
+      if (data.type === 'gameserver.depot_progress') {
+        state.depotProgress = {
+          percent: data.percent ?? 0,
+          completedBytes: data.completed_bytes ?? 0,
+          totalBytes: data.total_bytes ?? 0,
+        };
+      }
+      if (data.type === 'gameserver.depot_complete' || data.type === 'gameserver.depot_cached' || data.type === 'gameserver.error') {
+        state.depotProgress = null;
+      }
+
       // Re-fetch gameserver on update (name/config changed)
       if (data.type === 'gameserver.update') {
         api.gameservers.get(data.gameserver_id).then(gs => {
@@ -331,6 +350,7 @@ class GameserverStore {
       logLines: [],
       containerStartedAt: '',
       activeOperation: null,
+      depotProgress: null,
       backups: null,
       schedules: null,
     };

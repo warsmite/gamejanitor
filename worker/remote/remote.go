@@ -377,8 +377,8 @@ func (w *RemoteWorker) PrepareGameScripts(ctx context.Context, gameID, gameserve
 	return resp.ScriptDir, resp.DefaultsDir, nil
 }
 
-func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
-	resp, err := w.client.EnsureDepot(ctx, &pb.EnsureDepotRequest{
+func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
+	stream, err := w.client.EnsureDepot(ctx, &pb.EnsureDepotRequest{
 		AppId:        appID,
 		Branch:       branch,
 		AccountName:  accountName,
@@ -387,11 +387,33 @@ func (w *RemoteWorker) EnsureDepot(ctx context.Context, appID uint32, branch, ac
 	if err != nil {
 		return nil, err
 	}
-	return &worker.DepotResult{
-		DepotDir:        resp.DepotDir,
-		Cached:          resp.Cached,
-		BytesDownloaded: resp.BytesDownloaded,
-	}, nil
+
+	var result *worker.DepotResult
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			if result != nil {
+				return result, nil
+			}
+			return nil, err
+		}
+
+		// Final message has depot_dir set
+		if msg.DepotDir != "" {
+			result = &worker.DepotResult{
+				DepotDir:        msg.DepotDir,
+				Cached:          msg.Cached,
+				BytesDownloaded: msg.BytesDownloaded,
+			}
+		} else if onProgress != nil {
+			onProgress(worker.DepotProgress{
+				CompletedBytes:  msg.CompletedBytes,
+				TotalBytes:      msg.TotalBytes,
+				CompletedChunks: int(msg.CompletedChunks),
+				TotalChunks:     int(msg.TotalChunks),
+			})
+		}
+	}
 }
 
 func (w *RemoteWorker) Sendbeat(ctx context.Context, req *pb.HeartbeatRequest) error {

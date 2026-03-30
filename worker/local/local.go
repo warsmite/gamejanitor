@@ -237,8 +237,8 @@ func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserver
 	return worker.PrepareGameScripts(w.GameStore, w.DataDir, gameID, gameserverID)
 }
 
-func (w *LocalWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string) (*worker.DepotResult, error) {
-	return worker.EnsureDepot(ctx, w.DataDir, w.Log, appID, branch, accountName, refreshToken)
+func (w *LocalWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
+	return worker.EnsureDepot(ctx, w.DataDir, w.Log, appID, branch, accountName, refreshToken, onProgress)
 }
 
 func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {

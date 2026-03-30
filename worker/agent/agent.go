@@ -403,16 +403,27 @@ func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScrip
 	return resp, nil
 }
 
-func (a *Agent) EnsureDepot(ctx context.Context, req *pb.EnsureDepotRequest) (*pb.EnsureDepotResponse, error) {
-	result, err := worker.EnsureDepot(ctx, a.dataDir, a.log, req.AppId, req.Branch, req.AccountName, req.RefreshToken)
-	if err != nil {
-		return nil, err
+func (a *Agent) EnsureDepot(req *pb.EnsureDepotRequest, stream pb.WorkerService_EnsureDepotServer) error {
+	onProgress := func(p worker.DepotProgress) {
+		stream.Send(&pb.EnsureDepotProgress{
+			CompletedBytes:  p.CompletedBytes,
+			TotalBytes:      p.TotalBytes,
+			CompletedChunks: int32(p.CompletedChunks),
+			TotalChunks:     int32(p.TotalChunks),
+		})
 	}
-	return &pb.EnsureDepotResponse{
+
+	result, err := worker.EnsureDepot(stream.Context(), a.dataDir, a.log, req.AppId, req.Branch, req.AccountName, req.RefreshToken, onProgress)
+	if err != nil {
+		return err
+	}
+
+	// Final message with result
+	return stream.Send(&pb.EnsureDepotProgress{
 		DepotDir:        result.DepotDir,
 		Cached:          result.Cached,
 		BytesDownloaded: result.BytesDownloaded,
-	}, nil
+	})
 }
 
 func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {

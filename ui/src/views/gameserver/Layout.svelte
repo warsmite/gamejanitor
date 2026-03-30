@@ -8,6 +8,13 @@
 
   const connAddr = $derived(gameserverStore.connectionAddress(id));
 
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(0)} MB`;
+    return `${(bytes / 1073741824).toFixed(1)} GB`;
+  }
+
   const can = (p: string) => gameserverStore.can(p);
   import type { Snippet } from 'svelte';
 
@@ -20,6 +27,7 @@
   const gameserver = $derived(gsState?.gameserver ?? null);
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
   const activeOperation = $derived(gsState?.activeOperation ?? null);
+  const depotProgress = $derived(gsState?.depotProgress ?? null);
 
   // Mods tab visibility: fetch config to check if game supports mods
   let hasModsSupport = $state(false);
@@ -149,7 +157,11 @@
           {#if activeOperation}
             <span class="op-badge">
               <span class="op-dot"></span>
-              {operationLabels[activeOperation] || activeOperation}
+              {#if depotProgress}
+                Downloading... {depotProgress.percent.toFixed(0)}% ({formatBytes(depotProgress.completedBytes)} / {formatBytes(depotProgress.totalBytes)})
+              {:else}
+                {operationLabels[activeOperation] || activeOperation}
+              {/if}
             </span>
           {/if}
           <StatusPill status={gameserver.status} />

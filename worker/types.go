@@ -9,6 +9,14 @@ type DepotResult struct {
 	BytesDownloaded uint64 // 0 if cached
 }
 
+// DepotProgress reports download progress during EnsureDepot.
+type DepotProgress struct {
+	CompletedBytes  uint64
+	TotalBytes      uint64
+	CompletedChunks int
+	TotalChunks     int
+}
+
 type ContainerOptions struct {
 	Name          string
 	Image         string

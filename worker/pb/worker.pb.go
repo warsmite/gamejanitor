@@ -3406,29 +3406,37 @@ func (x *EnsureDepotRequest) GetRefreshToken() string {
 	return ""
 }
 
-type EnsureDepotResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	DepotDir        string                 `protobuf:"bytes,1,opt,name=depot_dir,json=depotDir,proto3" json:"depot_dir,omitempty"`
-	Cached          bool                   `protobuf:"varint,2,opt,name=cached,proto3" json:"cached,omitempty"`
-	BytesDownloaded uint64                 `protobuf:"varint,3,opt,name=bytes_downloaded,json=bytesDownloaded,proto3" json:"bytes_downloaded,omitempty"`
+// Streamed during EnsureDepot. Progress messages have depot_dir empty.
+// The final message has depot_dir set and marks completion.
+type EnsureDepotProgress struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Set only on the final message — indicates completion.
+	DepotDir        string `protobuf:"bytes,1,opt,name=depot_dir,json=depotDir,proto3" json:"depot_dir,omitempty"`
+	Cached          bool   `protobuf:"varint,2,opt,name=cached,proto3" json:"cached,omitempty"`
+	BytesDownloaded uint64 `protobuf:"varint,3,opt,name=bytes_downloaded,json=bytesDownloaded,proto3" json:"bytes_downloaded,omitempty"`
+	// Set on progress messages during download.
+	CompletedBytes  uint64 `protobuf:"varint,4,opt,name=completed_bytes,json=completedBytes,proto3" json:"completed_bytes,omitempty"`
+	TotalBytes      uint64 `protobuf:"varint,5,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
+	CompletedChunks int32  `protobuf:"varint,6,opt,name=completed_chunks,json=completedChunks,proto3" json:"completed_chunks,omitempty"`
+	TotalChunks     int32  `protobuf:"varint,7,opt,name=total_chunks,json=totalChunks,proto3" json:"total_chunks,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *EnsureDepotResponse) Reset() {
-	*x = EnsureDepotResponse{}
+func (x *EnsureDepotProgress) Reset() {
+	*x = EnsureDepotProgress{}
 	mi := &file_worker_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnsureDepotResponse) String() string {
+func (x *EnsureDepotProgress) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnsureDepotResponse) ProtoMessage() {}
+func (*EnsureDepotProgress) ProtoMessage() {}
 
-func (x *EnsureDepotResponse) ProtoReflect() protoreflect.Message {
+func (x *EnsureDepotProgress) ProtoReflect() protoreflect.Message {
 	mi := &file_worker_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3440,28 +3448,56 @@ func (x *EnsureDepotResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnsureDepotResponse.ProtoReflect.Descriptor instead.
-func (*EnsureDepotResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use EnsureDepotProgress.ProtoReflect.Descriptor instead.
+func (*EnsureDepotProgress) Descriptor() ([]byte, []int) {
 	return file_worker_proto_rawDescGZIP(), []int{64}
 }
 
-func (x *EnsureDepotResponse) GetDepotDir() string {
+func (x *EnsureDepotProgress) GetDepotDir() string {
 	if x != nil {
 		return x.DepotDir
 	}
 	return ""
 }
 
-func (x *EnsureDepotResponse) GetCached() bool {
+func (x *EnsureDepotProgress) GetCached() bool {
 	if x != nil {
 		return x.Cached
 	}
 	return false
 }
 
-func (x *EnsureDepotResponse) GetBytesDownloaded() uint64 {
+func (x *EnsureDepotProgress) GetBytesDownloaded() uint64 {
 	if x != nil {
 		return x.BytesDownloaded
+	}
+	return 0
+}
+
+func (x *EnsureDepotProgress) GetCompletedBytes() uint64 {
+	if x != nil {
+		return x.CompletedBytes
+	}
+	return 0
+}
+
+func (x *EnsureDepotProgress) GetTotalBytes() uint64 {
+	if x != nil {
+		return x.TotalBytes
+	}
+	return 0
+}
+
+func (x *EnsureDepotProgress) GetCompletedChunks() int32 {
+	if x != nil {
+		return x.CompletedChunks
+	}
+	return 0
+}
+
+func (x *EnsureDepotProgress) GetTotalChunks() int32 {
+	if x != nil {
+		return x.TotalChunks
 	}
 	return 0
 }
@@ -3694,11 +3730,16 @@ const file_worker_proto_rawDesc = "" +
 	"\x06app_id\x18\x01 \x01(\rR\x05appId\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12!\n" +
 	"\faccount_name\x18\x03 \x01(\tR\vaccountName\x12#\n" +
-	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\"u\n" +
-	"\x13EnsureDepotResponse\x12\x1b\n" +
+	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\"\x8d\x02\n" +
+	"\x13EnsureDepotProgress\x12\x1b\n" +
 	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir\x12\x16\n" +
 	"\x06cached\x18\x02 \x01(\bR\x06cached\x12)\n" +
-	"\x10bytes_downloaded\x18\x03 \x01(\x04R\x0fbytesDownloaded2\x8d\x12\n" +
+	"\x10bytes_downloaded\x18\x03 \x01(\x04R\x0fbytesDownloaded\x12'\n" +
+	"\x0fcompleted_bytes\x18\x04 \x01(\x04R\x0ecompletedBytes\x12\x1f\n" +
+	"\vtotal_bytes\x18\x05 \x01(\x04R\n" +
+	"totalBytes\x12)\n" +
+	"\x10completed_chunks\x18\x06 \x01(\x05R\x0fcompletedChunks\x12!\n" +
+	"\ftotal_chunks\x18\a \x01(\x05R\vtotalChunks2\x8f\x12\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
@@ -3731,8 +3772,8 @@ const file_worker_proto_rawDesc = "" +
 	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x19.worker.ContainerEventMsg0\x01\x12m\n" +
 	"\x18ListGameserverContainers\x12'.worker.ListGameserverContainersRequest\x1a(.worker.ListGameserverContainersResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
-	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse\x12F\n" +
-	"\vEnsureDepot\x12\x1a.worker.EnsureDepotRequest\x1a\x1b.worker.EnsureDepotResponse2\xde\x01\n" +
+	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse\x12H\n" +
+	"\vEnsureDepot\x12\x1a.worker.EnsureDepotRequest\x1a\x1b.worker.EnsureDepotProgress0\x012\xde\x01\n" +
 	"\x11ControllerService\x12=\n" +
 	"\bRegister\x12\x17.worker.RegisterRequest\x1a\x18.worker.RegisterResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12H\n" +
@@ -3816,7 +3857,7 @@ var file_worker_proto_goTypes = []any{
 	(*PrepareGameScriptsRequest)(nil),        // 61: worker.PrepareGameScriptsRequest
 	(*PrepareGameScriptsResponse)(nil),       // 62: worker.PrepareGameScriptsResponse
 	(*EnsureDepotRequest)(nil),               // 63: worker.EnsureDepotRequest
-	(*EnsureDepotResponse)(nil),              // 64: worker.EnsureDepotResponse
+	(*EnsureDepotProgress)(nil),              // 64: worker.EnsureDepotProgress
 }
 var file_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
@@ -3884,7 +3925,7 @@ var file_worker_proto_depIdxs = []int32{
 	59, // 62: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
 	53, // 63: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
 	62, // 64: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
-	64, // 65: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotResponse
+	64, // 65: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
 	55, // 66: worker.ControllerService.Register:output_type -> worker.RegisterResponse
 	53, // 67: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
 	57, // 68: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse

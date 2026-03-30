@@ -52,8 +52,8 @@ service WorkerService {
     // Game scripts — worker extracts scripts locally from embedded game data
     rpc PrepareGameScripts(PrepareGameScriptsRequest) returns (PrepareGameScriptsResponse);
 
-    // Steam depot — worker downloads game files for auth-required games
-    rpc EnsureDepot(EnsureDepotRequest) returns (EnsureDepotResponse);
+    // Steam depot — worker downloads game files, streams progress back
+    rpc EnsureDepot(EnsureDepotRequest) returns (stream EnsureDepotProgress);
 }
 
 // ControllerService runs on the controller and accepts worker registrations/heartbeats.
@@ -366,8 +366,17 @@ message EnsureDepotRequest {
     string account_name = 3;
     string refresh_token = 4;
 }
-message EnsureDepotResponse {
+// Streamed during EnsureDepot. Progress messages have depot_dir empty.
+// The final message has depot_dir set and marks completion.
+message EnsureDepotProgress {
+    // Set only on the final message — indicates completion.
     string depot_dir = 1;
     bool cached = 2;
     uint64 bytes_downloaded = 3;
+
+    // Set on progress messages during download.
+    uint64 completed_bytes = 4;
+    uint64 total_bytes = 5;
+    int32 completed_chunks = 6;
+    int32 total_chunks = 7;
 }

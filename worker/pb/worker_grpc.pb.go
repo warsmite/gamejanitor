@@ -95,8 +95,8 @@ type WorkerServiceClient interface {
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
 	PrepareGameScripts(ctx context.Context, in *PrepareGameScriptsRequest, opts ...grpc.CallOption) (*PrepareGameScriptsResponse, error)
-	// Steam depot — worker downloads game files for auth-required games
-	EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (*EnsureDepotResponse, error)
+	// Steam depot — worker downloads game files, streams progress back
+	EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EnsureDepotProgress], error)
 }
 
 type workerServiceClient struct {
@@ -439,15 +439,24 @@ func (c *workerServiceClient) PrepareGameScripts(ctx context.Context, in *Prepar
 	return out, nil
 }
 
-func (c *workerServiceClient) EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (*EnsureDepotResponse, error) {
+func (c *workerServiceClient) EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EnsureDepotProgress], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EnsureDepotResponse)
-	err := c.cc.Invoke(ctx, WorkerService_EnsureDepot_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_EnsureDepot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[EnsureDepotRequest, EnsureDepotProgress]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_EnsureDepotClient = grpc.ServerStreamingClient[EnsureDepotProgress]
 
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
@@ -493,8 +502,8 @@ type WorkerServiceServer interface {
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
 	PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error)
-	// Steam depot — worker downloads game files for auth-required games
-	EnsureDepot(context.Context, *EnsureDepotRequest) (*EnsureDepotResponse, error)
+	// Steam depot — worker downloads game files, streams progress back
+	EnsureDepot(*EnsureDepotRequest, grpc.ServerStreamingServer[EnsureDepotProgress]) error
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -592,8 +601,8 @@ func (UnimplementedWorkerServiceServer) Heartbeat(context.Context, *HeartbeatReq
 func (UnimplementedWorkerServiceServer) PrepareGameScripts(context.Context, *PrepareGameScriptsRequest) (*PrepareGameScriptsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareGameScripts not implemented")
 }
-func (UnimplementedWorkerServiceServer) EnsureDepot(context.Context, *EnsureDepotRequest) (*EnsureDepotResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method EnsureDepot not implemented")
+func (UnimplementedWorkerServiceServer) EnsureDepot(*EnsureDepotRequest, grpc.ServerStreamingServer[EnsureDepotProgress]) error {
+	return status.Error(codes.Unimplemented, "method EnsureDepot not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -1088,23 +1097,16 @@ func _WorkerService_PrepareGameScripts_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_EnsureDepot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnsureDepotRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _WorkerService_EnsureDepot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(EnsureDepotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(WorkerServiceServer).EnsureDepot(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkerService_EnsureDepot_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).EnsureDepot(ctx, req.(*EnsureDepotRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(WorkerServiceServer).EnsureDepot(m, &grpc.GenericServerStream[EnsureDepotRequest, EnsureDepotProgress]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_EnsureDepotServer = grpc.ServerStreamingServer[EnsureDepotProgress]
 
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -1205,10 +1207,6 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "PrepareGameScripts",
 			Handler:    _WorkerService_PrepareGameScripts_Handler,
 		},
-		{
-			MethodName: "EnsureDepot",
-			Handler:    _WorkerService_EnsureDepot_Handler,
-		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1239,6 +1237,11 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "WatchEvents",
 			Handler:       _WorkerService_WatchEvents_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "EnsureDepot",
+			Handler:       _WorkerService_EnsureDepot_Handler,
 			ServerStreams: true,
 		},
 	},

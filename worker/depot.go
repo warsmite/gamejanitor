@@ -9,12 +9,24 @@ import (
 
 // EnsureDepot downloads game files for Steam games to the worker's local cache.
 // Shared implementation used by LocalWorker, ProcessWorker, and the worker Agent.
-func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID uint32, branch, accountName, refreshToken string) (*DepotResult, error) {
+func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error) {
 	creds := &staticCredentials{account: accountName, token: refreshToken}
 	svc := steam.NewService(log, dataDir, creds)
 	defer svc.Close()
 
-	result, err := svc.EnsureDepot(ctx, appID, branch)
+	var progressFn steam.OnProgressFunc
+	if onProgress != nil {
+		progressFn = func(completedBytes, totalBytes uint64, completedChunks, totalChunks int) {
+			onProgress(DepotProgress{
+				CompletedBytes:  completedBytes,
+				TotalBytes:      totalBytes,
+				CompletedChunks: completedChunks,
+				TotalChunks:     totalChunks,
+			})
+		}
+	}
+
+	result, err := svc.EnsureDepot(ctx, appID, branch, progressFn)
 	if err != nil {
 		return nil, err
 	}
