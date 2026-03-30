@@ -420,6 +420,54 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, resp)
 }
 
+// OperationStream is an SSE endpoint that streams real-time operation state
+// for a single gameserver. Used by the UI detail page for live progress during
+// downloads and other operations. Only active watchers receive updates —
+// no load on the event bus.
+func (h *GameserverHandlers) OperationStream(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		respondError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch, unwatch := h.svc.WatchOperation(id)
+	defer unwatch()
+
+	// Send the current state immediately so the client doesn't start blank
+	current := h.svc.GetOperationState(id)
+	data, _ := json.Marshal(current)
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+
+	ctx := r.Context()
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case op, ok := <-ch:
+			if !ok {
+				return
+			}
+			data, _ := json.Marshal(op)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		case <-heartbeat.C:
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 

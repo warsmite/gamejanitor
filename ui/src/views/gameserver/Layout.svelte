@@ -4,7 +4,7 @@
   import { gameserverStore, formatUptime, phaseLabels, toast } from '$lib/stores';
   import { GameIcon, StatusPill } from '$lib/components';
   import { getRoute, navigate, isActive } from '$lib/router';
-  import { embedded } from '$lib/base';
+  import { embedded, basePath } from '$lib/base';
 
   const connAddr = $derived(gameserverStore.connectionAddress(id));
 
@@ -35,6 +35,43 @@
     api.mods.config(id).then(cfg => {
       hasModsSupport = (cfg?.categories?.length ?? 0) > 0 || !!cfg?.loader || !!cfg?.version;
     }).catch(() => { hasModsSupport = false; });
+  });
+
+  // Operation progress stream — connects to dedicated SSE endpoint when
+  // an operation is active on this gameserver. Provides real-time progress
+  // without using the main event bus.
+  let operationSource: EventSource | null = null;
+
+  $effect(() => {
+    const hasOperation = !!operation;
+
+    if (hasOperation && !operationSource) {
+      const url = `${basePath}/api/gameservers/${id}/operation`;
+      const es = new EventSource(url);
+      es.onmessage = (e) => {
+        try {
+          const op = JSON.parse(e.data);
+          const state = gameserverStore.getState(id);
+          if (state) {
+            state.gameserver = { ...state.gameserver, operation: op };
+          }
+        } catch {}
+      };
+      es.onerror = () => {
+        es.close();
+        operationSource = null;
+      };
+      operationSource = es;
+    }
+
+    if (!hasOperation && operationSource) {
+      operationSource.close();
+      operationSource = null;
+    }
+  });
+
+  onDestroy(() => {
+    operationSource?.close();
   });
 
   const isRunning = $derived(gameserverStore.isRunning(id));

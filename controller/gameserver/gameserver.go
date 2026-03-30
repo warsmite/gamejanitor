@@ -100,6 +100,25 @@ func (s *GameserverService) SetOperationTracker(tracker *OperationTracker) {
 	s.operations = tracker
 }
 
+// GetOperationState returns the current operation for a gameserver, or nil.
+func (s *GameserverService) GetOperationState(gameserverID string) *model.Operation {
+	if s.operations == nil {
+		return nil
+	}
+	return s.operations.GetOperation(gameserverID)
+}
+
+// WatchOperation returns a channel that streams operation state changes for a gameserver.
+// Includes progress updates. Call unwatch to stop.
+func (s *GameserverService) WatchOperation(gameserverID string) (ch <-chan *model.Operation, unwatch func()) {
+	if s.operations == nil {
+		c := make(chan *model.Operation)
+		close(c)
+		return c, func() {}
+	}
+	return s.operations.Watch(gameserverID)
+}
+
 // trackActivity starts an activity if the tracker is set. Returns "" if tracker is nil (tests)
 // or if this call is already part of a larger activity (e.g. Restart → Stop → Start).
 func (s *GameserverService) trackActivity(ctx context.Context, gsID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error) {

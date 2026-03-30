@@ -150,6 +150,7 @@ func NewRouter(opts RouterOptions) *Router {
 				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
 				r.With(requireRegenSFTP).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
+				r.With(requireAccess).Get("/operation", gameserverHandlers.OperationStream)
 				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
 				r.With(requireAccess).Get("/stats/history", gameserverHandlers.StatsHistory)

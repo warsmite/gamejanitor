@@ -11,10 +11,13 @@ import (
 
 // OperationTracker manages the transient in-flight operation state for gameservers.
 // Operations are held in memory only — not persisted to DB.
-// Phase changes publish events; progress updates do not (UI polls instead).
+// Phase changes publish events via the event bus.
+// Progress updates notify per-gameserver watchers (dedicated stream, not the event bus).
 type OperationTracker struct {
 	mu         sync.RWMutex
 	operations map[string]*model.Operation
+	watchers   map[string]map[uint64]chan *model.Operation
+	nextWatch  uint64
 	bus        *controller.EventBus
 	log        *slog.Logger
 }
@@ -22,19 +25,20 @@ type OperationTracker struct {
 func NewOperationTracker(bus *controller.EventBus, log *slog.Logger) *OperationTracker {
 	return &OperationTracker{
 		operations: make(map[string]*model.Operation),
+		watchers:   make(map[string]map[uint64]chan *model.Operation),
 		bus:        bus,
 		log:        log.With("component", "operation_tracker"),
 	}
 }
 
 // SetOperation sets the current operation and phase for a gameserver.
-// Publishes a gameserver.operation event on every phase change.
+// Publishes a gameserver.operation event and notifies watchers.
 func (t *OperationTracker) SetOperation(gameserverID, opType string, phase model.OperationPhase) {
+	op := &model.Operation{Type: opType, Phase: phase}
+
 	t.mu.Lock()
-	t.operations[gameserverID] = &model.Operation{
-		Type:  opType,
-		Phase: phase,
-	}
+	t.operations[gameserverID] = op
+	t.notifyWatchersLocked(gameserverID, op)
 	t.mu.Unlock()
 
 	t.bus.Publish(controller.OperationEvent{
@@ -51,22 +55,24 @@ func (t *OperationTracker) SetOperation(gameserverID, opType string, phase model
 }
 
 // UpdateProgress updates the progress on the current operation.
-// Does not publish an event — the UI polls for progress via the API.
+// Notifies watchers only (not the event bus — progress is high-frequency).
 func (t *OperationTracker) UpdateProgress(gameserverID string, progress model.OperationProgress) {
 	t.mu.Lock()
 	op, ok := t.operations[gameserverID]
 	if ok {
 		op.Progress = &progress
+		t.notifyWatchersLocked(gameserverID, t.copyOpLocked(gameserverID))
 	}
 	t.mu.Unlock()
 }
 
 // ClearOperation removes the active operation for a gameserver.
-// Publishes a gameserver.operation event with nil operation.
+// Publishes a gameserver.operation event with nil and notifies watchers.
 func (t *OperationTracker) ClearOperation(gameserverID string) {
 	t.mu.Lock()
 	_, had := t.operations[gameserverID]
 	delete(t.operations, gameserverID)
+	t.notifyWatchersLocked(gameserverID, nil)
 	t.mu.Unlock()
 
 	if !had {
@@ -86,17 +92,64 @@ func (t *OperationTracker) ClearOperation(gameserverID string) {
 func (t *OperationTracker) GetOperation(gameserverID string) *model.Operation {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	return t.copyOpLocked(gameserverID)
+}
 
+// Watch registers a watcher for a gameserver's operation state.
+// Returns a channel that receives the current operation on every change (phase or progress).
+// The channel is buffered(1) — if the consumer is slow, intermediate updates are dropped
+// and only the latest state is delivered. Call unwatch to unregister.
+func (t *OperationTracker) Watch(gameserverID string) (ch <-chan *model.Operation, unwatch func()) {
+	c := make(chan *model.Operation, 1)
+
+	t.mu.Lock()
+	t.nextWatch++
+	id := t.nextWatch
+	if t.watchers[gameserverID] == nil {
+		t.watchers[gameserverID] = make(map[uint64]chan *model.Operation)
+	}
+	t.watchers[gameserverID][id] = c
+	t.mu.Unlock()
+
+	return c, func() {
+		t.mu.Lock()
+		delete(t.watchers[gameserverID], id)
+		if len(t.watchers[gameserverID]) == 0 {
+			delete(t.watchers, gameserverID)
+		}
+		t.mu.Unlock()
+	}
+}
+
+// notifyWatchersLocked sends the operation to all watchers for a gameserver.
+// Must be called with t.mu held. Non-blocking — drops if consumer is behind.
+func (t *OperationTracker) notifyWatchersLocked(gameserverID string, op *model.Operation) {
+	for _, ch := range t.watchers[gameserverID] {
+		select {
+		case ch <- op:
+		default:
+			// Consumer behind — drain old value and send latest
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- op:
+			default:
+			}
+		}
+	}
+}
+
+func (t *OperationTracker) copyOpLocked(gameserverID string) *model.Operation {
 	op, ok := t.operations[gameserverID]
 	if !ok {
 		return nil
 	}
-
-	// Return a copy so callers can't mutate the tracked state
-	copy := *op
+	cp := *op
 	if op.Progress != nil {
 		p := *op.Progress
-		copy.Progress = &p
+		cp.Progress = &p
 	}
-	return &copy
+	return &cp
 }

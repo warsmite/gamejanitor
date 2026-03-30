@@ -234,13 +234,9 @@ class GameserverStore {
         }
       }
 
-      // Operation state — re-fetch gameserver to get authoritative operation from API
+      // Operation state — update from event payload on phase changes
       if (data.type === 'gameserver.operation') {
-        api.gameservers.get(data.gameserver_id).then(gs => {
-          if (this.gameservers[gs.id]) {
-            this.gameservers[gs.id].gameserver = gs;
-          }
-        }).catch(() => {});
+        state.gameserver = { ...state.gameserver, operation: data.operation ?? null };
       }
 
       // Re-fetch gameserver on update (name/config changed)
