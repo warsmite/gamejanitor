@@ -2,6 +2,7 @@
 // SSE events feed into this store; pages read from it reactively.
 
 import { api, type Gameserver, type GameserverStats, type QueryData, type Game, type Backup, type Schedule } from '$lib/api';
+import { basePath } from '$lib/base';
 import { onEvent } from './sse';
 
 export interface GameserverState {
@@ -38,6 +39,7 @@ class GameserverStore {
   authRequired = $state(false);
 
   private unsubs: (() => void)[] = [];
+  private logStreams = new Map<string, EventSource>();
 
   // ── Accessors ──
 
@@ -148,10 +150,10 @@ class GameserverStore {
         this.gameservers[gs.id] = this.newState(gs);
       }
 
-      // Fetch live data for active servers
+      // Connect live data for active servers
       for (const gs of gsResponse.gameservers) {
         if (gs.status !== 'stopped') {
-          this.fetchLogs(gs.id);
+          this.connectLogStream(gs.id);
         }
         if (gs.status === 'running' || gs.status === 'started') {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
@@ -180,6 +182,7 @@ class GameserverStore {
   destroy() {
     for (const unsub of this.unsubs) unsub();
     this.unsubs = [];
+    for (const [id] of this.logStreams) this.disconnectLogStream(id);
     this.gameservers = {};
     this.games = {};
     this.loading = true;
@@ -249,14 +252,14 @@ class GameserverStore {
           error_reason: data.type === 'gameserver.error' ? (data.reason || '') : state.gameserver.error_reason,
         };
 
-        if (wasInactive && newStatus !== 'stopped') {
-          this.fetchLogs(data.gameserver_id);
-        }
         if (newStatus === 'stopped') {
+          this.disconnectLogStream(data.gameserver_id);
           state.stats = null;
           state.query = null;
           state.logLines = [];
           state.containerStartedAt = '';
+        } else {
+          this.connectLogStream(data.gameserver_id);
         }
       }
 
@@ -274,8 +277,6 @@ class GameserverStore {
         }).catch((e) => { console.warn('gameserverStore:', e); });
       }
 
-      // Refresh log tail
-      this.fetchLogs(data.gameserver_id);
     }));
 
     // Backup events — list refresh
@@ -338,13 +339,36 @@ class GameserverStore {
     if (state) state.query = query;
   }
 
-  private fetchLogs(id: string) {
-    api.gameservers.logs(id, 4).then(r => {
+  private connectLogStream(id: string) {
+    if (this.logStreams.has(id)) return;
+
+    const url = `${basePath}/api/gameservers/${id}/logs/stream?tail=4`;
+    const es = new EventSource(url);
+
+    es.onmessage = (e) => {
       const state = this.gameservers[id];
-      if (state && r?.lines) {
-        state.logLines = r.lines.slice(-4);
+      if (!state) return;
+      state.logLines = [...state.logLines, e.data].slice(-4);
+    };
+
+    es.onerror = () => {
+      this.disconnectLogStream(id);
+      // Reconnect if server is still active
+      const state = this.gameservers[id];
+      if (state && state.gameserver.status !== 'stopped') {
+        setTimeout(() => this.connectLogStream(id), 2000);
       }
-    }).catch((e) => { console.warn('gameserverStore:', e); });
+    };
+
+    this.logStreams.set(id, es);
+  }
+
+  private disconnectLogStream(id: string) {
+    const es = this.logStreams.get(id);
+    if (es) {
+      es.close();
+      this.logStreams.delete(id);
+    }
   }
 }
 
