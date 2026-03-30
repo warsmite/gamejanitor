@@ -179,8 +179,17 @@ func (p *mojangVersionsProvider) Options() ([]Option, error) {
 		Group: "latest",
 	})
 
-	// Releases and snapshots
+	// Releases and snapshots — only include versions with a dedicated server jar.
+	// Server JARs are available from 1.2.5 onwards (April 2012). The manifest
+	// lists versions in reverse chronological order, so we stop at 1.2.4.
+	stopRelease := false
 	for _, v := range manifest.Versions {
+		if v.ID == "1.2.4" {
+			stopRelease = true
+		}
+		if stopRelease {
+			continue
+		}
 		switch v.Type {
 		case "release":
 			options = append(options, Option{Value: v.ID, Label: v.ID, Group: "releases"})
