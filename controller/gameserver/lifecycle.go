@@ -159,8 +159,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 			Timestamp:    time.Now(),
 		})
 
+		var lastProgressPublish time.Time
 		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken, func(p worker.DepotProgress) {
-			if p.TotalChunks > 0 {
+			now := time.Now()
+			if p.TotalChunks > 0 && now.Sub(lastProgressPublish) >= 2*time.Second {
+				lastProgressPublish = now
 				pct := float64(p.CompletedBytes) / float64(p.TotalBytes) * 100
 				s.broadcaster.Publish(controller.DepotProgressEvent{
 					GameserverID:   id,

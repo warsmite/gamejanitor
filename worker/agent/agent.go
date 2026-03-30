@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/worker"
@@ -404,7 +405,13 @@ func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScrip
 }
 
 func (a *Agent) EnsureDepot(req *pb.EnsureDepotRequest, stream pb.WorkerService_EnsureDepotServer) error {
+	var lastSent time.Time
 	onProgress := func(p worker.DepotProgress) {
+		now := time.Now()
+		if now.Sub(lastSent) < 2*time.Second {
+			return
+		}
+		lastSent = now
 		stream.Send(&pb.EnsureDepotProgress{
 			CompletedBytes:  p.CompletedBytes,
 			TotalBytes:      p.TotalBytes,
