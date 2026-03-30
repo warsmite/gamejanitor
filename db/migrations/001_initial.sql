@@ -54,12 +54,14 @@ CREATE TABLE tokens (
     scope TEXT NOT NULL DEFAULT 'gameserver',
     gameserver_ids JSON NOT NULL DEFAULT '[]',
     permissions JSON NOT NULL DEFAULT '[]',
+    claim_code TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME,
     expires_at DATETIME
 );
 
 CREATE INDEX IF NOT EXISTS idx_tokens_prefix ON tokens(token_prefix) WHERE token_prefix != '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tokens_claim_code ON tokens(claim_code) WHERE claim_code IS NOT NULL;
 
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,

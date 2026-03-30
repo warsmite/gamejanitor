@@ -161,3 +161,39 @@ func (h *AuthHandlers) RotateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	respondOK(w, map[string]any{"token": rawToken, "token_id": newToken.ID, "name": newToken.Name})
 }
+
+// GenerateClaimCode creates or regenerates an invite link claim code for a token.
+func (h *AuthHandlers) GenerateClaimCode(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "tokenId")
+	code, err := h.authSvc.GenerateClaimCode(id)
+	if err != nil {
+		h.log.Error("generating claim code", "token", id, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondOK(w, map[string]string{"claim_code": code})
+}
+
+// RedeemClaimCode is a public endpoint that exchanges a claim code for a raw token.
+func (h *AuthHandlers) RedeemClaimCode(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.Code == "" {
+		respondError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+
+	rawToken, err := h.authSvc.RedeemClaimCode(req.Code)
+	if err != nil {
+		h.log.Warn("claim code redemption failed", "error", err)
+		respondError(w, http.StatusNotFound, "invalid or expired claim code")
+		return
+	}
+
+	respondOK(w, map[string]string{"token": rawToken})
+}

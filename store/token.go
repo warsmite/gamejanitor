@@ -8,6 +8,8 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
+const tokenColumns = "id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, claim_code, created_at, last_used_at, expires_at"
+
 type TokenStore struct {
 	db *sql.DB
 }
@@ -16,12 +18,18 @@ func NewTokenStore(db *sql.DB) *TokenStore {
 	return &TokenStore{db: db}
 }
 
+func scanToken(scan func(dest ...any) error) (model.Token, error) {
+	var t model.Token
+	err := scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.ClaimCode, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	return t, err
+}
+
 func (s *TokenStore) ListTokens() ([]model.Token, error) {
-	return s.listTokens("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens ORDER BY created_at DESC")
+	return s.listTokens("SELECT "+tokenColumns+" FROM tokens ORDER BY created_at DESC")
 }
 
 func (s *TokenStore) ListTokensByScope(scope string) ([]model.Token, error) {
-	return s.listTokens("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE scope = ? ORDER BY created_at DESC", scope)
+	return s.listTokens("SELECT "+tokenColumns+" FROM tokens WHERE scope = ? ORDER BY created_at DESC", scope)
 }
 
 func (s *TokenStore) listTokens(query string, args ...any) ([]model.Token, error) {
@@ -33,8 +41,8 @@ func (s *TokenStore) listTokens(query string, args ...any) ([]model.Token, error
 
 	var tokens []model.Token
 	for rows.Next() {
-		var t model.Token
-		if err := rows.Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt); err != nil {
+		t, err := scanToken(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("scanning token row: %w", err)
 		}
 		tokens = append(tokens, t)
@@ -43,9 +51,7 @@ func (s *TokenStore) listTokens(query string, args ...any) ([]model.Token, error
 }
 
 func (s *TokenStore) GetToken(id string) (*model.Token, error) {
-	var t model.Token
-	err := s.db.QueryRow("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE id = ?", id).
-		Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	t, err := scanToken(s.db.QueryRow("SELECT "+tokenColumns+" FROM tokens WHERE id = ?", id).Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -58,9 +64,7 @@ func (s *TokenStore) GetToken(id string) (*model.Token, error) {
 // GetTokenByPrefix finds a token candidate by its prefix for fast lookup.
 // Returns nil if no token with this prefix exists.
 func (s *TokenStore) GetTokenByPrefix(prefix string) (*model.Token, error) {
-	var t model.Token
-	err := s.db.QueryRow("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE token_prefix = ?", prefix).
-		Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	t, err := scanToken(s.db.QueryRow("SELECT "+tokenColumns+" FROM tokens WHERE token_prefix = ?", prefix).Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -73,8 +77,8 @@ func (s *TokenStore) GetTokenByPrefix(prefix string) (*model.Token, error) {
 func (s *TokenStore) CreateToken(t *model.Token) error {
 	t.CreatedAt = time.Now()
 	_, err := s.db.Exec(
-		"INSERT INTO tokens (id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Scope, t.GameserverIDs, t.Permissions, t.CreatedAt, t.ExpiresAt,
+		"INSERT INTO tokens (id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, claim_code, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Scope, t.GameserverIDs, t.Permissions, t.ClaimCode, t.CreatedAt, t.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating token %s: %w", t.ID, err)
@@ -109,11 +113,10 @@ func (s *TokenStore) DeleteToken(id string) error {
 // GetTokenByNameAndScope finds a token by its (name, scope) pair.
 // Returns nil if no matching token exists.
 func (s *TokenStore) GetTokenByNameAndScope(name string, scope string) (*model.Token, error) {
-	var t model.Token
-	err := s.db.QueryRow(
-		"SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE name = ? AND scope = ?",
+	t, err := scanToken(s.db.QueryRow(
+		"SELECT "+tokenColumns+" FROM tokens WHERE name = ? AND scope = ?",
 		name, scope,
-	).Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	).Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -142,4 +145,46 @@ func (s *TokenStore) TokenExistsByScope(id string, scope string) bool {
 		id, scope, time.Now(),
 	).Scan(&exists)
 	return err == nil
+}
+
+// --- Claim codes ---
+
+// GetTokenByClaimCode finds a token by its claim code.
+// Returns nil if no token with this code exists.
+func (s *TokenStore) GetTokenByClaimCode(code string) (*model.Token, error) {
+	t, err := scanToken(s.db.QueryRow("SELECT "+tokenColumns+" FROM tokens WHERE claim_code = ?", code).Scan)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting token by claim code: %w", err)
+	}
+	return &t, nil
+}
+
+// SetClaimCode sets or clears a claim code on a token.
+func (s *TokenStore) SetClaimCode(tokenID string, code *string) error {
+	_, err := s.db.Exec("UPDATE tokens SET claim_code = ? WHERE id = ?", code, tokenID)
+	if err != nil {
+		return fmt.Errorf("setting claim code for token %s: %w", tokenID, err)
+	}
+	return nil
+}
+
+// ClearClaimCode removes the claim code from a token (after redemption).
+func (s *TokenStore) ClearClaimCode(tokenID string) error {
+	return s.SetClaimCode(tokenID, nil)
+}
+
+// RekeyToken updates a token's hash, prefix, and clears the claim code in one operation.
+// Used when a claim code is redeemed — generates a fresh raw token for the new holder.
+func (s *TokenStore) RekeyToken(tokenID, hashedToken, prefix string) error {
+	_, err := s.db.Exec(
+		"UPDATE tokens SET hashed_token = ?, token_prefix = ?, claim_code = NULL WHERE id = ?",
+		hashedToken, prefix, tokenID,
+	)
+	if err != nil {
+		return fmt.Errorf("re-keying token %s: %w", tokenID, err)
+	}
+	return nil
 }

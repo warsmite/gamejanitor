@@ -246,8 +246,12 @@ func NewRouter(opts RouterOptions) *Router {
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
 			r.With(requireAdmin).Post("/{tokenId}/rotate", authHandlers.RotateToken)
+			r.With(requireAdmin).Post("/{tokenId}/claim-code", authHandlers.GenerateClaimCode)
 		})
 	})
+
+	// Public claim code redemption — no auth required
+	r.Post("/api/claim", authHandlers.RedeemClaimCode)
 
 	// Serve embedded web UI (SPA with index.html fallback)
 	if opts.WebUI != nil {

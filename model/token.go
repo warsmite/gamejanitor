@@ -15,6 +15,7 @@ type Token struct {
 	Scope         string      `json:"scope"`
 	GameserverIDs StringSlice `json:"gameserver_ids"`
 	Permissions   StringSlice `json:"permissions"`
+	ClaimCode     *string     `json:"claim_code,omitempty"`
 	CreatedAt     time.Time   `json:"created_at"`
 	LastUsedAt    *time.Time  `json:"last_used_at,omitempty"`
 	ExpiresAt     *time.Time  `json:"expires_at,omitempty"`

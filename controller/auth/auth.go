@@ -28,6 +28,10 @@ type Store interface {
 	DeleteTokenByNameAndScope(name, scope string) (bool, error)
 	TokenExistsByScope(id, scope string) bool
 	GetGameserver(id string) (*model.Gameserver, error)
+	GetTokenByClaimCode(code string) (*model.Token, error)
+	SetClaimCode(tokenID string, code *string) error
+	ClearClaimCode(tokenID string) error
+	RekeyToken(tokenID, hashedToken, prefix string) error
 }
 
 type authContextKey string
@@ -520,4 +524,66 @@ func generateSecureToken() (string, error) {
 		return "", err
 	}
 	return "gj_" + hex.EncodeToString(b), nil
+}
+
+func generateClaimCode() (string, error) {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "inv_" + hex.EncodeToString(b), nil
+}
+
+// GenerateClaimCode creates or regenerates a claim code for an existing token.
+// Returns the new claim code. The old code (if any) stops working immediately.
+func (s *AuthService) GenerateClaimCode(tokenID string) (string, error) {
+	t, err := s.store.GetToken(tokenID)
+	if err != nil {
+		return "", fmt.Errorf("getting token: %w", err)
+	}
+	if t == nil {
+		return "", fmt.Errorf("token not found")
+	}
+
+	code, err := generateClaimCode()
+	if err != nil {
+		return "", fmt.Errorf("generating claim code: %w", err)
+	}
+
+	if err := s.store.SetClaimCode(tokenID, &code); err != nil {
+		return "", err
+	}
+
+	s.log.Info("claim code generated", "token", tokenID)
+	return code, nil
+}
+
+// RedeemClaimCode exchanges a claim code for a raw token.
+// Generates a fresh token (re-keys the record) so the claim code holder gets
+// their own credential. The claim code is consumed — single use.
+func (s *AuthService) RedeemClaimCode(code string) (string, error) {
+	t, err := s.store.GetTokenByClaimCode(code)
+	if err != nil {
+		return "", fmt.Errorf("looking up claim code: %w", err)
+	}
+	if t == nil {
+		return "", fmt.Errorf("invalid or expired claim code")
+	}
+
+	rawToken, err := generateSecureToken()
+	if err != nil {
+		return "", fmt.Errorf("generating token: %w", err)
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("hashing token: %w", err)
+	}
+
+	if err := s.store.RekeyToken(t.ID, string(hashed), tokenPrefix(rawToken)); err != nil {
+		return "", err
+	}
+
+	s.log.Info("claim code redeemed", "token", t.ID, "name", t.Name)
+	return rawToken, nil
 }
