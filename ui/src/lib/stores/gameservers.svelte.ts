@@ -32,6 +32,7 @@ class GameserverStore {
   gameservers = $state<Record<string, GameserverState>>({});
   games = $state<Record<string, Game>>({});
   permissions = $state<string[]>([]);
+  sftpPort = $state(0);
   loading = $state(true);
   initialized = $state(false);
   authRequired = $state(false);
@@ -79,6 +80,26 @@ class GameserverStore {
     return `${ip}:${gamePort.host_port}`;
   }
 
+  connectionIP(id: string): string {
+    const gs = this.gameservers[id]?.gameserver;
+    if (!gs) return '';
+    // If there's a custom connection_address, extract the host part
+    if (gs.connection_address) {
+      const addr = gs.connection_address;
+      const colonIdx = addr.lastIndexOf(':');
+      return colonIdx > 0 ? addr.substring(0, colonIdx) : addr;
+    }
+    return gs.node?.external_ip || gs.node?.lan_ip || '';
+  }
+
+  sftpAddress(id: string): string {
+    const gs = this.gameservers[id]?.gameserver;
+    if (!gs || !this.sftpPort) return '';
+    const ip = this.connectionIP(id);
+    if (!ip) return '';
+    return `sftp://${gs.sftp_username}@${ip}:${this.sftpPort}`;
+  }
+
   can(permission: string): boolean {
     return this.permissions.includes(permission);
   }
@@ -107,10 +128,15 @@ class GameserverStore {
     if (this.initialized) return;
 
     try {
-      const [gsResponse, gameList] = await Promise.all([
+      const [gsResponse, gameList, clusterStatus] = await Promise.all([
         api.gameservers.list(),
         api.games.list(),
+        api.clusterStatus.get().catch(() => null),
       ]);
+
+      if (clusterStatus?.config?.sftp_port) {
+        this.sftpPort = clusterStatus.config.sftp_port;
+      }
 
       this.permissions = gsResponse.permissions || [];
 

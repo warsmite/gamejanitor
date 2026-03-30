@@ -8,11 +8,30 @@
 
   let { id }: { id: string } = $props();
 
+  const can = (p: string) => gameserverStore.can(p);
   const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const stats = $derived(gsState?.stats ?? null);
   const query = $derived(gsState?.query ?? null);
   const isRunning = $derived(gameserverStore.isRunning(id));
+  const sftpAddr = $derived(gameserverStore.sftpAddress(id));
+
+  // SFTP password regen
+  let sftpPassword = $state('');
+  let regenerating = $state(false);
+
+  async function regenerateSftpPassword() {
+    regenerating = true;
+    try {
+      const result = await api.gameservers.regenerateSftpPassword(id);
+      sftpPassword = result.sftp_password;
+      toast('SFTP password regenerated', 'success');
+    } catch (e: any) {
+      toast(`Failed: ${e.message}`, 'error');
+    } finally {
+      regenerating = false;
+    }
+  }
 
   const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
 
@@ -138,9 +157,30 @@
     <div class="panel full-width" style="padding: 0;">
       <div class="connect-row">
         <CopyBlock label="Connect" value={gameserverStore.connectionAddress(id)} primary={true} />
-        <CopyBlock label="SFTP" value={`sftp://${gameserver.sftp_username}@localhost:2222`} />
       </div>
     </div>
+
+    <!-- SFTP — full width -->
+    {#if sftpAddr || can('gameserver.regenerate-sftp')}
+      <div class="panel full-width" style="padding: 0;">
+        <div class="sftp-section">
+          {#if sftpAddr}
+            <div class="sftp-addr">
+              <CopyBlock label="SFTP" value={sftpAddr} />
+            </div>
+          {/if}
+          {#if can('gameserver.regenerate-sftp')}
+            {#if sftpPassword}
+              <CopyBlock label="Password" value={sftpPassword} />
+            {/if}
+            <button class="sftp-regen-btn" onclick={regenerateSftpPassword} disabled={regenerating}>
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
+              {regenerating ? 'Generating...' : sftpPassword ? 'Regenerate' : 'Generate Password'}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
 
     <!-- Telemetry — full width -->
     <div class="panel full-width">
@@ -276,6 +316,25 @@
     padding: 14px 18px;
   }
 
+  .sftp-section {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+  }
+  .sftp-addr { flex: 1; min-width: 0; }
+
+  .sftp-regen-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 14px; border-radius: var(--radius-sm);
+    background: none; border: 1px solid var(--border-dim);
+    color: var(--text-tertiary); font-family: var(--font-mono);
+    font-size: 0.7rem; cursor: pointer; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .sftp-regen-btn:hover { color: var(--text-secondary); border-color: var(--border); }
+  .sftp-regen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sftp-regen-btn svg { width: 12px; height: 12px; }
+
+
   .tele-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
     padding: 14px 18px 18px;
@@ -343,5 +402,6 @@
     .tele-grid { grid-template-columns: 1fr; }
     .tele-grid > :global(div + div) { border-left: none; border-top: 1px solid var(--border-dim); padding-left: 0; padding-top: 12px; }
     .connect-row { flex-direction: column; }
+    .sftp-section { flex-direction: column; align-items: stretch; }
   }
 </style>

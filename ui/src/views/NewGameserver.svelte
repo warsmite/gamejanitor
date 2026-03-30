@@ -30,8 +30,6 @@
   let submitting = $state(false);
   let globalMaxBackups = $state(10);
 
-  // Post-creation state
-  let createdServer = $state<{ id: string; name: string; sftp_password: string; sftp_username: string } | null>(null);
 
   const popularGames = $derived(games.filter(g => popularIds.includes(g.id)));
   const filteredGames = $derived(
@@ -142,16 +140,11 @@
 
       const result = await api.gameservers.create(payload);
 
-      createdServer = {
-        id: result.id,
-        name: result.name,
-        sftp_password: (result as any).sftp_password || '',
-        sftp_username: result.sftp_username,
-      };
-
       if (autoStart) {
         api.gameservers.start(result.id).catch((e) => { console.warn('NewGameserver: failed to auto-start', e); });
       }
+
+      navigate(`/gameservers/${result.id}`);
     } catch (e: any) {
       toast(`Failed to create server: ${e.message}`, 'error');
     } finally {
@@ -159,14 +152,6 @@
     }
   }
 
-  let sftpCopied = $state(false);
-  function copySftpPassword() {
-    if (!createdServer) return;
-    navigator.clipboard.writeText(createdServer.sftp_password).then(() => {
-      sftpCopied = true;
-      setTimeout(() => sftpCopied = false, 2000);
-    });
-  }
 </script>
 
 <main>
@@ -267,35 +252,6 @@
     </div>
   {/if}
 
-  <!-- SFTP password modal -->
-  {#if createdServer}
-    <div class="modal-overlay" onclick={() => navigate(`/gameservers/${createdServer?.id}`)}>
-      <div class="modal" onclick={(e) => e.stopPropagation()}>
-        <div class="modal-title">Gameserver Created</div>
-        <p class="modal-text">Your SFTP credentials are below. <strong>Save the password now</strong> — it cannot be retrieved later.</p>
-
-        <div class="credential-block">
-          <div class="credential-row">
-            <span class="credential-label">Username</span>
-            <span class="credential-value">{createdServer.sftp_username}</span>
-          </div>
-          <div class="credential-row">
-            <span class="credential-label">Password</span>
-            <span class="credential-value">{createdServer.sftp_password}</span>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn-accent" onclick={copySftpPassword}>
-            {sftpCopied ? 'Copied!' : 'Copy Password'}
-          </button>
-          <button class="btn-solid" onclick={() => navigate(`/gameservers/${createdServer?.id}`)}>
-            Go to Server
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
 </main>
 
 <style>
@@ -349,21 +305,6 @@
   .submit-toggle { display: flex; align-items: center; gap: 6px; }
   .submit-toggle-label { font-size: 0.78rem; color: var(--text-tertiary); }
   .submit-row .btn-solid:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* Modal */
-  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.6); display: grid; place-items: center; animation: fade-in 0.2s ease-out; }
-  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-  .modal { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 28px; max-width: 440px; width: 90%; animation: modal-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-  @keyframes modal-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  .modal-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
-  .modal-text { font-size: 0.84rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 18px; }
-  .modal-text strong { color: var(--accent); }
-  .credential-block { background: var(--bg-inset); border: 1px solid var(--border-dim); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 20px; }
-  .credential-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
-  .credential-row + .credential-row { border-top: 1px solid var(--border-dim); }
-  .credential-label { font-size: 0.76rem; color: var(--text-tertiary); }
-  .credential-value { font-size: 0.84rem; font-family: var(--font-mono); font-weight: 500; color: var(--text-primary); }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
   @media (max-width: 700px) { .featured-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 620px) { .config-panel { padding: 18px; } .all-header { flex-direction: column; align-items: flex-start; } .all-search { max-width: 100%; } }

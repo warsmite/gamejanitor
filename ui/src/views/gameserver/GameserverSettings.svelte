@@ -29,10 +29,6 @@
   let autoRestart = $state(true);
   let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
 
-  // SFTP
-  let sftpPassword = $state('');
-  let regenerating = $state(false);
-
   // Danger
   let updating = $state(false);
   let reinstalling = $state(false);
@@ -108,19 +104,6 @@
       toast(`Failed to save: ${e.message}`, 'error');
     } finally {
       saving = false;
-    }
-  }
-
-  async function regenerateSftpPassword() {
-    regenerating = true;
-    try {
-      const result = await api.gameservers.regenerateSftpPassword(gsId);
-      sftpPassword = result.sftp_password;
-      toast('SFTP password regenerated', 'success');
-    } catch (e: any) {
-      toast(`Failed: ${e.message}`, 'error');
-    } finally {
-      regenerating = false;
     }
   }
 
@@ -264,29 +247,6 @@
       </div>
     {/if}
 
-    {#if can('gameserver.regenerate-sftp')}
-      <div class="s-section">
-        <div class="s-title">SFTP</div>
-        <div class="sftp-row">
-          <div style="flex:1;">
-            <label class="label">Username</label>
-            <div class="s-mono-value">{gameserver.sftp_username}</div>
-          </div>
-          <button class="btn-accent" onclick={regenerateSftpPassword} disabled={regenerating} style="padding:8px 14px; font-size:0.8rem; align-self:flex-end;">
-            {regenerating ? 'Regenerating...' : 'Regenerate Password'}
-          </button>
-        </div>
-        {#if sftpPassword}
-          <div class="sftp-pass">
-            <label class="label">New Password (copy now — shown only once)</label>
-            <div class="s-mono-value" style="color:var(--accent);">{sftpPassword}</div>
-          </div>
-        {:else}
-          <div class="sftp-warn">Current SFTP password will stop working immediately.</div>
-        {/if}
-      </div>
-    {/if}
-
     {#if can('gameserver.update-game') || can('gameserver.reinstall') || can('gameserver.delete')}
       <div class="s-section">
         <div class="danger-zone">
@@ -408,10 +368,6 @@
     background: var(--bg-inset); border: 1px solid var(--border-dim);
     border-radius: var(--radius-sm);
   }
-
-  .sftp-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-  .sftp-warn { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 6px; }
-  .sftp-pass { margin-top: 10px; }
 
   .danger-zone { background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: var(--radius); padding: 20px; }
   .danger-zone .s-title { color: var(--danger); border-bottom-color: rgba(239, 68, 68, 0.12); }
