@@ -408,7 +408,7 @@ func (a *Agent) EnsureDepot(req *pb.EnsureDepotRequest, stream pb.WorkerService_
 	var lastSent time.Time
 	onProgress := func(p worker.DepotProgress) {
 		now := time.Now()
-		if now.Sub(lastSent) < 2*time.Second {
+		if now.Sub(lastSent) < 200*time.Millisecond {
 			return
 		}
 		lastSent = now
