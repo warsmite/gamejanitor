@@ -128,7 +128,7 @@ func TestScenario_Newbie_RegenerateSFTPPassword(t *testing.T) {
 func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "node-us", testutil.WithMaxMemoryMB(8192))
+	wUS := testutil.RegisterFakeWorker(t, svc, "node-us", testutil.WithMaxMemoryMB(8192))
 	testutil.RegisterFakeWorker(t, svc, "node-eu", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
@@ -143,6 +143,7 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 	assert.Equal(t, "node-us", *gs.NodeID)
+	testutil.SeedVolumeData(t, wUS, gs.VolumeName)
 
 	// Migrate to EU
 	require.NoError(t, svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "node-eu"))

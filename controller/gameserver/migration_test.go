@@ -14,7 +14,7 @@ import (
 func TestMigration_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	w1 := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
@@ -28,6 +28,8 @@ func TestMigration_HappyPath(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 	require.Equal(t, "worker-1", *gs.NodeID)
+
+	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
@@ -135,7 +137,7 @@ func TestMigration_GameserverNotFound(t *testing.T) {
 func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	w1 := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
@@ -149,6 +151,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 	originalPorts := gs.Ports
+	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
@@ -163,7 +166,7 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	svc.SettingsSvc.Set(settings.SettingPortUniqueness, "node")
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	w1 := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
@@ -176,6 +179,7 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
+	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
@@ -191,7 +195,7 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "node-a")
+	wA := testutil.RegisterFakeWorker(t, svc, "node-a")
 	testutil.RegisterFakeWorker(t, svc, "node-b")
 	ctx := testutil.TestContext()
 
@@ -203,6 +207,7 @@ func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
+	testutil.SeedVolumeData(t, wA, gs.VolumeName)
 
 	done := make(chan error, 1)
 	go func() {

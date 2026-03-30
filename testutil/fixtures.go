@@ -47,6 +47,15 @@ func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *model.Gameserver {
 	return gs
 }
 
+// SeedVolumeData writes a test file to a gameserver's volume so migration
+// verification (VolumeSize > 0) passes. Call after CreateGameserver.
+func SeedVolumeData(t *testing.T, worker *FakeWorker, volumeName string) {
+	t.Helper()
+	if err := worker.WriteFile(context.Background(), volumeName, "server.properties", []byte("test=true\n"), 0644); err != nil {
+		t.Fatalf("seeding volume data: %v", err)
+	}
+}
+
 // SetGameserverStatus writes a status_changed activity to set the gameserver's derived status.
 // Use this in tests that need to put a gameserver into a specific status without going
 // through the full lifecycle.

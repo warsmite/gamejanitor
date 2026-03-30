@@ -152,7 +152,7 @@ func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
 func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	fw1 := testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
 	fw2 := testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
@@ -167,6 +167,7 @@ func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 	require.Equal(t, "small-node", *gs.NodeID)
+	testutil.SeedVolumeData(t, fw1, gs.VolumeName)
 
 	// Bump memory in DB to exceed small-node's capacity (simulates resource
 	// upgrade where async migration failed, or admin reduced node capacity)
@@ -241,7 +242,7 @@ func TestLifecycle_Start_AutoMigrateAfterResourceUpgrade(t *testing.T) {
 	// migration failed. Next start should auto-migrate instead of overcommitting.
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	fw1 := testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
 	testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
@@ -254,6 +255,7 @@ func TestLifecycle_Start_AutoMigrateAfterResourceUpgrade(t *testing.T) {
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
+	testutil.SeedVolumeData(t, fw1, gs.VolumeName)
 
 	// Simulate: DB has upgraded resources but gameserver is still on small-node
 	// (as if auto-migration on update failed)

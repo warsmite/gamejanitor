@@ -158,17 +158,25 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up target volume after failed restore", "volume", gs.VolumeName, "error", rmErr)
 		}
-		// Don't delete migration data on failure — operator can retry manually
 		s.log.Error("migration restore failed, data preserved in store", "migration", migrationID)
 		return fmt.Errorf("restoring volume on target worker: %w", err)
 	}
 	gzReader.Close()
 	reader.Close()
 
-	// Cleanup migration data on success
-	if err := s.backupStore.Delete(ctx, "migrations", migrationID); err != nil {
-		s.log.Warn("failed to clean up migration data from store", "migration", migrationID, "error", err)
+	// Verify the target volume actually has data before deleting anything.
+	// A silent restore failure would leave an empty volume — without this check
+	// we'd delete the source volume and lose the data permanently.
+	targetSize, err := targetWorker.VolumeSize(ctx, gs.VolumeName)
+	if err != nil {
+		s.log.Error("migration: failed to verify target volume, aborting — source volume preserved", "migration", migrationID, "error", err)
+		return fmt.Errorf("verifying target volume after restore: %w", err)
 	}
+	if targetSize == 0 {
+		s.log.Error("migration: target volume is empty after restore, aborting — source volume preserved", "migration", migrationID, "volume", gs.VolumeName)
+		return fmt.Errorf("target volume is empty after restore — data may not have transferred. Source volume preserved on %s, migration data preserved in store as %s", currentNodeID, migrationID)
+	}
+	s.log.Info("migration restore verified", "gameserver", gameserverID, "target_volume_bytes", targetSize)
 
 	// Update node assignment (and reallocate ports if using per-node port scope)
 	gs.NodeID = &targetNodeID
@@ -193,9 +201,14 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return fmt.Errorf("updating gameserver node assignment: %w", err)
 	}
 
-	// Clean up old volume on source worker
+	// Source volume is safe to delete — target is verified
 	if err := sourceWorker.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		s.log.Warn("failed to remove old volume from source worker", "volume", gs.VolumeName, "error", err)
+	}
+
+	// Clean up migration data only after source is removed — it's the last safety net
+	if err := s.backupStore.Delete(ctx, "migrations", migrationID); err != nil {
+		s.log.Warn("failed to clean up migration data from store", "migration", migrationID, "error", err)
 	}
 
 	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})

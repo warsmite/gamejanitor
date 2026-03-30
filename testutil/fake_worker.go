@@ -355,6 +355,16 @@ func (w *FakeWorker) VolumeSize(ctx context.Context, volumeName string) (int64, 
 
 // Volume file operations — use real filesystem in temp dirs
 
+func (w *FakeWorker) resolve(_ context.Context, volumeName string) (string, error) {
+	w.mu.Lock()
+	dir, ok := w.volumes[volumeName]
+	w.mu.Unlock()
+	if !ok {
+		return "", fmt.Errorf("volume %s not found", volumeName)
+	}
+	return dir, nil
+}
+
 func (w *FakeWorker) volumePath(volumeName, path string) (string, error) {
 	w.mu.Lock()
 	dir, ok := w.volumes[volumeName]
@@ -529,18 +539,14 @@ func (w *FakeWorker) BackupVolume(ctx context.Context, volumeName string) (io.Re
 	if err := w.popFailure("BackupVolume"); err != nil {
 		return nil, err
 	}
-	// Return a small valid tar.gz-ish blob. Real tests that need actual tar content
-	// should use the worker integration tests with Docker.
-	return io.NopCloser(bytes.NewReader([]byte("fake-backup-data"))), nil
+	return worker.BackupVolumeDirect(w.resolve, ctx, volumeName)
 }
 
 func (w *FakeWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
 	if err := w.popFailure("RestoreVolume"); err != nil {
 		return err
 	}
-	// Drain the reader to simulate restore
-	io.Copy(io.Discard, tarStream)
-	return nil
+	return worker.RestoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
 }
 
 // Events
