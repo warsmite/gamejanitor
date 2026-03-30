@@ -213,19 +213,17 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.MigrateGameserver(detachedCtx(r), id, body.NodeID); err != nil {
-		h.log.Error("migrating gameserver", "id", id, "target_node", body.NodeID, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
+	// Run migration in background — return 202 immediately.
+	// Migration involves stopping, volume transfer, and node reassignment which can take minutes.
+	// The gameserver.migrate event fires at start, gameserver.error or container_stopped on completion.
+	ctx := detachedCtx(r)
+	go func() {
+		if err := h.svc.MigrateGameserver(ctx, id, body.NodeID); err != nil {
+			h.log.Error("background migration failed", "id", id, "target_node", body.NodeID, "error", err)
+		}
+	}()
 
-	gs, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver after migration", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	respondOK(w, gs)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) {
