@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Token, type WebhookEndpoint, type WorkerView, type Activity } from '$lib/api';
-  import { toast, confirm, prompt } from '$lib/stores';
+  import { toast, confirm, prompt, setToken } from '$lib/stores';
 
   let loading = $state(true);
   let saving = $state(false);
@@ -532,8 +532,11 @@
           <div class="reveal-banner">
             <div class="reveal-title">Token Created — copy now, shown only once</div>
             <div class="reveal-value">{revealedToken}</div>
-            <button class="btn-accent" onclick={() => { navigator.clipboard.writeText(revealedToken); toast('Copied', 'success'); }} style="margin-top:8px;">Copy Token</button>
-            <button class="btn-accent" onclick={() => revealedToken = ''} style="margin-top:8px; margin-left:8px;">Dismiss</button>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="btn-accent" onclick={() => { navigator.clipboard.writeText(revealedToken); toast('Copied', 'success'); }}>Copy Token</button>
+              <button class="btn-solid" onclick={() => { setToken(revealedToken); window.location.reload(); }}>Login as this token</button>
+              <button class="btn-accent" onclick={() => revealedToken = ''}>Dismiss</button>
+            </div>
           </div>
         {/if}
 
