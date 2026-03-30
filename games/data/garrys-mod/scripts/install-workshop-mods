@@ -1,4 +1,3 @@
 #!/bin/bash
 # TODO: Workshop mod downloads need to be implemented via the depot downloader.
-# SteamCMD is no longer available in the container.
-echo "[install-workshop-mods] skipped (not yet implemented without SteamCMD)"
+echo "[install-workshop-mods] skipped (not yet implemented)"

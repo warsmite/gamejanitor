@@ -149,7 +149,7 @@ set -e  # Required for install-server and start-server. Optional for stop/save/s
 **Logging — always use `[script-name]` prefix:**
 ```bash
 # install-server
-echo "[install-server] installing <game name> via <SteamCMD|API|GitHub>"
+echo "[install-server] installing <game name> from depot cache"
 echo "[install-server] <game name> installed"
 
 # start-server — log config summary, then "starting"

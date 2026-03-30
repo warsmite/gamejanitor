@@ -12,7 +12,7 @@ import (
 // ── Shared types — importable by gjq, gamejanitorbrowser, gamejanitorhosting ──
 
 // SteamLoginType describes what level of Steam authentication is required to download
-// a game's dedicated server files via SteamCMD/depot downloader.
+// a game's dedicated server files via Steam depot downloader.
 type SteamLoginType string
 
 const (

@@ -57,7 +57,7 @@ func (d *FileDelivery) Uninstall(ctx context.Context, gameserverID, filePath str
 // --- ManifestDelivery ---
 
 // ManifestDelivery writes mod IDs to a JSON manifest file.
-// The game server reads this manifest and downloads mods itself via SteamCMD.
+// The game server reads this manifest and downloads mods at install time.
 type ManifestDelivery struct {
 	fileSvc FileOperator
 	log     *slog.Logger

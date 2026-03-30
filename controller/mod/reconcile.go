@@ -138,7 +138,7 @@ func (s *ModService) resolveDownloadURL(ctx context.Context, mod model.Installed
 }
 
 // reconcileManifests regenerates manifest files from DB state.
-// For Workshop-style mods, the manifest is the source of truth for SteamCMD.
+// For Workshop-style mods, the manifest is the source of truth for mod downloads.
 func (s *ModService) reconcileManifests(ctx context.Context, gameserverID string, mods []model.InstalledMod) error {
 	// Group manifest mods by source to find their manifest paths
 	manifestSources := make(map[string][]string) // source → mod source_ids
