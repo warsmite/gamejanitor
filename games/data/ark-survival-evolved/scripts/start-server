@@ -24,6 +24,48 @@ if [ -d "$SAVE_DIR" ] && [ ! -L "$SAVE_DIR" ]; then
 fi
 ln -sfn /data/saves "$SAVE_DIR"
 
+# Detect installed Workshop mods by scanning the mods directory.
+# Each mod is a subdirectory named by its Workshop ID (e.g. 731604991/).
+MODS_DIR="/data/server/ShooterGame/Content/Mods"
+MOD_IDS=""
+if [ -d "$MODS_DIR" ]; then
+    for dir in "$MODS_DIR"/*/; do
+        [ -d "$dir" ] || continue
+        mod_id=$(basename "$dir")
+        # Only include numeric directory names (Workshop IDs)
+        if [[ "$mod_id" =~ ^[0-9]+$ ]]; then
+            if [ -n "$MOD_IDS" ]; then
+                MOD_IDS="${MOD_IDS},${mod_id}"
+            else
+                MOD_IDS="$mod_id"
+            fi
+        fi
+    done
+fi
+
+# Write ActiveMods to GameUserSettings.ini
+CONFIG_DIR="/data/saves/Config/LinuxServer"
+mkdir -p "$CONFIG_DIR"
+INI_FILE="${CONFIG_DIR}/GameUserSettings.ini"
+touch "$INI_FILE"
+
+if [ -n "$MOD_IDS" ]; then
+    echo "[start-server] active mods: $MOD_IDS"
+    # Update or add ActiveMods in [ServerSettings]
+    if grep -q '^ActiveMods=' "$INI_FILE" 2>/dev/null; then
+        sed -i "s|^ActiveMods=.*|ActiveMods=${MOD_IDS}|" "$INI_FILE"
+    else
+        # Ensure [ServerSettings] section exists
+        if ! grep -q '^\[ServerSettings\]' "$INI_FILE" 2>/dev/null; then
+            echo -e "\n[ServerSettings]" >> "$INI_FILE"
+        fi
+        sed -i "/^\[ServerSettings\]/a ActiveMods=${MOD_IDS}" "$INI_FILE"
+    fi
+else
+    # No mods — clear ActiveMods if it exists
+    sed -i '/^ActiveMods=/d' "$INI_FILE" 2>/dev/null || true
+fi
+
 PASSWORD_PARAM=""
 if [ -n "$SERVER_PASSWORD" ]; then
     PASSWORD_PARAM="?ServerPassword=${SERVER_PASSWORD}"
@@ -35,4 +77,5 @@ exec ./ShooterGame/Binaries/Linux/ShooterGameServer \
     "${MAP}?listen?SessionName=${SESSION_NAME}?ServerAdminPassword=${ADMIN_PASSWORD}${PASSWORD_PARAM}?Port=${GAME_PORT}?QueryPort=${QUERY_PORT}?RCONPort=${RCON_PORT}?RCONEnabled=True?MaxPlayers=${MAX_PLAYERS}" \
     -server \
     -log \
+    -automanagedmods \
     $([ "${ENABLE_BATTLEYE:-false}" = "true" ] || echo "-NoBattlEye")
