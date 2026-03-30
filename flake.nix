@@ -121,6 +121,7 @@
               echo "Stopping..."
               [ -n "''${CTRL_PID:-}" ] && kill "$CTRL_PID" 2>/dev/null || true
               [ -n "''${WORK_PID:-}" ] && sudo kill "$WORK_PID" 2>/dev/null || true
+              [ -n "''${WORK2_PID:-}" ] && sudo kill "$WORK2_PID" 2>/dev/null || true
               wait 2>/dev/null
             }
             trap cleanup EXIT
@@ -142,21 +143,45 @@
               sleep 0.5
             done
 
-            echo "Starting worker (gRPC :9091, connecting to controller :9090)..."
+            echo "Starting worker-1 (gRPC :9091, connecting to controller :9090)..."
             sudo -E go run -mod=mod . serve \
               --worker --controller=false \
               --bind 0.0.0.0 \
               --grpc-port 9091 \
+              --worker-id worker-1 \
               --controller-address localhost:9090 \
               --worker-token "$WORKER_TOKEN" \
               -d "$WORK_DIR" &
             WORK_PID=$!
 
+            WORK2_DIR=/tmp/gamejanitor-multi-worker-2
+            mkdir -p "$WORK2_DIR"
+
+            # Create second worker token
+            WORKER2_TOKEN=$(go run -mod=mod . tokens offline create \
+              --name dev-worker-2 --type worker -d "$CTRL_DIR" 2>/dev/null || true)
+            if [ -z "$WORKER2_TOKEN" ]; then
+              WORKER2_TOKEN=$(go run -mod=mod . tokens offline rotate \
+                --name dev-worker-2 --type worker -d "$CTRL_DIR" 2>/dev/null)
+            fi
+
+            echo "Starting worker-2 (gRPC :9092, connecting to controller :9090)..."
+            sudo -E go run -mod=mod . serve \
+              --worker --controller=false \
+              --bind 0.0.0.0 \
+              --grpc-port 9092 \
+              --worker-id worker-2 \
+              --controller-address localhost:9090 \
+              --worker-token "$WORKER2_TOKEN" \
+              -d "$WORK2_DIR" &
+            WORK2_PID=$!
+
             echo ""
             echo "Multi-node dev running:"
             echo "  Controller: http://localhost:8080 (gRPC :9090)"
-            echo "  Worker:     gRPC :9091"
-            echo "  Press Ctrl+C to stop both"
+            echo "  Worker 1:   gRPC :9091"
+            echo "  Worker 2:   gRPC :9092"
+            echo "  Press Ctrl+C to stop all"
             echo ""
 
             wait
@@ -271,7 +296,7 @@
               fi
             fi
             echo "Removing /tmp/gamejanitor-*..."
-            rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-* /tmp/gamejanitor-multi-*
+            sudo rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-* /tmp/gamejanitor-multi-*
             echo "Cleanup complete."
           '';
         in
