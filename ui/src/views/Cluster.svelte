@@ -46,15 +46,16 @@
 
   async function doMigrate(targetNodeId: string) {
     if (!migrateTarget) return;
+    const target = migrateTarget;
     migrating = true;
     try {
-      await api.gameservers.migrate(migrateTarget.gsId, targetNodeId);
-      toast(`Migrating "${migrateTarget.gsName}" to ${targetNodeId}`, 'info');
+      await api.gameservers.migrate(target.gsId, targetNodeId);
+      toast(`Migrating "${target.gsName}" to ${targetNodeId}`, 'info');
       migrateTarget = null;
-      // Refresh workers to update allocation
       workers = await api.workers.list();
     } catch (e: any) {
       toast(`Migration failed: ${e.message}`, 'error');
+      migrateTarget = null;
     } finally {
       migrating = false;
     }
