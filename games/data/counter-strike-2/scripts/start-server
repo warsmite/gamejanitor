@@ -17,13 +17,6 @@ echo "[start-server] config: gslt=${GSLT:+set}${GSLT:-not set}"
 # CS2 needs engine libs on LD_LIBRARY_PATH (libv8.so etc.)
 export LD_LIBRARY_PATH="/data/server/game/bin/linuxsteamrt64:${LD_LIBRARY_PATH}"
 
-# steamclient.so expected at ~/.steam/sdk64/ — find it in the game files
-mkdir -p /home/gameserver/.steam/sdk64
-STEAMCLIENT=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
-if [ -n "$STEAMCLIENT" ]; then
-    ln -sfn "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
-fi
-
 cd /data/server
 
 GSLT_ARG=""

@@ -24,6 +24,14 @@ if [ -d /defaults ]; then
     cp -n /defaults/* /data/ 2>/dev/null || true
 fi
 
+# Steam games expect steamclient.so at ~/.steam/sdk64/ for networking.
+# Find it in the game files (downloaded by the depot downloader) and symlink.
+STEAMCLIENT=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
+if [ -n "$STEAMCLIENT" ]; then
+    mkdir -p /home/gameserver/.steam/sdk64
+    ln -sf "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
+fi
+
 # start-server scripts use exec, so the game binary becomes PID 1 and
 # inherits the tee redirect. SIGTERM from Docker reaches it directly.
 exec /scripts/start-server
