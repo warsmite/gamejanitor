@@ -83,6 +83,7 @@
     operationSource?.close();
   });
 
+  const stats = $derived(gsState?.stats ?? null);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
   const isTransitioning = $derived(() => {
@@ -240,12 +241,20 @@
           {/if}
         </div>
 
-        {#if uptime}
-          <div class="uptime">
-            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V8a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 7.71V3.5z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/></svg>
-            {uptime}
-          </div>
-        {/if}
+        <div class="srv-stats">
+          {#if stats}
+            <span class="stat mem">{(stats.memory_usage_mb / 1024).toFixed(1)}<span class="stat-dim">/{(stats.memory_limit_mb / 1024).toFixed(0)} GB</span></span>
+            <span class="stat-sep">·</span>
+            <span class="stat cpu">{Math.round(stats.cpu_percent)}%<span class="stat-dim"> CPU</span></span>
+          {/if}
+          {#if uptime}
+            {#if stats}<span class="stat-sep">·</span>{/if}
+            <span class="stat uptime">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V8a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 7.71V3.5z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/></svg>
+              {uptime}
+            </span>
+          {/if}
+        </div>
       </div>
     </div>
 
@@ -368,12 +377,21 @@
   .srv-actions-left { display: flex; gap: 6px; align-items: center; }
   .btn-action:disabled { opacity: 0.4; pointer-events: none; }
 
-  .uptime {
+  .srv-stats {
+    display: flex; align-items: center; gap: 6px;
     font-size: 0.74rem; font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat { color: var(--text-secondary); }
+  .stat.mem { color: #8b5cf6; }
+  .stat.cpu { color: var(--accent); }
+  .stat-dim { color: var(--text-tertiary); font-weight: 400; }
+  .stat-sep { color: var(--text-tertiary); opacity: 0.3; }
+  .stat.uptime {
     color: var(--text-tertiary);
     display: flex; align-items: center; gap: 5px;
   }
-  .uptime svg { width: 13px; height: 13px; }
+  .stat.uptime svg { width: 13px; height: 13px; }
 
   .tabs {
     display: flex; gap: 2px;

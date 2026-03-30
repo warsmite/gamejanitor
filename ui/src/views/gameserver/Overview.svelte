@@ -3,7 +3,7 @@
   import { api, type Activity } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
-  import { CopyBlock, TelemetryCell, StatsChart } from '$lib/components';
+  import { CopyBlock, StatsChart } from '$lib/components';
   import { embedded } from '$lib/base';
 
   let { id }: { id: string } = $props();
@@ -11,7 +11,6 @@
   const can = (p: string) => gameserverStore.can(p);
   const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
-  const stats = $derived(gsState?.stats ?? null);
   const query = $derived(gsState?.query ?? null);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const sftpAddr = $derived(gameserverStore.sftpAddress(id));
@@ -46,18 +45,6 @@
       regenerating = false;
     }
   }
-
-  const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
-
-  // Derived telemetry values
-  const memPercent = $derived(
-    stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0
-  );
-  const cpuPercent = $derived(stats ? Math.round(stats.cpu_percent) : 0);
-  const storageMB = $derived(stats ? Math.round(stats.volume_size_bytes / (1024 * 1024)) : 0);
-  const storagePercent = $derived(
-    stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : (stats ? 100 : 0)
-  );
 
   // Activity feed — page-specific state
   let events = $state<Activity[]>([]);
@@ -199,37 +186,6 @@
       </div>
     {/if}
 
-    <!-- Telemetry — full width -->
-    <div class="panel full-width">
-      <div class="panel-title">Resources</div>
-      <div class="tele-grid">
-        <TelemetryCell
-          label="Memory"
-          value={stats ? `${(stats.memory_usage_mb / 1024).toFixed(1)}` : '—'}
-          unit={stats ? ' GB' : ''}
-          detail={stats ? `of ${(stats.memory_limit_mb / 1024).toFixed(0)} GB` : ''}
-          percent={memPercent}
-          color="mem"
-        />
-        <TelemetryCell
-          label="CPU"
-          value={stats ? `${cpuPercent}` : '—'}
-          unit={stats ? '%' : ''}
-          detail={gameserver.cpu_limit ? `${gameserver.cpu_limit} cores` : ''}
-          percent={cpuPercent}
-          color="accent"
-        />
-        <TelemetryCell
-          label="Storage"
-          value={stats ? `${storageMB < 1024 ? storageMB + '' : (storageMB / 1024).toFixed(1)}` : '—'}
-          unit={stats ? (storageMB < 1024 ? ' MB' : ' GB') : ''}
-          detail={stats?.storage_limit_mb ? `of ${(stats.storage_limit_mb / 1024).toFixed(0)} GB` : 'no limit'}
-          percent={storagePercent}
-          color={hasStorageLimit ? 'accent' : 'live'}
-        />
-      </div>
-    </div>
-
     <!-- Resource history charts -->
     <div class="panel full-width">
       <StatsChart {id} />
@@ -352,14 +308,6 @@
   .sftp-regen-btn svg { width: 12px; height: 12px; }
 
 
-  .tele-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    padding: 14px 18px 18px;
-  }
-  .tele-grid > :global(div) { padding: 0 16px; }
-  .tele-grid > :global(div + div) { border-left: 1px solid var(--border-dim); }
-  .tele-grid > :global(div:first-child) { padding-left: 0; }
-  .tele-grid > :global(div:last-child) { padding-right: 0; }
 
   .query-content { padding: 14px 18px 18px; }
   .query-row {
@@ -416,8 +364,6 @@
   @media (max-width: 700px) {
     .overview { grid-template-columns: 1fr; }
     .full-width { grid-column: 1; }
-    .tele-grid { grid-template-columns: 1fr; }
-    .tele-grid > :global(div + div) { border-left: none; border-top: 1px solid var(--border-dim); padding-left: 0; padding-top: 12px; }
     .connect-row { flex-direction: column; }
     .sftp-section { flex-direction: column; align-items: stretch; }
   }
