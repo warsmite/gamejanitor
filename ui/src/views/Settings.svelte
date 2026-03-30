@@ -1,8 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Token, type WebhookEndpoint, type WorkerView, type Activity } from '$lib/api';
-  import { toast, confirm, prompt, setToken } from '$lib/stores';
+  import { toast, confirm, prompt, setToken, gameserverStore } from '$lib/stores';
   import { getRoute, navigate } from '$lib/router';
+
+  const can = (p: string) => gameserverStore.can(p);
+  const canEdit = $derived(can('settings.edit'));
+  const canTokens = $derived(can('tokens.manage'));
+  const canWebhooks = $derived(can('webhooks.manage'));
+  const canNodes = $derived(can('nodes.manage'));
 
   let loading = $state(true);
   let saving = $state(false);
@@ -307,14 +313,19 @@
   <aside class="sidebar">
     <div class="sidebar-title">Settings</div>
     {#each sections as section}
-      <button
-        class="sidebar-link"
-        class:active={activeSection === section.id}
-        onclick={() => switchSection(section.id)}
-      >
-        <svg viewBox="0 0 16 16" fill="currentColor"><path d={section.icon}/></svg>
-        {section.label}
-      </button>
+      {#if section.id === 'general' || section.id === 'security' || section.id === 'events'
+        || (section.id === 'tokens' && canTokens)
+        || (section.id === 'webhooks' && canWebhooks)
+        || (section.id === 'workers' && canNodes)}
+        <button
+          class="sidebar-link"
+          class:active={activeSection === section.id}
+          onclick={() => switchSection(section.id)}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d={section.icon}/></svg>
+          {section.label}
+        </button>
+      {/if}
     {/each}
   </aside>
 
@@ -442,11 +453,13 @@
             <span class="field-hint">Enables Steam Workshop mod search for CS2, Garry's Mod, and ARK. <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--accent);">Get a key</a></span>
           </div>
 
-          <div class="save-row">
-            <button class="btn-solid" onclick={saveSettings} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+          {#if canEdit}
+            <div class="save-row">
+              <button class="btn-solid" onclick={saveSettings} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
 
@@ -517,11 +530,13 @@
             </div>
           </div>
 
-          <div class="save-row">
-            <button class="btn-solid" onclick={saveSettings} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+          {#if canEdit}
+            <div class="save-row">
+              <button class="btn-solid" onclick={saveSettings} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
 
