@@ -24,16 +24,17 @@ if [ -d /defaults ]; then
     cp -n /defaults/* /data/ 2>/dev/null || true
 fi
 
-# Steam games expect steamclient.so at ~/.steam/sdk64/ for networking.
-# Prefer the game's bundled copy, fall back to the one in the base image.
-mkdir -p /home/gameserver/.steam/sdk64
-STEAMCLIENT=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
-if [ -z "$STEAMCLIENT" ] && [ -f /usr/lib/steam/steamclient.so ]; then
-    STEAMCLIENT=/usr/lib/steam/steamclient.so
-fi
-if [ -n "$STEAMCLIENT" ]; then
-    ln -sf "$STEAMCLIENT" /home/gameserver/.steam/sdk64/steamclient.so
-fi
+# Steam games expect steamclient.so at ~/.steam/sdk32/ or sdk64/ for networking.
+# Prefer the game's bundled copy, fall back to the ones in the base image.
+mkdir -p /home/gameserver/.steam/sdk32 /home/gameserver/.steam/sdk64
+
+SC64=$(find /data/server -name "steamclient.so" -path "*/linux64/*" 2>/dev/null | head -1)
+[ -z "$SC64" ] && [ -f /usr/lib/steam/sdk64/steamclient.so ] && SC64=/usr/lib/steam/sdk64/steamclient.so
+[ -n "$SC64" ] && ln -sf "$SC64" /home/gameserver/.steam/sdk64/steamclient.so
+
+SC32=$(find /data/server -name "steamclient.so" -path "*/linux32/*" 2>/dev/null | head -1)
+[ -z "$SC32" ] && [ -f /usr/lib/steam/sdk32/steamclient.so ] && SC32=/usr/lib/steam/sdk32/steamclient.so
+[ -n "$SC32" ] && ln -sf "$SC32" /home/gameserver/.steam/sdk32/steamclient.so
 
 # start-server scripts use exec, so the game binary becomes PID 1 and
 # inherits the tee redirect. SIGTERM from Docker reaches it directly.
