@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -81,10 +82,18 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 	}
 
 	// All depots merge into one directory — games expect a single installation.
+	// Downloads go to a temp directory first, then atomically renamed to the
+	// final path on success. This prevents corrupted game files if the process
+	// dies mid-download.
 	mergedDir := s.cache.AppFilesDir(appID)
+	stagingDir := mergedDir + ".staging"
+
+	// Clean up any leftover staging dir from a previous failed download
+	os.RemoveAll(stagingDir)
 
 	// Download each depot
 	allCached := true
+	needsStaging := false
 	var totalBytesDownloaded uint64
 	for _, depot := range appInfo.Depots {
 		// Skip shared depots (depotfromapp) — these reference content from another app
@@ -105,8 +114,6 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 			continue
 		}
 
-		filesDir := mergedDir
-
 		// Check if already cached with this manifest
 		meta := s.cache.GetMeta(appID, depot.DepotID)
 		if meta != nil && meta.ManifestID == depot.ManifestID {
@@ -117,6 +124,8 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 			)
 			continue
 		}
+
+		needsStaging = true
 
 		// Get depot key for decryption
 		depotKey, err := client.GetDepotDecryptionKey(ctx, depot.DepotID, appID)
@@ -134,7 +143,7 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 			AppID:       appID,
 			DepotID:     depot.DepotID,
 			Branch:      branch,
-			DestDir:     filesDir,
+			DestDir:     stagingDir,
 			OldManifest: oldManifest,
 			OnProgress: func(p DownloadProgress) {
 				if p.CompletedChunks%500 == 0 || p.CompletedChunks == p.TotalChunks {
@@ -176,6 +185,18 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 			"files_written", result.FilesWritten,
 			"is_delta", result.IsDelta,
 		)
+	}
+
+	// Atomic swap: staging → merged. Only if we actually downloaded something.
+	if needsStaging {
+		// Remove old merged dir (if exists) and rename staging into place
+		if err := os.RemoveAll(mergedDir); err != nil {
+			return nil, fmt.Errorf("remove old cache: %w", err)
+		}
+		if err := os.Rename(stagingDir, mergedDir); err != nil {
+			return nil, fmt.Errorf("finalize cache: %w", err)
+		}
+		s.log.Info("depot cache finalized", "app_id", appID, "path", mergedDir)
 	}
 
 	return &EnsureDepotResult{
