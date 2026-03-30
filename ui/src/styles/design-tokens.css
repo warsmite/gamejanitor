@@ -7,6 +7,7 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
+  color-scheme: dark;
   /* Brand — copper orange, the heat in the system */
   --accent: #e8722a;
   --accent-hover: #f08840;
