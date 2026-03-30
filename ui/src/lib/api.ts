@@ -117,12 +117,25 @@ export interface GameserverNode {
   lan_ip: string;
 }
 
+export interface OperationProgress {
+  percent: number;
+  completed_bytes?: number;
+  total_bytes?: number;
+}
+
+export interface Operation {
+  type: string;
+  phase: string;
+  progress?: OperationProgress;
+}
+
 export interface Gameserver {
   id: string;
   name: string;
   game_id: string;
   status: string;
   error_reason?: string;
+  operation?: Operation | null;
   ports: any;
   env: any;
   memory_limit_mb: number;

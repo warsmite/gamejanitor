@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { api } from '$lib/api';
-  import { gameserverStore, formatUptime, operationLabels, toast } from '$lib/stores';
+  import { gameserverStore, formatUptime, phaseLabels, toast } from '$lib/stores';
   import { GameIcon, StatusPill } from '$lib/components';
   import { getRoute, navigate, isActive } from '$lib/router';
   import { embedded } from '$lib/base';
@@ -26,8 +26,7 @@
   const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
-  const activeOperation = $derived(gsState?.activeOperation ?? null);
-  const depotProgress = $derived(gsState?.depotProgress ?? null);
+  const operation = $derived(gameserver?.operation ?? null);
 
   // Mods tab visibility: fetch config to check if game supports mods
   let hasModsSupport = $state(false);
@@ -154,13 +153,13 @@
           {#if !embedded && gameserver.node_id}
             <span class="node-badge">{gameserver.node_id}</span>
           {/if}
-          {#if activeOperation}
+          {#if operation}
             <span class="op-badge">
               <span class="op-dot"></span>
-              {#if depotProgress}
-                Downloading... {depotProgress.percent.toFixed(0)}% ({formatBytes(depotProgress.completedBytes)} / {formatBytes(depotProgress.totalBytes)})
+              {#if operation.progress && operation.progress.total_bytes}
+                {phaseLabels[operation.phase] || operation.phase} {operation.progress.percent.toFixed(0)}% ({formatBytes(operation.progress.completed_bytes ?? 0)} / {formatBytes(operation.progress.total_bytes)})
               {:else}
-                {operationLabels[activeOperation] || activeOperation}
+                {phaseLabels[operation.phase] || operation.phase}
               {/if}
             </span>
           {/if}
@@ -172,20 +171,20 @@
         <div class="srv-actions-left">
           {#if isStopped}
             {#if can('gameserver.start')}
-              <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning() || !!activeOperation}>
+              <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning() || !!operation}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
                 Start
               </button>
             {/if}
           {:else}
             {#if can('gameserver.stop')}
-              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={isTransitioning() || !!activeOperation}>
+              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={isTransitioning() || !!operation}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
                 Stop
               </button>
             {/if}
             {#if can('gameserver.restart')}
-              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={isTransitioning() || !!activeOperation}>
+              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={isTransitioning() || !!operation}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
                 Restart
               </button>

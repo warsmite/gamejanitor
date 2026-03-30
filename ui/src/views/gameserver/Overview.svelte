@@ -34,12 +34,12 @@
     // Load activity feed
     try {
       const allEvents = await api.events.history({ gameserver_id: id, limit: 40 });
-      events = allEvents.filter(e => e.type !== 'status_changed').slice(0, 20);
+      events = allEvents.slice(0, 20);
     } catch (e) { console.warn('Overview: failed to load events', e); }
 
     // SSE: activity feed only — stats/query/status handled by store
     unsub = onGameserverEvent(id, (data: any) => {
-      if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query' || data.type === 'gameserver.depot_progress') return;
+      if (data.type === 'gameserver.stats' || data.type === 'gameserver.query' || data.type === 'gameserver.operation') return;
 
       const event: Activity = {
         id: crypto.randomUUID(),

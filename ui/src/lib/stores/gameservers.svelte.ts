@@ -4,40 +4,28 @@
 import { api, type Gameserver, type GameserverStats, type QueryData, type Game, type Backup, type Schedule } from '$lib/api';
 import { onEvent } from './sse';
 
-export interface DepotProgressData {
-  percent: number;
-  completedBytes: number;
-  totalBytes: number;
-}
-
 export interface GameserverState {
   gameserver: Gameserver;
   stats: GameserverStats | null;
   query: QueryData | null;
   logLines: string[];
   containerStartedAt: string;
-  activeOperation: string | null;
-  depotProgress: DepotProgressData | null;
   backups: Backup[] | null;       // null = not loaded yet
   schedules: Schedule[] | null;   // null = not loaded yet
 }
 
-const operationStartEvents: Record<string, string> = {
-  'gameserver.depot_downloading': 'Downloading game files...',
-  'backup.create': 'Backing up...',
-  'backup.restore': 'Restoring...',
-  'gameserver.update_game': 'Updating...',
-  'gameserver.reinstall': 'Reinstalling...',
-  'gameserver.migrate': 'Migrating...',
-};
-
-const operationClearEvents: Record<string, string[]> = {
-  'gameserver.depot_downloading': ['gameserver.depot_complete', 'gameserver.depot_cached', 'gameserver.image_pulling', 'gameserver.error'],
-  'backup.create': ['backup.completed', 'backup.failed'],
-  'backup.restore': ['backup.restore.completed', 'backup.restore.failed', 'gameserver.ready', 'gameserver.error'],
-  'gameserver.update_game': ['gameserver.ready', 'gameserver.error'],
-  'gameserver.reinstall': ['gameserver.ready', 'gameserver.error'],
-  'gameserver.migrate': ['gameserver.ready', 'gameserver.error'],
+// Maps operation phases to display labels for the UI badge.
+export const phaseLabels: Record<string, string> = {
+  'downloading_game': 'Downloading game files...',
+  'pulling_image': 'Pulling image...',
+  'installing': 'Installing...',
+  'starting': 'Starting...',
+  'stopping': 'Stopping...',
+  'creating_backup': 'Backing up...',
+  'restoring_backup': 'Restoring...',
+  'updating_game': 'Updating...',
+  'reinstalling': 'Reinstalling...',
+  'migrating': 'Migrating...',
 };
 
 class GameserverStore {
@@ -175,28 +163,6 @@ class GameserverStore {
   // ── SSE Subscriptions ──
 
   private subscribeToSSE() {
-    // Status changes
-    this.unsubs.push(onEvent('status_changed', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-
-      const wasInactive = state.gameserver.status === 'stopped';
-      const nowStopped = data.new_status === 'stopped';
-
-      state.gameserver = { ...state.gameserver, status: data.new_status, error_reason: data.error_reason || '' };
-
-      if (wasInactive && !nowStopped) {
-        this.fetchLogs(data.gameserver_id);
-      }
-      if (nowStopped) {
-        state.stats = null;
-        state.query = null;
-        state.logLines = [];
-        state.containerStartedAt = '';
-        state.activeOperation = null;
-      }
-    }));
-
     // Stats from server-side polling
     this.unsubs.push(onEvent('gameserver.stats', (data: any) => {
       this.updateStats(data.gameserver_id, {
@@ -235,27 +201,46 @@ class GameserverStore {
         state.containerStartedAt = '';
       }
 
-      // Operation tracking
-      if (data.type in operationStartEvents) {
-        state.activeOperation = data.type;
-      }
-      if (state.activeOperation && operationClearEvents[state.activeOperation]?.includes(data.type)) {
-        state.activeOperation = null;
-      }
+      // Derive status from lifecycle events (replaces status_changed)
+      const statusMap: Record<string, string> = {
+        'gameserver.image_pulling': 'installing',
+        'gameserver.depot_downloading': 'installing',
+        'gameserver.container_creating': 'starting',
+        'gameserver.container_started': 'started',
+        'gameserver.ready': 'running',
+        'gameserver.container_stopping': 'stopping',
+        'gameserver.container_stopped': 'stopped',
+        'gameserver.container_exited': 'error',
+        'gameserver.error': 'error',
+      };
+      if (data.type in statusMap) {
+        const wasInactive = state.gameserver.status === 'stopped';
+        const newStatus = statusMap[data.type];
 
-      // Depot download progress — also restores the operation badge after page refresh
-      if (data.type === 'gameserver.depot_progress') {
-        state.depotProgress = {
-          percent: data.percent ?? 0,
-          completedBytes: data.completed_bytes ?? 0,
-          totalBytes: data.total_bytes ?? 0,
+        state.gameserver = {
+          ...state.gameserver,
+          status: newStatus,
+          error_reason: data.type === 'gameserver.error' ? (data.reason || '') : state.gameserver.error_reason,
         };
-        if (!state.activeOperation) {
-          state.activeOperation = 'gameserver.depot_downloading';
+
+        if (wasInactive && newStatus !== 'stopped') {
+          this.fetchLogs(data.gameserver_id);
+        }
+        if (newStatus === 'stopped') {
+          state.stats = null;
+          state.query = null;
+          state.logLines = [];
+          state.containerStartedAt = '';
         }
       }
-      if (data.type === 'gameserver.depot_complete' || data.type === 'gameserver.depot_cached' || data.type === 'gameserver.error') {
-        state.depotProgress = null;
+
+      // Operation state — re-fetch gameserver to get authoritative operation from API
+      if (data.type === 'gameserver.operation') {
+        api.gameservers.get(data.gameserver_id).then(gs => {
+          if (this.gameservers[gs.id]) {
+            this.gameservers[gs.id].gameserver = gs;
+          }
+        }).catch(() => {});
       }
 
       // Re-fetch gameserver on update (name/config changed)
@@ -271,46 +256,10 @@ class GameserverStore {
       this.fetchLogs(data.gameserver_id);
     }));
 
-    // Backup events — operation badges + list refresh
-    this.unsubs.push(onEvent('backup.create', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      state.activeOperation = 'backup.create';
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.completed', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      if (state.activeOperation === 'backup.create') state.activeOperation = null;
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.failed', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      if (state.activeOperation === 'backup.create') state.activeOperation = null;
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.delete', (data: any) => {
+    // Backup events — list refresh
+    this.unsubs.push(onEvent('backup.*', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
       if (state?.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.restore', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      state.activeOperation = 'backup.restore';
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.restore.completed', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      if (state.activeOperation === 'backup.restore') state.activeOperation = null;
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
-    }));
-    this.unsubs.push(onEvent('backup.restore.failed', (data: any) => {
-      const state = this.gameservers[data.gameserver_id];
-      if (!state) return;
-      if (state.activeOperation === 'backup.restore') state.activeOperation = null;
-      if (state.backups !== null) this.loadBackups(data.gameserver_id);
     }));
 
     // Schedule events — list refresh
@@ -352,8 +301,6 @@ class GameserverStore {
       query: null,
       logLines: [],
       containerStartedAt: '',
-      activeOperation: null,
-      depotProgress: null,
       backups: null,
       schedules: null,
     };
@@ -395,4 +342,3 @@ export function formatUptime(containerStartedAt: string): string {
   return `Up ${mins}m`;
 }
 
-export const operationLabels: Record<string, string> = operationStartEvents;
