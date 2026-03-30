@@ -69,7 +69,7 @@
   }
 
   function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 </script>
 
@@ -88,7 +88,9 @@
   {#if loading}
     <div class="backup-row"><div class="backup-info"><span class="backup-name" style="color:var(--text-tertiary)">Loading...</span></div></div>
   {:else if backups.length === 0}
-    <div class="backup-row"><div class="backup-info"><span class="backup-name" style="color:var(--text-tertiary)">No backups yet</span></div></div>
+    <div class="backup-empty">
+      <span>No backups yet. Create one to save a snapshot of your server you can restore later.</span>
+    </div>
   {:else}
     {#each backups as backup (backup.id)}
       <div class="backup-row" class:in-progress={backup.status === 'in_progress'} class:failed={backup.status === 'failed'}>
@@ -211,6 +213,11 @@
   .bk-act:hover { color: var(--accent); background: var(--accent-subtle); }
   .bk-act.restore:hover { color: var(--caution); background: rgba(245,158,11,0.06); }
   .bk-act.danger:hover { color: var(--danger); background: rgba(239,68,68,0.06); }
+
+  .backup-empty {
+    padding: 32px 18px; text-align: center;
+    font-size: 0.82rem; color: var(--text-tertiary); line-height: 1.5;
+  }
 
   @media (max-width: 700px) {
     .backups-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
