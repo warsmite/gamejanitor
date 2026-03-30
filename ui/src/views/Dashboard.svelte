@@ -54,13 +54,13 @@
           <span class={status}>{count} {status}</span>
         {/each}
         {#if cluster && cluster.total_memory_mb > 0}
+          <span class="sep capacity-label">— Allocated:</span>
+          <span class="capacity mem">{(cluster.allocated_memory_mb / 1024).toFixed(1)}<span class="cap-dim">/{(cluster.total_memory_mb / 1024).toFixed(0)} GB mem</span></span>
           <span class="sep">·</span>
-          <span class="capacity mem">{(cluster.allocated_memory_mb / 1024).toFixed(1)}/{(cluster.total_memory_mb / 1024).toFixed(0)} GB</span>
-          <span class="sep">·</span>
-          <span class="capacity cpu">{cluster.allocated_cpu.toFixed(1)}/{cluster.total_cpu.toFixed(0)} CPU</span>
+          <span class="capacity cpu">{cluster.allocated_cpu.toFixed(1)}<span class="cap-dim">/{cluster.total_cpu.toFixed(0)} CPU</span></span>
           {#if cluster.total_storage_mb > 0}
             <span class="sep">·</span>
-            <span class="capacity">{(cluster.allocated_storage_mb / 1024).toFixed(0)}/{(cluster.total_storage_mb / 1024).toFixed(0)} GB disk</span>
+            <span class="capacity">{(cluster.allocated_storage_mb / 1024).toFixed(0)}<span class="cap-dim">/{(cluster.total_storage_mb / 1024).toFixed(0)} GB disk</span></span>
           {/if}
         {/if}
       </div>
@@ -127,9 +127,11 @@
   .summary-stats .running { color: var(--live); }
   .summary-stats .stopped { color: var(--idle); }
   .summary-stats .error { color: var(--danger); }
-  .summary-stats .capacity { color: var(--text-tertiary); }
+  .summary-stats .capacity-label { opacity: 0.5; margin-left: 2px; }
+  .summary-stats .capacity { color: var(--text-secondary); }
   .summary-stats .capacity.mem { color: #8b5cf6; }
   .summary-stats .capacity.cpu { color: var(--accent); }
+  .summary-stats .cap-dim { color: var(--text-tertiary); opacity: 0.6; }
 
   .summary-search { position: relative; max-width: 220px; width: 100%; }
   .summary-search input {
