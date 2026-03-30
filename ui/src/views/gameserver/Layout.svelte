@@ -5,6 +5,7 @@
   import { GameIcon, StatusPill } from '$lib/components';
   import { getRoute, navigate, isActive } from '$lib/router';
   import { embedded, basePath } from '$lib/base';
+  import { parseLine } from '$lib/logparse';
 
   const connAddr = $derived(gameserverStore.connectionAddress(id));
 
@@ -84,6 +85,7 @@
   });
 
   const stats = $derived(gsState?.stats ?? null);
+  const logLines = $derived(gsState?.logLines ?? []);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
   const isTransitioning = $derived(() => {
@@ -242,7 +244,7 @@
           {#if stats}
             <span class="stat mem">{(stats.memory_usage_mb / 1024).toFixed(1)}<span class="stat-dim">/{(stats.memory_limit_mb / 1024).toFixed(0)} GB</span></span>
             <span class="stat-sep">·</span>
-            <span class="stat cpu">{Math.round(stats.cpu_percent)}%<span class="stat-dim"> CPU</span></span>
+            <span class="stat cpu">{Math.round(stats.cpu_percent)}% <span class="stat-dim">CPU</span></span>
           {/if}
           {#if uptime}
             {#if stats}<span class="stat-sep">·</span>{/if}
@@ -253,6 +255,14 @@
           {/if}
         </div>
       </div>
+
+      {#if !isStopped && logLines.length > 0}
+        <a href={tabHref({ label: 'Console', path: '/console' })} class="log-strip">
+          {#each logLines as line}
+            <div class="log-strip-line">{#each parseLine(line) as seg}<span class={seg.cls}>{seg.text}</span>{/each}</div>
+          {/each}
+        </a>
+      {/if}
     </div>
 
     <!-- Tab Bar -->
@@ -365,6 +375,26 @@
   }
   .srv-actions-left { display: flex; gap: 6px; align-items: center; }
   .btn-action:disabled { opacity: 0.4; pointer-events: none; }
+
+  .log-strip {
+    display: block;
+    padding: 8px 24px;
+    border-top: 1px solid var(--border-dim);
+    background: rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+    position: relative; z-index: 1;
+    transition: background 0.15s;
+    overflow: hidden;
+  }
+  .log-strip:hover { background: rgba(0, 0, 0, 0.25); }
+  .log-strip-line {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    line-height: 1.55;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .srv-stats {
     display: flex; align-items: center; gap: 6px;

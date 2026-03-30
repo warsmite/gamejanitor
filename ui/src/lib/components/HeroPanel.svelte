@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Gameserver, GameserverStats, QueryData } from '$lib/api';
   import { navigate } from '$lib/router';
+  import { parseLine } from '$lib/logparse';
   import GameIcon from './GameIcon.svelte';
   import StatusPill from './StatusPill.svelte';
   import CopyBlock from './CopyBlock.svelte';
@@ -92,7 +93,7 @@
     {#if logLines.length > 0}
       <a href="/gameservers/{gameserver.id}/console" class="log-preview" onclick={(e) => e.stopPropagation()}>
         {#each logLines as line}
-          <div class="log-line">{line}</div>
+          <div class="log-line">{#each parseLine(line) as seg}<span class={seg.cls}>{seg.text}</span>{/each}</div>
         {/each}
       </a>
     {/if}
@@ -237,7 +238,6 @@
     font-family: var(--font-mono);
     font-size: 0.68rem;
     line-height: 1.55;
-    color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

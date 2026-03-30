@@ -203,6 +203,24 @@ nav {
 }
 .toggle-label { font-size: 0.82rem; color: var(--text-secondary); }
 
+/* ═══════════════════════ LOG HIGHLIGHTING ═══════════════════════ */
+/* Used by console, header log strip, and dashboard hero panels.
+   Classes are emitted by $lib/logparse.ts parseLine(). */
+.log-dim { color: #5a5550; }
+.log-lvl-info { color: #6b6560; }
+.log-lvl-warn { color: var(--caution); }
+.log-lvl-error { color: var(--danger); font-weight: 500; }
+.log-lvl-debug { color: #5a5550; }
+.log-msg { color: var(--text-secondary); }
+.log-msg-warn { color: var(--caution); }
+.log-msg-error { color: var(--danger); }
+.log-msg-debug { color: #7a7570; }
+.log-chat { color: var(--text-primary); }
+.log-join { color: var(--live); }
+.log-leave { color: var(--idle); }
+.log-system { color: var(--accent); }
+.log-trace { color: var(--danger); opacity: 0.75; }
+
 /* ═══════════════════════ SHARED LAYOUT ═══════════════════════ */
 main { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
 
