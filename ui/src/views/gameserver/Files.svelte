@@ -24,7 +24,7 @@
 
   function buildSegments(path: string): { name: string; path: string }[] {
     const parts = path.split('/').filter(Boolean);
-    const segments: { name: string; path: string }[] = [{ name: '~', path: '/' }];
+    const segments: { name: string; path: string }[] = [{ name: 'server', path: '/' }];
     let acc = '';
     for (const p of parts) {
       acc += '/' + p;
