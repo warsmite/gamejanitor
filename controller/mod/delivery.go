@@ -54,46 +54,6 @@ func (d *FileDelivery) Uninstall(ctx context.Context, gameserverID, filePath str
 	return nil
 }
 
-// --- ManifestDelivery ---
-
-// ManifestDelivery writes mod IDs to a JSON manifest file.
-// The game server reads this manifest and downloads mods at install time.
-type ManifestDelivery struct {
-	fileSvc FileOperator
-	log     *slog.Logger
-}
-
-func NewManifestDelivery(fileSvc FileOperator, log *slog.Logger) *ManifestDelivery {
-	return &ManifestDelivery{fileSvc: fileSvc, log: log}
-}
-
-func (d *ManifestDelivery) Install(ctx context.Context, gameserverID, manifestPath string, allModIDs []string) error {
-	dir := path.Dir(manifestPath)
-	if err := d.fileSvc.CreateDirectory(ctx, gameserverID, dir); err != nil {
-		return fmt.Errorf("creating manifest directory %s: %w", dir, err)
-	}
-
-	data, err := json.MarshalIndent(allModIDs, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshalling manifest: %w", err)
-	}
-
-	if err := d.fileSvc.WriteFile(ctx, gameserverID, manifestPath, data); err != nil {
-		return fmt.Errorf("writing manifest: %w", err)
-	}
-	return nil
-}
-
-func (d *ManifestDelivery) Uninstall(ctx context.Context, gameserverID, manifestPath string, remainingModIDs []string) error {
-	if len(remainingModIDs) == 0 {
-		if err := d.fileSvc.DeletePath(ctx, gameserverID, manifestPath); err != nil {
-			d.log.Warn("failed to delete empty manifest", "path", manifestPath, "error", err)
-		}
-		return nil
-	}
-	return d.Install(ctx, gameserverID, manifestPath, remainingModIDs)
-}
-
 // --- PackDelivery ---
 
 // PackDelivery installs a modpack (.mrpack) — a bundle of mods + config overrides.

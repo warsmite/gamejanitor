@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -82,7 +84,7 @@ func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
 				continue
 			}
 
-			if err := s.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, mod.FilePath, "", 0); err != nil {
+			if err := s.recoverModFile(ctx, gameserverID, downloadURL, mod); err != nil {
 				s.log.Warn("reconcile: failed to re-download mod", "mod", mod.Name, "url", downloadURL, "error", err)
 				failed++
 				continue
@@ -96,11 +98,6 @@ func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
 		}
 	}
 
-	// Handle manifest-delivery mods — regenerate manifest files
-	if err := s.reconcileManifests(ctx, gameserverID, mods); err != nil {
-		s.log.Warn("reconcile: manifest regeneration had errors", "error", err)
-	}
-
 	// Handle pack records — if any child mods were recovered, re-extract pack overrides
 	if recovered > 0 {
 		s.reconcilePackOverrides(ctx, gameserverID, mods)
@@ -110,6 +107,20 @@ func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {
 		s.log.Info("reconcile: complete", "gameserver", gameserverID, "recovered", recovered, "failed", failed)
 	}
 	return nil
+}
+
+// recoverModFile downloads a missing mod file, handling both HTTP and steam://ugc/ URLs.
+func (s *ModService) recoverModFile(ctx context.Context, gameserverID, downloadURL string, mod model.InstalledMod) error {
+	if strings.HasPrefix(downloadURL, "steam://ugc/") {
+		parts := strings.Split(strings.TrimPrefix(downloadURL, "steam://ugc/"), "/")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid UGC URL: %s", downloadURL)
+		}
+		appID, _ := strconv.ParseUint(parts[0], 10, 32)
+		hcontent, _ := strconv.ParseUint(parts[1], 10, 64)
+		return s.fileSvc.DownloadWorkshopItem(ctx, gameserverID, uint32(appID), hcontent, path.Dir(mod.FilePath))
+	}
+	return s.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, mod.FilePath, "", 0)
 }
 
 // resolveDownloadURL queries the catalog for the current download URL of an installed mod.
@@ -135,52 +146,6 @@ func (s *ModService) resolveDownloadURL(ctx context.Context, mod model.Installed
 
 	// Fallback: return latest version URL (better than nothing)
 	return versions[0].DownloadURL
-}
-
-// reconcileManifests regenerates manifest files from DB state.
-// For Workshop-style mods, the manifest is the source of truth for mod downloads.
-func (s *ModService) reconcileManifests(ctx context.Context, gameserverID string, mods []model.InstalledMod) error {
-	// Group manifest mods by source to find their manifest paths
-	manifestSources := make(map[string][]string) // source → mod source_ids
-	for _, mod := range mods {
-		if mod.Delivery == "manifest" {
-			manifestSources[mod.Source] = append(manifestSources[mod.Source], mod.SourceID)
-		}
-	}
-
-	if len(manifestSources) == 0 {
-		return nil
-	}
-
-	// Look up the game definition to find manifest paths
-	gs, err := s.store.GetGameserver(gameserverID)
-	if err != nil {
-		return err
-	}
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return nil
-	}
-
-	for _, cat := range game.Mods.Categories {
-		for _, src := range cat.Sources {
-			if src.Delivery != "manifest" {
-				continue
-			}
-			ids, ok := manifestSources[src.Name]
-			if !ok || len(ids) == 0 {
-				continue
-			}
-			manifestPath := src.Config["manifest_path"]
-			if manifestPath == "" {
-				continue
-			}
-			if err := s.manifestDel.Install(ctx, gameserverID, manifestPath, ids); err != nil {
-				s.log.Warn("reconcile: failed to regenerate manifest", "source", src.Name, "error", err)
-			}
-		}
-	}
-	return nil
 }
 
 // reconcilePackOverrides re-downloads pack .mrpack files and re-extracts overrides

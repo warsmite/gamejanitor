@@ -53,7 +53,6 @@ type ModService struct {
 	catalogs    map[string]ModCatalog
 	fileSvc     FileOperator
 	fileDel     *FileDelivery
-	manifestDel *ManifestDelivery
 	packDel     *PackDelivery
 	store       Store
 	gameStore   *games.GameStore
@@ -77,7 +76,6 @@ func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore
 		locks:       make(map[string]*sync.Mutex),
 		fileSvc:     fileSvc,
 		fileDel:     NewFileDelivery(fileSvc, log),
-		manifestDel: NewManifestDelivery(fileSvc, log),
 		packDel:     NewPackDelivery(fileSvc, log),
 		store:       store,
 		gameStore:   gameStore,
@@ -574,16 +572,8 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID, modID string) 
 	}
 
 	// Deliver uninstall
-	switch mod.Delivery {
-	case "file":
+	if mod.Delivery == "file" {
 		s.fileDel.Uninstall(ctx, gameserverID, mod.FilePath)
-	case "manifest":
-		// Rebuild manifest without this mod
-		remaining := s.remainingManifestIDs(gameserverID, mod.Source, mod.SourceID)
-		game := s.gameStore.GetGame(s.gameserverGameID(gameserverID))
-		if manifestPath := s.findManifestPath(game, mod.Category, mod.Source); manifestPath != "" {
-			s.manifestDel.Uninstall(ctx, gameserverID, manifestPath, remaining)
-		}
 	}
 
 	if err := s.store.DeleteInstalledMod(modID); err != nil {
@@ -972,14 +962,6 @@ func (s *ModService) getGameserver(gameserverID string) (*model.Gameserver, erro
 	return gs, nil
 }
 
-func (s *ModService) gameserverGameID(gameserverID string) string {
-	gs, err := s.store.GetGameserver(gameserverID)
-	if err != nil || gs == nil {
-		return ""
-	}
-	return gs.GameID
-}
-
 // availableCategories returns categories whose sources are available given current env.
 func (s *ModService) availableCategories(game *games.Game, env model.Env) []games.ModCategoryDef {
 	allowedSources := s.allowedSources(game, env)
@@ -1114,13 +1096,6 @@ func (s *ModService) deliver(ctx context.Context, gameserverID string, src games
 			return s.deliverWorkshopUGC(ctx, gameserverID, src.InstallPath, version)
 		}
 		return s.fileDel.Install(ctx, gameserverID, src.InstallPath, version.DownloadURL, sanitizeFileName(version.FileName))
-	case "manifest":
-		manifestPath := src.Config["manifest_path"]
-		if manifestPath == "" {
-			return fmt.Errorf("manifest delivery requires manifest_path in source config")
-		}
-		allIDs := s.allManifestIDs(gameserverID, src.Name, version.VersionID)
-		return s.manifestDel.Install(ctx, gameserverID, manifestPath, allIDs)
 	default:
 		return fmt.Errorf("unsupported delivery type: %s", src.Delivery)
 	}
@@ -1147,45 +1122,6 @@ func (s *ModService) deliverWorkshopUGC(ctx context.Context, gameserverID, insta
 
 	destPath := path.Join(installPath, version.VersionID)
 	return s.fileSvc.DownloadWorkshopItem(ctx, gameserverID, uint32(appID), hcontentFile, destPath)
-}
-
-func (s *ModService) allManifestIDs(gameserverID, sourceName, newID string) []string {
-	installed, _ := s.store.ListInstalledMods(gameserverID)
-	var ids []string
-	for _, m := range installed {
-		if m.Source == sourceName && m.Delivery == "manifest" {
-			ids = append(ids, m.SourceID)
-		}
-	}
-	ids = append(ids, newID)
-	return ids
-}
-
-func (s *ModService) remainingManifestIDs(gameserverID, sourceName, excludeSourceID string) []string {
-	installed, _ := s.store.ListInstalledMods(gameserverID)
-	var ids []string
-	for _, m := range installed {
-		if m.Source == sourceName && m.Delivery == "manifest" && m.SourceID != excludeSourceID {
-			ids = append(ids, m.SourceID)
-		}
-	}
-	return ids
-}
-
-func (s *ModService) findManifestPath(game *games.Game, category, sourceName string) string {
-	if game == nil {
-		return ""
-	}
-	for _, cat := range game.Mods.Categories {
-		if cat.Name == category {
-			for _, src := range cat.Sources {
-				if src.Name == sourceName {
-					return src.Config["manifest_path"]
-				}
-			}
-		}
-	}
-	return ""
 }
 
 func (s *ModService) newInstalledMod(gameserverID, source, sourceID, category string, version *ModVersion, delivery string, autoInstalled bool, packID *string) *model.InstalledMod {

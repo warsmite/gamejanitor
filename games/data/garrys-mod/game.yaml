@@ -56,10 +56,10 @@ container:
       - name: Addons
         sources:
           - name: workshop
-            delivery: manifest
+            delivery: file
+            install_path: /data/server/garrysmod/addons
             config:
               app_id: "4000"
-              manifest_path: /data/.gamejanitor/workshop_items.json
 
 assets:
   icon: garrys-mod-icon.ico
