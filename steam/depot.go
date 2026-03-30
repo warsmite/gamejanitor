@@ -51,16 +51,23 @@ type DownloadOptions struct {
 
 // DownloadResult contains information about a completed download.
 type DownloadResult struct {
-	Manifest     *Manifest
-	FilesWritten int
-	FilesRemoved int
+	Manifest        *Manifest
+	FilesWritten    int
+	FilesRemoved    int
 	BytesDownloaded uint64
 	// IsDelta is true if this was a delta update from an old manifest.
 	IsDelta bool
 }
 
+// chunkTarget describes where a chunk should be written on disk.
+type chunkTarget struct {
+	path   string
+	offset uint64
+}
+
 // Download fetches a depot and writes it to disk. If OldManifest is provided,
 // only changed chunks are downloaded (delta update).
+// Chunks are written directly to their target files as they download — no buffering in memory.
 func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*DownloadResult, error) {
 	if opts.Branch == "" {
 		opts.Branch = "public"
@@ -86,7 +93,6 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 			break
 		}
 	}
-	// If no specific depot requested, use the first one
 	if depotInfo == nil && opts.DepotID == 0 && len(appInfo.Depots) > 0 {
 		depotInfo = &appInfo.Depots[0]
 		d.log.Info("no depot specified, using first depot", "depot_id", depotInfo.DepotID)
@@ -134,7 +140,7 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 		"depot_id", manifest.DepotID,
 	)
 
-	// Determine which chunks to download
+	// Determine which chunks to download and which files to write
 	var chunksToDownload []ManifestChunk
 	var filesToWrite []ManifestFile
 	var filesToRemove []string
@@ -158,7 +164,6 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 		}
 		filesToRemove = diff.FilesRemoved
 
-		// Only write files that changed or were added
 		changedSet := make(map[string]struct{})
 		for _, name := range diff.FilesAdded {
 			changedSet[name] = struct{}{}
@@ -191,8 +196,41 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 		return nil, fmt.Errorf("create dest dir: %w", err)
 	}
 
-	// Download chunks into memory-mapped store keyed by chunk ID
-	chunkStore := &chunkStore{data: make(map[string][]byte)}
+	// Create directories and pre-create files before downloading chunks
+	for _, file := range filesToWrite {
+		path := filepath.Join(opts.DestDir, filepath.FromSlash(file.Filename))
+		if file.Flags&0x40 != 0 {
+			os.MkdirAll(path, 0o755)
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, fmt.Errorf("create dir for %s: %w", file.Filename, err)
+		}
+	}
+
+	// Build chunk-to-file index: for each chunk ID, where does it go on disk?
+	// A chunk may appear in multiple files (rare but possible with hardlinked content).
+	chunkTargets := make(map[string][]chunkTarget)
+	for _, file := range filesToWrite {
+		if file.Flags&0x40 != 0 {
+			continue // directory
+		}
+		path := filepath.Join(opts.DestDir, filepath.FromSlash(file.Filename))
+		for _, chunk := range file.Chunks {
+			cid := chunk.ChunkIDHex()
+			chunkTargets[cid] = append(chunkTargets[cid], chunkTarget{
+				path:   path,
+				offset: chunk.Offset,
+			})
+		}
+	}
+
+	// File handle cache — avoid opening/closing the same file for every chunk.
+	// Files are written by multiple goroutines so each write uses pwrite (WriteAt)
+	// which is safe for concurrent access to different offsets.
+	fileCache := &fileHandleCache{handles: make(map[string]*os.File)}
+	defer fileCache.closeAll()
+
 	var totalBytes uint64
 	for _, c := range chunksToDownload {
 		totalBytes += uint64(c.CompressedSize)
@@ -211,7 +249,23 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 
 		err = d.cdn.DownloadChunksParallel(ctx, depotInfo.DepotID, depotKey, chunksToDownload, d.Workers,
 			func(chunk ManifestChunk, data []byte) error {
-				chunkStore.put(chunk.ChunkIDHex(), data)
+				// Write chunk data directly to all target files at the correct offsets
+				cid := chunk.ChunkIDHex()
+				targets, ok := chunkTargets[cid]
+				if !ok {
+					return nil // orphan chunk (shouldn't happen)
+				}
+
+				for _, target := range targets {
+					f, err := fileCache.get(target.path)
+					if err != nil {
+						return fmt.Errorf("open %s: %w", target.path, err)
+					}
+					if _, err := f.WriteAt(data, int64(target.offset)); err != nil {
+						return fmt.Errorf("write %s at %d: %w", target.path, target.offset, err)
+					}
+				}
+
 				progress.CompletedChunks++
 				progress.CompletedBytes += uint64(chunk.CompressedSize)
 				if opts.OnProgress != nil {
@@ -224,12 +278,16 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 		}
 	}
 
-	// Assemble files on disk
+	fileCache.closeAll()
+
+	// Set file permissions — all files 0755 since Steam manifests don't carry permission info
 	filesWritten := 0
 	for _, file := range filesToWrite {
-		if err := d.assembleFile(opts.DestDir, &file, chunkStore); err != nil {
-			return nil, fmt.Errorf("assemble %s: %w", file.Filename, err)
+		if file.Flags&0x40 != 0 {
+			continue
 		}
+		path := filepath.Join(opts.DestDir, filepath.FromSlash(file.Filename))
+		os.Chmod(path, 0o755)
 		filesWritten++
 	}
 
@@ -259,59 +317,35 @@ func (d *DepotDownloader) Download(ctx context.Context, opts DownloadOptions) (*
 	}, nil
 }
 
-// assembleFile writes a single file by concatenating its chunks in order.
-func (d *DepotDownloader) assembleFile(destDir string, file *ManifestFile, store *chunkStore) error {
-	path := filepath.Join(destDir, filepath.FromSlash(file.Filename))
+// fileHandleCache keeps files open during chunk download to avoid repeated open/close.
+// WriteAt is safe for concurrent use on different offsets (pwrite syscall).
+type fileHandleCache struct {
+	mu      sync.Mutex
+	handles map[string]*os.File
+}
 
-	// Directories are represented as files with flag 0x40 and size 0
-	if file.Flags&0x40 != 0 {
-		return os.MkdirAll(path, 0o755)
+func (c *fileHandleCache) get(path string) (*os.File, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if f, ok := c.handles[path]; ok {
+		return f, nil
 	}
 
-	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	// Steam manifests don't reliably carry executable permission info.
-	// Use 0755 for all files — this runs inside a container where
-	// restrictive permissions cause more problems than they solve.
-	perm := os.FileMode(0o755)
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o755)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer f.Close()
+	c.handles[path] = f
+	return f, nil
+}
 
-	for _, chunk := range file.Chunks {
-		data, ok := store.get(chunk.ChunkIDHex())
-		if !ok {
-			return fmt.Errorf("missing chunk %s", chunk.ChunkIDHex())
-		}
-		if _, err := f.WriteAt(data, int64(chunk.Offset)); err != nil {
-			return err
-		}
+func (c *fileHandleCache) closeAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, f := range c.handles {
+		f.Close()
 	}
-
-	return nil
-}
-
-// chunkStore is a thread-safe in-memory store for downloaded chunk data.
-type chunkStore struct {
-	mu   sync.RWMutex
-	data map[string][]byte
-}
-
-func (s *chunkStore) put(chunkID string, data []byte) {
-	s.mu.Lock()
-	s.data[chunkID] = data
-	s.mu.Unlock()
-}
-
-func (s *chunkStore) get(chunkID string) ([]byte, bool) {
-	s.mu.RLock()
-	data, ok := s.data[chunkID]
-	s.mu.RUnlock()
-	return data, ok
+	c.handles = make(map[string]*os.File)
 }
