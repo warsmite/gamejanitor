@@ -332,6 +332,11 @@ in {
 
         DynamicUser = true;
         StateDirectory = "gamejanitor";
+
+        # Workers need CAP_CHOWN and CAP_FOWNER to set ownership on Docker
+        # volume directories so game containers (UID 1001) can write to them.
+        AmbientCapabilities = lib.optionals hasLocalWorker [ "CAP_CHOWN" "CAP_FOWNER" ];
+        CapabilityBoundingSet = lib.optionals hasLocalWorker [ "CAP_CHOWN" "CAP_FOWNER" ];
       };
     };
 
