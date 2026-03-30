@@ -56,6 +56,7 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
+            sudo rm -rf ui/dist
             (cd ui && npm run build)
             exec sudo -E go run -mod=mod . serve -d /tmp/gamejanitor-data "$@"
           '';
@@ -94,7 +95,59 @@
             done
           '';
 
-          # Multi-node test scripts — separate data dirs so they don't conflict
+          # Multi-node dev — runs controller + worker as separate processes.
+          # Both share the same machine but communicate via gRPC, catching
+          # proto mismatches, registration bugs, and multi-node code paths.
+          dev-multi = pkgs.writeShellScriptBin "dev-multi" ''
+            set -e
+            echo "Building UI..."
+            sudo rm -rf ui/dist
+            (cd ui && npm run build)
+
+            CTRL_DIR=/tmp/gamejanitor-multi-controller
+            WORK_DIR=/tmp/gamejanitor-multi-worker
+            mkdir -p "$CTRL_DIR" "$WORK_DIR"
+
+            cleanup() {
+              echo "Stopping..."
+              [ -n "''${CTRL_PID:-}" ] && kill "$CTRL_PID" 2>/dev/null || true
+              [ -n "''${WORK_PID:-}" ] && kill "$WORK_PID" 2>/dev/null || true
+              wait 2>/dev/null
+            }
+            trap cleanup EXIT
+
+            echo "Starting controller on :8080 (gRPC :9090)..."
+            go run -mod=mod . serve \
+              --controller --worker=false \
+              --port 8080 --grpc-port 9090 --sftp-port 0 \
+              -d "$CTRL_DIR" &
+            CTRL_PID=$!
+
+            # Wait for controller gRPC to be ready
+            for i in $(seq 1 30); do
+              if nc -z localhost 9090 2>/dev/null; then break; fi
+              sleep 0.2
+            done
+
+            echo "Starting worker (gRPC :9091, connecting to controller :9090)..."
+            sudo -E go run -mod=mod . serve \
+              --worker --controller=false \
+              --grpc-port 9091 \
+              --controller-address localhost:9090 \
+              -d "$WORK_DIR" &
+            WORK_PID=$!
+
+            echo ""
+            echo "Multi-node dev running:"
+            echo "  Controller: http://localhost:8080 (gRPC :9090)"
+            echo "  Worker:     gRPC :9091"
+            echo "  Press Ctrl+C to stop both"
+            echo ""
+
+            wait
+          '';
+
+          # Individual process scripts for advanced use
           dev-controller = pkgs.writeShellScriptBin "dev-controller" ''
             echo "Starting controller on :8090 (gRPC :9090)"
             exec go run . serve \
@@ -112,7 +165,7 @@
               EXTRA_ARGS+=(--worker-token "$TOKEN")
             fi
             echo "Starting worker agent on gRPC :$PORT, registering with controller at $CTRL"
-            exec go run . serve \
+            exec sudo -E go run . serve \
               --worker --controller=false \
               --grpc-port "$PORT" \
               --controller-address "$CTRL" \
@@ -203,7 +256,7 @@
               fi
             fi
             echo "Removing /tmp/gamejanitor-*..."
-            rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-*
+            rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-* /tmp/gamejanitor-multi-*
             echo "Cleanup complete."
           '';
         in
@@ -221,6 +274,7 @@
             build-image
             push-image
             push-all-images
+            dev-multi
             dev-controller
             dev-worker
             gen-proto
