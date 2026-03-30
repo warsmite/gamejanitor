@@ -200,8 +200,7 @@ echo "[start-server] ERROR: <what went wrong>"
 
 | Image | Contents | Used by |
 |-------|----------|---------|
-| `ghcr.io/warsmite/gamejanitor/base` | Ubuntu 24.04, curl, wget, rcon-cli, entrypoint | Minecraft Bedrock |
-| `ghcr.io/warsmite/gamejanitor/steamcmd` | base + SteamCMD, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
+| `ghcr.io/warsmite/gamejanitor/base` | Ubuntu 24.04, curl, wget, rcon-cli, entrypoint | Most games (Rust, CS2, ARK, etc.) |
 | `ghcr.io/warsmite/gamejanitor/java8` | base + OpenJDK 8 | Minecraft (pre-1.17) |
 | `ghcr.io/warsmite/gamejanitor/java17` | base + OpenJDK 17 | Minecraft 1.17–1.20 |
 | `ghcr.io/warsmite/gamejanitor/java21` | base + OpenJDK 21 | Minecraft 1.21+ |

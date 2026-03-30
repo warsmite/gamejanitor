@@ -9,9 +9,9 @@ import (
 func TestResolveImage_StaticImage(t *testing.T) {
 	t.Parallel()
 	g := &Game{
-		BaseImage: "ghcr.io/warsmite/gamejanitor/steamcmd",
+		BaseImage: "ghcr.io/warsmite/gamejanitor/base",
 	}
-	assert.Equal(t, "ghcr.io/warsmite/gamejanitor/steamcmd", g.ResolveImage(nil))
+	assert.Equal(t, "ghcr.io/warsmite/gamejanitor/base", g.ResolveImage(nil))
 }
 
 func TestResolveImage_RuntimeStaticOverride(t *testing.T) {

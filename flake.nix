@@ -58,7 +58,7 @@
           build-image = pkgs.writeShellScriptBin "build-image" ''
             image="$1"
             if [ -z "$image" ]; then
-              echo "Usage: build-image <base|steamcmd|java8|java17|java21|java25|dotnet>"
+              echo "Usage: build-image <base|java8|java17|java21|java25|dotnet>"
               exit 1
             fi
             docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
@@ -67,7 +67,7 @@
           push-image = pkgs.writeShellScriptBin "push-image" ''
             image="$1"
             if [ -z "$image" ]; then
-              echo "Usage: push-image <base|steamcmd|java8|java17|java21|java25|dotnet>"
+              echo "Usage: push-image <base|java8|java17|java21|java25|dotnet>"
               exit 1
             fi
             echo "Building and pushing $image..."
@@ -77,7 +77,7 @@
 
           push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
             # Build order matters: base must be built first since others depend on it
-            for image in base steamcmd java8 java17 java21 java25 dotnet; do
+            for image in base java8 java17 java21 java25 dotnet; do
               echo "Building and pushing $image..."
               docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
               docker push "ghcr.io/warsmite/gamejanitor/$image"

@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.filter.outputs.base }}
-      steamcmd: ${{ steps.filter.outputs.steamcmd }}
       java8: ${{ steps.filter.outputs.java8 }}
       java17: ${{ steps.filter.outputs.java17 }}
       java21: ${{ steps.filter.outputs.java21 }}
@@ -30,8 +29,6 @@ jobs:
           filters: |
             base:
               - 'images/base/**'
-            steamcmd:
-              - 'images/steamcmd/**'
             java8:
               - 'images/java8/**'
             java17:
@@ -62,28 +59,6 @@ jobs:
           context: images/base
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/base:latest
-
-  steamcmd:
-    needs: [changes, base]
-    if: >-
-      always() && needs.base.result != 'failure' &&
-      (needs.changes.outputs.steamcmd == 'true' || needs.changes.outputs.base == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        with:
-          context: images/steamcmd
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}/steamcmd:latest
 
   java8:
     needs: [changes, base]
