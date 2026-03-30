@@ -243,13 +243,16 @@ class GameserverStore {
         state.activeOperation = null;
       }
 
-      // Depot download progress
+      // Depot download progress — also restores the operation badge after page refresh
       if (data.type === 'gameserver.depot_progress') {
         state.depotProgress = {
           percent: data.percent ?? 0,
           completedBytes: data.completed_bytes ?? 0,
           totalBytes: data.total_bytes ?? 0,
         };
+        if (!state.activeOperation) {
+          state.activeOperation = 'gameserver.depot_downloading';
+        }
       }
       if (data.type === 'gameserver.depot_complete' || data.type === 'gameserver.depot_cached' || data.type === 'gameserver.error') {
         state.depotProgress = null;
