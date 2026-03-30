@@ -199,9 +199,6 @@
           </div>
         </div>
         <div class="srv-id-right">
-          {#if !embedded && gameserver.node_id}
-            <span class="node-badge">{gameserver.node_id}</span>
-          {/if}
           {#if operation}
             <span class="op-badge">
               <span class="op-dot"></span>
@@ -342,14 +339,6 @@
   }
   .srv-addr:hover { color: var(--accent); }
   .srv-id-right { display: flex; align-items: center; gap: 8px; }
-  .node-badge {
-    font-size: 0.66rem; font-family: var(--font-mono);
-    color: var(--text-tertiary); opacity: 0.7;
-    padding: 3px 8px; border-radius: 4px;
-    background: var(--bg-inset); border: 1px solid var(--border-dim);
-    max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-
   .op-badge {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 4px 11px 4px 8px; border-radius: 100px;
