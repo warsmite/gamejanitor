@@ -1,15 +1,32 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api, type FileEntry } from '$lib/api';
   import { toast, confirm, prompt } from '$lib/stores';
 
   let { id }: { id: string } = $props();
 
-  // Local state replaces URL search params for file navigation
-  let currentPath = $state('/');
+  // Read initial state from URL search params
+  function readURLState(): { path: string; edit: string | null } {
+    const params = new URLSearchParams(window.location.search);
+    return { path: params.get('path') || '/', edit: params.get('edit') };
+  }
+
+  function syncURL() {
+    const params = new URLSearchParams();
+    if (currentPath !== '/') params.set('path', currentPath);
+    if (editing && editPath) params.set('edit', editPath);
+    const qs = params.toString();
+    const base = window.location.pathname;
+    window.history.replaceState(null, '', qs ? `${base}?${qs}` : base);
+  }
+
+  const initial = readURLState();
+  let currentPath = $state(initial.path);
   let editing = $state(false);
   let editPath = $state('');
   let editContent = $state('');
   let editSaving = $state(false);
+  let pendingEdit = initial.edit;
 
   let files = $state<FileEntry[]>([]);
   let loading = $state(true);
@@ -59,6 +76,19 @@
     }
   });
 
+  // Restore editor from URL on mount
+  onMount(() => {
+    if (pendingEdit) {
+      const path = pendingEdit;
+      pendingEdit = null;
+      api.files.read(id, apiPath(path)).then(result => {
+        editPath = path;
+        editContent = result.content;
+        editing = true;
+      }).catch(() => {});
+    }
+  });
+
   async function loadFiles() {
     loading = true;
     try {
@@ -75,6 +105,7 @@
     renamingFile = '';
     editing = false;
     currentPath = path;
+    syncURL();
   }
 
   function openDir(name: string) {
@@ -93,6 +124,7 @@
       editPath = path;
       editContent = result.content;
       editing = true;
+      syncURL();
     } catch (e: any) {
       toast(`Failed to read file: ${e.message}`, 'error');
     }
@@ -112,6 +144,7 @@
 
   function closeEditor() {
     editing = false;
+    syncURL();
   }
 
   function handleEditorKeydown(e: KeyboardEvent) {
