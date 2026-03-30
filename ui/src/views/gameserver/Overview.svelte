@@ -163,33 +163,6 @@
       </div>
     </div>
 
-    <!-- SFTP — full width -->
-    {#if sftpAddr || can('gameserver.regenerate-sftp')}
-      <div class="panel full-width" style="padding: 0;">
-        <div class="sftp-section">
-          {#if sftpAddr}
-            <div class="sftp-addr">
-              <CopyBlock label="SFTP" value={sftpAddr} />
-            </div>
-          {/if}
-          {#if can('gameserver.regenerate-sftp')}
-            {#if sftpPassword}
-              <CopyBlock label="Password" value={sftpPassword} />
-            {/if}
-            <button class="sftp-regen-btn" onclick={regenerateSftpPassword} disabled={regenerating}>
-              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
-              {regenerating ? 'Generating...' : sftpPassword ? 'Regenerate' : 'Generate Password'}
-            </button>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
-    <!-- Resource history charts -->
-    <div class="panel full-width">
-      <StatsChart {id} />
-    </div>
-
     <!-- Query data -->
     <div class="panel">
       <div class="panel-title">Server Info</div>
@@ -252,6 +225,33 @@
         </div>
       </div>
     </div>
+
+    <!-- Resource history charts -->
+    <div class="panel full-width">
+      <StatsChart {id} />
+    </div>
+
+    <!-- SFTP -->
+    {#if sftpAddr || can('gameserver.regenerate-sftp')}
+      <div class="panel full-width" style="padding: 0;">
+        <div class="sftp-section">
+          {#if sftpAddr}
+            <div class="sftp-addr">
+              <CopyBlock label="SFTP" value={sftpAddr} />
+            </div>
+          {/if}
+          {#if can('gameserver.regenerate-sftp')}
+            {#if sftpPassword}
+              <CopyBlock label="Password" value={sftpPassword} />
+            {/if}
+            <button class="sftp-regen-btn" onclick={regenerateSftpPassword} disabled={regenerating}>
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
+              {regenerating ? 'Generating...' : sftpPassword ? 'Regenerate' : 'Generate Password'}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
 
   </div>
 {/if}
