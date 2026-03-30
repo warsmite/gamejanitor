@@ -14,6 +14,7 @@ interface Route {
 }
 
 const standardPatterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
+  { name: 'invite', pattern: /^\/invite\/([^/]+)$/, paramNames: ['code'] },
   { name: 'dashboard', pattern: /^\/$/, paramNames: [] },
   { name: 'cluster', pattern: /^\/cluster$/, paramNames: [] },
   { name: 'settings', pattern: /^\/settings$/, paramNames: [] },

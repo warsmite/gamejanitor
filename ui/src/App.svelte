@@ -12,6 +12,7 @@
   import Settings from './views/Settings.svelte';
   import NewGameserver from './views/NewGameserver.svelte';
   import Login from './views/Login.svelte';
+  import Invite from './views/Invite.svelte';
   import GameserverLayout from './views/gameserver/Layout.svelte';
   import Overview from './views/gameserver/Overview.svelte';
   import Console from './views/gameserver/Console.svelte';
@@ -97,7 +98,9 @@
   </nav>
 {/if}
 
-{#if gameserverStore.authRequired}
+{#if route.name === 'invite'}
+  <Invite code={route.params.code} />
+{:else if gameserverStore.authRequired}
   <Login />
 {:else if isGameserverRoute}
   <GameserverLayout id={gameserverId}>

@@ -524,6 +524,7 @@ export const api = {
     list: () => get<Token[]>('/api/tokens'),
     create: (data: any) => post<any>('/api/tokens', data),
     delete: (id: string) => del(`/api/tokens/${id}`),
+    generateClaimCode: (id: string) => post<{ claim_code: string }>(`/api/tokens/${id}/claim-code`),
   },
 
   webhooks: {

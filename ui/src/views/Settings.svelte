@@ -195,6 +195,25 @@
     }
   }
 
+  async function shareToken(id: string) {
+    try {
+      // Generate (or regenerate) a claim code
+      const result = await api.tokens.generateClaimCode(id);
+      const link = `${window.location.origin}/invite/${result.claim_code}`;
+
+      await navigator.clipboard.writeText(link);
+      toast('Invite link copied to clipboard', 'success');
+
+      // Update the token in the list to show it has a claim code
+      const idx = tokens.findIndex(t => t.id === id);
+      if (idx >= 0) {
+        tokens[idx] = { ...tokens[idx], claim_code: result.claim_code };
+      }
+    } catch (e: any) {
+      toast(`Failed to generate invite link: ${e.message}`, 'error');
+    }
+  }
+
   async function deleteToken(id: string, name: string) {
     if (!await confirm({ title: 'Delete Token', message: `Delete token "${name}"? Any integrations using it will stop working.`, confirmLabel: 'Delete', danger: true })) return;
     try {
@@ -593,6 +612,11 @@
                   </div>
                 </div>
                 <div class="list-actions">
+                  {#if token.scope === 'custom'}
+                    <button class="act" onclick={() => shareToken(token.id)}>
+                      {token.claim_code ? 'Copy Link' : 'Share'}
+                    </button>
+                  {/if}
                   <button class="act danger" onclick={() => deleteToken(token.id, token.name)}>Delete</button>
                 </div>
               </div>
