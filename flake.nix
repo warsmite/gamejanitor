@@ -126,7 +126,7 @@
             }
             trap cleanup EXIT
 
-            echo "Starting controller on :8080 (gRPC :9090)..."
+            echo "Starting controller on :8080 (gRPC :9090, no SFTP)..."
             go run -mod=mod . serve \
               --controller --worker=false \
               --port 8080 --grpc-port 9090 --sftp-port 0 \
@@ -143,11 +143,11 @@
               sleep 0.5
             done
 
-            echo "Starting worker-1 (gRPC :9091, connecting to controller :9090)..."
+            echo "Starting worker-1 (gRPC :9091, SFTP :2222, connecting to controller :9090)..."
             sudo -E go run -mod=mod . serve \
               --worker --controller=false \
               --bind 0.0.0.0 \
-              --grpc-port 9091 \
+              --grpc-port 9091 --sftp-port 2222 \
               --worker-id worker-1 \
               --controller-address localhost:9090 \
               --worker-token "$WORKER_TOKEN" \
@@ -165,11 +165,11 @@
                 --name dev-worker-2 --type worker -d "$CTRL_DIR" 2>/dev/null)
             fi
 
-            echo "Starting worker-2 (gRPC :9092, connecting to controller :9090)..."
+            echo "Starting worker-2 (gRPC :9092, SFTP :2223, connecting to controller :9090)..."
             sudo -E go run -mod=mod . serve \
               --worker --controller=false \
               --bind 0.0.0.0 \
-              --grpc-port 9092 \
+              --grpc-port 9092 --sftp-port 2223 \
               --worker-id worker-2 \
               --controller-address localhost:9090 \
               --worker-token "$WORKER2_TOKEN" \
@@ -179,8 +179,8 @@
             echo ""
             echo "Multi-node dev running:"
             echo "  Controller: http://localhost:8080 (gRPC :9090)"
-            echo "  Worker 1:   gRPC :9091"
-            echo "  Worker 2:   gRPC :9092"
+            echo "  Worker 1:   gRPC :9091, SFTP :2222"
+            echo "  Worker 2:   gRPC :9092, SFTP :2223"
             echo "  Press Ctrl+C to stop all"
             echo ""
 
