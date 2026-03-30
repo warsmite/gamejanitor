@@ -415,7 +415,7 @@
   {#if loading}
     <div class="sched-row"><div class="sched-info"><span class="sched-name" style="color:var(--text-tertiary)">Loading...</span></div></div>
   {:else if schedules.length === 0}
-    <div class="sched-row"><div class="sched-info"><span class="sched-name" style="color:var(--text-tertiary)">No schedules yet</span></div></div>
+    <div class="sched-empty">Automate restarts, backups, commands, and game updates on a schedule.</div>
   {:else}
     {#each schedules as sched (sched.id)}
       <div class="sched-row" class:disabled={!sched.enabled}>
@@ -775,6 +775,11 @@
   }
   .sch-act:hover { color: var(--accent); background: var(--accent-subtle); }
   .sch-act.danger:hover { color: var(--danger); background: rgba(239,68,68,0.06); }
+
+  .sched-empty {
+    padding: 32px 18px; text-align: center;
+    font-size: 0.82rem; color: var(--text-tertiary); line-height: 1.5;
+  }
 
   /* Edit inline */
   .edit-form { display: flex; flex-direction: column; gap: 10px; width: 100%; }
