@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,9 +46,16 @@ type FileOperator interface {
 	DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error
 }
 
+// WorkshopDownloader downloads Steam Workshop UGC items via the depot downloader.
+// The implementation resolves the gameserver's volume and writes directly to it.
+type WorkshopDownloader interface {
+	DownloadWorkshopItem(ctx context.Context, gameserverID string, appID uint32, hcontentFile uint64, installPath string) error
+}
+
 type ModService struct {
 	catalogs    map[string]ModCatalog
 	fileSvc     FileOperator
+	workshopDl  WorkshopDownloader
 	fileDel     *FileDelivery
 	manifestDel *ManifestDelivery
 	packDel     *PackDelivery
@@ -81,6 +89,11 @@ func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore
 		broadcaster: broadcaster,
 		log:         log,
 	}
+}
+
+// SetWorkshopDownloader sets the Steam Workshop UGC download handler.
+func (s *ModService) SetWorkshopDownloader(dl WorkshopDownloader) {
+	s.workshopDl = dl
 }
 
 // SetURLValidator sets the URL validation function for external downloads.
@@ -1104,6 +1117,11 @@ func (s *ModService) resolveVersion(ctx context.Context, catalog ModCatalog, mod
 func (s *ModService) deliver(ctx context.Context, gameserverID string, src games.ModCategorySource, version *ModVersion) error {
 	switch src.Delivery {
 	case "file":
+		// Workshop items with direct file_url use standard file delivery.
+		// UGC depot items (steam://ugc/ scheme) use the workshop downloader.
+		if strings.HasPrefix(version.DownloadURL, "steam://ugc/") {
+			return s.deliverWorkshopUGC(ctx, gameserverID, src.InstallPath, version)
+		}
 		return s.fileDel.Install(ctx, gameserverID, src.InstallPath, version.DownloadURL, sanitizeFileName(version.FileName))
 	case "manifest":
 		manifestPath := src.Config["manifest_path"]
@@ -1115,6 +1133,33 @@ func (s *ModService) deliver(ctx context.Context, gameserverID string, src games
 	default:
 		return fmt.Errorf("unsupported delivery type: %s", src.Delivery)
 	}
+}
+
+// deliverWorkshopUGC downloads a Steam Workshop UGC item via the depot downloader.
+// The download URL has the format: steam://ugc/{app_id}/{hcontent_file}
+func (s *ModService) deliverWorkshopUGC(ctx context.Context, gameserverID, installPath string, version *ModVersion) error {
+	if s.workshopDl == nil {
+		return fmt.Errorf("workshop UGC downloads not available (no Steam credentials configured)")
+	}
+
+	// Parse steam://ugc/{app_id}/{hcontent_file}
+	parts := strings.Split(strings.TrimPrefix(version.DownloadURL, "steam://ugc/"), "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid workshop UGC URL: %s", version.DownloadURL)
+	}
+
+	appID, err := strconv.ParseUint(parts[0], 10, 32)
+	if err != nil {
+		return fmt.Errorf("invalid app ID in UGC URL: %s", parts[0])
+	}
+
+	hcontentFile, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid hcontent_file in UGC URL: %s", parts[1])
+	}
+
+	destPath := path.Join(installPath, version.VersionID)
+	return s.workshopDl.DownloadWorkshopItem(ctx, gameserverID, uint32(appID), hcontentFile, destPath)
 }
 
 func (s *ModService) allManifestIDs(gameserverID, sourceName, newID string) []string {

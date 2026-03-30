@@ -125,12 +125,23 @@ func (c *WorkshopCatalog) GetVersions(ctx context.Context, modID string, filters
 		return nil, err
 	}
 
-	// Workshop items don't have discrete versions
+	// Determine download URL: prefer direct HTTP, fall back to UGC depot scheme
+	downloadURL := detail.FileURL
+	if downloadURL == "" && detail.HContentFile != "" && detail.HContentFile != "0" {
+		// UGC depot content — encode as steam:// scheme for the delivery layer
+		appID := detail.ConsumerApp
+		if appID == "" {
+			appID = filters.Extra["app_id"]
+		}
+		downloadURL = fmt.Sprintf("steam://ugc/%s/%s", appID, detail.HContentFile)
+	}
+
 	return []ModVersion{
 		{
-			VersionID: modID,
-			Version:   "",
-			FileName:  detail.Title,
+			VersionID:   modID,
+			Version:     "",
+			FileName:    detail.Title,
+			DownloadURL: downloadURL,
 		},
 	}, nil
 }
@@ -141,8 +152,11 @@ func (c *WorkshopCatalog) GetDependencies(ctx context.Context, versionID string)
 }
 
 type workshopItemDetail struct {
-	Title     string
-	ShortDesc string
+	Title        string
+	ShortDesc    string
+	FileURL      string // Direct HTTP download URL (empty for UGC depot items)
+	HContentFile string // UGC content handle as string (manifest ID for depot download)
+	ConsumerApp  string // App ID this item belongs to
 }
 
 func (c *WorkshopCatalog) getItemDetails(ctx context.Context, fileID string) (*workshopItemDetail, error) {
@@ -172,9 +186,12 @@ func (c *WorkshopCatalog) getItemDetails(ctx context.Context, fileID string) (*w
 	var steamResp struct {
 		Response struct {
 			PublishedFileDetails []struct {
-				Result int    `json:"result"`
-				Title  string `json:"title"`
-				Desc   string `json:"description"`
+				Result       int    `json:"result"`
+				Title        string `json:"title"`
+				Desc         string `json:"description"`
+				FileURL      string `json:"file_url"`
+				HContentFile string `json:"hcontent_file"`
+				ConsumerApp  string `json:"consumer_appid"`
 			} `json:"publishedfiledetails"`
 		} `json:"response"`
 	}
@@ -193,7 +210,10 @@ func (c *WorkshopCatalog) getItemDetails(ctx context.Context, fileID string) (*w
 	}
 
 	return &workshopItemDetail{
-		Title:     d.Title,
-		ShortDesc: desc,
+		Title:        d.Title,
+		ShortDesc:    desc,
+		FileURL:      d.FileURL,
+		HContentFile: d.HContentFile,
+		ConsumerApp:  d.ConsumerApp,
 	}, nil
 }

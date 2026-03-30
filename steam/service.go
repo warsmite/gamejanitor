@@ -206,6 +206,36 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 	}, nil
 }
 
+// DownloadWorkshopItem downloads a Workshop UGC item to destDir.
+// appID is the game's app ID, publishedFileID is the Workshop item ID.
+// hcontentFile is the UGC content handle from GetPublishedFileDetails API.
+func (s *Service) DownloadWorkshopItem(ctx context.Context, appID uint32, hcontentFile uint64, destDir string) error {
+	client, downloader, err := s.getOrConnect(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Get app info to find the workshop depot ID
+	appInfo, err := client.GetAppInfo(ctx, appID, "public")
+	if err != nil {
+		return fmt.Errorf("get app info for workshop: %w", err)
+	}
+
+	// Use workshopdepot if available, otherwise fall back to app ID
+	workshopDepotID := appInfo.WorkshopDepotID
+	if workshopDepotID == 0 {
+		workshopDepotID = appID
+	}
+
+	s.log.Info("downloading workshop item",
+		"app_id", appID,
+		"workshop_depot", workshopDepotID,
+		"hcontent_file", hcontentFile,
+	)
+
+	return downloader.DownloadUGCItem(ctx, appID, workshopDepotID, hcontentFile, destDir)
+}
+
 // CacheDir returns the path to cached files for an app's first depot.
 func (s *Service) CacheDir(appID, depotID uint32) string {
 	return s.cache.FilesDir(appID, depotID)

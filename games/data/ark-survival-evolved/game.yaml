@@ -68,10 +68,10 @@ container:
       - name: Mods
         sources:
           - name: workshop
-            delivery: manifest
+            delivery: file
+            install_path: /data/server/ShooterGame/Content/Mods
             config:
               app_id: "346110"
-              manifest_path: /data/.gamejanitor/workshop_items.json
 
 assets:
   icon: ark-survival-evolved-icon.ico

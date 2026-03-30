@@ -13,9 +13,10 @@ import (
 
 // AppInfo contains the resolved depot and manifest information for a Steam app.
 type AppInfo struct {
-	AppID   uint32
-	Depots  []DepotInfo
-	BuildID string
+	AppID          uint32
+	Depots         []DepotInfo
+	BuildID        string
+	WorkshopDepotID uint32 // Depot ID for Workshop/UGC content. 0 if not present.
 }
 
 // DepotInfo describes a single depot within an app.
@@ -154,6 +155,13 @@ func parseAppInfo(appID uint32, branch string, root *VDFNode) (*AppInfo, error) 
 	}
 
 	info := &AppInfo{AppID: appID}
+
+	// Extract workshop depot ID (used for UGC/Workshop mod downloads)
+	if wsDepot := depotsNode.ChildValue("workshopdepot"); wsDepot != "" {
+		if id, err := strconv.ParseUint(wsDepot, 10, 32); err == nil {
+			info.WorkshopDepotID = uint32(id)
+		}
+	}
 
 	// Extract build ID from the branch info
 	branchesNode := depotsNode.Child("branches")
