@@ -15,7 +15,7 @@ func TestMigration_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	w1 := testutil.RegisterFakeWorker(t, svc, "worker-1")
-	testutil.RegisterFakeWorker(t, svc, "worker-2")
+	w2 := testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()
 
 	// Explicitly place on worker-1 so we know which node to migrate from
@@ -38,6 +38,15 @@ func TestMigration_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, fetched.NodeID)
 	assert.Equal(t, "worker-2", *fetched.NodeID)
+
+	// Verify data actually transferred to the target worker
+	data, err := w2.ReadFile(ctx, gs.VolumeName, "server.properties")
+	require.NoError(t, err, "file should exist on target worker after migration")
+	assert.Equal(t, "test=true\n", string(data))
+
+	// Verify source volume was cleaned up
+	_, err = w1.ReadFile(ctx, gs.VolumeName, "server.properties")
+	assert.Error(t, err, "source volume should be removed after migration")
 }
 
 func TestMigration_SameNode_Error(t *testing.T) {
