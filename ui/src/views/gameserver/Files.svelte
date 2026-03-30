@@ -114,6 +114,13 @@
     editing = false;
   }
 
+  function handleEditorKeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveFile();
+    }
+  }
+
   async function deleteFile(name: string, isDir: boolean) {
     const path = filePath(name);
     if (!await confirm({ title: `Delete ${isDir ? 'Directory' : 'File'}`, message: `Delete "${name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
@@ -198,7 +205,7 @@
 
     if (succeeded > 0) {
       toast(`Uploaded ${succeeded} file${succeeded > 1 ? 's' : ''}${failed > 0 ? ` (${failed} failed)` : ''}`, succeeded > 0 && failed === 0 ? 'success' : 'warning');
-      await loadFiles(currentPath);
+      await loadFiles();
     } else {
       toast('Upload failed', 'error');
     }
@@ -215,6 +222,25 @@
   function isTextFile(name: string): boolean {
     const textExts = ['.txt', '.properties', '.yml', '.yaml', '.json', '.cfg', '.conf', '.ini', '.toml', '.log', '.sh', '.bat', '.cmd', '.xml', '.html', '.css', '.js', '.ts', '.md'];
     return textExts.some(ext => name.toLowerCase().endsWith(ext));
+  }
+
+  function fileIcon(name: string, isDir: boolean): string {
+    if (isDir) return '📁';
+    const lower = name.toLowerCase();
+    const ext = lower.slice(lower.lastIndexOf('.'));
+    const icons: Record<string, string> = {
+      '.yml': '⚙', '.yaml': '⚙', '.properties': '⚙', '.cfg': '⚙',
+      '.conf': '⚙', '.ini': '⚙', '.toml': '⚙', '.xml': '⚙',
+      '.json': '{ }',
+      '.log': '📋',
+      '.jar': '☕', '.java': '☕',
+      '.sh': '▸', '.bat': '▸', '.cmd': '▸',
+      '.zip': '📦', '.tar': '📦', '.gz': '📦', '.7z': '📦', '.rar': '📦',
+      '.png': '🖼', '.jpg': '🖼', '.jpeg': '🖼', '.gif': '🖼', '.ico': '🖼',
+      '.txt': '📝', '.md': '📝',
+      '.db': '🗃', '.sqlite': '🗃', '.dat': '🗃',
+    };
+    return icons[ext] || '📄';
   }
 
   function formatSize(bytes: number): string {
@@ -252,7 +278,7 @@
     </div>
   </div>
   <div class="editor-wrap">
-    <textarea class="editor" bind:value={editContent} spellcheck="false"></textarea>
+    <textarea class="editor" bind:value={editContent} spellcheck="false" onkeydown={handleEditorKeydown}></textarea>
   </div>
 {:else}
   <!-- File browser -->
@@ -299,7 +325,7 @@
     {:else}
       {#each sortedFiles as file (file.name)}
         <div class="file-row" class:dir={file.is_dir}>
-          <span class="file-icon">{file.is_dir ? '📁' : '📄'}</span>
+          <span class="file-icon">{fileIcon(file.name, file.is_dir)}</span>
           {#if renamingFile === file.name}
             <input
               class="rename-input"
@@ -311,6 +337,7 @@
           {:else}
             <span
               class="file-name"
+              class:clickable={file.is_dir || isTextFile(file.name)}
               onclick={() => file.is_dir ? openDir(file.name) : (isTextFile(file.name) ? openEditor(file.name) : null)}
               role={file.is_dir || isTextFile(file.name) ? 'button' : undefined}
               tabindex={file.is_dir || isTextFile(file.name) ? 0 : undefined}
@@ -385,9 +412,11 @@
   .file-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
   .file-name {
     font-size: 0.84rem; font-weight: 500; flex: 1; min-width: 0;
-    cursor: default;
+    cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .file-row.dir .file-name { color: var(--accent); cursor: pointer; }
+  .file-name.clickable { cursor: pointer; }
+  .file-name.clickable:hover { color: var(--accent); }
 
   .rename-input {
     flex: 1; min-width: 0;
@@ -407,7 +436,8 @@
   }
 
   .file-actions {
-    display: flex; gap: 2px;
+    display: flex; gap: 2px; justify-content: flex-end;
+    min-width: 200px;
     opacity: 0; transition: opacity 0.15s;
   }
   .file-row:hover .file-actions { opacity: 1; }
