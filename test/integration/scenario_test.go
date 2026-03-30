@@ -312,7 +312,7 @@ func TestScenario_Business_WebhookIntegration(t *testing.T) {
 		"https://billing.example.com/webhook",
 		"Billing webhook",
 		"hmac-secret-key",
-		[]string{"gameserver.create", "gameserver.delete", "status_changed"},
+		[]string{"gameserver.create", "gameserver.delete", "gameserver.ready"},
 		true,
 	)
 	require.NoError(t, err)
@@ -323,7 +323,7 @@ func TestScenario_Business_WebhookIntegration(t *testing.T) {
 	endpoints, err := whSvc.List()
 	require.NoError(t, err)
 	assert.Len(t, endpoints, 1)
-	assert.Equal(t, []string{"gameserver.create", "gameserver.delete", "status_changed"}, endpoints[0].Events)
+	assert.Equal(t, []string{"gameserver.create", "gameserver.delete", "gameserver.ready"}, endpoints[0].Events)
 
 	_ = ctx
 }

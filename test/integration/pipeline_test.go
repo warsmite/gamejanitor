@@ -51,19 +51,19 @@ func TestPipeline_StatusChangedEventPublished(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Subscribe to catch status_changed events
+	// Subscribe to catch lifecycle events
 	ch, unsub := svc.Broadcaster.Subscribe()
 	defer unsub()
 
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
 
-	// StatusSubscriber should publish status_changed events
+	// StatusSubscriber should react to lifecycle events
 	deadline := time.Now().Add(3 * time.Second)
 	found := false
 	for time.Now().Before(deadline) {
 		select {
 		case evt := <-ch:
-			if evt.EventType() == "status_changed" {
+			if evt.EventType() == "gameserver.ready" {
 				found = true
 			}
 		default:
@@ -73,7 +73,7 @@ func TestPipeline_StatusChangedEventPublished(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found, "status_changed event should be published by StatusSubscriber")
+	assert.True(t, found, "gameserver.ready event should be published during start")
 }
 
 func TestPipeline_StopDerivesStopped(t *testing.T) {

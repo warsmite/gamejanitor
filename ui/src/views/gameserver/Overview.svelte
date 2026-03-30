@@ -83,7 +83,6 @@
       'create_backup': 'Backup started',
       'restore_backup': 'Restore started',
       'gameserver.depot_downloading': 'Downloading game files...',
-      'gameserver.depot_progress': 'Downloading game files...',
       'gameserver.depot_complete': 'Game files downloaded',
       'gameserver.depot_cached': 'Game files up to date',
       'gameserver.image_pulling': 'Pulling image...',

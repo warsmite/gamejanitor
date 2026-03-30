@@ -63,16 +63,12 @@ func TestSSE_ScopedToken_OnlyReceivesOwnEvents(t *testing.T) {
 		auth.AllPermissions, []string{gsA})
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events", scopedToken, func() {
-		api.Services.Broadcaster.Publish(controller.StatusEvent{
+		api.Services.Broadcaster.Publish(controller.GameserverReadyEvent{
 			GameserverID: gsA,
-			OldStatus:    "stopped",
-			NewStatus:    "running",
 			Timestamp:    time.Now(),
 		})
-		api.Services.Broadcaster.Publish(controller.StatusEvent{
+		api.Services.Broadcaster.Publish(controller.GameserverReadyEvent{
 			GameserverID: gsB,
-			OldStatus:    "stopped",
-			NewStatus:    "running",
 			Timestamp:    time.Now(),
 		})
 	}, 300*time.Millisecond)
@@ -102,16 +98,12 @@ func TestSSE_AdminToken_ReceivesAllEvents(t *testing.T) {
 	gsB := createGameserverWithToken(t, api, adminToken, "Server B")
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events", adminToken, func() {
-		api.Services.Broadcaster.Publish(controller.StatusEvent{
+		api.Services.Broadcaster.Publish(controller.GameserverReadyEvent{
 			GameserverID: gsA,
-			OldStatus:    "stopped",
-			NewStatus:    "running",
 			Timestamp:    time.Now(),
 		})
-		api.Services.Broadcaster.Publish(controller.StatusEvent{
+		api.Services.Broadcaster.Publish(controller.GameserverReadyEvent{
 			GameserverID: gsB,
-			OldStatus:    "stopped",
-			NewStatus:    "running",
 			Timestamp:    time.Now(),
 		})
 	}, 300*time.Millisecond)
@@ -138,11 +130,9 @@ func TestSSE_TypeFilter(t *testing.T) {
 	adminToken := testutil.MustCreateAdminToken(t, api.Services)
 	gsA := createGameserverWithToken(t, api, adminToken, "Server A")
 
-	received := readSSEEvents(t, api.Server.URL+"/api/events?types=status_changed", adminToken, func() {
-		api.Services.Broadcaster.Publish(controller.StatusEvent{
+	received := readSSEEvents(t, api.Server.URL+"/api/events?types=gameserver.ready", adminToken, func() {
+		api.Services.Broadcaster.Publish(controller.GameserverReadyEvent{
 			GameserverID: gsA,
-			OldStatus:    "stopped",
-			NewStatus:    "running",
 			Timestamp:    time.Now(),
 		})
 		api.Services.Broadcaster.Publish(controller.GameserverStatsEvent{
@@ -163,7 +153,7 @@ func TestSSE_TypeFilter(t *testing.T) {
 			hasStats = true
 		}
 	}
-	assert.True(t, hasStatus, "status_changed event should pass the type filter")
+	assert.True(t, hasStatus, "gameserver.ready event should pass the type filter")
 	assert.False(t, hasStats, "gameserver.stats event should be filtered out")
 }
 
