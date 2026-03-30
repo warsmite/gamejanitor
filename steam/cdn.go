@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,13 +24,19 @@ type CDNClient struct {
 	hosts      []string
 	hostIdx    int
 	hostMu     sync.Mutex
+
+	// Dynamic blacklist — hosts that fail with TLS/connection errors are
+	// skipped for the remainder of this session.
+	blacklist   map[string]struct{}
+	blacklistMu sync.RWMutex
 }
 
 // NewCDNClient creates a CDN client with the given server hosts.
 func NewCDNClient(log *slog.Logger, hosts []string) *CDNClient {
 	return &CDNClient{
-		log:   log.With("component", "steam_cdn"),
-		hosts: hosts,
+		log:       log.With("component", "steam_cdn"),
+		hosts:     hosts,
+		blacklist: make(map[string]struct{}),
 		httpClient: &http.Client{
 			Timeout: cdnRequestTimeout,
 		},
@@ -37,25 +44,36 @@ func NewCDNClient(log *slog.Logger, hosts []string) *CDNClient {
 }
 
 // DownloadChunk downloads a single chunk from the CDN and returns the raw (encrypted+compressed) data.
-// Tries each host in the list, skipping hosts that fail with TLS or connection errors.
 func (c *CDNClient) DownloadChunk(ctx context.Context, depotID uint32, chunkIDHex string) ([]byte, error) {
 	var lastErr error
 
-	// Try up to len(hosts) different servers to find one that works
 	maxAttempts := max(defaultChunkRetries, len(c.hosts))
 	for attempt := range maxAttempts {
-		host := c.nextHost()
+		host := c.nextAvailableHost()
+		if host == "" {
+			break
+		}
 		url := fmt.Sprintf("https://%s/depot/%d/chunk/%s", host, depotID, chunkIDHex)
 
 		data, err := c.doDownload(ctx, url)
 		if err != nil {
 			lastErr = err
-			c.log.Debug("CDN chunk download failed, trying next host",
-				"chunk_id", chunkIDHex,
-				"host", host,
-				"attempt", attempt+1,
-				"error", err,
-			)
+
+			// Blacklist hosts with TLS or connection-level failures
+			if isCDNHostError(err) {
+				c.blacklistHost(host)
+				c.log.Warn("CDN host blacklisted for session",
+					"host", host,
+					"error", err,
+				)
+			} else {
+				c.log.Debug("CDN chunk download failed, trying next host",
+					"chunk_id", chunkIDHex,
+					"host", host,
+					"attempt", attempt+1,
+					"error", err,
+				)
+			}
 			continue
 		}
 
@@ -112,13 +130,7 @@ func (c *CDNClient) DownloadChunksParallel(ctx context.Context, depotID uint32, 
 				}
 
 				if uint32(len(data)) != w.chunk.DecompressedSize {
-					magic := ""
-					if len(raw) > 20 {
-						if dec, err2 := steamDecrypt(raw, depotKey); err2 == nil && len(dec) >= 4 {
-							magic = fmt.Sprintf("%02x%02x%02x%02x", dec[0], dec[1], dec[2], dec[3])
-						}
-					}
-					errCh <- fmt.Errorf("chunk %s: size mismatch (got %d, want %d, compressed=%d, magic=%s)", w.chunk.ChunkIDHex(), len(data), w.chunk.DecompressedSize, w.chunk.CompressedSize, magic)
+					errCh <- fmt.Errorf("chunk %s: size mismatch (got %d, want %d)", w.chunk.ChunkIDHex(), len(data), w.chunk.DecompressedSize)
 					cancel()
 					return
 				}
@@ -135,7 +147,6 @@ func (c *CDNClient) DownloadChunksParallel(ctx context.Context, depotID uint32, 
 	wg.Wait()
 	close(errCh)
 
-	// Return the first error
 	for err := range errCh {
 		return err
 	}
@@ -143,13 +154,44 @@ func (c *CDNClient) DownloadChunksParallel(ctx context.Context, depotID uint32, 
 	return nil
 }
 
-func (c *CDNClient) nextHost() string {
+// nextAvailableHost returns the next host that isn't blacklisted.
+// Returns empty string if all hosts are blacklisted.
+func (c *CDNClient) nextAvailableHost() string {
 	c.hostMu.Lock()
 	defer c.hostMu.Unlock()
 
-	host := c.hosts[c.hostIdx%len(c.hosts)]
-	c.hostIdx++
-	return host
+	for range len(c.hosts) {
+		host := c.hosts[c.hostIdx%len(c.hosts)]
+		c.hostIdx++
+		if !c.isBlacklisted(host) {
+			return host
+		}
+	}
+	return ""
+}
+
+func (c *CDNClient) blacklistHost(host string) {
+	c.blacklistMu.Lock()
+	c.blacklist[host] = struct{}{}
+	c.blacklistMu.Unlock()
+}
+
+func (c *CDNClient) isBlacklisted(host string) bool {
+	c.blacklistMu.RLock()
+	_, ok := c.blacklist[host]
+	c.blacklistMu.RUnlock()
+	return ok
+}
+
+// isCDNHostError returns true if the error indicates a host-level problem
+// (TLS, connection refused, DNS) rather than a transient issue.
+func isCDNHostError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "tls:") ||
+		strings.Contains(msg, "x509:") ||
+		strings.Contains(msg, "certificate") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no such host")
 }
 
 func (c *CDNClient) doDownload(ctx context.Context, url string) ([]byte, error) {

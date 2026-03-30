@@ -97,22 +97,15 @@ func (c *Client) GetCDNServers(ctx context.Context, cellID uint32) ([]string, er
 		return nil, fmt.Errorf("unmarshal CDN servers: %w", err)
 	}
 
-	// Only use Valve's own CDN hosts with valid TLS certs.
-	// Third-party edge servers (edgenext, alibaba, etc.) frequently have
-	// certificate mismatches and TLS errors.
+	// Collect all CDN hosts. Bad hosts (TLS errors, etc.) are dynamically
+	// blacklisted by the CDN client at runtime.
 	var hosts []string
 	for _, server := range serversResp.GetServers() {
 		host := server.GetVhost()
 		if host == "" {
 			host = server.GetHost()
 		}
-		if host == "" {
-			continue
-		}
-		// Only keep hosts under steamcontent.com that aren't known-bad third-party edges
-		if strings.HasSuffix(host, ".steamcontent.com") &&
-			!strings.Contains(host, "edgenext") &&
-			!strings.Contains(host, "alibaba") {
+		if host != "" {
 			hosts = append(hosts, host)
 		}
 	}
