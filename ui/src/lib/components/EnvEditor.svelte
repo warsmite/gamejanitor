@@ -93,14 +93,17 @@
     margin-bottom: 14px;
   }
 
-  .env-row { margin-bottom: 14px; }
-  .env-row:last-child { margin-bottom: 0; }
+  .env-row { }
 
-  .bool-row { display: flex; align-items: center; gap: 8px; }
+  .bool-row {
+    display: flex; align-items: center; gap: 8px;
+    min-height: 40px;
+  }
   .bool-label { font-size: 0.78rem; color: var(--text-tertiary); }
 
   /* Default grid — consumers can override via gridClass */
   :global(.env-grid) { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  :global(.form-grid) { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 700px) {
     :global(.env-grid) { grid-template-columns: 1fr; }
   }
