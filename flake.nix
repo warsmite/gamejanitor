@@ -165,8 +165,9 @@
             for node in "''${TARGETS[@]}"; do
               echo "Cleaning $node..."
               ssh "$node" "
-                sudo systemctl stop gamejanitor-dev 2>/dev/null || true
-                sudo systemctl stop gamejanitor 2>/dev/null || true
+                sudo systemctl kill gamejanitor-dev 2>/dev/null || true
+                sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                sudo systemctl kill gamejanitor 2>/dev/null || true
                 sudo docker ps -a --filter name=gamejanitor- --format '{{.ID}}' | xargs -r sudo docker rm -f 2>/dev/null || true
                 sudo docker volume ls --filter name=gamejanitor- --format '{{.Name}}' | xargs -r sudo docker volume rm -f 2>/dev/null || true
                 sudo rm -rf /var/lib/gamejanitor/*
