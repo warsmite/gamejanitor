@@ -336,11 +336,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 0;
-    border-radius: var(--radius-sm);
-  }
-  .chart-row:nth-child(even) {
-    background: rgba(255, 255, 255, 0.015);
+    margin-bottom: 8px;
   }
 
   .chart-label-col {
@@ -382,6 +378,9 @@
     flex: 1;
     min-width: 0;
     height: 48px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
   }
 
   .chart-svg-wrap svg {
