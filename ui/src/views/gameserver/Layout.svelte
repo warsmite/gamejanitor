@@ -252,7 +252,7 @@
             <span class="stat cpu">{Math.round(stats.cpu_percent)}% <span class="stat-dim">CPU</span></span>
             <span class="stat-sep">·</span>
             {@const storageMB = Math.round(stats.volume_size_bytes / (1024 * 1024))}
-            <span class="stat">{storageMB < 1024 ? `${storageMB} MB` : `${(storageMB / 1024).toFixed(1)} GB `}<span class="stat-dim">disk</span></span>
+            <span class="stat">{storageMB < 1024 ? `${storageMB} MB` : `${(storageMB / 1024).toFixed(1)} GB`} <span class="stat-dim">disk</span></span>
           {/if}
           {#if uptime}
             {#if stats}<span class="stat-sep">·</span>{/if}
