@@ -108,10 +108,19 @@
             WORK_DIR=/tmp/gamejanitor-multi-worker
             mkdir -p "$CTRL_DIR" "$WORK_DIR"
 
+            # Create worker token via offline DB access (idempotent — reuses existing)
+            WORKER_TOKEN=$(go run -mod=mod . tokens offline create \
+              --name dev-worker --type worker -d "$CTRL_DIR" 2>/dev/null || true)
+            if [ -z "$WORKER_TOKEN" ]; then
+              # Token already exists — rotate to get a fresh secret
+              WORKER_TOKEN=$(go run -mod=mod . tokens offline rotate \
+                --name dev-worker --type worker -d "$CTRL_DIR" 2>/dev/null)
+            fi
+
             cleanup() {
               echo "Stopping..."
               [ -n "''${CTRL_PID:-}" ] && kill "$CTRL_PID" 2>/dev/null || true
-              [ -n "''${WORK_PID:-}" ] && kill "$WORK_PID" 2>/dev/null || true
+              [ -n "''${WORK_PID:-}" ] && sudo kill "$WORK_PID" 2>/dev/null || true
               wait 2>/dev/null
             }
             trap cleanup EXIT
@@ -123,17 +132,23 @@
               -d "$CTRL_DIR" &
             CTRL_PID=$!
 
-            # Wait for controller gRPC to be ready
-            for i in $(seq 1 30); do
-              if nc -z localhost 9090 2>/dev/null; then break; fi
-              sleep 0.2
+            # Wait for controller gRPC to be fully ready (not just port open)
+            echo "Waiting for controller gRPC..."
+            for i in $(seq 1 60); do
+              if ${pkgs.netcat-openbsd}/bin/nc -z localhost 9090 2>/dev/null; then
+                sleep 1  # extra settle time for gRPC service init
+                break
+              fi
+              sleep 0.5
             done
 
             echo "Starting worker (gRPC :9091, connecting to controller :9090)..."
             sudo -E go run -mod=mod . serve \
               --worker --controller=false \
+              --bind 0.0.0.0 \
               --grpc-port 9091 \
               --controller-address localhost:9090 \
+              --worker-token "$WORKER_TOKEN" \
               -d "$WORK_DIR" &
             WORK_PID=$!
 
