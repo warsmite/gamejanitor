@@ -33,9 +33,7 @@ func (s *ModService) volumeState(ctx context.Context, gameserverID string, mods 
 			}
 			names := make(map[string]bool, len(entries))
 			for _, e := range entries {
-				if !e.IsDir {
-					names[e.Name] = true
-				}
+				names[e.Name] = true
 			}
 			dirFiles[dir] = names
 		}

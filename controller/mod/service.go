@@ -381,8 +381,14 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 	mod := s.newInstalledMod(gameserverID, sourceName, sourceID, category, version, src.Delivery, false, nil)
 	mod.ID = modID
 	if src.Delivery == "file" {
-		mod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, sanitizeFileName(version.FileName))
-		mod.FileName = sanitizeFileName(version.FileName)
+		if strings.HasPrefix(version.DownloadURL, "steam://ugc/") {
+			// Workshop UGC mods are directories named by the version ID (Workshop item ID)
+			mod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, version.VersionID)
+			mod.FileName = version.VersionID
+		} else {
+			mod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, sanitizeFileName(version.FileName))
+			mod.FileName = sanitizeFileName(version.FileName)
+		}
 	}
 	if err := s.store.CreateInstalledMod(mod); err != nil {
 		return nil, fmt.Errorf("saving installed mod: %w", err)
