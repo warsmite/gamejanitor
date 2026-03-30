@@ -1042,9 +1042,8 @@
   }
   .browse-header { margin-top: 24px; }
   .section-label {
-    font-size: 0.68rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary);
+    font-size: 0.82rem; font-weight: 550;
+    color: var(--text-secondary);
   }
   .btn-update-all {
     padding: 5px 12px; border-radius: 4px;

@@ -278,9 +278,8 @@
 
   .panel-title {
     padding: 14px 18px 0;
-    font-size: 0.66rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary);
+    font-size: 0.82rem; font-weight: 550;
+    color: var(--text-secondary);
   }
 
   .connect-row {

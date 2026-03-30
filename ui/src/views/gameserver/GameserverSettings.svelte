@@ -362,9 +362,8 @@
   .s-section { position: relative; z-index: 1; margin-bottom: 28px; }
   .s-section:last-child { margin-bottom: 0; }
   .s-title {
-    font-size: 0.68rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary);
+    font-size: 0.82rem; font-weight: 550;
+    color: var(--text-secondary);
     margin-bottom: 14px; padding-bottom: 8px;
     border-bottom: 1px solid var(--border-dim);
   }

@@ -280,9 +280,8 @@
 
   .section { margin-bottom: 32px; animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
   .section-label {
-    font-size: 0.66rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary); margin-bottom: 14px;
+    font-size: 0.82rem; font-weight: 550;
+    color: var(--text-secondary); margin-bottom: 14px;
   }
 
   /* Worker Cards */
