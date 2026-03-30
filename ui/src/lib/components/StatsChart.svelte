@@ -98,6 +98,14 @@
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   }
 
+  function areaPath(points: { x: number; y: number }[]): string {
+    if (points.length === 0) return '';
+    const line = polyline(points);
+    const lastX = points[points.length - 1].x.toFixed(1);
+    const firstX = points[0].x.toFixed(1);
+    return `${line} L${lastX},${H} L${firstX},${H} Z`;
+  }
+
   function scale(values: number[], height: number): { x: number; y: number }[] {
     if (values.length === 0) return [];
     const max = Math.max(...values, 1); // avoid zero max
@@ -182,7 +190,7 @@
       <!-- CPU -->
       <div class="chart-row">
         <div class="chart-label-col">
-          <span class="chart-label">CPU</span>
+          <span class="chart-label cpu">CPU</span>
           <span class="chart-value">
             {hoverData ? `${hoverData.cpu_percent.toFixed(1)}%` : (data.length ? `${data[data.length - 1].cpu_percent.toFixed(1)}%` : '—')}
           </span>
@@ -192,9 +200,16 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
+            <defs>
+              <linearGradient id="fill-cpu" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.12" />
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
+            <path d={areaPath(cpuPoints)} fill="url(#fill-cpu)" />
             <path d={polyline(cpuPoints)} class="line accent" />
             {#if hoverX !== null}
               <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
@@ -207,7 +222,7 @@
       <!-- Memory -->
       <div class="chart-row">
         <div class="chart-label-col">
-          <span class="chart-label">MEM</span>
+          <span class="chart-label mem">MEM</span>
           <span class="chart-value">
             {hoverData ? formatMB(hoverData.memory_usage_mb) : (data.length ? formatMB(data[data.length - 1].memory_usage_mb) : '—')}
           </span>
@@ -217,16 +232,23 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
+            <defs>
+              <linearGradient id="fill-mem" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.12" />
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+              </linearGradient>
+            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
             {#if memLimit}
               <line x1="0" y1={H - (memLimit / memMax) * (H - 4) - 2} x2={W} y2={H - (memLimit / memMax) * (H - 4) - 2} class="limit-line" />
             {/if}
-            <path d={polyline(memPoints)} class="line accent" />
+            <path d={areaPath(memPoints)} fill="url(#fill-mem)" />
+            <path d={polyline(memPoints)} class="line mem" />
             {#if hoverX !== null}
               <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
-              <circle cx={hoverX} cy={memPoints[hoverIndex!]?.y ?? 0} r="3" class="dot accent" />
+              <circle cx={hoverX} cy={memPoints[hoverIndex!]?.y ?? 0} r="3" class="dot mem" />
             {/if}
           </svg>
         </div>
@@ -235,7 +257,7 @@
       <!-- Network I/O -->
       <div class="chart-row">
         <div class="chart-label-col">
-          <span class="chart-label">NET</span>
+          <span class="chart-label net">NET</span>
           <span class="chart-value">
             {#if hoverData}
               <span class="net-rx">{formatBytes(hoverData.net_rx_bytes_per_sec)}</span>
@@ -253,9 +275,16 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
+            <defs>
+              <linearGradient id="fill-rx" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--live)" stop-opacity="0.1" />
+                <stop offset="100%" stop-color="var(--live)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
+            <path d={areaPath(rxPoints)} fill="url(#fill-rx)" />
             <path d={polyline(rxPoints)} class="line live" />
             <path d={polyline(txPoints)} class="line caution" />
             {#if hoverX !== null}
@@ -360,6 +389,9 @@
     letter-spacing: 0.12em;
     color: var(--text-tertiary);
   }
+  .chart-label.cpu { color: var(--accent); }
+  .chart-label.mem { color: #8b5cf6; }
+  .chart-label.net { color: var(--live); }
 
   .chart-value {
     font-size: 0.68rem;
@@ -367,6 +399,7 @@
     font-weight: 500;
     color: var(--text-secondary);
     line-height: 1.3;
+    font-variant-numeric: tabular-nums;
   }
 
   .net-rx, .net-tx {
@@ -407,6 +440,7 @@
     vector-effect: non-scaling-stroke;
   }
   .chart-svg-wrap :global(.line.accent) { stroke: var(--accent); }
+  .chart-svg-wrap :global(.line.mem) { stroke: #8b5cf6; }
   .chart-svg-wrap :global(.line.live) { stroke: var(--live); }
   .chart-svg-wrap :global(.line.caution) { stroke: var(--caution); opacity: 0.6; }
 
@@ -421,6 +455,7 @@
     vector-effect: non-scaling-stroke;
   }
   .chart-svg-wrap :global(.dot.accent) { fill: var(--accent); }
+  .chart-svg-wrap :global(.dot.mem) { fill: #8b5cf6; }
   .chart-svg-wrap :global(.dot.live) { fill: var(--live); }
   .chart-svg-wrap :global(.dot.caution) { fill: var(--caution); }
 
