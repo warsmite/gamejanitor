@@ -349,11 +349,6 @@
   .port-label { font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; }
   .port-proto { font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; }
 
-  .toggle-row {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 0.85rem; color: var(--text-secondary);
-    cursor: pointer; position: relative; z-index: 1;
-  }
 
   .save-row {
     display: flex; justify-content: flex-end; gap: 8px;

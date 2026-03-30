@@ -249,7 +249,6 @@
 
   .field-hint { font-size: 0.68rem; color: var(--text-tertiary); opacity: 0.6; margin-top: 4px; }
 
-  .toggle-row { display: flex; align-items: center; gap: 8px; }
   .toggle-label { font-size: 0.78rem; color: var(--text-tertiary); }
 
   .eula-callout { background: var(--bg-elevated); border: 1px solid rgba(232,114,42,0.15); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: relative; overflow: hidden; }

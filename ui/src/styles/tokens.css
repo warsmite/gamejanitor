@@ -195,6 +195,14 @@ nav {
 }
 .toggle.on::after { transform: translateX(16px); }
 
+.toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 40px;
+  font-size: 0.85rem; color: var(--text-secondary);
+  cursor: pointer;
+}
+.toggle-label { font-size: 0.82rem; color: var(--text-secondary); }
+
 /* ═══════════════════════ SHARED LAYOUT ═══════════════════════ */
 main { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
 
