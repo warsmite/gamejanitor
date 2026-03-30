@@ -12,6 +12,12 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
+// OperationClearer clears the active operation for a gameserver.
+// Implemented by gameserver.OperationTracker.
+type OperationClearer interface {
+	ClearOperation(gameserverID string)
+}
+
 // StatusSubscriber listens to lifecycle events on the bus and derives gameserver
 // status from them. This centralizes status logic in one place instead of 25+
 // scattered setGameserverStatus calls.
@@ -21,8 +27,13 @@ type StatusSubscriber struct {
 	bus         *controller.EventBus
 	querySvc    *QueryService
 	statsPoller *StatsPoller
+	operations  OperationClearer
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
+}
+
+func (s *StatusSubscriber) SetOperationClearer(oc OperationClearer) {
+	s.operations = oc
 }
 
 func NewStatusSubscriber(store Store, bus *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *StatusSubscriber {
@@ -77,18 +88,28 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case controller.GameserverReadyEvent:
 		s.setStatus(e.GameserverID, controller.StatusRunning, "")
+		s.clearOperation(e.GameserverID)
 		s.startPolling(e.GameserverID)
 	case controller.ContainerStoppingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopping, "")
 	case controller.ContainerStoppedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopped, "")
+		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.ContainerExitedEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
+		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.GameserverErrorEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, e.Reason)
+		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
+	}
+}
+
+func (s *StatusSubscriber) clearOperation(gameserverID string) {
+	if s.operations != nil {
+		s.operations.ClearOperation(gameserverID)
 	}
 }
 

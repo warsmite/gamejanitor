@@ -158,20 +158,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 			AppID:        depotAppID,
 			Timestamp:    time.Now(),
 		})
+		if s.operations != nil {
+			s.operations.SetOperation(id, "start", model.PhaseDownloadingGame)
+		}
 
-		var lastProgressPublish time.Time
 		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken, func(p worker.DepotProgress) {
-			now := time.Now()
-			if p.TotalChunks > 0 && now.Sub(lastProgressPublish) >= 2*time.Second {
-				lastProgressPublish = now
-				pct := float64(p.CompletedBytes) / float64(p.TotalBytes) * 100
-				s.broadcaster.Publish(controller.DepotProgressEvent{
-					GameserverID:   id,
-					AppID:          depotAppID,
+			if s.operations != nil && p.TotalBytes > 0 {
+				s.operations.UpdateProgress(id, model.OperationProgress{
+					Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
 					CompletedBytes: p.CompletedBytes,
 					TotalBytes:     p.TotalBytes,
-					Percent:        pct,
-					Timestamp:      time.Now(),
 				})
 			}
 		})
@@ -203,6 +199,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Pull image
+	if s.operations != nil {
+		s.operations.SetOperation(id, "start", model.PhasePullingImage)
+	}
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
 		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
@@ -271,7 +270,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		s.log.Debug("no stale container to remove by name", "name", containerName)
 	}
 
-	// Create container
+	// Create container — the install script runs when the container starts
+	if s.operations != nil {
+		s.operations.SetOperation(id, "start", model.PhaseInstalling)
+	}
 	containerID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:          containerName,
 		Image:         game.ResolveImage(map[string]string(gs.Env)),
@@ -304,6 +306,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	s.broadcaster.Publish(controller.ContainerStartedEvent{GameserverID: id, Timestamp: time.Now()})
+
+	if s.operations != nil {
+		s.operations.SetOperation(id, "start", model.PhaseStarting)
+	}
 
 	if s.readyWatcher != nil {
 		s.readyWatcher.Watch(id, w, containerID)

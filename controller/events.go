@@ -44,6 +44,7 @@ const (
 	EventContainerStopped  = "gameserver.container_stopped"
 	EventContainerExited   = "gameserver.container_exited"
 	EventGameserverError   = "gameserver.error"
+	EventGameserverOperation = "gameserver.operation"
 )
 
 // Operation outcome events — system
@@ -80,6 +81,7 @@ var AllEventTypes = []string{
 	EventGameserverReady,
 	EventContainerStopping, EventContainerStopped, EventContainerExited,
 	EventGameserverError,
+	EventGameserverOperation,
 	// Operation outcomes
 	EventStatusChanged,
 
@@ -145,6 +147,17 @@ func (e DepotCachedEvent) EventType() string        { return EventDepotCached }
 func (e DepotCachedEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e DepotCachedEvent) EventGameserverID() string { return e.GameserverID }
 func (e DepotCachedEvent) EventActor() Actor         { return SystemActor }
+
+type OperationEvent struct {
+	GameserverID string           `json:"gameserver_id"`
+	Operation    *model.Operation `json:"operation"` // nil when operation cleared
+	Timestamp    time.Time        `json:"timestamp"`
+}
+
+func (e OperationEvent) EventType() string        { return EventGameserverOperation }
+func (e OperationEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e OperationEvent) EventGameserverID() string { return e.GameserverID }
+func (e OperationEvent) EventActor() Actor         { return SystemActor }
 
 type ImagePullingEvent struct {
 	GameserverID string    `json:"gameserver_id"`

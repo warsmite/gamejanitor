@@ -33,6 +33,7 @@ type Gameserver struct {
 	VolumeName     string          `json:"volume_name"`
 	Status         string          `json:"status"`
 	ErrorReason    string          `json:"error_reason"`
+	Operation      *Operation      `json:"operation,omitempty"`
 	PortMode       string          `json:"port_mode"`
 	NodeID         *string         `json:"node_id"`
 	Node           *GameserverNode `json:"node,omitempty"`

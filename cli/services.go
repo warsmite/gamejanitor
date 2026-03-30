@@ -85,6 +85,10 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	activityTracker := gameserver.NewActivityTracker(db, logger)
 	gameserverSvc.SetActivityTracker(activityTracker)
 
+	// Operation tracking (transient in-memory state for active operations)
+	operationTracker := gameserver.NewOperationTracker(broadcaster, logger)
+	gameserverSvc.SetOperationTracker(operationTracker)
+
 	// Port probe override (tests skip host port checking)
 	if opts.PortProbe != nil {
 		gameserverSvc.SetPortProbe(opts.PortProbe)
@@ -110,6 +114,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	authSvc := auth.NewAuthService(db, logger)
 	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
+	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
 	webhookWorker.ValidateURL = func(rawURL string) error {

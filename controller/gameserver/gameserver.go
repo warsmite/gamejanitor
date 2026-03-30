@@ -78,6 +78,7 @@ type GameserverService struct {
 	placementMu     sync.Mutex // serializes port allocation + gameserver creation to prevent races
 	portProbe    func(int) bool // nil uses default net.Listen probe
 	activity     *ActivityTracker
+	operations   *OperationTracker
 }
 
 // SetPortProbe overrides the host port availability check. Used in tests
@@ -93,6 +94,10 @@ func (s *GameserverService) SetModReconciler(r ModReconciler) {
 
 func (s *GameserverService) SetActivityTracker(tracker *ActivityTracker) {
 	s.activity = tracker
+}
+
+func (s *GameserverService) SetOperationTracker(tracker *OperationTracker) {
+	s.operations = tracker
 }
 
 // trackActivity starts an activity if the tracker is set. Returns "" if tracker is nil (tests)
@@ -163,6 +168,9 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 	s.store.PopulateNodes(gameservers)
 	for i := range gameservers {
 		gameservers[i].ComputeRestartRequired()
+		if s.operations != nil {
+			gameservers[i].Operation = s.operations.GetOperation(gameservers[i].ID)
+		}
 	}
 	return gameservers, nil
 }
@@ -174,6 +182,9 @@ func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) 
 	}
 	s.store.PopulateNode(gs)
 	gs.ComputeRestartRequired()
+	if s.operations != nil {
+		gs.Operation = s.operations.GetOperation(id)
+	}
 	return gs, nil
 }
 
