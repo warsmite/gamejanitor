@@ -34,7 +34,7 @@
     // Load activity feed
     try {
       const allEvents = await api.events.history({ gameserver_id: id, limit: 40 });
-      events = allEvents.filter(e => e.event_type !== 'status_changed').slice(0, 20);
+      events = allEvents.filter(e => e.type !== 'status_changed').slice(0, 20);
     } catch (e) { console.warn('Overview: failed to load events', e); }
 
     // SSE: activity feed only — stats/query/status handled by store
@@ -73,6 +73,15 @@
       'gameserver.update_game': 'Game update requested',
       'gameserver.reinstall': 'Reinstall requested',
       'gameserver.migrate': 'Migration requested',
+      // Activity table uses short names
+      'start': 'Start requested',
+      'stop': 'Stop requested',
+      'restart': 'Restart requested',
+      'update_game': 'Game update requested',
+      'reinstall': 'Reinstall requested',
+      'migrate': 'Migration requested',
+      'create_backup': 'Backup started',
+      'restore_backup': 'Restore started',
       'gameserver.depot_downloading': 'Downloading game files...',
       'gameserver.depot_progress': 'Downloading game files...',
       'gameserver.depot_complete': 'Game files downloaded',
