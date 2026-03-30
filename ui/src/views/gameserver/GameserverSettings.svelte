@@ -16,7 +16,6 @@
   let game = $state<Game | null>(null);
   let loading = $state(true);
   let saving = $state(false);
-  let restartRequired = $state(false);
 
   // Form state
   let serverName = $state('');
@@ -101,8 +100,6 @@
 
       await api.gameservers.update(gsId, update);
       gameserver = await api.gameservers.get(gsId);
-      restartRequired = gameserver.restart_required ?? false;
-
       if (andRestart && isRunning) {
         await api.gameservers.restart(gsId);
         restartRequired = false;
@@ -251,19 +248,14 @@
 
     {#if canEditAnything}
       <div class="save-row">
-        {#if restartRequired}
-          <span class="restart-hint">Restart required to apply changes</span>
-        {/if}
-        <div class="save-buttons">
-          <button class="btn-accent" onclick={() => saveAll(false)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
-            {saving ? 'Saving...' : 'Save'}
+        <button class="btn-accent" onclick={() => saveAll(false)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        {#if isRunning && can('gameserver.restart')}
+          <button class="btn-solid" onclick={() => saveAll(true)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+            {saving ? 'Saving...' : 'Save & Restart'}
           </button>
-          {#if isRunning && can('gameserver.restart')}
-            <button class="btn-solid" onclick={() => saveAll(true)} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
-              {saving ? 'Saving...' : 'Save & Restart'}
-            </button>
-          {/if}
-        </div>
+        {/if}
       </div>
     {/if}
 
@@ -364,16 +356,11 @@
   }
 
   .save-row {
-    display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+    display: flex; justify-content: flex-end; gap: 8px;
     position: relative; z-index: 1;
     margin: 20px 0 28px;
     padding-top: 20px;
     border-top: 1px solid var(--border-dim);
-  }
-  .save-buttons { display: flex; gap: 8px; }
-  .restart-hint {
-    font-size: 0.74rem; font-family: var(--font-mono);
-    color: var(--caution); margin-right: auto;
   }
 
   .s-section { position: relative; z-index: 1; margin-bottom: 28px; }
