@@ -38,7 +38,7 @@ nav {
 .n-links a:hover { color: var(--text-secondary); background: var(--bg-hover); }
 .n-links a.active { color: var(--accent); background: var(--accent-dim); }
 
-.n-right { display: flex; align-items: center; }
+.n-right { display: flex; align-items: center; gap: 8px; }
 .auth {
   display: flex; align-items: center; gap: 6px;
   padding: 5px 12px; border-radius: 100px;
@@ -46,8 +46,17 @@ nav {
   font-size: 0.75rem; color: var(--text-tertiary); font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
+.auth.authenticated { color: var(--text-secondary); }
 .auth-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.4; }
 .auth-dot.authenticated { background: var(--live); opacity: 1; }
+.logout-btn {
+  padding: 5px 10px; border-radius: 100px;
+  background: none; border: 1px solid var(--border-dim);
+  font-size: 0.7rem; font-family: var(--font-mono);
+  color: var(--text-tertiary); cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.logout-btn:hover { color: var(--danger); border-color: rgba(239,68,68,0.3); }
 
 /* ═══════════════════════ SHARED BUTTONS ═══════════════════════ */
 .btn-accent {

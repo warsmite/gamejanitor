@@ -2,7 +2,7 @@
   import './styles/tokens.css';
   import { onMount, onDestroy } from 'svelte';
   import { ToastContainer, ConfirmModal } from '$lib/components';
-  import { connect, disconnect, enableAutoToasts, initAuth, gameserverStore } from '$lib/stores';
+  import { connect, disconnect, enableAutoToasts, initAuth, clearToken, gameserverStore } from '$lib/stores';
   import { api } from '$lib/api';
   import { getRoute, navigate } from '$lib/router';
   import { embedded, basePath } from '$lib/base';
@@ -36,6 +36,12 @@
   const gameserverId = $derived(embedded ? embeddedId : route.params.id || '');
 
   let multiNode = $state(false);
+  const hasToken = $derived(!!document.cookie.match(/(?:^|; )_token=/));
+
+  function logout() {
+    clearToken();
+    window.location.reload();
+  }
 
   onMount(() => {
     initAuth();
@@ -93,7 +99,12 @@
       </div>
     </div>
     <div class="n-right">
-      <div class="auth"><span class="auth-dot"></span>Local</div>
+      {#if hasToken}
+        <div class="auth authenticated"><span class="auth-dot authenticated"></span>Authenticated</div>
+        <button class="logout-btn" onclick={logout}>Sign out</button>
+      {:else}
+        <div class="auth"><span class="auth-dot"></span>Local</div>
+      {/if}
     </div>
   </nav>
 {/if}
