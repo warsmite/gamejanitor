@@ -48,18 +48,13 @@ container:
     - key: RCON_PORT
       default: "27015"
       system: true
+    - key: WORKSHOP_COLLECTION
+      default: ""
+      label: "Workshop Collection ID"
+      notice: "Create a collection at steamcommunity.com/workshop, add your addons, then paste the collection ID here. The server downloads all addons at startup."
     - key: SAVE_TIMEOUT_SECONDS
       default: "5"
       system: true
-  mods:
-    categories:
-      - name: Addons
-        sources:
-          - name: workshop
-            delivery: file
-            install_path: /data/server/garrysmod/addons
-            config:
-              app_id: "4000"
 
 assets:
   icon: garrys-mod-icon.ico
