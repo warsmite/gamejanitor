@@ -46,7 +46,7 @@
   </div>
 
   <!-- Connection -->
-  <div class="connect-row" onclick={(e) => e.preventDefault()}>
+  <div class="connect-row" onclick={(e) => e.stopPropagation()}>
     <CopyBlock label="Connect" value={connectionAddress} primary={true} />
     {#if isRunning && query}
       <div class="player-count">
