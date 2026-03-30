@@ -3,6 +3,7 @@ name: "Rust"
 aliases: []
 description: "Hardcore multiplayer survival with building, raiding, and PvP"
 app_id: 252490
+server_app_id: 258550
 
 ports:
   - name: game
@@ -20,7 +21,7 @@ query:
   supports: [players, rules, keywords]
 
 container:
-  image: ghcr.io/warsmite/gamejanitor/steamcmd
+  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Server startup complete'
   disabled_capabilities: []

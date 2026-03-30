@@ -1,6 +1,7 @@
 package steam
 
 import (
+	"archive/zip"
 	"bytes"
 	"compress/zlib"
 	"crypto/aes"
@@ -113,16 +114,24 @@ func decompressChunk(data []byte) ([]byte, error) {
 	// VZip:  "VZa"  = 56 5A 61
 	if data[0] == 'V' {
 		if len(data) > 3 && data[1] == 'S' && data[2] == 'Z' && data[3] == 'a' {
-			return decompressZstd(data)
+			result, err := decompressZstd(data)
+			if err != nil {
+				return nil, fmt.Errorf("vzstd (input=%d): %w", len(data), err)
+			}
+			return result, nil
 		}
 		if len(data) > 2 && data[1] == 'Z' && data[2] == 'a' {
-			return decompressVZip(data)
+			result, err := decompressVZip(data)
+			if err != nil {
+				return nil, fmt.Errorf("vzip (input=%d): %w", len(data), err)
+			}
+			return result, nil
 		}
 	}
 
 	// PKZip
 	if data[0] == 'P' && data[1] == 'K' && len(data) > 3 && data[2] == 0x03 && data[3] == 0x04 {
-		return data, nil
+		return decompressPKZip(data)
 	}
 
 	// Zlib (0x78 is the zlib header)
@@ -130,8 +139,29 @@ func decompressChunk(data []byte) ([]byte, error) {
 		return decompressZlib(data)
 	}
 
-	// No known compression header, data is uncompressed
-	return data, nil
+	// All depot chunks should be compressed. Unknown magic means a bug.
+	if len(data) >= 4 {
+		return nil, fmt.Errorf("unknown chunk compression: magic %02x %02x %02x %02x (len=%d)", data[0], data[1], data[2], data[3], len(data))
+	}
+	return nil, fmt.Errorf("unknown chunk compression: data too short (len=%d)", len(data))
+}
+
+// decompressPKZip handles PKZip (deflate) compressed chunks.
+// The chunk is a single-entry ZIP archive.
+func decompressPKZip(data []byte) ([]byte, error) {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, fmt.Errorf("pkzip reader: %w", err)
+	}
+	if len(r.File) == 0 {
+		return nil, fmt.Errorf("pkzip: empty archive")
+	}
+	f, err := r.File[0].Open()
+	if err != nil {
+		return nil, fmt.Errorf("pkzip open: %w", err)
+	}
+	defer f.Close()
+	return io.ReadAll(f)
 }
 
 // decompressZlib handles standard zlib compressed data.

@@ -112,7 +112,13 @@ func (c *CDNClient) DownloadChunksParallel(ctx context.Context, depotID uint32, 
 				}
 
 				if uint32(len(data)) != w.chunk.DecompressedSize {
-					errCh <- fmt.Errorf("chunk %s: size mismatch (got %d, want %d)", w.chunk.ChunkIDHex(), len(data), w.chunk.DecompressedSize)
+					magic := ""
+					if len(raw) > 20 {
+						if dec, err2 := steamDecrypt(raw, depotKey); err2 == nil && len(dec) >= 4 {
+							magic = fmt.Sprintf("%02x%02x%02x%02x", dec[0], dec[1], dec[2], dec[3])
+						}
+					}
+					errCh <- fmt.Errorf("chunk %s: size mismatch (got %d, want %d, compressed=%d, magic=%s)", w.chunk.ChunkIDHex(), len(data), w.chunk.DecompressedSize, w.chunk.CompressedSize, magic)
 					cancel()
 					return
 				}

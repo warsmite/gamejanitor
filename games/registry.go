@@ -37,6 +37,7 @@ type GameDef struct {
 	Aliases     []string         `yaml:"aliases,omitempty" json:"aliases,omitempty"`
 	Description string           `yaml:"description,omitempty" json:"description,omitempty"`
 	AppID       uint32           `yaml:"app_id,omitempty" json:"app_id,omitempty"`
+	ServerAppID uint32           `yaml:"server_app_id,omitempty" json:"server_app_id,omitempty"`
 	SteamLogin  SteamLoginType   `yaml:"steam_login,omitempty" json:"steam_login,omitempty"`
 	Ports       []Port           `yaml:"ports" json:"ports"`
 	Query       *QueryConfig     `yaml:"query,omitempty" json:"query,omitempty"`

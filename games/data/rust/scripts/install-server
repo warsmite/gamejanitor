@@ -1,14 +1,20 @@
 #!/bin/bash
 set -e
 
-echo "[install-server] downloading Rust dedicated server via SteamCMD (app 258550)"
-steamcmd-retry \
-    +force_install_dir /data/server \
-    +login anonymous \
-    +app_update 258550 validate \
-    +quit
-
-echo "[install-server] Rust dedicated server installed"
+if [ -d "/depot" ]; then
+    echo "[install-server] copying pre-downloaded game files from depot cache"
+    mkdir -p /data/server
+    cp -a /depot/. /data/server/
+    echo "[install-server] Rust dedicated server installed from depot"
+else
+    echo "[install-server] downloading Rust dedicated server via SteamCMD (app 258550)"
+    steamcmd-retry \
+        +force_install_dir /data/server \
+        +login anonymous \
+        +app_update 258550 validate \
+        +quit
+    echo "[install-server] Rust dedicated server installed"
+fi
 
 MOD_FRAMEWORK="${MOD_FRAMEWORK:-none}"
 

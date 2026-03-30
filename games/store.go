@@ -121,6 +121,7 @@ type Game struct {
 	Aliases              []string      `json:"aliases,omitempty"`
 	Description          string        `json:"description,omitempty"`
 	AppID                uint32         `json:"app_id,omitempty"`
+	ServerAppID          uint32         `json:"server_app_id,omitempty"`
 	SteamLogin           SteamLoginType `json:"steam_login,omitempty"`
 	BaseImage            string         `json:"base_image"`
 	Runtime              RuntimeConfig `json:"runtime,omitempty"`
@@ -132,6 +133,15 @@ type Game struct {
 	DisabledCapabilities []string      `json:"disabled_capabilities"`
 	Mods                 ModsConfig    `json:"mods,omitempty"`
 	Query                *QueryConfig  `json:"query,omitempty"`
+}
+
+// DepotAppID returns the app ID to use for depot downloads.
+// Uses ServerAppID if set, otherwise falls back to AppID.
+func (g *Game) DepotAppID() uint32 {
+	if g.ServerAppID != 0 {
+		return g.ServerAppID
+	}
+	return g.AppID
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
@@ -315,6 +325,7 @@ func defToGame(def *GameDef) *Game {
 		Aliases:              aliases,
 		Description:          def.Description,
 		AppID:                def.AppID,
+		ServerAppID:          def.ServerAppID,
 		SteamLogin:           def.SteamLogin,
 		BaseImage:            c.Image,
 		Runtime:              runtime,

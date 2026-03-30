@@ -174,10 +174,6 @@ func (s *Service) getOrConnect(ctx context.Context) (*Client, *DepotDownloader, 
 	token := s.creds.SteamRefreshToken()
 	accountName := s.creds.SteamAccountName()
 
-	if token == "" {
-		return nil, nil, fmt.Errorf("no Steam credentials configured — run 'gamejanitor steam login'")
-	}
-
 	// Reconnect if credentials changed since last connection
 	if s.client != nil && s.lastToken != token {
 		s.log.Info("Steam credentials changed, reconnecting")
@@ -195,9 +191,16 @@ func (s *Service) getOrConnect(ctx context.Context) (*Client, *DepotDownloader, 
 		return nil, nil, fmt.Errorf("connect to Steam: %w", err)
 	}
 
-	if err := client.LoginWithRefreshToken(ctx, accountName, token); err != nil {
-		client.Close()
-		return nil, nil, fmt.Errorf("Steam login failed: %w", err)
+	if token != "" {
+		if err := client.LoginWithRefreshToken(ctx, accountName, token); err != nil {
+			client.Close()
+			return nil, nil, fmt.Errorf("Steam login failed: %w", err)
+		}
+	} else {
+		if err := client.LoginAnonymous(ctx); err != nil {
+			client.Close()
+			return nil, nil, fmt.Errorf("Steam anonymous login failed: %w", err)
+		}
 	}
 
 	s.client = client

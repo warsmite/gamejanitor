@@ -132,28 +132,34 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		}()
 	}
 
-	// Download depot for games that require authenticated Steam downloads.
-	// The worker downloads game files to its local cache so no cross-network transfer is needed.
+	// Download game files via Steam depot downloader for all Steam games.
+	// Anonymous games need no credentials. Auth-required games need a linked Steam account.
 	var depotDir string
-	if game.SteamLogin.RequiresAuth() && game.AppID != 0 {
-		accountName := s.settingsSvc.GetString(settings.SettingSteamAccountName)
-		refreshToken := s.settingsSvc.GetString(settings.SettingSteamRefreshToken)
-		if refreshToken == "" {
-			s.broadcaster.Publish(controller.GameserverErrorEvent{
-				GameserverID: id,
-				Reason:       "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.",
-				Timestamp:    time.Now(),
-			})
-			return fmt.Errorf("game %s requires Steam auth but no credentials configured", game.ID)
+	depotAppID := game.DepotAppID()
+	if depotAppID != 0 {
+		accountName := ""
+		refreshToken := ""
+
+		if game.SteamLogin.RequiresAuth() {
+			accountName = s.settingsSvc.GetString(settings.SettingSteamAccountName)
+			refreshToken = s.settingsSvc.GetString(settings.SettingSteamRefreshToken)
+			if refreshToken == "" {
+				s.broadcaster.Publish(controller.GameserverErrorEvent{
+					GameserverID: id,
+					Reason:       "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.",
+					Timestamp:    time.Now(),
+				})
+				return fmt.Errorf("game %s requires Steam auth but no credentials configured", game.ID)
+			}
 		}
 
-		s.log.Info("downloading authenticated depot", "gameserver_id", id, "app_id", game.AppID)
+		s.log.Info("downloading game depot", "gameserver_id", id, "app_id", depotAppID, "auth", game.SteamLogin.RequiresAuth())
 		var depotErr error
-		depotDir, depotErr = w.EnsureDepot(ctx, game.AppID, "public", accountName, refreshToken)
+		depotDir, depotErr = w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken)
 		if depotErr != nil {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{
 				GameserverID: id,
-				Reason:       "Failed to download game files from Steam. Check your Steam account credentials.",
+				Reason:       "Failed to download game files from Steam.",
 				Timestamp:    time.Now(),
 			})
 			return fmt.Errorf("depot download for gameserver %s: %w", id, depotErr)
