@@ -34,6 +34,7 @@ class GameserverStore {
   games = $state<Record<string, Game>>({});
   permissions = $state<string[]>([]);
   sftpPort = $state(0);
+  cluster = $state<{ total_memory_mb: number; allocated_memory_mb: number; total_cpu: number; allocated_cpu: number; total_storage_mb: number; allocated_storage_mb: number } | null>(null);
   loading = $state(true);
   initialized = $state(false);
   authRequired = $state(false);
@@ -138,6 +139,9 @@ class GameserverStore {
 
       if (clusterStatus?.config?.sftp_port) {
         this.sftpPort = clusterStatus.config.sftp_port;
+      }
+      if (clusterStatus?.cluster) {
+        this.cluster = clusterStatus.cluster;
       }
 
       this.permissions = gsResponse.permissions || [];
