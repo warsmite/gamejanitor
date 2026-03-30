@@ -31,6 +31,7 @@
   .bar { height: 3px; border-radius: 2px; background: rgba(42,37,32,0.6); overflow: hidden; }
   .fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.16,1,0.3,1); }
   .fill.accent { background: var(--accent); }
+  .fill.mem { background: #8b5cf6; }
   .fill.live { background: var(--live); }
   .fill.muted { background: var(--accent); opacity: 0.5; }
 </style>

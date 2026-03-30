@@ -98,14 +98,6 @@
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   }
 
-  function areaPath(points: { x: number; y: number }[]): string {
-    if (points.length === 0) return '';
-    const line = polyline(points);
-    const lastX = points[points.length - 1].x.toFixed(1);
-    const firstX = points[0].x.toFixed(1);
-    return `${line} L${lastX},${H} L${firstX},${H} Z`;
-  }
-
   function scale(values: number[], height: number): { x: number; y: number }[] {
     if (values.length === 0) return [];
     const max = Math.max(...values, 1); // avoid zero max
@@ -200,16 +192,9 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
-            <defs>
-              <linearGradient id="fill-cpu" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.12" />
-                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
-              </linearGradient>
-            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
-            <path d={areaPath(cpuPoints)} fill="url(#fill-cpu)" />
             <path d={polyline(cpuPoints)} class="line accent" />
             {#if hoverX !== null}
               <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
@@ -232,19 +217,12 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
-            <defs>
-              <linearGradient id="fill-mem" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.12" />
-                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
-              </linearGradient>
-            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
             {#if memLimit}
               <line x1="0" y1={H - (memLimit / memMax) * (H - 4) - 2} x2={W} y2={H - (memLimit / memMax) * (H - 4) - 2} class="limit-line" />
             {/if}
-            <path d={areaPath(memPoints)} fill="url(#fill-mem)" />
             <path d={polyline(memPoints)} class="line mem" />
             {#if hoverX !== null}
               <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
@@ -260,11 +238,11 @@
           <span class="chart-label net">NET</span>
           <span class="chart-value">
             {#if hoverData}
-              <span class="net-rx">{formatBytes(hoverData.net_rx_bytes_per_sec)}</span>
-              <span class="net-tx">{formatBytes(hoverData.net_tx_bytes_per_sec)}</span>
+              <span class="net-in">In {formatBytes(hoverData.net_rx_bytes_per_sec)}</span>
+              <span class="net-out">Out {formatBytes(hoverData.net_tx_bytes_per_sec)}</span>
             {:else if data.length}
-              <span class="net-rx">{formatBytes(data[data.length - 1].net_rx_bytes_per_sec)}</span>
-              <span class="net-tx">{formatBytes(data[data.length - 1].net_tx_bytes_per_sec)}</span>
+              <span class="net-in">In {formatBytes(data[data.length - 1].net_rx_bytes_per_sec)}</span>
+              <span class="net-out">Out {formatBytes(data[data.length - 1].net_tx_bytes_per_sec)}</span>
             {:else}
               —
             {/if}
@@ -275,16 +253,9 @@
           <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
             onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
             onmouseleave={handleMouseLeave}>
-            <defs>
-              <linearGradient id="fill-rx" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="var(--live)" stop-opacity="0.1" />
-                <stop offset="100%" stop-color="var(--live)" stop-opacity="0" />
-              </linearGradient>
-            </defs>
             {#each gridYs as gy}
               <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
             {/each}
-            <path d={areaPath(rxPoints)} fill="url(#fill-rx)" />
             <path d={polyline(rxPoints)} class="line live" />
             <path d={polyline(txPoints)} class="line caution" />
             {#if hoverX !== null}
@@ -303,12 +274,6 @@
         {:else if data.length}
           {formatTime(data[data.length - 1].timestamp)}
         {/if}
-      </div>
-
-      <!-- Legend for net -->
-      <div class="chart-legend">
-        <span class="legend-item"><span class="legend-dot live"></span> rx</span>
-        <span class="legend-item"><span class="legend-dot caution"></span> tx</span>
       </div>
 
     {/if}
@@ -371,7 +336,11 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 8px;
+    padding: 8px 0;
+    border-radius: var(--radius-sm);
+  }
+  .chart-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.015);
   }
 
   .chart-label-col {
@@ -402,12 +371,12 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .net-rx, .net-tx {
+  .net-in, .net-out {
     display: block;
     font-size: 0.62rem;
   }
-  .net-rx { color: var(--live); }
-  .net-tx { color: var(--caution); }
+  .net-in { color: var(--live); }
+  .net-out { color: var(--caution); }
 
   .chart-svg-wrap {
     flex: 1;
@@ -467,28 +436,6 @@
     margin-top: 2px;
     opacity: 0.7;
   }
-
-  .chart-legend {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 4px;
-  }
-  .legend-item {
-    font-size: 0.56rem;
-    font-family: var(--font-mono);
-    color: var(--text-tertiary);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .legend-dot {
-    width: 6px;
-    height: 2px;
-    border-radius: 1px;
-  }
-  .legend-dot.live { background: var(--live); }
-  .legend-dot.caution { background: var(--caution); }
 
   @media (max-width: 700px) {
     .chart-label-col { width: 54px; }

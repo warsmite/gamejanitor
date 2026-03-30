@@ -209,7 +209,7 @@
           unit={stats ? ' GB' : ''}
           detail={stats ? `of ${(stats.memory_limit_mb / 1024).toFixed(0)} GB` : ''}
           percent={memPercent}
-          color="accent"
+          color="mem"
         />
         <TelemetryCell
           label="CPU"
