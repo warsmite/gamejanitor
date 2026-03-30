@@ -85,6 +85,7 @@
   });
 
   const stats = $derived(gsState?.stats ?? null);
+  const query = $derived(gsState?.query ?? null);
   const logLines = $derived(gsState?.logLines ?? []);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
@@ -241,13 +242,17 @@
         </div>
 
         <div class="srv-stats">
+          {#if query}
+            <span class="stat players">{query.players_online}<span class="stat-dim">/{query.max_players}</span></span>
+            <span class="stat-sep">·</span>
+          {/if}
           {#if stats}
             <span class="stat mem">{(stats.memory_usage_mb / 1024).toFixed(1)}<span class="stat-dim">/{(stats.memory_limit_mb / 1024).toFixed(0)} GB</span></span>
             <span class="stat-sep">·</span>
             <span class="stat cpu">{Math.round(stats.cpu_percent)}% <span class="stat-dim">CPU</span></span>
             <span class="stat-sep">·</span>
             {@const storageMB = Math.round(stats.volume_size_bytes / (1024 * 1024))}
-            <span class="stat">{storageMB < 1024 ? `${storageMB} MB` : `${(storageMB / 1024).toFixed(1)} GB`}<span class="stat-dim"> disk</span></span>
+            <span class="stat">{storageMB < 1024 ? `${storageMB} MB` : `${(storageMB / 1024).toFixed(1)} GB `}<span class="stat-dim">disk</span></span>
           {/if}
           {#if uptime}
             {#if stats}<span class="stat-sep">·</span>{/if}
@@ -405,6 +410,7 @@
     font-variant-numeric: tabular-nums;
   }
   .stat { color: var(--text-secondary); }
+  .stat.players { color: var(--live); }
   .stat.mem { color: #8b5cf6; }
   .stat.cpu { color: var(--accent); }
   .stat-dim { color: var(--text-tertiary); font-weight: 400; }
