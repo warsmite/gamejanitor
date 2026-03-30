@@ -111,6 +111,7 @@
   // --- Derived chart data ---
   const cpuPoints = $derived(scale(data.map(d => d.cpu_percent), H));
   const memPoints = $derived(scale(data.map(d => d.memory_usage_mb), H));
+  const storagePoints = $derived(scale(data.map(d => d.volume_size_bytes / (1024 * 1024)), H));
   const rxPoints = $derived(scale(data.map(d => d.net_rx_bytes_per_sec), H));
   const txPoints = $derived(scale(data.map(d => d.net_tx_bytes_per_sec), H));
 
@@ -139,6 +140,12 @@
   }
 
   function formatMB(mb: number): string {
+    if (mb < 1024) return `${Math.round(mb)} MB`;
+    return `${(mb / 1024).toFixed(1)} GB`;
+  }
+
+  function formatStorageBytes(bytes: number): string {
+    const mb = bytes / (1024 * 1024);
     if (mb < 1024) return `${Math.round(mb)} MB`;
     return `${(mb / 1024).toFixed(1)} GB`;
   }
@@ -227,6 +234,31 @@
             {#if hoverX !== null}
               <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
               <circle cx={hoverX} cy={memPoints[hoverIndex!]?.y ?? 0} r="3" class="dot mem" />
+            {/if}
+          </svg>
+        </div>
+      </div>
+
+      <!-- Storage -->
+      <div class="chart-row">
+        <div class="chart-label-col">
+          <span class="chart-label storage">DISK</span>
+          <span class="chart-value">
+            {hoverData ? formatStorageBytes(hoverData.volume_size_bytes) : (data.length ? formatStorageBytes(data[data.length - 1].volume_size_bytes) : '—')}
+          </span>
+        </div>
+        <div class="chart-svg-wrap">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
+            onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
+            onmouseleave={handleMouseLeave}>
+            {#each gridYs as gy}
+              <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
+            {/each}
+            <path d={polyline(storagePoints)} class="line accent" />
+            {#if hoverX !== null}
+              <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
+              <circle cx={hoverX} cy={storagePoints[hoverIndex!]?.y ?? 0} r="3" class="dot accent" />
             {/if}
           </svg>
         </div>
@@ -356,6 +388,7 @@
   }
   .chart-label.cpu { color: var(--accent); }
   .chart-label.mem { color: #8b5cf6; }
+  .chart-label.storage { color: var(--text-secondary); }
   .chart-label.net { color: var(--live); }
 
   .chart-value {
