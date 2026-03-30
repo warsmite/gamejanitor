@@ -11,7 +11,7 @@
 
 <span class="pill {statusClass}">
   <span class="dot"></span>
-  {status}
+  {status.charAt(0).toUpperCase() + status.slice(1)}
 </span>
 
 <style>
@@ -19,7 +19,7 @@
     display: inline-flex; align-items: center; gap: 7px;
     padding: 5px 13px 5px 10px; border-radius: 100px;
     font-size: 0.72rem; font-weight: 500; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.05em;
+    letter-spacing: 0.02em;
   }
   .dot { width: 7px; height: 7px; border-radius: 50%; }
 

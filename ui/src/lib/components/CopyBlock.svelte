@@ -5,7 +5,7 @@
   function copy() {
     navigator.clipboard.writeText(value).then(() => {
       copied = true;
-      setTimeout(() => copied = false, 1500);
+      setTimeout(() => copied = false, 2000);
     });
   }
 </script>

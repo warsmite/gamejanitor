@@ -134,6 +134,7 @@
     cursor: pointer;
     transition: border-color 0.2s;
     animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity;
   }
   .hero:hover { border-color: var(--border); }
 
