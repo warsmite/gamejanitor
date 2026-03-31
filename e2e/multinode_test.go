@@ -171,7 +171,7 @@ func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
 	delResp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	delResp.Body.Close()
-	assert.Equal(t, 204, delResp.StatusCode)
+	assert.Equal(t, 202, delResp.StatusCode)
 	t.Logf("gameserver deleted")
 }
 
