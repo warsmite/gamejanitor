@@ -25,6 +25,8 @@ type SandboxWorker struct {
 	gameStore *games.GameStore
 	dataDir   string
 	resolve   worker.VolumeResolver
+	bwrapPath string
+	slirpPath string
 
 	mu        sync.Mutex
 	instances map[string]*managedInstance
@@ -45,6 +47,7 @@ type managedInstance struct {
 	logFile   *os.File
 	done      chan struct{}
 	unitName  string // systemd unit name
+	slirp     *slirpInstance
 }
 
 // instanceManifest is persisted to disk so StartInstance can reconstruct the config.
@@ -69,10 +72,25 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 	}
 	w.resolve = w.volumeResolver()
 
-	if !hasSystemdRun() {
-		log.Warn("systemd-run not found — sandbox runtime requires systemd for resource limits and process survival")
+	// Ensure sandbox binaries are available
+	bwrapPath, err := ensureBwrap(dataDir, log)
+	if err != nil {
+		log.Error("failed to ensure bwrap binary", "error", err)
 	} else {
-		log.Info("sandbox runtime ready (bwrap + systemd + slirp4netns)")
+		w.bwrapPath = bwrapPath
+	}
+
+	slirpPath, err := ensureSlirp4netns(dataDir, log)
+	if err != nil {
+		log.Warn("slirp4netns not available — network isolation disabled", "error", err)
+	} else {
+		w.slirpPath = slirpPath
+	}
+
+	if !hasSystemdRun() {
+		log.Warn("systemd-run not found — resource limits and process survival unavailable")
+	} else {
+		log.Info("sandbox runtime ready", "bwrap", w.bwrapPath, "slirp", w.slirpPath)
 	}
 	return w
 }
@@ -154,11 +172,17 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 
 	// Build bwrap command with full isolation
 	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.dataDir)
+
+	// Add network namespace isolation when slirp4netns is available
+	if w.slirpPath != "" {
+		bwrapArgs = append([]string{"--unshare-net"}, bwrapArgs...)
+	}
+
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
 
 	// Wrap in systemd-run for lifecycle + cgroups
-	cmd := buildSystemdCommand(id, manifest, bwrapArgs)
+	cmd := buildSystemdCommand(id, manifest, bwrapArgs, w.bwrapPath)
 
 	// Log file
 	logPath := filepath.Join(dir, "output.log")
@@ -191,6 +215,16 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		unitName:  "gj-" + id,
 	}
 
+	// Set up network namespace with slirp4netns
+	if w.slirpPath != "" && pid > 0 {
+		si, err := setupNetworkNamespace(id, pid, manifest.Ports, w.dataDir, w.slirpPath, w.log)
+		if err != nil {
+			w.log.Warn("failed to set up network namespace, instance has no network", "id", id, "error", err)
+		} else {
+			inst.slirp = si
+		}
+	}
+
 	w.mu.Lock()
 	w.instances[id] = inst
 	w.mu.Unlock()
@@ -201,6 +235,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		inst.exitCode = cmd.ProcessState.ExitCode()
 		inst.exited = true
 		logFile.Close()
+		stopSlirp(inst.slirp, w.log)
 
 		w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode)
 		close(inst.done)
@@ -261,6 +296,8 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 	if ok && !inst.exited {
 		killSystemdUnit(inst.unitName, w.log)
 		<-inst.done
+	} else if ok {
+		stopSlirp(inst.slirp, w.log)
 	}
 
 	os.RemoveAll(w.instanceDir(id))
@@ -316,7 +353,7 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmd...)
 
-	execCmd := buildExecCommand(bwrapArgs)
+	execCmd := buildExecCommand(bwrapArgs, w.bwrapPath)
 	var stdout, stderr []byte
 	var stdoutBuf, stderrBuf safeBuffer
 	execCmd.Stdout = &stdoutBuf

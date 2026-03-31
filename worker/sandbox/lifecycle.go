@@ -14,11 +14,14 @@ func hasSystemdRun() bool {
 
 // buildSystemdCommand wraps bwrap in a systemd transient unit with resource limits
 // and port restrictions. Falls back to raw bwrap if systemd is unavailable.
-func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []string) *exec.Cmd {
+func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []string, bwrapPath string) *exec.Cmd {
+	if bwrapPath == "" {
+		bwrapPath = "bwrap"
+	}
+
 	if !hasSystemdRun() {
-		// Fallback: run bwrap directly (no resource limits, process dies with parent)
 		args := append([]string{"--die-with-parent"}, bwrapArgs...)
-		return exec.Command("bwrap", args...)
+		return exec.Command(bwrapPath, args...)
 	}
 
 	unitName := "gj-" + id
@@ -45,15 +48,18 @@ func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []strin
 		sdArgs = append(sdArgs, "--property=SocketBindDeny=any")
 	}
 
-	sdArgs = append(sdArgs, "--", "bwrap")
+	sdArgs = append(sdArgs, "--", bwrapPath)
 	sdArgs = append(sdArgs, bwrapArgs...)
 
 	return exec.Command("systemd-run", sdArgs...)
 }
 
 // buildExecCommand builds a bwrap command for exec (no systemd wrapping needed).
-func buildExecCommand(bwrapArgs []string) *exec.Cmd {
-	return exec.Command("bwrap", bwrapArgs...)
+func buildExecCommand(bwrapArgs []string, bwrapPath string) *exec.Cmd {
+	if bwrapPath == "" {
+		bwrapPath = "bwrap"
+	}
+	return exec.Command(bwrapPath, bwrapArgs...)
 }
 
 // stopSystemdUnit stops a systemd transient unit gracefully.
