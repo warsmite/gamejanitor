@@ -19,6 +19,7 @@ const (
 	PaginationDefaultLogTail  = 100
 	PaginationDefaultModLimit = 20
 
+	MaxFileReadBytes   = 10 * 1024 * 1024  // 10 MB — inline file reads via API (use download endpoint for larger)
 	MaxFileWriteBytes  = 10 * 1024 * 1024  // 10 MB — inline file writes via API
 	MaxFileUploadBytes = 100 * 1024 * 1024 // 100 MB — multipart file uploads
 )

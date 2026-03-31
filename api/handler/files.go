@@ -47,6 +47,20 @@ func (h *FileHandlers) Read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check file size before reading into memory
+	reader, size, err := h.svc.OpenFile(r.Context(), id, filePath)
+	if err != nil {
+		h.log.Error("reading file", "gameserver", id, "path", filePath, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	reader.Close()
+
+	if size > MaxFileReadBytes {
+		respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("file is %d MB, exceeds %d MB read limit — use the download endpoint for large files", size/(1024*1024), MaxFileReadBytes/(1024*1024)))
+		return
+	}
+
 	content, err := h.svc.ReadFile(r.Context(), id, filePath)
 	if err != nil {
 		h.log.Error("reading file", "gameserver", id, "path", filePath, "error", err)
@@ -131,7 +145,9 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		dirPath = "/data"
 	}
 
-	if err := r.ParseMultipartForm(MaxFileUploadBytes); err != nil {
+	// Keep at most 2MB in memory; the rest spills to temp files on disk.
+	// Individual files are still capped at MaxFileUploadBytes when read.
+	if err := r.ParseMultipartForm(2 * 1024 * 1024); err != nil {
 		respondError(w, http.StatusBadRequest, "failed to parse multipart form")
 		return
 	}

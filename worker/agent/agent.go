@@ -275,31 +275,46 @@ func (a *Agent) CopyDirFromContainer(req *pb.CopyDirFromContainerRequest, stream
 }
 
 func (a *Agent) CopyTarToContainer(stream pb.WorkerService_CopyTarToContainerServer) error {
-	var containerID, destPath string
-	var buf bytes.Buffer
-
-	for {
-		msg, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		if containerID == "" {
-			containerID = msg.ContainerId
-			destPath = msg.DestPath
-		}
-		buf.Write(msg.Data)
+	// Read the first message to get container ID and dest path
+	first, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("no messages received: %w", err)
 	}
-
+	containerID := first.ContainerId
+	destPath := first.DestPath
 	if containerID == "" {
-		return fmt.Errorf("no messages received")
+		return fmt.Errorf("first message missing container_id")
 	}
 
-	if err := a.worker.CopyTarToContainer(stream.Context(), containerID, destPath, &buf); err != nil {
-		return err
+	// Stream remaining chunks through a pipe to avoid buffering the entire tar
+	pr, pw := io.Pipe()
+	var copyErr error
+	go func() {
+		defer pw.Close()
+		// Write data from the first message
+		if len(first.Data) > 0 {
+			if _, err := pw.Write(first.Data); err != nil {
+				return
+			}
+		}
+		for {
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				pw.CloseWithError(err)
+				return
+			}
+			if _, err := pw.Write(msg.Data); err != nil {
+				return
+			}
+		}
+	}()
+
+	copyErr = a.worker.CopyTarToContainer(stream.Context(), containerID, destPath, pr)
+	if copyErr != nil {
+		return copyErr
 	}
 	return stream.SendAndClose(&pb.CopyTarToContainerResponse{})
 }
