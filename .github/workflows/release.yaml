@@ -26,10 +26,10 @@ jobs:
         run: cd ui && npm install && npm run build
 
       - name: Build binary
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gamejanitor .
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gamejanitor-linux-amd64 .
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: gamejanitor
+          files: gamejanitor-linux-amd64
           generate_release_notes: true
