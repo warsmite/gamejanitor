@@ -19,10 +19,16 @@ type Route struct {
 	Protocol     string // "tcp" or "udp"
 }
 
-// Manager manages per-port forwarders. Thread-safe.
+// routeKey uniquely identifies a forwarder by port + protocol.
+type routeKey struct {
+	Port     int
+	Protocol string
+}
+
+// Manager manages per-port/protocol forwarders. Thread-safe.
 type Manager struct {
 	bindAddr   string // address to bind listeners on (e.g. "0.0.0.0")
-	forwarders map[int]*forwarder
+	forwarders map[routeKey]*forwarder
 	mu         sync.Mutex
 	log        *slog.Logger
 }
@@ -31,52 +37,50 @@ type Manager struct {
 func NewManager(bindAddr string, log *slog.Logger) *Manager {
 	return &Manager{
 		bindAddr:   bindAddr,
-		forwarders: make(map[int]*forwarder),
+		forwarders: make(map[routeKey]*forwarder),
 		log:        log,
 	}
 }
 
-// Set starts or updates a forwarder for the given port.
-// If a forwarder already exists for this port, it updates the backend address.
-// If the protocol changed, it restarts the forwarder.
+// Set starts or updates a forwarder for the given port and protocol.
+// A port can have both TCP and UDP forwarders simultaneously.
 func (m *Manager) Set(port int, route Route) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if f, ok := m.forwarders[port]; ok {
-		if f.protocol == route.Protocol {
-			// Same protocol — just update backend
-			f.setBackend(route.BackendAddr)
-			m.log.Info("proxy route updated",
-				"port", port, "backend", route.BackendAddr,
-				"protocol", route.Protocol, "gameserver", route.GameserverID)
-			return nil
-		}
-		// Protocol changed — stop old, start new
-		f.stop()
-		delete(m.forwarders, port)
+	key := routeKey{Port: port, Protocol: route.Protocol}
+
+	if f, ok := m.forwarders[key]; ok {
+		f.setBackend(route.BackendAddr)
+		m.log.Info("proxy route updated",
+			"port", port, "backend", route.BackendAddr,
+			"protocol", route.Protocol, "gameserver", route.GameserverID)
+		return nil
 	}
 
 	f, err := newForwarder(m.bindAddr, port, route.Protocol, route.BackendAddr, m.log)
 	if err != nil {
-		return fmt.Errorf("starting forwarder on port %d: %w", port, err)
+		return fmt.Errorf("starting forwarder on port %d/%s: %w", port, route.Protocol, err)
 	}
-	m.forwarders[port] = f
+	m.forwarders[key] = f
 	m.log.Info("proxy route added",
 		"port", port, "backend", route.BackendAddr,
 		"protocol", route.Protocol, "gameserver", route.GameserverID)
 	return nil
 }
 
-// Remove stops and removes the forwarder for the given port.
+// Remove stops and removes all forwarders for the given port (both TCP and UDP).
 func (m *Manager) Remove(port int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if f, ok := m.forwarders[port]; ok {
-		f.stop()
-		delete(m.forwarders, port)
-		m.log.Info("proxy route removed", "port", port)
+	for _, proto := range []string{"tcp", "udp"} {
+		key := routeKey{Port: port, Protocol: proto}
+		if f, ok := m.forwarders[key]; ok {
+			f.stop()
+			delete(m.forwarders, key)
+			m.log.Info("proxy route removed", "port", port, "protocol", proto)
+		}
 	}
 }
 
@@ -85,21 +89,21 @@ func (m *Manager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for port, f := range m.forwarders {
+	for key, f := range m.forwarders {
 		f.stop()
-		delete(m.forwarders, port)
+		delete(m.forwarders, key)
 	}
 	m.log.Info("proxy manager stopped")
 }
 
 // Routes returns a snapshot of active routes for diagnostics.
-func (m *Manager) Routes() map[int]string {
+func (m *Manager) Routes() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	routes := make(map[int]string, len(m.forwarders))
-	for port, f := range m.forwarders {
-		routes[port] = f.getBackend()
+	routes := make(map[string]string, len(m.forwarders))
+	for key, f := range m.forwarders {
+		routes[fmt.Sprintf("%d/%s", key.Port, key.Protocol)] = f.getBackend()
 	}
 	return routes
 }
