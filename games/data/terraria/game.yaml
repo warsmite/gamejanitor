@@ -16,7 +16,7 @@ query:
   supports: [players]
   notes: "Requires TShock mod with RestApiEnabled — vanilla Terraria has no query protocol"
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/dotnet
   recommended_memory_mb: 1024
   ready_pattern: "Type 'help' for a list of commands"

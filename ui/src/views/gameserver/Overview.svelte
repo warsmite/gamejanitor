@@ -52,7 +52,7 @@
 
   // Events worth showing in the activity feed — keyed by type with label and dot color.
   // Anything not in this map is filtered out (status_changed, stats, query, operation,
-  // intermediate lifecycle steps like image_pulling, container_creating, etc.)
+  // intermediate lifecycle steps like image_pulling, instance_creating, etc.)
   const activityEvents: Record<string, { label: string; color: string }> = {
     // User actions
     'gameserver.create':     { label: 'Created',                  color: 'green' },
@@ -74,7 +74,7 @@
     'restore_backup':        { label: 'Restore started',          color: 'orange' },
     // Lifecycle milestones
     'gameserver.ready':      { label: 'Ready — accepting players', color: 'green' },
-    'gameserver.container_exited': { label: 'Crashed',            color: 'red' },
+    'gameserver.instance_exited': { label: 'Crashed',            color: 'red' },
     'gameserver.error':      { label: 'Error',                    color: 'red' },
     // Backups
     'backup.create':         { label: 'Backup started',           color: 'orange' },

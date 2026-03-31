@@ -309,7 +309,7 @@ func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName
 
 	// Ensure all restored files are owned by the gameserver user (UID/GID 1001).
 	// The tar may preserve ownership from the source node which differs from the
-	// target. Without this, the container process can't read/write restored files.
+	// target. Without this, the instance process can't read/write restored files.
 	filepath.Walk(mountpoint, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -485,10 +485,10 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 // chownToGameserver chowns the given directory and all its parent directories
 // up to the point where they're already owned by the gameserver user.
 // This ensures that MkdirAll-created intermediate directories (e.g., /data/server/oxide/
-// when creating /data/server/oxide/plugins/) are accessible inside the container.
+// when creating /data/server/oxide/plugins/) are accessible inside the instance.
 // chownToGameserver chowns the given directory and all parent directories up to
 // (and including) the volume mountpoint. Ensures directories created by MkdirAll
-// are accessible by the gameserver user inside the container.
+// are accessible by the gameserver user inside the instance.
 func chownToGameserver(dir string, volumeRoot string) error {
 	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
 		info, err := os.Stat(p)

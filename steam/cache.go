@@ -54,7 +54,7 @@ func (c *DepotCache) FilesDir(appID, depotID uint32) string {
 }
 
 // AppFilesDir returns a shared directory where all depots for an app are merged.
-// This is the directory that gets bind-mounted into the container.
+// This is the directory that gets bind-mounted into the instance.
 func (c *DepotCache) AppFilesDir(appID uint32) string {
 	return filepath.Join(c.root, fmt.Sprintf("%d", appID), "merged")
 }

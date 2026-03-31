@@ -29,7 +29,7 @@ type imageConfig struct {
 	WorkingDir string
 }
 
-// pullAndExtractOCIImage pulls a container image and extracts its filesystem to destDir.
+// pullAndExtractOCIImage pulls an instance image and extracts its filesystem to destDir.
 // Skips extraction if the image has already been extracted (digest marker file present).
 // Returns the parsed image config (entrypoint, cmd, env, working dir).
 func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir string, log *slog.Logger) (*imageConfig, error) {

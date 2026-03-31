@@ -3,30 +3,30 @@ package naming
 import "strings"
 
 const (
-	ContainerPrefix        = "gamejanitor-"
-	UpdateContainerPrefix  = ContainerPrefix + "update-"
-	FileopsContainerPrefix = ContainerPrefix + "fileops-"
+	InstancePrefix        = "gamejanitor-"
+	UpdateInstancePrefix  = InstancePrefix + "update-"
+	FileopsInstancePrefix = InstancePrefix + "fileops-"
 )
 
 func InstanceName(gameserverID string) string {
-	return ContainerPrefix + gameserverID
+	return InstancePrefix + gameserverID
 }
 
 func UpdateInstanceName(gameserverID string) string {
-	return UpdateContainerPrefix + gameserverID
+	return UpdateInstancePrefix + gameserverID
 }
 
 func VolumeName(gameserverID string) string {
-	return ContainerPrefix + gameserverID
+	return InstancePrefix + gameserverID
 }
 
-// GameserverIDFromInstanceName extracts a gameserver ID from a container name.
-// Returns empty string and false for non-gameserver containers (fileops, update, etc).
+// GameserverIDFromInstanceName extracts a gameserver ID from a instance name.
+// Returns empty string and false for non-gameserver instances (fileops, update, etc).
 func GameserverIDFromInstanceName(name string) (string, bool) {
-	if !strings.HasPrefix(name, ContainerPrefix) {
+	if !strings.HasPrefix(name, InstancePrefix) {
 		return "", false
 	}
-	id := strings.TrimPrefix(name, ContainerPrefix)
+	id := strings.TrimPrefix(name, InstancePrefix)
 	if strings.HasPrefix(id, "update-") || strings.HasPrefix(id, "reinstall-") ||
 		strings.HasPrefix(id, "backup-") || strings.HasPrefix(id, "fileops-") {
 		return "", false

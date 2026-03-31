@@ -11,7 +11,7 @@ ports:
 query:
   protocol: raknet
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 1024
   ready_pattern: 'Server started'

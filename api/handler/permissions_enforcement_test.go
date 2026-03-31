@@ -236,7 +236,7 @@ func TestPermissions_Patch_ConfigureEnv_BlocksPorts(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"ports": []map[string]any{
-			{"host": 27015, "container": 27015, "protocol": "udp"},
+			{"host": 27015, "instance": 27015, "protocol": "udp"},
 		},
 	})
 	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)

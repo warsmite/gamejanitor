@@ -16,7 +16,7 @@ query:
   supports: [players, mods]
   notes: "Player list limited to server's sample (usually 12 max)"
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/java17
   recommended_memory_mb: 2048
   ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'

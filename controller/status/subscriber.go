@@ -93,7 +93,7 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.InstanceExitedEvent:
-		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
+		s.setStatus(e.GameserverID, controller.StatusError, "Instance exited unexpectedly")
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.GameserverErrorEvent:

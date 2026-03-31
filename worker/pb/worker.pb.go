@@ -148,7 +148,7 @@ func (*PullImageResponse) Descriptor() ([]byte, []int) {
 type PortBinding struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HostPort      int32                  `protobuf:"varint,1,opt,name=host_port,json=hostPort,proto3" json:"host_port,omitempty"`
-	ContainerPort int32                  `protobuf:"varint,2,opt,name=container_port,json=containerPort,proto3" json:"container_port,omitempty"`
+	InstancePort  int32                  `protobuf:"varint,2,opt,name=instance_port,json=instancePort,proto3" json:"instance_port,omitempty"`
 	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -191,9 +191,9 @@ func (x *PortBinding) GetHostPort() int32 {
 	return 0
 }
 
-func (x *PortBinding) GetContainerPort() int32 {
+func (x *PortBinding) GetInstancePort() int32 {
 	if x != nil {
-		return x.ContainerPort
+		return x.InstancePort
 	}
 	return 0
 }
@@ -3228,7 +3228,7 @@ func (*ListGameserverInstancesRequest) Descriptor() ([]byte, []int) {
 
 type ListGameserverInstancesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Containers    []*GameserverInstance  `protobuf:"bytes,1,rep,name=containers,proto3" json:"containers,omitempty"`
+	Instances     []*GameserverInstance  `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3263,9 +3263,9 @@ func (*ListGameserverInstancesResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{61}
 }
 
-func (x *ListGameserverInstancesResponse) GetContainers() []*GameserverInstance {
+func (x *ListGameserverInstancesResponse) GetInstances() []*GameserverInstance {
 	if x != nil {
-		return x.Containers
+		return x.Instances
 	}
 	return nil
 }
@@ -3274,7 +3274,7 @@ type GameserverInstance struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	InstanceName  string                 `protobuf:"bytes,2,opt,name=instance_name,json=instanceName,proto3" json:"instance_name,omitempty"`
-	GameserverId  string                 `protobuf:"bytes,3,opt,name=gameserver_id,json=gameserverId,proto3" json:"gameserver_id,omitempty"` // extracted from container name
+	GameserverId  string                 `protobuf:"bytes,3,opt,name=gameserver_id,json=gameserverId,proto3" json:"gameserver_id,omitempty"` // extracted from instance name
 	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                                   // running, exited, etc.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3807,10 +3807,10 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"(\n" +
 	"\x10PullImageRequest\x12\x14\n" +
 	"\x05image\x18\x01 \x01(\tR\x05image\"\x13\n" +
-	"\x11PullImageResponse\"m\n" +
+	"\x11PullImageResponse\"k\n" +
 	"\vPortBinding\x12\x1b\n" +
-	"\thost_port\x18\x01 \x01(\x05R\bhostPort\x12%\n" +
-	"\x0econtainer_port\x18\x02 \x01(\x05R\rcontainerPort\x12\x1a\n" +
+	"\thost_port\x18\x01 \x01(\x05R\bhostPort\x12#\n" +
+	"\rinstance_port\x18\x02 \x01(\x05R\finstancePort\x12\x1a\n" +
 	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd1\x02\n" +
 	"\x15CreateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
@@ -4025,11 +4025,9 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\rgameserver_id\x18\x02 \x01(\tR\fgameserverId\x12\x1f\n" +
 	"\vvolume_name\x18\x03 \x01(\tR\n" +
 	"volumeName\" \n" +
-	"\x1eListGameserverInstancesRequest\"]\n" +
-	"\x1fListGameserverInstancesResponse\x12:\n" +
-	"\n" +
-	"containers\x18\x01 \x03(\v2\x1a.worker.GameserverInstanceR\n" +
-	"containers\"\x95\x01\n" +
+	"\x1eListGameserverInstancesRequest\"[\n" +
+	"\x1fListGameserverInstancesResponse\x128\n" +
+	"\tinstances\x18\x01 \x03(\v2\x1a.worker.GameserverInstanceR\tinstances\"\x95\x01\n" +
 	"\x12GameserverInstance\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
 	"instanceId\x12#\n" +
@@ -4200,7 +4198,7 @@ var file_proto_worker_proto_goTypes = []any{
 var file_proto_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateInstanceRequest.ports:type_name -> worker.PortBinding
 	29, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
-	62, // 2: worker.ListGameserverInstancesResponse.containers:type_name -> worker.GameserverInstance
+	62, // 2: worker.ListGameserverInstancesResponse.instances:type_name -> worker.GameserverInstance
 	1,  // 3: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
 	4,  // 4: worker.WorkerService.CreateInstance:input_type -> worker.CreateInstanceRequest
 	6,  // 5: worker.WorkerService.StartInstance:input_type -> worker.StartInstanceRequest

@@ -52,7 +52,7 @@ func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceReques
 	for _, p := range req.Ports {
 		opts.Ports = append(opts.Ports, worker.PortBinding{
 			HostPort:      int(p.HostPort),
-			ContainerPort: int(p.ContainerPort),
+			InstancePort: int(p.InstancePort),
 			Protocol:      p.Protocol,
 		})
 	}
@@ -326,14 +326,14 @@ func (a *Agent) CopyDirFromInstance(req *pb.CopyDirFromInstanceRequest, stream p
 }
 
 func (a *Agent) CopyTarToInstance(stream pb.WorkerService_CopyTarToInstanceServer) error {
-	// Read the first message to get container ID and dest path
+	// Read the first message to get instance ID and dest path
 	first, err := stream.Recv()
 	if err != nil {
 		return fmt.Errorf("no messages received: %w", err)
 	}
-	containerID := first.InstanceId
+	instanceID := first.InstanceId
 	destPath := first.DestPath
-	if containerID == "" {
+	if instanceID == "" {
 		return fmt.Errorf("first message missing instance_id")
 	}
 
@@ -363,7 +363,7 @@ func (a *Agent) CopyTarToInstance(stream pb.WorkerService_CopyTarToInstanceServe
 		}
 	}()
 
-	copyErr = a.worker.CopyTarToInstance(stream.Context(), containerID, destPath, pr)
+	copyErr = a.worker.CopyTarToInstance(stream.Context(), instanceID, destPath, pr)
 	if copyErr != nil {
 		return copyErr
 	}
@@ -539,20 +539,20 @@ func (a *Agent) CopyDepotToVolume(ctx context.Context, req *pb.CopyDepotToVolume
 }
 
 func (a *Agent) ListGameserverInstances(ctx context.Context, req *pb.ListGameserverInstancesRequest) (*pb.ListGameserverInstancesResponse, error) {
-	containers, err := a.worker.ListGameserverInstances(ctx)
+	instances, err := a.worker.ListGameserverInstances(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var pbContainers []*pb.GameserverInstance
-	for _, c := range containers {
-		pbContainers = append(pbContainers, &pb.GameserverInstance{
+	var pbInstances []*pb.GameserverInstance
+	for _, c := range instances {
+		pbInstances = append(pbInstances, &pb.GameserverInstance{
 			InstanceId:   c.InstanceID,
 			InstanceName: c.InstanceName,
 			GameserverId:  c.GameserverID,
 			State:         c.State,
 		})
 	}
-	return &pb.ListGameserverInstancesResponse{Containers: pbContainers}, nil
+	return &pb.ListGameserverInstancesResponse{Instances: pbInstances}, nil
 }
 
 func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {

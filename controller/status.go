@@ -2,7 +2,7 @@ package controller
 
 // Gameserver status constants.
 // Lifecycle: Stopped → Pulling → Starting → Started → Running → Stopping → Stopped
-// Gameserver statuses — reflect current container state, not the operation that triggered it.
+// Gameserver statuses — reflect current instance state, not the operation that triggered it.
 const (
 	StatusStopped     = "stopped"
 	StatusInstalling  = "installing"
@@ -11,15 +11,15 @@ const (
 	StatusRunning     = "running"
 	StatusStopping    = "stopping"
 	StatusError       = "error"
-	StatusUnreachable = "unreachable" // Worker disconnected — actual container state unknown
+	StatusUnreachable = "unreachable" // Worker disconnected — actual instance state unknown
 	StatusArchived    = "archived"
 )
 
-// Container contract constants — shared between gamejanitor and game container scripts.
+// Instance contract constants — shared between gamejanitor and game instance scripts.
 // Changing these requires updating the corresponding entrypoint.sh in images/base/.
 const (
 	InstallMarker = "[gamejanitor:installed]" // Emitted by entrypoint.sh after first install completes
-	EnvSkipInstall = "SKIP_INSTALL=1"         // Passed to container when gs.Installed is true
+	EnvSkipInstall = "SKIP_INSTALL=1"         // Passed to instance when gs.Installed is true
 
 	PortNameQuery = "query" // Port used for server query polling (A2S/GJQ)
 	PortNameGame  = "game"  // Fallback port for query polling if no "query" port defined

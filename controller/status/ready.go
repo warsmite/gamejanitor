@@ -13,7 +13,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker/logparse"
 )
 
-// ReadyWatcher monitors container logs for a game's ready pattern
+// ReadyWatcher monitors instance logs for a game's ready pattern
 // to promote gameservers from Started → Running.
 type ReadyWatcher struct {
 	store       Store
@@ -35,9 +35,9 @@ func NewReadyWatcher(store Store, broadcaster *controller.EventBus, gameStore *g
 	}
 }
 
-// Watch starts monitoring container logs for the ready pattern.
+// Watch starts monitoring instance logs for the ready pattern.
 // If the game has no ready_pattern, promotes immediately.
-func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID string) {
+func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, instanceID string) {
 	gs, err := w.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		w.log.Error("failed to load gameserver for ready watch", "gameserver", gameserverID, "error", err)
@@ -75,7 +75,7 @@ func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID
 		w.watchers[gameserverID] = cancel
 		w.mu.Unlock()
 
-		go w.watchLogs(ctx, gameserverID, wkr, containerID, pattern)
+		go w.watchLogs(ctx, gameserverID, wkr, instanceID, pattern)
 	}
 }
 
@@ -101,7 +101,7 @@ func (w *ReadyWatcher) StopAll() {
 	}
 }
 
-func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr worker.Worker, containerID string, pattern *regexp.Regexp) {
+func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr worker.Worker, instanceID string, pattern *regexp.Regexp) {
 	defer func() {
 		w.mu.Lock()
 		delete(w.watchers, gameserverID)
@@ -109,14 +109,14 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 	}()
 
 	if pattern != nil {
-		w.log.Info("watching container logs for ready pattern", "gameserver", gameserverID, "pattern", pattern.String())
+		w.log.Info("watching instance logs for ready pattern", "gameserver", gameserverID, "pattern", pattern.String())
 	} else {
-		w.log.Info("watching container logs for install marker", "gameserver", gameserverID)
+		w.log.Info("watching instance logs for install marker", "gameserver", gameserverID)
 	}
 
-	reader, err := wkr.InstanceLogs(ctx, containerID, 0, true)
+	reader, err := wkr.InstanceLogs(ctx, instanceID, 0, true)
 	if err != nil {
-		w.log.Error("failed to follow container logs", "gameserver", gameserverID, "error", err)
+		w.log.Error("failed to follow instance logs", "gameserver", gameserverID, "error", err)
 		if pattern != nil {
 			w.promote(gameserverID)
 		}

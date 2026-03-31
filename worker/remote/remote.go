@@ -52,7 +52,7 @@ func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceO
 	for _, p := range opts.Ports {
 		req.Ports = append(req.Ports, &pb.PortBinding{
 			HostPort:      int32(p.HostPort),
-			ContainerPort: int32(p.ContainerPort),
+			InstancePort: int32(p.InstancePort),
 			Protocol:      p.Protocol,
 		})
 	}
@@ -95,9 +95,9 @@ func (w *RemoteWorker) InspectInstance(ctx context.Context, id string) (*worker.
 	}, nil
 }
 
-func (w *RemoteWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
+func (w *RemoteWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
 	resp, err := w.client.Exec(ctx, &pb.ExecRequest{
-		InstanceId: containerID,
+		InstanceId: instanceID,
 		Cmd:         cmd,
 	})
 	if err != nil {
@@ -106,9 +106,9 @@ func (w *RemoteWorker) Exec(ctx context.Context, containerID string, cmd []strin
 	return int(resp.ExitCode), resp.Stdout, resp.Stderr, nil
 }
 
-func (w *RemoteWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+func (w *RemoteWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
 	stream, err := w.client.InstanceLogs(ctx, &pb.InstanceLogsRequest{
-		InstanceId: containerID,
+		InstanceId: instanceID,
 		Tail:        int32(tail),
 		Follow:      follow,
 	})
@@ -118,8 +118,8 @@ func (w *RemoteWorker) InstanceLogs(ctx context.Context, containerID string, tai
 	return &grpcStreamReader{stream: stream}, nil
 }
 
-func (w *RemoteWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
-	resp, err := w.client.InstanceStats(ctx, &pb.InstanceStatsRequest{InstanceId: containerID})
+func (w *RemoteWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
+	resp, err := w.client.InstanceStats(ctx, &pb.InstanceStatsRequest{InstanceId: instanceID})
 	if err != nil {
 		return nil, err
 	}
@@ -275,9 +275,9 @@ func (w *RemoteWorker) RenamePath(ctx context.Context, volumeName string, from s
 	return err
 }
 
-func (w *RemoteWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+func (w *RemoteWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
 	resp, err := w.client.CopyFromInstance(ctx, &pb.CopyFromInstanceRequest{
-		InstanceId: containerID,
+		InstanceId: instanceID,
 		Path:        path,
 	})
 	if err != nil {
@@ -286,18 +286,18 @@ func (w *RemoteWorker) CopyFromInstance(ctx context.Context, containerID string,
 	return resp.Content, nil
 }
 
-func (w *RemoteWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+func (w *RemoteWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
 	_, err := w.client.CopyToInstance(ctx, &pb.CopyToInstanceRequest{
-		InstanceId: containerID,
+		InstanceId: instanceID,
 		Path:        path,
 		Content:     content,
 	})
 	return err
 }
 
-func (w *RemoteWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+func (w *RemoteWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
 	stream, err := w.client.CopyDirFromInstance(ctx, &pb.CopyDirFromInstanceRequest{
-		InstanceId: containerID,
+		InstanceId: instanceID,
 		Path:        path,
 	})
 	if err != nil {
@@ -306,7 +306,7 @@ func (w *RemoteWorker) CopyDirFromInstance(ctx context.Context, containerID stri
 	return &grpcStreamReader{stream: stream}, nil
 }
 
-func (w *RemoteWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+func (w *RemoteWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
 	stream, err := w.client.CopyTarToInstance(ctx)
 	if err != nil {
 		return err
@@ -319,7 +319,7 @@ func (w *RemoteWorker) CopyTarToInstance(ctx context.Context, containerID string
 		if n > 0 {
 			msg := &pb.CopyTarToInstanceRequest{Data: buf[:n]}
 			if first {
-				msg.InstanceId = containerID
+				msg.InstanceId = instanceID
 				msg.DestPath = destPath
 				first = false
 			}
@@ -533,10 +533,10 @@ func (w *RemoteWorker) CopyDepotToVolume(ctx context.Context, depotDir string, v
 func (w *RemoteWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	resp, err := w.client.ListGameserverInstances(ctx, &pb.ListGameserverInstancesRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("listing gameserver containers on %s: %w", w.nodeID, err)
+		return nil, fmt.Errorf("listing gameserver instances on %s: %w", w.nodeID, err)
 	}
 	var result []worker.GameserverInstance
-	for _, c := range resp.Containers {
+	for _, c := range resp.Instances {
 		result = append(result, worker.GameserverInstance{
 			InstanceID:   c.InstanceId,
 			InstanceName: c.InstanceName,

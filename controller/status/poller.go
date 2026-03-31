@@ -19,7 +19,7 @@ type StatsHistoryWriter interface {
 	InsertBatch(samples []model.StatsSample) error
 }
 
-// StatsPoller polls container stats for running gameservers and publishes
+// StatsPoller polls instance stats for running gameservers and publishes
 // controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
 // the GET /stats endpoint can serve them instantly without hitting Docker.
 type StatsPoller struct {

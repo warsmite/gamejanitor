@@ -41,7 +41,7 @@ type GameDef struct {
 	SteamLogin  SteamLoginType   `yaml:"steam_login,omitempty" json:"steam_login,omitempty"`
 	Ports       []Port           `yaml:"ports" json:"ports"`
 	Query       *QueryConfig     `yaml:"query,omitempty" json:"query,omitempty"`
-	Container   *ContainerConfig `yaml:"container,omitempty" json:"container,omitempty"`
+	Instance    *InstanceConfig `yaml:"instance,omitempty" json:"instance,omitempty"`
 	Assets      Assets           `yaml:"assets,omitempty" json:"assets,omitempty"`
 }
 
@@ -65,9 +65,9 @@ type EOSQueryConfig struct {
 	Attributes      map[string]string `yaml:"attributes,omitempty" json:"attributes,omitempty"`
 }
 
-// ContainerConfig holds fields only needed by gamejanitor for running game servers.
+// InstanceConfig holds fields only needed by gamejanitor for running game servers.
 // Query-only games (most gjq games) omit this section entirely.
-type ContainerConfig struct {
+type InstanceConfig struct {
 	Image                string         `yaml:"image" json:"image"`
 	Runtime              *RuntimeConfig `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	ReadyPattern         string         `yaml:"ready_pattern,omitempty" json:"ready_pattern,omitempty"`
@@ -78,12 +78,12 @@ type ContainerConfig struct {
 }
 
 // HasCapability returns true if the capability is NOT disabled.
-// Returns true if Container is nil (query-only games have no disabled capabilities).
+// Returns true if Instance is nil (query-only games have no disabled capabilities).
 func (d *GameDef) HasCapability(capability string) bool {
-	if d.Container == nil {
+	if d.Instance == nil {
 		return true
 	}
-	for _, cap := range d.Container.DisabledCapabilities {
+	for _, cap := range d.Instance.DisabledCapabilities {
 		if cap == capability {
 			return false
 		}
@@ -120,9 +120,9 @@ func (d *GameDef) HasQuery() bool {
 	return d.Query != nil && d.Query.Protocol != ""
 }
 
-// HasContainer returns true if this game has container/hosting support.
-func (d *GameDef) HasContainer() bool {
-	return d.Container != nil && d.Container.Image != ""
+// HasInstance returns true if this game has instance support.
+func (d *GameDef) HasInstance() bool {
+	return d.Instance != nil && d.Instance.Image != ""
 }
 
 // ── Registry — shared game lookup used by all consumers ──
@@ -186,15 +186,15 @@ func newRegistryFromFS(root fs.FS) (*Registry, error) {
 		if def.Aliases == nil {
 			def.Aliases = []string{}
 		}
-		if def.Container != nil {
-			if def.Container.DisabledCapabilities == nil {
-				def.Container.DisabledCapabilities = []string{}
+		if def.Instance != nil {
+			if def.Instance.DisabledCapabilities == nil {
+				def.Instance.DisabledCapabilities = []string{}
 			}
-			if def.Container.Env == nil {
-				def.Container.Env = []EnvVar{}
+			if def.Instance.Env == nil {
+				def.Instance.Env = []EnvVar{}
 			}
-			if def.Container.Mods.Categories == nil {
-				def.Container.Mods.Categories = []ModCategoryDef{}
+			if def.Instance.Mods.Categories == nil {
+				def.Instance.Mods.Categories = []ModCategoryDef{}
 			}
 		}
 		if def.Query != nil && def.Query.Supports == nil {
@@ -267,11 +267,11 @@ func (r *Registry) WithQuery() []GameDef {
 	return result
 }
 
-// WithContainer returns games that have container/hosting support.
-func (r *Registry) WithContainer() []GameDef {
+// WithInstance returns games that have instance support.
+func (r *Registry) WithInstance() []GameDef {
 	var result []GameDef
 	for _, g := range r.sorted {
-		if g.HasContainer() {
+		if g.HasInstance() {
 			result = append(result, g)
 		}
 	}

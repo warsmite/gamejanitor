@@ -606,7 +606,7 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan 
 					return
 				}
 				name := msg.Actor.Attributes["name"]
-				if !strings.HasPrefix(name, naming.ContainerPrefix) {
+				if !strings.HasPrefix(name, naming.InstancePrefix) {
 					continue
 				}
 
@@ -633,7 +633,7 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan 
 func (c *Client) ListGameserverInstances(ctx context.Context) ([]GameserverInstanceInfo, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("name", naming.ContainerPrefix)),
+		Filters: filters.NewArgs(filters.Arg("name", naming.InstancePrefix)),
 	})
 	if err != nil {
 		return nil, err

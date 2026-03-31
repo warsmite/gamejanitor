@@ -17,25 +17,25 @@ import (
 
 // FakeWorker implements worker.Worker with in-memory state tracking.
 // Volumes use real temp directories for file operation testing.
-// Containers track state transitions and emit events.
+// Instances track state transitions and emit events.
 type FakeWorker struct {
 	mu         sync.Mutex
 	volumes    map[string]string            // volume name → temp dir path
-	containers map[string]*fakeContainer
+	instances map[string]*fakeInstance
 	events     chan worker.InstanceEvent
 	failures   map[string]error // method name → error to return once
 	t          *testing.T
 	tmpDir     string // parent dir for volume temp dirs
 
-	// ReadyPattern to echo in logs after container start (simulates game ready).
-	// Set this before starting a container to test ready detection.
+	// ReadyPattern to echo in logs after instance start (simulates game ready).
+	// Set this before starting a instance to test ready detection.
 	ReadyPattern string
 
 	// PulledImages tracks which images have been "pulled".
 	PulledImages []string
 }
 
-type fakeContainer struct {
+type fakeInstance struct {
 	id     string
 	name   string
 	opts   worker.InstanceOptions
@@ -51,7 +51,7 @@ func NewFakeWorker(t *testing.T) *FakeWorker {
 
 	fw := &FakeWorker{
 		volumes:    make(map[string]string),
-		containers: make(map[string]*fakeContainer),
+		instances: make(map[string]*fakeInstance),
 		events:     make(chan worker.InstanceEvent, 64),
 		failures:   make(map[string]error),
 		t:          t,
@@ -61,13 +61,13 @@ func NewFakeWorker(t *testing.T) *FakeWorker {
 	return fw
 }
 
-// AddFakeContainer injects a running container into the FakeWorker without going
-// through the full Start lifecycle. Used in tests that need a container to exist
+// AddFakeInstance injects a running instance into the FakeWorker without going
+// through the full Start lifecycle. Used in tests that need a instance to exist
 // without triggering lifecycle events.
-func (w *FakeWorker) AddFakeContainer(gameserverID string) string {
+func (w *FakeWorker) AddFakeInstance(gameserverID string) string {
 	id := fmt.Sprintf("fake-%s-%d", gameserverID, time.Now().UnixNano())
 	w.mu.Lock()
-	w.containers[id] = &fakeContainer{
+	w.instances[id] = &fakeInstance{
 		id:    id,
 		name:  naming.InstanceName(gameserverID),
 		state: "running",
@@ -94,18 +94,18 @@ func (w *FakeWorker) popFailure(method string) error {
 	return nil
 }
 
-// Container queries
+// Instance queries
 
-func (w *FakeWorker) GetContainer(id string) *fakeContainer {
+func (w *FakeWorker) GetInstance(id string) *fakeInstance {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.containers[id]
+	return w.instances[id]
 }
 
-func (w *FakeWorker) ContainerCount() int {
+func (w *FakeWorker) InstanceCount() int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return len(w.containers)
+	return len(w.instances)
 }
 
 func (w *FakeWorker) VolumeCount() int {
@@ -141,7 +141,7 @@ func (w *FakeWorker) CreateInstance(ctx context.Context, opts worker.InstanceOpt
 	id := fmt.Sprintf("fake-%s-%d", opts.Name, time.Now().UnixNano())
 
 	w.mu.Lock()
-	w.containers[id] = &fakeContainer{
+	w.instances[id] = &fakeInstance{
 		id:    id,
 		name:  opts.Name,
 		opts:  opts,
@@ -158,10 +158,10 @@ func (w *FakeWorker) StartInstance(ctx context.Context, id string) error {
 	}
 
 	w.mu.Lock()
-	c, ok := w.containers[id]
+	c, ok := w.instances[id]
 	if !ok {
 		w.mu.Unlock()
-		return fmt.Errorf("container %s not found", id)
+		return fmt.Errorf("instance %s not found", id)
 	}
 	c.state = "running"
 
@@ -188,10 +188,10 @@ func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds
 	}
 
 	w.mu.Lock()
-	c, ok := w.containers[id]
+	c, ok := w.instances[id]
 	if !ok {
 		w.mu.Unlock()
-		return fmt.Errorf("container %s not found", id)
+		return fmt.Errorf("instance %s not found", id)
 	}
 	c.state = "stopped"
 	w.mu.Unlock()
@@ -210,18 +210,18 @@ func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds
 	return nil
 }
 
-// SimulateCrash emits a "die" event as if the container crashed unexpectedly.
+// SimulateCrash emits a "die" event as if the instance crashed unexpectedly.
 // Use this to test auto-restart and crash detection, not for expected stops.
-func (w *FakeWorker) SimulateCrash(containerID string) {
+func (w *FakeWorker) SimulateCrash(instanceID string) {
 	w.mu.Lock()
-	c, ok := w.containers[containerID]
+	c, ok := w.instances[instanceID]
 	if ok {
 		c.state = "stopped"
 	}
 	w.mu.Unlock()
 
 	w.events <- worker.InstanceEvent{
-		InstanceID:   containerID,
+		InstanceID:   instanceID,
 		InstanceName: c.name,
 		Action:        "die",
 	}
@@ -233,7 +233,7 @@ func (w *FakeWorker) RemoveInstance(ctx context.Context, id string) error {
 	}
 
 	w.mu.Lock()
-	delete(w.containers, id)
+	delete(w.instances, id)
 	w.mu.Unlock()
 	return nil
 }
@@ -244,10 +244,10 @@ func (w *FakeWorker) InspectInstance(ctx context.Context, id string) (*worker.In
 	}
 
 	w.mu.Lock()
-	c, ok := w.containers[id]
+	c, ok := w.instances[id]
 	if !ok {
 		w.mu.Unlock()
-		return nil, fmt.Errorf("container %s not found", id)
+		return nil, fmt.Errorf("instance %s not found", id)
 	}
 	info := &worker.InstanceInfo{
 		ID:        c.id,
@@ -258,23 +258,23 @@ func (w *FakeWorker) InspectInstance(ctx context.Context, id string) (*worker.In
 	return info, nil
 }
 
-func (w *FakeWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
+func (w *FakeWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
 	if err := w.popFailure("Exec"); err != nil {
 		return 1, "", "", err
 	}
 	return 0, "", "", nil
 }
 
-func (w *FakeWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+func (w *FakeWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
 	if err := w.popFailure("InstanceLogs"); err != nil {
 		return nil, err
 	}
 
 	w.mu.Lock()
-	c, ok := w.containers[containerID]
+	c, ok := w.instances[instanceID]
 	if !ok {
 		w.mu.Unlock()
-		return nil, fmt.Errorf("container %s not found", containerID)
+		return nil, fmt.Errorf("instance %s not found", instanceID)
 	}
 	data := make([]byte, c.logBuf.Len())
 	copy(data, c.logBuf.Bytes())
@@ -283,7 +283,7 @@ func (w *FakeWorker) InstanceLogs(ctx context.Context, containerID string, tail 
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func (w *FakeWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
+func (w *FakeWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
 	if err := w.popFailure("InstanceStats"); err != nil {
 		return nil, err
 	}
@@ -527,28 +527,28 @@ func (w *FakeWorker) RenamePath(ctx context.Context, volumeName string, from str
 
 // Copy operations
 
-func (w *FakeWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+func (w *FakeWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
 	if err := w.popFailure("CopyFromInstance"); err != nil {
 		return nil, err
 	}
 	return []byte{}, nil
 }
 
-func (w *FakeWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+func (w *FakeWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
 	if err := w.popFailure("CopyToInstance"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (w *FakeWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+func (w *FakeWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
 	if err := w.popFailure("CopyDirFromInstance"); err != nil {
 		return nil, err
 	}
 	return io.NopCloser(bytes.NewReader(nil)), nil
 }
 
-func (w *FakeWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+func (w *FakeWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
 	if err := w.popFailure("CopyTarToInstance"); err != nil {
 		return err
 	}

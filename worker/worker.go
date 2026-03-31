@@ -6,19 +6,19 @@ import (
 	"os"
 )
 
-// Worker abstracts all container and host operations.
+// Worker abstracts all instance and host operations.
 // LocalWorker implements this via Docker, RemoteWorker via gRPC to a worker agent.
 type Worker interface {
-	// Container lifecycle
+	// Instance lifecycle
 	PullImage(ctx context.Context, image string) error
 	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
 	StartInstance(ctx context.Context, id string) error
 	StopInstance(ctx context.Context, id string, timeoutSeconds int) error
 	RemoveInstance(ctx context.Context, id string) error
 	InspectInstance(ctx context.Context, id string) (*InstanceInfo, error)
-	Exec(ctx context.Context, containerID string, cmd []string) (exitCode int, stdout string, stderr string, err error)
-	InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error)
-	InstanceStats(ctx context.Context, containerID string) (*InstanceStats, error)
+	Exec(ctx context.Context, instanceID string, cmd []string) (exitCode int, stdout string, stderr string, err error)
+	InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error)
+	InstanceStats(ctx context.Context, instanceID string) (*InstanceStats, error)
 
 	// Volumes
 	CreateVolume(ctx context.Context, name string) error
@@ -37,12 +37,12 @@ type Worker interface {
 	DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error
 
 	// Copy operations (used by config file read/write)
-	CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error)
-	CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error
-	CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error)
-	CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error
+	CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error)
+	CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error
+	CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error)
+	CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error
 
-	// Volume-level backup operations (container-independent)
+	// Volume-level backup operations (instance-independent)
 	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
 	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
 
@@ -56,7 +56,7 @@ type Worker interface {
 	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
 
 	// Copy depot files into a volume's /server directory on the host.
-	// Done outside the container to avoid cgroup OOM on large depots.
+	// Done outside the instance to avoid cgroup OOM on large depots.
 	CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error
 
 	// Steam depot — download game files to local cache, return host path and download info.

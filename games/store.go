@@ -112,9 +112,9 @@ type Assets struct {
 
 // ── Game — flattened runtime type used by gamejanitor services ──
 
-// Game is the runtime representation of a game with container support.
-// Gamejanitor services use this type — fields are flattened from GameDef.Container
-// for ergonomic access (game.BaseImage instead of game.Container.Image).
+// Game is the runtime representation of a game with instance support.
+// Gamejanitor services use this type — fields are flattened from GameDef.Instance
+// for ergonomic access (game.BaseImage instead of game.Instance.Image).
 type Game struct {
 	ID                   string        `json:"id"`
 	Name                 string        `json:"name"`
@@ -157,7 +157,7 @@ func (g *Game) HasCapability(capability string) bool {
 // ── GameStore — gamejanitor-specific, wraps Registry ──
 
 // GameStore provides game data for gamejanitor services. It only exposes games
-// with container support (image, env, etc.) and adds local override loading,
+// with instance support (image, env, etc.) and adds local override loading,
 // script extraction, and asset serving on top of the shared Registry.
 type GameStore struct {
 	registry *Registry
@@ -171,7 +171,7 @@ type GameStore struct {
 
 // Registry returns the underlying shared registry for query-config lookups.
 // gjq and other consumers use this for protocol/port data on all games,
-// including those without container support.
+// including those without instance support.
 func (s *GameStore) Registry() *Registry {
 	return s.registry
 }
@@ -191,7 +191,7 @@ func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 		localDir: localGamesDir,
 	}
 
-	// Load container games from embedded data
+	// Load instance games from embedded data
 	embeddedRoot, err := fs.Sub(embeddedGames, "data")
 	if err != nil {
 		return nil, fmt.Errorf("accessing embedded game data: %w", err)
@@ -228,7 +228,7 @@ func NewGameStore(localGamesDir string, log *slog.Logger) (*GameStore, error) {
 	})
 
 	log.Info("game store loaded",
-		"container_games", len(s.games),
+		"instance_games", len(s.games),
 		"total_registry", registry.Count(),
 		"alias_count", len(s.aliases),
 	)
@@ -261,8 +261,8 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 			def.ID = gameDir
 		}
 
-		// Only load games with container support into the GameStore
-		if !def.HasContainer() {
+		// Only load games with instance support into the GameStore
+		if !def.HasInstance() {
 			continue
 		}
 
@@ -287,7 +287,7 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 
 // defToGame flattens a GameDef into the runtime Game type.
 func defToGame(def *GameDef) *Game {
-	c := def.Container
+	c := def.Instance
 
 	caps := c.DisabledCapabilities
 	if caps == nil {
@@ -407,7 +407,7 @@ func (f *gameAssetsFS) Open(name string) (fs.File, error) {
 }
 
 // ExtractScripts writes a game's scripts and defaults to a local directory.
-// Called before starting a container so scripts can be bind-mounted.
+// Called before starting an instance so scripts can be bind-mounted.
 func (s *GameStore) ExtractScripts(gameID, targetDir string) error {
 	gameFS := s.GetGameFS(gameID)
 	if gameFS == nil {

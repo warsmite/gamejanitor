@@ -8,7 +8,7 @@ import (
 )
 
 // CopyDepotToVolume copies depot files into the volume's /server directory
-// using pure Go (no external commands). This avoids both the container's cgroup
+// using pure Go (no external commands). This avoids both the instance's cgroup
 // memory limit (OOM on large depots) and PATH issues on NixOS.
 func CopyDepotToVolume(depotDir string, volumeMountpoint string) error {
 	serverDir := filepath.Join(volumeMountpoint, "server")

@@ -22,9 +22,9 @@ func TestLifecycle_Start_HappyPath(t *testing.T) {
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 
-	assert.Greater(t, fw.ContainerCount(), 0, "should have created a container")
+	assert.Greater(t, fw.InstanceCount(), 0, "should have created an instance")
 
-	// Verify gameserver has container ID in DB
+	// Verify gameserver has instance ID in DB
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, fetched.InstanceID)
@@ -127,7 +127,7 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 	svc.Registry.Unregister("worker-1")
 
 	// Stop should still succeed — the lifecycle code logs a warning but
-	// proceeds with clearing the container ID and completing the stop.
+	// proceeds with clearing the instance ID and completing the stop.
 	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)
 }
@@ -181,7 +181,7 @@ func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "big-node", *fetched.NodeID, "should have auto-migrated to big-node")
-	assert.Greater(t, fw2.ContainerCount(), 0, "container should be on big-node")
+	assert.Greater(t, fw2.InstanceCount(), 0, "instance should be on big-node")
 }
 
 func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
@@ -207,7 +207,7 @@ func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "worker-1", *fetched.NodeID, "should stay on original node")
-	assert.Greater(t, fw1.ContainerCount(), 0, "container should be on worker-1")
+	assert.Greater(t, fw1.InstanceCount(), 0, "instance should be on worker-1")
 }
 
 func TestLifecycle_Start_FailsWhenNoNodeHasCapacity(t *testing.T) {
@@ -294,5 +294,5 @@ func TestLifecycle_Start_SkipsCapacityCheckWithZeroLimits(t *testing.T) {
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "worker-1", *fetched.NodeID)
-	assert.Greater(t, fw.ContainerCount(), 0)
+	assert.Greater(t, fw.InstanceCount(), 0)
 }

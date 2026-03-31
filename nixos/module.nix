@@ -18,8 +18,8 @@ let
       web_ui = cfg.webUI;
     }
     // lib.optionalAttrs (cfg.mode != "") { mode = cfg.mode; }
-    // lib.optionalAttrs (cfg.containerRuntime != "auto") { container_runtime = cfg.containerRuntime; }
-    // lib.optionalAttrs (cfg.containerSocket != null) { container_socket = cfg.containerSocket; }
+    // lib.optionalAttrs (cfg.runtime != "auto") { runtime = cfg.runtime; }
+    // lib.optionalAttrs (cfg.runtimeSocket != null) { runtime_socket = cfg.runtimeSocket; }
     // lib.optionalAttrs (cfg.grpcPort != null) { grpc_port = cfg.grpcPort; }
     // lib.optionalAttrs (cfg.workerGrpcPort != null) { worker_grpc_port = cfg.workerGrpcPort; }
     // lib.optionalAttrs (cfg.sftpPort != null) { sftp_port = cfg.sftpPort; }
@@ -79,7 +79,7 @@ in {
     worker = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Enable the worker role (Docker container management).";
+      description = "Enable the worker role (game instance management).";
     };
 
     port = lib.mkOption {
@@ -256,16 +256,16 @@ in {
       description = "Enable the embedded web UI. Disable for API-only deployments.";
     };
 
-    containerRuntime = lib.mkOption {
+    runtime = lib.mkOption {
       type = lib.types.enum [ "auto" "docker" "process" ];
       default = "auto";
-      description = "Container runtime. Auto-detects Docker, falls back to process.";
+      description = "Runtime. Auto-detects Docker, falls back to process.";
     };
 
-    containerSocket = lib.mkOption {
+    runtimeSocket = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Explicit container runtime socket path. Auto-detected if null.";
+      description = "Explicit runtime socket path. Auto-detected if null.";
     };
 
     environment = lib.mkOption {
@@ -300,7 +300,7 @@ in {
       }
     ];
 
-    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.containerRuntime != "process") true;
+    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.runtime != "process") true;
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";

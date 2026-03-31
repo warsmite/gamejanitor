@@ -85,7 +85,7 @@ message PullImageResponse {}
 
 message PortBinding {
     int32 host_port = 1;
-    int32 container_port = 2;
+    int32 instance_port = 2;
     string protocol = 3;
 }
 
@@ -355,12 +355,12 @@ message SFTPLoginResponse {
 
 message ListGameserverInstancesRequest {}
 message ListGameserverInstancesResponse {
-    repeated GameserverInstance containers = 1;
+    repeated GameserverInstance instances = 1;
 }
 message GameserverInstance {
     string instance_id = 1;
     string instance_name = 2;
-    string gameserver_id = 3; // extracted from container name
+    string gameserver_id = 3; // extracted from instance name
     string state = 4;         // running, exited, etc.
 }
 

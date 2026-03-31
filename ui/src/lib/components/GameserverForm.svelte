@@ -26,7 +26,7 @@
     cpuEnforced?: boolean;
     backupLimit?: number;
     portMode?: string;
-    manualPorts?: { name: string; host_port: number; container_port: number; protocol: string }[];
+    manualPorts?: { name: string; host_port: number; instance_port: number; protocol: string }[];
     autoRestart?: boolean;
     envValues?: Record<string, string>;
     dynamicOptions?: Record<string, DynamicOption[]>;
@@ -154,8 +154,8 @@
                   <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
                 </div>
                 <div class="port-field">
-                  <label class="port-label">Container</label>
-                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
+                  <label class="port-label">Instance</label>
+                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].instance_port}>
                 </div>
                 <span class="port-proto">{port.protocol}</span>
               </div>

@@ -49,7 +49,7 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 	} else {
 		dockerClient, err := docker.New(logger, cfg.ResolveRuntimeSocket())
 		if err != nil {
-			return fmt.Errorf("failed to connect to container runtime: %w", err)
+			return fmt.Errorf("failed to connect to runtime: %w", err)
 		}
 		defer dockerClient.Close()
 		localWorker = local.New(dockerClient, gameStore, cfg.DataDir, logger)

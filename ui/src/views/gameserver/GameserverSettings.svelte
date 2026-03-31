@@ -26,7 +26,7 @@
   let cpuEnforced = $state(false);
   let backupLimit = $state(0);
   let portMode = $state('auto');
-  let manualPorts = $state<{ name: string; host_port: number; container_port: number; protocol: string }[]>([]);
+  let manualPorts = $state<{ name: string; host_port: number; instance_port: number; protocol: string }[]>([]);
   let autoRestart = $state(true);
   let dynamicOptions = $state<Record<string, DynamicOption[]>>({});
 
@@ -61,8 +61,8 @@
         const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
         if (ports && ports.length > 0) {
           manualPorts = ports.map((p: any) => ({
-            name: p.name || '', host_port: p.host_port || p.container_port,
-            container_port: p.container_port, protocol: p.protocol || 'tcp',
+            name: p.name || '', host_port: p.host_port || p.instance_port,
+            instance_port: p.instance_port, protocol: p.protocol || 'tcp',
           }));
         }
       } catch (e) { console.warn('GameserverSettings: failed to parse ports', e); }
@@ -223,8 +223,8 @@
                 <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
               </div>
               <div class="port-field">
-                <label class="port-label">Container</label>
-                <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
+                <label class="port-label">Instance</label>
+                <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].instance_port}>
               </div>
               <span class="port-proto">{port.protocol}</span>
             </div>

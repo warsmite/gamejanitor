@@ -30,7 +30,7 @@ func Detect(log *slog.Logger) *Info {
 	return info
 }
 
-// virtualPrefixes covers common VPN, container, and virtual interface names.
+// virtualPrefixes covers common VPN, instance, and virtual interface names.
 var virtualPrefixes = []string{
 	"tun", "tap",      // OpenVPN, generic tunnels
 	"wg",              // WireGuard
@@ -100,7 +100,7 @@ func detectLANIP(log *slog.Logger) string {
 				if ones >= 24 {
 					return ip.String()
 				}
-				log.Debug("skipping large subnet in 172.x range (likely container network)", "interface", iface.Name, "ip", ip.String(), "mask", ones)
+				log.Debug("skipping large subnet in 172.x range (likely Docker/container network)", "interface", iface.Name, "ip", ip.String(), "mask", ones)
 			}
 			if fallback == "" {
 				fallback = ip.String()

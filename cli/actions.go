@@ -193,8 +193,8 @@ var statusCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Status:      %s\n", colorStatus(status.Status))
-		if status.Container != nil && !status.Container.StartedAt.IsZero() {
-			d := time.Since(status.Container.StartedAt)
+		if status.Instance != nil && !status.Instance.StartedAt.IsZero() {
+			d := time.Since(status.Instance.StartedAt)
 			fmt.Printf("Uptime:      %s\n", formatDuration(d))
 		}
 

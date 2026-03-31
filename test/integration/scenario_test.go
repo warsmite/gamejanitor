@@ -51,7 +51,7 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 
 	// Start should work
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-	assert.Greater(t, fw.ContainerCount(), 0)
+	assert.Greater(t, fw.InstanceCount(), 0)
 
 	// Stop should work
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
@@ -375,13 +375,13 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Set up a running container directly (avoids lifecycle goroutine races)
-	containerID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "cmd-test"})
+	// Set up a running instance directly (avoids lifecycle goroutine races)
+	instanceID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "cmd-test"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartInstance(ctx, containerID))
+	require.NoError(t, fw.StartInstance(ctx, instanceID))
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.InstanceID = &containerID
+	fetched.InstanceID = &instanceID
 	store.New(svc.DB).UpdateGameserver(fetched)
 	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
 

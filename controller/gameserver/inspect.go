@@ -18,7 +18,7 @@ func (s *GameserverService) GetInstanceInfo(ctx context.Context, gameserverID st
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+		return nil, fmt.Errorf("gameserver %s has no instance", gameserverID)
 	}
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
@@ -44,7 +44,7 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 		StorageLimitMB: gs.StorageLimitMB,
 	}
 
-	// Container stats only available when running
+	// Instance stats only available when running
 	if gs.InstanceID != nil {
 		cs, err := w.InstanceStats(ctx, *gs.InstanceID)
 		if err == nil {
@@ -52,7 +52,7 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 			stats.MemoryLimitMB = cs.MemoryLimitMB
 			stats.CPUPercent = cs.CPUPercent
 		} else {
-			s.log.Debug("container stats unavailable", "gameserver", gameserverID, "error", err)
+			s.log.Debug("instance stats unavailable", "gameserver", gameserverID, "error", err)
 		}
 	}
 
@@ -91,7 +91,7 @@ func (s *GameserverService) GetInstanceLogs(ctx context.Context, gameserverID st
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+		return nil, fmt.Errorf("gameserver %s has no instance", gameserverID)
 	}
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {

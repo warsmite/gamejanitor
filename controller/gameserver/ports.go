@@ -177,7 +177,7 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 
 	// Find first contiguous block of blockSize free ports.
 	// Checks both DB (gamejanitor-managed) and host (net.Listen probe) to avoid
-	// conflicts with other Docker containers or services on the host.
+	// conflicts with other Docker instances or services on the host.
 	probe := isPortAvailable
 	if s.portProbe != nil {
 		probe = s.portProbe
@@ -210,7 +210,7 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 		result[i] = model.PortMapping{
 			Name:          p.Name,
 			HostPort:      model.FlexInt(allocatedPort),
-			ContainerPort: model.FlexInt(allocatedPort),
+			InstancePort: model.FlexInt(allocatedPort),
 			Protocol:      p.Protocol,
 		}
 	}

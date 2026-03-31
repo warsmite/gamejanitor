@@ -13,7 +13,7 @@ import (
 )
 
 // Archive stops the gameserver, backs up its volume to archive storage,
-// removes the container and volume from the worker, and marks it archived.
+// removes the instance and volume from the worker, and marks it archived.
 func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
@@ -98,10 +98,10 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 
 	s.log.Info("archive saved to store", "gameserver", id)
 
-	// Remove container and volume from worker
+	// Remove instance and volume from worker
 	if gs.InstanceID != nil {
 		if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
-			s.log.Warn("failed to remove container during archive", "gameserver", id, "error", err)
+			s.log.Warn("failed to remove instance during archive", "gameserver", id, "error", err)
 		}
 	}
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {

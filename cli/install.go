@@ -19,7 +19,7 @@ var installCmd = &cobra.Command{
 }
 
 func init() {
-	installCmd.Flags().String("runtime", "auto", "Container runtime: docker, process, auto")
+	installCmd.Flags().String("runtime", "auto", "Runtime: docker, process, auto")
 	installCmd.Flags().String("data-dir", "", "Data directory (default: /var/lib/gamejanitor on Linux, ~/Library/Application Support/gamejanitor on macOS)")
 }
 

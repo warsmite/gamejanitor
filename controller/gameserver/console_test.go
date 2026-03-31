@@ -33,7 +33,7 @@ func TestConsole_SendCommand_NotRunning(t *testing.T) {
 	// Gameserver is stopped — command should fail
 	_, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no container")
+	assert.Contains(t, err.Error(), "no instance")
 }
 
 func TestConsole_SendCommand_HappyPath(t *testing.T) {
@@ -46,13 +46,13 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 
 	// Set up running state directly — avoids triggering ReadyWatcher goroutines
 	// which cause flaky cleanup races under parallel test load.
-	containerID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "test-cmd"})
+	instanceID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "test-cmd"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartInstance(ctx, containerID))
+	require.NoError(t, fw.StartInstance(ctx, instanceID))
 
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.InstanceID = &containerID
+	fetched.InstanceID = &instanceID
 	s.UpdateGameserver(fetched)
 	testutil.SetGameserverStatus(t, s, gs.ID, "running")
 
@@ -71,7 +71,7 @@ func TestConsole_StreamLogs_NotRunning(t *testing.T) {
 
 	_, err := svc.ConsoleSvc.StreamLogs(ctx, gs.ID, 100)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no container")
+	assert.Contains(t, err.Error(), "no instance")
 }
 
 func TestConsole_ListLogSessions_EmptyVolume(t *testing.T) {

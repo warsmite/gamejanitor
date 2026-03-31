@@ -45,7 +45,7 @@ type GameserverNode struct {
 type PortMapping struct {
 	Name          string `json:"name"`
 	HostPort      int    `json:"host_port"`
-	ContainerPort int    `json:"container_port"`
+	InstancePort int    `json:"instance_port"`
 	Protocol      string `json:"protocol"`
 }
 
@@ -125,7 +125,7 @@ type GameserverStatus struct {
 	Instance    *InstanceInfo `json:"instance"`
 }
 
-// InstanceInfo describes the underlying container state.
+// InstanceInfo describes the underlying instance state.
 type InstanceInfo struct {
 	State     string    `json:"state"`
 	StartedAt time.Time `json:"started_at"`

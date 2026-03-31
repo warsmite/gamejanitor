@@ -53,7 +53,7 @@ func init() {
 	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
-	serveCmd.Flags().String("runtime", "", "Container runtime: docker, process, auto")
+	serveCmd.Flags().String("runtime", "", "Runtime: docker, process, auto")
 	serveCmd.Flags().Bool("proxy", false, "Enable game traffic proxy (forward game ports to worker nodes)")
 }
 
@@ -419,7 +419,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	registry.StartReaper(ctx, logger)
 
-	// Reconcile gameserver status with container reality on startup.
+	// Reconcile gameserver status with instance reality on startup.
 	// Online workers get checked immediately; offline workers' gameservers
 	// are marked unreachable and recovered when the worker reconnects.
 	if err := svcs.StatusMgr.RecoverOnStartup(ctx); err != nil {

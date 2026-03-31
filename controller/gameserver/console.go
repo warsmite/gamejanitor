@@ -37,7 +37,7 @@ func NewConsoleService(store ConsoleStore, dispatcher *orchestrator.Dispatcher, 
 	return &ConsoleService{store: store, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 
-// StreamLogs returns a follow-mode log stream for a running gameserver's container.
+// StreamLogs returns a follow-mode log stream for a running gameserver's instance.
 func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
@@ -47,7 +47,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return nil, controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
+		return nil, controller.ErrBadRequestf("gameserver %s has no instance", gameserverID)
 	}
 	if !controller.IsRunningStatus(gs.Status) {
 		return nil, controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
@@ -69,9 +69,9 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	return w.InstanceLogs(ctx, *gs.InstanceID, tail, true)
 }
 
-// SendCommand executes a command inside a running gameserver's container via /scripts/send-command.
+// SendCommand executes a command inside a running gameserver's instance via /scripts/send-command.
 // Returns the command output (stdout), which is relevant for RCON-based games where
-// the response comes back on stdout rather than appearing in the container log stream.
+// the response comes back on stdout rather than appearing in the instance log stream.
 func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, command string) (string, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
@@ -81,7 +81,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return "", controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
+		return "", controller.ErrBadRequestf("gameserver %s has no instance", gameserverID)
 	}
 	if !controller.IsRunningStatus(gs.Status) {
 		return "", controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)

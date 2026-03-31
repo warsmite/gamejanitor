@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Container user identity — game processes run as this UID/GID inside containers.
+// Instance user identity — game processes run as this UID/GID inside instances.
 const (
 	GameserverUID  = 1001
 	GameserverGID  = 1001
@@ -54,7 +54,7 @@ type Gameserver struct {
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
-// AppliedConfig captures the configuration that was used when the container was
+// AppliedConfig captures the configuration that was used when the instance was
 // last created. Compared against current DB state to detect pending changes.
 type AppliedConfig struct {
 	Env           Env     `json:"env"`
@@ -137,7 +137,7 @@ func (fi *FlexInt) UnmarshalJSON(b []byte) error {
 type PortMapping struct {
 	Name          string  `json:"name"`
 	HostPort      FlexInt `json:"host_port"`
-	ContainerPort FlexInt `json:"container_port"`
+	InstancePort FlexInt `json:"instance_port"`
 	Protocol      string  `json:"protocol"`
 }
 

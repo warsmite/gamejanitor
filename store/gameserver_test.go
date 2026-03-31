@@ -195,7 +195,7 @@ func TestGameserver_JSONColumns(t *testing.T) {
 	db := store.New(testutil.NewTestDB(t))
 
 	expectedPorts := model.Ports{
-		{Name: "game", HostPort: 27015, ContainerPort: 27015, Protocol: "udp"},
+		{Name: "game", HostPort: 27015, InstancePort: 27015, Protocol: "udp"},
 	}
 	gs := newGameserver("gs-1", "JSON Test", "test-game", nil)
 	gs.Ports = expectedPorts

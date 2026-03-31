@@ -183,7 +183,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, id strin
 	return &resp, nil
 }
 
-// Status returns the gameserver's current status and container info.
+// Status returns the gameserver's current status and instance info.
 func (s *GameserverService) Status(ctx context.Context, id string) (*GameserverStatus, error) {
 	var resp GameserverStatus
 	if err := s.client.get(ctx, "/api/gameservers/"+id+"/status", &resp); err != nil {

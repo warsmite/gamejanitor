@@ -34,13 +34,13 @@ func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *status.Sta
 	return sm
 }
 
-func TestRecovery_RunningInDB_ContainerGone(t *testing.T) {
+func TestRecovery_RunningInDB_InstanceGone(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start the gameserver so it gets a real container
+	// Start the gameserver so it gets a real instance
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -51,8 +51,8 @@ func TestRecovery_RunningInDB_ContainerGone(t *testing.T) {
 	s := store.New(svc.DB)
 	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 
-	// Remove the container from the fake worker so InspectInstance fails
-	fw.FailNext("InspectInstance", fmt.Errorf("container not found"))
+	// Remove the instance from the fake worker so InspectInstance fails
+	fw.FailNext("InspectInstance", fmt.Errorf("instance not found"))
 
 	sm := newTestStatusManager(t, svc)
 	require.NoError(t, sm.RecoverOnStartup(context.Background()))
@@ -77,7 +77,7 @@ func TestRecovery_StoppedInDB_NoAction(t *testing.T) {
 	assert.Equal(t, controller.StatusStopped, fetched.Status)
 }
 
-func TestRecovery_RunningInDB_ContainerRunning(t *testing.T) {
+func TestRecovery_RunningInDB_InstanceRunning(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
@@ -85,20 +85,20 @@ func TestRecovery_RunningInDB_ContainerRunning(t *testing.T) {
 
 	// Set up state directly to avoid race with StatusSubscriber processing
 	// lifecycle events from a real Start() call.
-	containerID := fw.AddFakeContainer(gs.ID)
+	instanceID := fw.AddFakeInstance(gs.ID)
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.InstanceID = &containerID
+	fetched.InstanceID = &instanceID
 	require.NoError(t, s.UpdateGameserver(fetched))
 	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 
-	// Container is "running" in fake worker — recovery should re-attach (set to "started")
+	// Instance is "running" in fake worker — recovery should re-attach (set to "started")
 	sm := newTestStatusManager(t, svc)
 	require.NoError(t, sm.RecoverOnStartup(context.Background()))
 
 	recovered, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	// Recovery sets running containers to "started" and re-attaches the ready watcher
+	// Recovery sets running instances to "started" and re-attaches the ready watcher
 	assert.Equal(t, controller.StatusStarted, recovered.Status)
 }
 

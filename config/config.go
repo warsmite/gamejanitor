@@ -43,7 +43,7 @@ type Config struct {
 	// TLS for gRPC
 	TLS *TLSConfig `yaml:"tls"`
 
-	// Container runtime
+	// Runtime
 	Runtime string `yaml:"runtime"` // "docker", "process", or "auto" (default)
 	RuntimeSocket  string `yaml:"runtime_socket"`  // explicit socket path; auto-detected if empty
 
@@ -182,7 +182,7 @@ func (c *Config) WorkerOnly() bool {
 	return c.Worker && !c.Controller
 }
 
-// ResolveRuntimeSocket returns the container runtime socket path.
+// ResolveRuntimeSocket returns the runtime socket path.
 // Auto-detects Docker socket if not explicitly configured.
 func (c *Config) ResolveRuntimeSocket() string {
 	if c.RuntimeSocket != "" {

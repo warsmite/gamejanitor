@@ -230,7 +230,7 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 
 	// Run migration in background — return 202 immediately.
 	// Migration involves stopping, volume transfer, and node reassignment which can take minutes.
-	// The gameserver.migrate event fires at start, gameserver.error or container_stopped on completion.
+	// The gameserver.migrate event fires at start, gameserver.error or instance_stopped on completion.
 	ctx := detachedCtx(r)
 	go func() {
 		if err := h.svc.MigrateGameserver(ctx, id, body.NodeID); err != nil {
@@ -375,7 +375,7 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	if gs.InstanceID != nil {
 		info, err := h.svc.GetInstanceInfo(r.Context(), id)
 		if err != nil {
-			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
+			h.log.Warn("failed to inspect instance for status", "id", id, "error", err)
 		} else {
 			resp.Instance = &instanceInfo{
 				State:     info.State,

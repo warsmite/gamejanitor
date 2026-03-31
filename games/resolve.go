@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// ResolveImage returns the container image for a game given the current env.
+// ResolveImage returns the instance image for a game given the current env.
 // For games with a RuntimeConfig resolver, it dynamically selects the image.
 // For games with a static image, it returns BaseImage directly.
 func (g *Game) ResolveImage(env map[string]string) string {

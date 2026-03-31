@@ -20,7 +20,7 @@ func TestGameStore_LoadsAllGames(t *testing.T) {
 	require.NoError(t, err)
 
 	games := store.ListGames()
-	assert.GreaterOrEqual(t, len(games), 10, "should load at least 10 container games")
+	assert.GreaterOrEqual(t, len(games), 10, "should load at least 10 instance games")
 }
 
 func TestGameStore_GetGame_ReturnsCorrectFields(t *testing.T) {
@@ -145,7 +145,7 @@ ports:
   - name: game
     port: 9999
     protocol: tcp
-container:
+instance:
   image: alpine:latest
 `), 0644)
 
@@ -163,7 +163,7 @@ func TestGameStore_QueryOnlyGamesNotInStore(t *testing.T) {
 	store, err := NewGameStore("", testLogger())
 	require.NoError(t, err)
 
-	// dayz is query-only (no container section) — should not appear in GameStore
+	// dayz is query-only (no instance section) — should not appear in GameStore
 	game := store.GetGame("dayz")
 	assert.Nil(t, game, "query-only games should not be in GameStore")
 }
@@ -174,7 +174,7 @@ func TestRegistry_LoadsAllGames(t *testing.T) {
 	require.NoError(t, err)
 
 	all := registry.List()
-	assert.GreaterOrEqual(t, len(all), 80, "registry should load 80+ games (container + query-only)")
+	assert.GreaterOrEqual(t, len(all), 80, "registry should load 80+ games (instance + query-only)")
 }
 
 func TestRegistry_WithQuery(t *testing.T) {
@@ -190,16 +190,16 @@ func TestRegistry_WithQuery(t *testing.T) {
 	}
 }
 
-func TestRegistry_WithContainer(t *testing.T) {
+func TestRegistry_WithInstance(t *testing.T) {
 	t.Parallel()
 	registry, err := NewRegistry()
 	require.NoError(t, err)
 
-	containerGames := registry.WithContainer()
-	assert.GreaterOrEqual(t, len(containerGames), 10, "should have 10+ container games")
+	instanceGames := registry.WithInstance()
+	assert.GreaterOrEqual(t, len(instanceGames), 10, "should have 10+ instance games")
 
-	for _, g := range containerGames {
-		assert.True(t, g.HasContainer(), "WithContainer should only return games with container config")
+	for _, g := range instanceGames {
+		assert.True(t, g.HasInstance(), "WithInstance should only return games with instance config")
 	}
 }
 
@@ -244,9 +244,9 @@ func TestRegistry_AllGames_ValidYAML(t *testing.T) {
 			assert.NotEmpty(t, g.Name, "game must have a name")
 			assert.NotEmpty(t, g.Ports, "game must have at least one port")
 
-			// Every game must have either query or container support (or both)
-			assert.True(t, g.HasQuery() || g.HasContainer(),
-				"game must have query and/or container support")
+			// Every game must have either query or instance support (or both)
+			assert.True(t, g.HasQuery() || g.HasInstance(),
+				"game must have query and/or instance support")
 		})
 	}
 }

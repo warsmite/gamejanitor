@@ -42,7 +42,7 @@ func (s *ModService) volumeState(ctx context.Context, gameserverID string, mods 
 }
 
 // Reconcile ensures all DB-tracked mods exist on the gameserver volume.
-// Called automatically before container start as a safety net.
+// Called automatically before instance start as a safety net.
 // Downloads missing files, regenerates manifests. Non-fatal — logs warnings for
 // unrecoverable mods (uploads, detected files) but never blocks server start.
 func (s *ModService) Reconcile(ctx context.Context, gameserverID string) error {

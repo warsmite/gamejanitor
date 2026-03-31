@@ -44,9 +44,9 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	// Wait for running — the real ReadyWatcher parses the container's log output
+	// Wait for running — the real ReadyWatcher parses the instance.s log output
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute),
-		"gameserver should reach 'running' after ready pattern detected in real container logs")
+		"gameserver should reach 'running' after ready pattern detected in real instance logs")
 
 	// Verify installed flag set (entrypoint.sh emits [gamejanitor:installed])
 	resp, err = h.Get("/api/gameservers/" + gs.ID)

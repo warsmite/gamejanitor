@@ -28,12 +28,12 @@ type InstanceOptions struct {
 	CPUEnforced   bool
 	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"])
 	User          string   // Run as specific user (e.g., "1001:1001")
-	Binds         []string // Host bind mounts in "host:container:opts" format
+	Binds         []string // Host bind mounts in "host:instance:opts" format
 }
 
 type PortBinding struct {
 	HostPort      int
-	ContainerPort int
+	InstancePort int
 	Protocol      string // "tcp" or "udp"
 }
 
@@ -71,7 +71,7 @@ type InstanceEvent struct {
 type GameserverInstance struct {
 	InstanceID   string
 	InstanceName string
-	GameserverID  string // extracted from container name
+	GameserverID  string // extracted from instance name
 	State         string // running, exited, etc.
 }
 

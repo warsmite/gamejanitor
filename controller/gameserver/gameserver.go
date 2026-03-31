@@ -47,7 +47,7 @@ type Store interface {
 
 // ReadyWatcher watches for gameserver readiness after start.
 type ReadyWatcher interface {
-	Watch(gameserverID string, wkr worker.Worker, containerID string)
+	Watch(gameserverID string, wkr worker.Worker, instanceID string)
 	Stop(gameserverID string)
 }
 
@@ -428,7 +428,7 @@ func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 			gsPorts[i] = model.PortMapping{
 				Name:          p.Name,
 				HostPort:      model.FlexInt(p.Port),
-				ContainerPort: model.FlexInt(p.Port),
+				InstancePort: model.FlexInt(p.Port),
 				Protocol:      p.Protocol,
 			}
 		}
@@ -703,7 +703,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.readyWatcher.Stop(id)
 	}
 
-	// Archived servers have no volume or container on a worker — skip infrastructure cleanup
+	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
 	if !gs.Archived {
 		if gs.Status != controller.StatusStopped {
 			if err := s.Stop(ctx, id); err != nil {
@@ -725,13 +725,13 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 		if gs.InstanceID != nil {
 			if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
-				s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
+				s.log.Warn("failed to remove instance by id during delete", "id", id, "error", err)
 			}
 		}
-		// Also try by name in case InstanceID was cleared but container still exists
-		containerName := naming.InstanceName(id)
-		if err := w.RemoveInstance(ctx, containerName); err != nil {
-			s.log.Debug("no container to remove by name during delete", "name", containerName)
+		// Also try by name in case InstanceID was cleared but instance still exists
+		instanceName := naming.InstanceName(id)
+		if err := w.RemoveInstance(ctx, instanceName); err != nil {
+			s.log.Debug("no instance to remove by name during delete", "name", instanceName)
 		}
 
 		if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {

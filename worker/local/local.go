@@ -93,16 +93,16 @@ func (w *LocalWorker) InspectInstance(ctx context.Context, id string) (*worker.I
 	}, nil
 }
 
-func (w *LocalWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
-	return w.Docker.Exec(ctx, containerID, cmd)
+func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
+	return w.Docker.Exec(ctx, instanceID, cmd)
 }
 
-func (w *LocalWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	return w.Docker.InstanceLogs(ctx, containerID, tail, follow)
+func (w *LocalWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
+	return w.Docker.InstanceLogs(ctx, instanceID, tail, follow)
 }
 
-func (w *LocalWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
-	stats, err := w.Docker.InstanceStats(ctx, containerID)
+func (w *LocalWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
+	stats, err := w.Docker.InstanceStats(ctx, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 	if err := w.Docker.CreateVolume(ctx, name); err != nil {
 		return err
 	}
-	// Set ownership so the gameserver user (1001) can write before the container starts.
+	// Set ownership so the gameserver user (1001) can write before the instance starts.
 	// Docker creates volumes as root, but mods may be installed before first start.
 	mountpoint, err := w.Resolve(ctx, name)
 	if err != nil {
@@ -267,7 +267,7 @@ func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {
 	for i, p := range ports {
 		out[i] = docker.PortBinding{
 			HostPort:      p.HostPort,
-			ContainerPort: p.ContainerPort,
+			ContainerPort: p.InstancePort,
 			Protocol:      p.Protocol,
 		}
 	}
@@ -276,20 +276,20 @@ func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {
 
 // --- Copy operations (used by backup/restore) ---
 
-func (w *LocalWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
-	return w.Docker.CopyFromInstance(ctx, containerID, path)
+func (w *LocalWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
+	return w.Docker.CopyFromInstance(ctx, instanceID, path)
 }
 
-func (w *LocalWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
-	return w.Docker.CopyToInstance(ctx, containerID, path, content)
+func (w *LocalWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
+	return w.Docker.CopyToInstance(ctx, instanceID, path, content)
 }
 
-func (w *LocalWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	return w.Docker.CopyDirFromInstance(ctx, containerID, path)
+func (w *LocalWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
+	return w.Docker.CopyDirFromInstance(ctx, instanceID, path)
 }
 
-func (w *LocalWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	return w.Docker.CopyTarToInstance(ctx, containerID, destPath, content)
+func (w *LocalWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
+	return w.Docker.CopyTarToInstance(ctx, instanceID, destPath, content)
 }
 
 func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
@@ -301,7 +301,7 @@ func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.Gam
 	for _, c := range containers {
 		gsID, ok := naming.GameserverIDFromInstanceName(c.Name)
 		if !ok {
-			continue // update/fileops/backup container, not a gameserver
+			continue // update/fileops/backup instance, not a gameserver
 		}
 		result = append(result, worker.GameserverInstance{
 			InstanceID:   c.ID,

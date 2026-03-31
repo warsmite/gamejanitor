@@ -21,7 +21,7 @@ query:
   supports: [players, rules, keywords]
   notes: "Player list and max players may be inaccurate"
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Full Startup:'

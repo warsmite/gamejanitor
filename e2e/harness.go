@@ -111,8 +111,8 @@ func startLocal(t *testing.T) *Harness {
 
 	t.Cleanup(func() {
 		h.Stop()
-		// Clean up any containers/volumes created during the test
-		cleanupContainers(t)
+		// Clean up any instances/volumes created during the test
+		cleanupInstances(t)
 	})
 
 	h.waitForReady(t)
@@ -420,9 +420,9 @@ func copyTestGame(t *testing.T, dataDir string) {
 	}
 }
 
-func cleanupContainers(t *testing.T) {
+func cleanupInstances(t *testing.T) {
 	t.Helper()
-	// Best effort cleanup of any gamejanitor- prefixed containers and volumes
+	// Best effort cleanup of any gamejanitor- prefixed instances and volumes
 	exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output()
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
 		exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter name=gamejanitor-)").Run()

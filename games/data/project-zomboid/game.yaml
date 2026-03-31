@@ -24,7 +24,7 @@ query:
   port: 16261
   supports: [players, rules, keywords]
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 4096
   ready_pattern: 'SERVER STARTED'

@@ -238,10 +238,10 @@ class GameserverStore {
       const statusMap: Record<string, string> = {
         'gameserver.image_pulling': 'installing',
         'gameserver.depot_downloading': 'installing',
-        'gameserver.container_creating': 'starting',
+        'gameserver.instance_creating': 'starting',
         'gameserver.instance_started': 'started',
         'gameserver.ready': 'running',
-        'gameserver.container_stopping': 'stopping',
+        'gameserver.instance_stopping': 'stopping',
         'gameserver.instance_stopped': 'stopped',
         'gameserver.instance_exited': 'error',
         'gameserver.error': 'error',

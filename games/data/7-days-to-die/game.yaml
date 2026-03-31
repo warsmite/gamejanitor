@@ -17,7 +17,7 @@ query:
   protocol: source
   supports: [players, rules, keywords]
 
-container:
+instance:
   image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'GameServer.Init successful'

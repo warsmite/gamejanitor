@@ -229,7 +229,7 @@ func TestWorker_WatchEvents(t *testing.T) {
 
 	events, errs := w.WatchEvents(ctx)
 
-	// Pull and start a container to generate events
+	// Pull and start a instance to generate events
 	require.NoError(t, w.PullImage(ctx, "alpine:latest"))
 	containerName := testInstanceName(t)
 	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
@@ -246,12 +246,12 @@ func TestWorker_WatchEvents(t *testing.T) {
 	require.NoError(t, w.StartInstance(ctx, id))
 
 	// Should receive a "start" event for our container.
-	// Filter out events from other containers on the host.
+	// Filter out events from other instances on the host.
 	for {
 		select {
 		case evt := <-events:
 			if evt.InstanceID != id {
-				continue // skip events from other containers
+				continue // skip events from other instances
 			}
 			assert.Equal(t, "start", evt.Action)
 			assert.Equal(t, id, evt.InstanceID)

@@ -25,7 +25,7 @@ func TestNaming_InstanceName(t *testing.T) {
 		})
 	}
 
-	// Update container names use a distinct prefix
+	// Update instance names use a distinct prefix
 	assert.Equal(t, "gamejanitor-update-abc-123", UpdateInstanceName("abc-123"))
 }
 
@@ -42,8 +42,8 @@ func TestNaming_GameserverIDFromInstanceName_RoundTrip(t *testing.T) {
 	ids := []string{"abc-123", "my-server", "550e8400-e29b-41d4-a716-446655440000"}
 	for _, id := range ids {
 		t.Run(id, func(t *testing.T) {
-			containerName := InstanceName(id)
-			extracted, ok := GameserverIDFromInstanceName(containerName)
+			instanceName := InstanceName(id)
+			extracted, ok := GameserverIDFromInstanceName(instanceName)
 			require.True(t, ok)
 			assert.Equal(t, id, extracted)
 		})
@@ -54,7 +54,7 @@ func TestNaming_GameserverIDFromInstanceName_RejectsNonGameserver(t *testing.T) 
 	t.Parallel()
 
 	t.Run("no prefix", func(t *testing.T) {
-		_, ok := GameserverIDFromInstanceName("some-other-container")
+		_, ok := GameserverIDFromInstanceName("some-other-instance")
 		assert.False(t, ok)
 	})
 
@@ -63,22 +63,22 @@ func TestNaming_GameserverIDFromInstanceName_RejectsNonGameserver(t *testing.T) 
 		assert.False(t, ok)
 	})
 
-	t.Run("update container", func(t *testing.T) {
+	t.Run("update instance", func(t *testing.T) {
 		_, ok := GameserverIDFromInstanceName("gamejanitor-update-abc-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("fileops container", func(t *testing.T) {
+	t.Run("fileops instance", func(t *testing.T) {
 		_, ok := GameserverIDFromInstanceName("gamejanitor-fileops-vol-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("backup container", func(t *testing.T) {
+	t.Run("backup instance", func(t *testing.T) {
 		_, ok := GameserverIDFromInstanceName("gamejanitor-backup-abc-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("reinstall container", func(t *testing.T) {
+	t.Run("reinstall instance", func(t *testing.T) {
 		_, ok := GameserverIDFromInstanceName("gamejanitor-reinstall-abc-123")
 		assert.False(t, ok)
 	})

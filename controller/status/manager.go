@@ -109,16 +109,16 @@ func (m *StatusManager) Stop() {
 
 // RecoverOnStartup reconciles DB status with Docker reality.
 // Any gameserver not in a terminal state (stopped/error) is checked against
-// the actual Docker container and corrected.
+// the actual instance and corrected.
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
-	m.log.Info("recovering gameserver status from container state")
+	m.log.Info("recovering gameserver status from instance state")
 
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		return err
 	}
 
-	var withContainer, containerMissing int
+	var withInstance, instanceMissing int
 
 	for _, gs := range gameservers {
 		if !controller.NeedsRecovery(gs.Status) {
@@ -136,16 +136,16 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 		}
 
 		if gs.InstanceID != nil {
-			withContainer++
+			withInstance++
 		}
 		if m.recoverGameserver(ctx, &gs, w) {
-			containerMissing++
+			instanceMissing++
 		}
 	}
 
-	if withContainer > 0 && containerMissing == withContainer {
-		m.log.Warn("all gameserver containers are missing — did you switch container runtimes? Volumes may need manual migration",
-			"expected_containers", withContainer,
+	if withInstance > 0 && instanceMissing == withInstance {
+		m.log.Warn("all gameserver instances are missing — did you switch runtimes? Volumes may need manual migration",
+			"expected_instances", withInstance,
 		)
 	}
 
@@ -157,33 +157,33 @@ func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker 
 	return m.dispatcher.WorkerFor(gs.ID)
 }
 
-// recoverGameserver reconciles a single gameserver's DB status with container reality.
-// Returns true if the gameserver had a container ID but the container was not found.
+// recoverGameserver reconciles a single gameserver's DB status with instance reality.
+// Returns true if the gameserver had a instance ID but the instance was not found.
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.InstanceID == nil {
-		m.log.Info("gameserver has no container, setting stopped", "gameserver", gs.ID, "was_status", gs.Status)
+		m.log.Info("gameserver has no instance, setting stopped", "gameserver", gs.ID, "was_status", gs.Status)
 		m.setRecoveryStatus(gs.ID, controller.StatusStopped, "")
 		return false
 	}
 
 	info, err := w.InspectInstance(ctx, *gs.InstanceID)
 	if err != nil {
-		m.log.Warn("container not found, setting stopped", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
-		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
+		m.log.Warn("instance not found, setting stopped", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
+		m.clearInstanceAndSetStatus(gs, controller.StatusStopped)
 		return true
 	}
 
 	switch info.State {
 	case "running":
-		m.log.Info("container running, re-attaching ready watcher", "gameserver", gs.ID)
+		m.log.Info("instance running, re-attaching ready watcher", "gameserver", gs.ID)
 		m.setRecoveryStatus(gs.ID, controller.StatusStarted, "")
 		m.readyWatcher.Watch(gs.ID, w, *gs.InstanceID)
 	case "exited", "dead", "created":
-		m.log.Info("container is not running, setting stopped", "gameserver", gs.ID, "state", info.State)
-		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
+		m.log.Info("instance is not running, setting stopped", "gameserver", gs.ID, "state", info.State)
+		m.clearInstanceAndSetStatus(gs, controller.StatusStopped)
 	default:
-		m.log.Warn("container in unexpected state, setting error", "gameserver", gs.ID, "state", info.State)
-		m.setRecoveryStatus(gs.ID, controller.StatusError, "Container found in unexpected state.")
+		m.log.Warn("instance in unexpected state, setting error", "gameserver", gs.ID, "state", info.State)
+		m.setRecoveryStatus(gs.ID, controller.StatusError, "Instance found in unexpected state.")
 	}
 	return false
 }
@@ -207,13 +207,13 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	m.log.Info("recovery: status set", "gameserver", id, "from", oldStatus, "to", newStatus)
 }
 
-// clearContainerAndSetStatus clears the instance_id and records a status_changed activity.
+// clearInstanceAndSetStatus clears the instance_id and records a status_changed activity.
 // Used during startup recovery — no events published.
-func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStatus string) {
+func (m *StatusManager) clearInstanceAndSetStatus(gs *model.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.InstanceID = nil
 	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to clear container", "gameserver", gs.ID, "error", err)
+		m.log.Error("recovery: failed to clear instance", "gameserver", gs.ID, "error", err)
 		return
 	}
 	if err := setGameserverStatus(m.store, gs.ID, newStatus, ""); err != nil {
@@ -223,7 +223,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStat
 	m.log.Info("recovery: status set", "gameserver", gs.ID, "from", oldStatus, "to", newStatus)
 }
 
-// watchWorkerEvents starts a goroutine that watches container events from a worker.
+// watchWorkerEvents starts a goroutine that watches instance events from a worker.
 func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w worker.Worker) {
 	eventCh, errCh := w.WatchEvents(ctx)
 
@@ -257,24 +257,24 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 
 	gs, err := m.store.GetGameserver(gsID)
 	if err != nil || gs == nil {
-		m.log.Debug("container event for unknown gameserver", "container_name", event.InstanceName, "action", event.Action)
+		m.log.Debug("instance event for unknown gameserver", "instance_name", event.InstanceName, "action", event.Action)
 		return
 	}
 
 	switch event.Action {
 	case "start":
-		m.log.Debug("container event: container started", "gameserver", gsID)
+		m.log.Debug("instance event: instance started", "gameserver", gsID)
 
 	case "die", "stop":
-		// Ignore stale events from old containers (e.g. previous container's "die"
+		// Ignore stale events from old instances (e.g. previous instance.s "die"
 		// arriving after a new start has begun)
 		if gs.InstanceID != nil && *gs.InstanceID != event.InstanceID {
-			m.log.Debug("container event: ignoring stale event from old container", "gameserver", gsID, "event_container", event.InstanceID[:12], "current_container", (*gs.InstanceID)[:12])
+			m.log.Debug("instance event: ignoring stale event from old instance", "gameserver", gsID, "event_instance", event.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
 			return
 		}
 		// If InstanceID was cleared (restart in progress), this is a stale event
 		if gs.InstanceID == nil && gs.Status != controller.StatusStopping {
-			m.log.Debug("container event: ignoring event with no current container", "gameserver", gsID, "status", gs.Status, "action", event.Action)
+			m.log.Debug("instance event: ignoring event with no current instance", "gameserver", gsID, "status", gs.Status, "action", event.Action)
 			return
 		}
 
@@ -282,15 +282,15 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
 		if gs.Status == controller.StatusStopping {
-			m.log.Debug("container event: expected container stop", "gameserver", gsID, "status", gs.Status)
+			m.log.Debug("instance event: expected instance stop", "gameserver", gsID, "status", gs.Status)
 		} else if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted || gs.Status == controller.StatusInstalling || gs.Status == controller.StatusStarting {
-			m.log.Warn("container event: unexpected container death", "gameserver", gsID, "status", gs.Status, "action", event.Action)
+			m.log.Warn("instance event: unexpected instance death", "gameserver", gsID, "status", gs.Status, "action", event.Action)
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		}
 
 	case "kill":
-		m.log.Debug("container event: container killed", "gameserver", gsID)
+		m.log.Debug("instance event: instance killed", "gameserver", gsID)
 	}
 }
 
@@ -356,7 +356,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 }
 
 // recoverWorkerGameservers recovers gameservers assigned to a specific worker node
-// and detects orphan containers (running on Docker but not tracked in DB).
+// and detects orphan instances (running on Docker but not tracked in DB).
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
@@ -379,20 +379,20 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 	}
 
 	// Reverse check: Docker → DB (orphan detection)
-	m.detectOrphanContainers(ctx, nodeID, w, knownIDs)
+	m.detectOrphanInstances(ctx, nodeID, w, knownIDs)
 }
 
-// detectOrphanContainers finds gamejanitor containers running on a worker that
+// detectOrphanInstances finds gamejanitor instances running on a worker that
 // aren't tracked in the database. These are logged as warnings — not auto-removed,
 // as they may contain player data (e.g. after a DB restore).
-func (m *StatusManager) detectOrphanContainers(ctx context.Context, nodeID string, w worker.Worker, knownIDs map[string]bool) {
-	containers, err := w.ListGameserverInstances(ctx)
+func (m *StatusManager) detectOrphanInstances(ctx context.Context, nodeID string, w worker.Worker, knownIDs map[string]bool) {
+	instances, err := w.ListGameserverInstances(ctx)
 	if err != nil {
-		m.log.Warn("failed to list containers for orphan detection", "worker", nodeID, "error", err)
+		m.log.Warn("failed to list instances for orphan detection", "worker", nodeID, "error", err)
 		return
 	}
 
-	for _, c := range containers {
+	for _, c := range instances {
 		if knownIDs[c.GameserverID] {
 			continue
 		}
@@ -401,15 +401,15 @@ func (m *StatusManager) detectOrphanContainers(ctx context.Context, nodeID strin
 		if gs != nil {
 			continue
 		}
-		m.log.Warn("orphan container detected — container exists on worker but gameserver not found in database",
-			"worker", nodeID, "instance_id", c.InstanceID[:12], "container_name", c.InstanceName,
+		m.log.Warn("orphan instance detected — instance exists on worker but gameserver not found in database",
+			"worker", nodeID, "instance_id", c.InstanceID[:12], "instance_name", c.InstanceName,
 			"gameserver", c.GameserverID, "state", c.State)
 	}
 }
 
 const maxAutoRestartAttempts = 3
 
-// handleUnexpectedDeath handles an unexpected container death. If auto-restart
+// handleUnexpectedDeath handles an unexpected instance death. If auto-restart
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
 func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	if gs.AutoRestart == nil || !*gs.AutoRestart || m.restartFunc == nil {

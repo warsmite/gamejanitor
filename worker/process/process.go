@@ -24,7 +24,7 @@ import (
 )
 
 // ProcessWorker implements Worker by running game servers as bare processes.
-// Images are pulled via OCI and extracted to disk; no container runtime required.
+// Images are pulled via OCI and extracted to disk; no runtime required.
 type ProcessWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
@@ -111,7 +111,7 @@ func (w *ProcessWorker) PullImage(ctx context.Context, image string) error {
 }
 
 func (w *ProcessWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
-	id := opts.Name // reuse the container name as the process ID
+	id := opts.Name // reuse the instance name as the process ID
 
 	dir := w.processDir(id)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -335,17 +335,17 @@ func (w *ProcessWorker) InspectInstance(ctx context.Context, id string) (*worker
 	}, nil
 }
 
-func (w *ProcessWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
+func (w *ProcessWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok {
-		return -1, "", "", fmt.Errorf("process %s not found", containerID)
+		return -1, "", "", fmt.Errorf("process %s not found", instanceID)
 	}
 
 	// Read manifest to rebuild bwrap args
-	dir := w.processDir(containerID)
+	dir := w.processDir(instanceID)
 	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		return -1, "", "", fmt.Errorf("reading process manifest: %w", err)
@@ -394,8 +394,8 @@ func (w *ProcessWorker) Exec(ctx context.Context, containerID string, cmd []stri
 	return exitCode, stdout.String(), stderr.String(), nil
 }
 
-func (w *ProcessWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	dir := w.processDir(containerID)
+func (w *ProcessWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
+	dir := w.processDir(instanceID)
 	logPath := filepath.Join(dir, "output.log")
 
 	f, err := os.Open(logPath)
@@ -414,15 +414,15 @@ func (w *ProcessWorker) InstanceLogs(ctx context.Context, containerID string, ta
 	}
 
 	if follow {
-		return newFollowReader(ctx, f, containerID, w), nil
+		return newFollowReader(ctx, f, instanceID, w), nil
 	}
 
 	return f, nil
 }
 
-func (w *ProcessWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
+func (w *ProcessWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok || proc.exited || proc.cmd.Process == nil {
@@ -505,26 +505,26 @@ func (w *ProcessWorker) RenamePath(ctx context.Context, volumeName string, from 
 
 // --- Copy operations (direct filesystem for process worker) ---
 
-func (w *ProcessWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+func (w *ProcessWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok {
-		return nil, fmt.Errorf("process %s not found", containerID)
+		return nil, fmt.Errorf("process %s not found", instanceID)
 	}
 
 	fullPath := filepath.Join(proc.cmd.Dir, path)
 	return os.ReadFile(fullPath)
 }
 
-func (w *ProcessWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+func (w *ProcessWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found", containerID)
+		return fmt.Errorf("process %s not found", instanceID)
 	}
 
 	fullPath := filepath.Join(proc.cmd.Dir, path)
@@ -534,26 +534,26 @@ func (w *ProcessWorker) CopyToInstance(ctx context.Context, containerID string, 
 	return os.WriteFile(fullPath, content, 0644)
 }
 
-func (w *ProcessWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+func (w *ProcessWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok {
-		return nil, fmt.Errorf("process %s not found", containerID)
+		return nil, fmt.Errorf("process %s not found", instanceID)
 	}
 
 	fullPath := filepath.Join(proc.cmd.Dir, path)
 	return tarDirectory(fullPath)
 }
 
-func (w *ProcessWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+func (w *ProcessWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
 	w.mu.Lock()
-	proc, ok := w.processes[containerID]
+	proc, ok := w.processes[instanceID]
 	w.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf("process %s not found", containerID)
+		return fmt.Errorf("process %s not found", instanceID)
 	}
 
 	fullPath := filepath.Join(proc.cmd.Dir, destPath)
@@ -873,12 +873,12 @@ func tailFile(f *os.File, n int) ([]string, error) {
 type followReader struct {
 	f           *os.File
 	ctx         context.Context
-	containerID string
+	instanceID string
 	worker      *ProcessWorker
 }
 
-func newFollowReader(ctx context.Context, f *os.File, containerID string, w *ProcessWorker) *followReader {
-	return &followReader{f: f, ctx: ctx, containerID: containerID, worker: w}
+func newFollowReader(ctx context.Context, f *os.File, instanceID string, w *ProcessWorker) *followReader {
+	return &followReader{f: f, ctx: ctx, instanceID: instanceID, worker: w}
 }
 
 func (r *followReader) Read(p []byte) (int, error) {
@@ -893,7 +893,7 @@ func (r *followReader) Read(p []byte) (int, error) {
 
 		// Check if process is still running
 		r.worker.mu.Lock()
-		proc, ok := r.worker.processes[r.containerID]
+		proc, ok := r.worker.processes[r.instanceID]
 		r.worker.mu.Unlock()
 		if !ok || proc.exited {
 			// Read any remaining data
