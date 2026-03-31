@@ -47,34 +47,24 @@ chmod +x "$TMP"
 mv "$TMP" "${INSTALL_DIR}/${BINARY}"
 echo "Binary installed to ${INSTALL_DIR}/${BINARY}"
 
-# Detect runtime
-RUNTIME="process"
-if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
-    RUNTIME="docker"
-    echo "Detected Docker — using container runtime."
-else
-    echo "No Docker detected — using sandbox runtime (bwrap)."
-    # Install bwrap if missing
-    if ! command -v bwrap &>/dev/null; then
-        echo "Installing bubblewrap..."
-        if command -v apt-get &>/dev/null; then
-            apt-get install -y -qq bubblewrap
-        elif command -v dnf &>/dev/null; then
-            dnf install -y -q bubblewrap
-        elif command -v pacman &>/dev/null; then
-            pacman -S --noconfirm bubblewrap
-        elif command -v zypper &>/dev/null; then
-            zypper install -y bubblewrap
-        else
-            echo "WARNING: Could not install bubblewrap automatically."
-            echo "Install it manually: https://github.com/containers/bubblewrap"
-        fi
-    fi
+# Require Docker
+if ! command -v docker &>/dev/null; then
+    echo "ERROR: Docker is required but not installed."
+    echo "  Install Docker: https://docs.docker.com/engine/install/"
+    exit 1
 fi
+
+if ! docker info &>/dev/null 2>&1; then
+    echo "ERROR: Docker is installed but the daemon is not running."
+    echo "  Start Docker: sudo systemctl start docker"
+    exit 1
+fi
+
+echo "Docker detected."
 
 # Install systemd service
 echo "Setting up systemd service..."
-gamejanitor install --runtime "$RUNTIME"
+gamejanitor install
 
 echo ""
 echo "Gamejanitor is installed and running."
