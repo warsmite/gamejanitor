@@ -48,13 +48,13 @@ mv "$TMP" "${INSTALL_DIR}/${BINARY}"
 echo "Binary installed to ${INSTALL_DIR}/${BINARY}"
 
 # Require Docker
-if ! command -v docker &>/dev/null; then
+if ! command -v docker >/dev/null 2>&1; then
     echo "ERROR: Docker is required but not installed."
     echo "  Install Docker: https://docs.docker.com/engine/install/"
     exit 1
 fi
 
-if ! docker info &>/dev/null 2>&1; then
+if ! docker info >/dev/null 2>&1; then
     echo "ERROR: Docker is installed but the daemon is not running."
     echo "  Start Docker: sudo systemctl start docker"
     exit 1
