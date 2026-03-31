@@ -92,8 +92,9 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		}
 	}()
 
-	// Stop if running
-	if gs.Status != controller.StatusStopped {
+	// Stop if running — remember prior state so we can restart after migration
+	wasRunning := gs.Status != controller.StatusStopped
+	if wasRunning {
 		s.log.Info("stopping gameserver for migration", "gameserver", gameserverID)
 		if err := s.Stop(ctx, gameserverID); err != nil {
 			return fmt.Errorf("stopping gameserver for migration: %w", err)
@@ -211,7 +212,18 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.log.Warn("failed to clean up migration data from store", "migration", migrationID, "error", err)
 	}
 
-	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	s.log.Info("gameserver migrated", "gameserver", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
+
+	if wasRunning {
+		s.log.Info("restarting gameserver after migration", "gameserver", gameserverID)
+		if err := s.Start(ctx, gameserverID); err != nil {
+			s.log.Error("failed to restart gameserver after migration", "gameserver", gameserverID, "error", err)
+			// Migration succeeded but restart failed — don't return error, data is safe
+			s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		}
+	} else {
+		s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+	}
+
 	return nil
 }
