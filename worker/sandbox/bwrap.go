@@ -14,7 +14,7 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		"--dev", "/dev",
 		"--proc", "/proc",
 		"--tmpfs", "/tmp",
-		"--unshare-pid", // PID namespace — game can only see its own processes
+		"--unshare-pid",
 	}
 
 	// Bind DNS config
