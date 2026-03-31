@@ -39,6 +39,7 @@ type Services struct {
 	StatusMgr       *status.StatusManager
 	StatusSub       *status.StatusSubscriber
 	EventHistorySvc *event.EventHistoryService
+	EventPersister  *event.EventPersister
 	WebhookWorker   *webhook.WebhookWorker
 	WebhookSvc      *webhook.WebhookEndpointService
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
@@ -116,6 +117,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)
+	eventPersister := event.NewEventPersister(db, broadcaster, logger)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
 	webhookWorker.ValidateURL = func(rawURL string) error {
 		if !settingsSvc.GetBool(settings.SettingRestrictDownloadURLs) {
@@ -158,6 +160,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		StatusMgr:       statusMgr,
 		StatusSub:       statusSub,
 		EventHistorySvc: eventHistorySvc,
+		EventPersister:  eventPersister,
 		WebhookWorker:   webhookWorker,
 		WebhookSvc:      webhookSvc,
 		WorkerNodeSvc:   workerNodeSvc,

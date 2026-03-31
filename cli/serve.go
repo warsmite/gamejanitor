@@ -214,6 +214,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	svcs.StatusSub.Start(ctx)
 	defer svcs.StatusSub.Stop()
 
+	svcs.EventPersister.Start(ctx)
+	defer svcs.EventPersister.Stop()
+
 	svcs.WebhookWorker.Start(ctx)
 	defer svcs.WebhookWorker.Stop()
 
