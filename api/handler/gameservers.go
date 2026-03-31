@@ -204,7 +204,14 @@ func (h *GameserverHandlers) Archive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Unarchive(detachedCtx(r), id) })
+	id := chi.URLParam(r, "id")
+	var body struct {
+		NodeID string `json:"node_id"`
+	}
+	// Body is optional — empty body means auto-place
+	json.NewDecoder(r.Body).Decode(&body)
+
+	h.doAction(w, r, func(_ string) error { return h.svc.Unarchive(detachedCtx(r), id, body.NodeID) })
 }
 
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {

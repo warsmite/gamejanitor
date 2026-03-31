@@ -138,9 +138,9 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	return nil
 }
 
-// Unarchive restores an archived gameserver: picks a node, creates a volume,
-// restores the archive, and sets the gameserver to stopped.
-func (s *GameserverService) Unarchive(ctx context.Context, id string) error {
+// Unarchive restores an archived gameserver. If targetNodeID is empty, a node
+// is selected automatically via placement ranking.
+func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNodeID string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -157,15 +157,20 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string) error {
 
 	actor := controller.ActorFromContext(ctx)
 
-	// Pick a node via placement
-	s.placementMu.Lock()
-	candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
-	if len(candidates) == 0 {
+	// Pick a node — use explicit target or auto-place
+	var nodeID string
+	if targetNodeID != "" {
+		nodeID = targetNodeID
+	} else {
+		s.placementMu.Lock()
+		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
+		if len(candidates) == 0 {
+			s.placementMu.Unlock()
+			return controller.ErrUnavailable("no workers available for placement")
+		}
+		nodeID = candidates[0].NodeID
 		s.placementMu.Unlock()
-		return controller.ErrUnavailable("no workers available for placement")
 	}
-	nodeID := candidates[0].NodeID
-	s.placementMu.Unlock()
 
 	opID, _ := s.trackActivity(ctx, id, nodeID, model.OpUnarchive, nil, nil)
 	if opID != "" {
