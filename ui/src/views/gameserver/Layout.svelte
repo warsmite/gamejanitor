@@ -38,10 +38,12 @@
   const game = $derived(gameserverStore.gameFor(gameserver?.game_id ?? ''));
   const operation = $derived(gameserver?.operation ?? null);
 
-  // Mods tab visibility: fetch config to check if game supports mods
+  // Mods tab visibility: fetch config once to check if game supports mods
   let hasModsSupport = $state(false);
+  let modsConfigChecked = false;
   $effect(() => {
-    if (!gameserver) return;
+    if (!gameserver || modsConfigChecked) return;
+    modsConfigChecked = true;
     api.mods.config(id).then(cfg => {
       hasModsSupport = (cfg?.categories?.length ?? 0) > 0 || !!cfg?.loader || !!cfg?.version;
     }).catch(() => { hasModsSupport = false; });
