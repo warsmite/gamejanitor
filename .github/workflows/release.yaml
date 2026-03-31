@@ -14,18 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Build CSS
-        run: |
-          curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-          chmod +x tailwindcss-linux-x64
-          ./tailwindcss-linux-x64 -c tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
+      - name: Build UI
+        run: cd ui && npm install && npm run build
 
       - name: Build binary
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gamejanitor ./cmd/gamejanitor
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gamejanitor .
 
       - name: Create release
         uses: softprops/action-gh-release@v2
