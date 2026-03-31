@@ -371,18 +371,8 @@ func buildBinary(t *testing.T) string {
 		return cachedBinary
 	}
 
-	// Use the pre-built binary if available
 	projectRoot := projectDir()
-	prebuilt := filepath.Join(projectRoot, "gamejanitor")
-	if _, err := os.Stat(prebuilt); err == nil {
-		cachedBinary = prebuilt
-		t.Logf("using pre-built binary: %s", prebuilt)
-		return cachedBinary
-	}
-
-	// Build it
-	tmpDir := t.TempDir()
-	binary := filepath.Join(tmpDir, "gamejanitor-e2e")
+	binary := filepath.Join(os.TempDir(), "gamejanitor-e2e")
 	cmd := exec.Command("go", "build", "-o", binary, ".")
 	cmd.Dir = projectRoot
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")

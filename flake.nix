@@ -402,15 +402,15 @@ YAML
           test-e2e = pkgs.writeShellScriptBin "test-e2e" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
-            echo "Running e2e tests (requires Docker + base image)..."
-            exec go test -tags e2e -timeout 5m -v ./e2e/ "$@"
+            echo "Running e2e tests (requires Docker + root for volume chown)..."
+            exec sudo -E go test -tags e2e -timeout 5m -v ./e2e/ "$@"
           '';
 
           test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
             echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-terraria})..."
-            exec go test -tags smoke -timeout 15m -v ./e2e/ "$@"
+            exec sudo -E go test -tags smoke -timeout 15m -v ./e2e/ "$@"
           '';
 
           test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
