@@ -46,6 +46,7 @@ type Gameserver struct {
 	AutoRestart        *bool           `json:"auto_restart"`
 	ConnectionAddress  *string         `json:"connection_address"`
 	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
+	Archived           bool            `json:"archived"`
 	RestartRequired    bool            `json:"restart_required"` // derived, not stored
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`

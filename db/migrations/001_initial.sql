@@ -20,6 +20,7 @@ CREATE TABLE gameservers (
     auto_restart BOOLEAN NOT NULL DEFAULT 0,
     connection_address TEXT,
     applied_config JSON,
+    archived BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

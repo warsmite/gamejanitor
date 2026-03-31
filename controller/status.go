@@ -12,6 +12,7 @@ const (
 	StatusStopping    = "stopping"
 	StatusError       = "error"
 	StatusUnreachable = "unreachable" // Worker disconnected — actual container state unknown
+	StatusArchived    = "archived"
 )
 
 // Container contract constants — shared between gamejanitor and game container scripts.

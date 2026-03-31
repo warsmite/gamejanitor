@@ -57,6 +57,9 @@ type BackupStore interface {
 	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
 	Delete(ctx context.Context, gameserverID string, backupID string) error
 	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
+	SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error
+	LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error)
+	DeleteArchive(ctx context.Context, gameserverID string) error
 }
 
 // ModReconciler verifies DB-tracked mods exist on the volume before start.
@@ -680,49 +683,52 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	s.log.Info("deleting gameserver", "id", id, "name", gs.Name)
+	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "archived", gs.Archived)
 
 	if s.readyWatcher != nil {
 		s.readyWatcher.Stop(id)
 	}
 
-	if gs.Status != controller.StatusStopped {
-		if err := s.Stop(ctx, id); err != nil {
-			return fmt.Errorf("stopping gameserver before delete: %w", err)
+	// Archived servers have no volume or container on a worker — skip infrastructure cleanup
+	if !gs.Archived {
+		if gs.Status != controller.StatusStopped {
+			if err := s.Stop(ctx, id); err != nil {
+				return fmt.Errorf("stopping gameserver before delete: %w", err)
+			}
+			// Re-read after stop — Stop() clears ContainerID in DB
+			gs, err = s.store.GetGameserver(id)
+			if err != nil {
+				return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
+			}
+			if gs == nil {
+				return controller.ErrNotFoundf("gameserver %s not found after stop", id)
+			}
 		}
-		// Re-read after stop — Stop() clears ContainerID in DB
-		gs, err = s.store.GetGameserver(id)
-		if err != nil {
-			return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
-		}
-		if gs == nil {
-			return controller.ErrNotFoundf("gameserver %s not found after stop", id)
-		}
-	}
 
-	w := s.dispatcher.WorkerFor(id)
-	if w == nil {
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
-	}
-	if gs.ContainerID != nil {
-		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-			s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
+		w := s.dispatcher.WorkerFor(id)
+		if w == nil {
+			return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
 		}
-	}
-	// Also try by name in case ContainerID was cleared but container still exists
-	containerName := naming.ContainerName(id)
-	if err := w.RemoveContainer(ctx, containerName); err != nil {
-		s.log.Debug("no container to remove by name during delete", "name", containerName)
-	}
+		if gs.ContainerID != nil {
+			if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+				s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
+			}
+		}
+		// Also try by name in case ContainerID was cleared but container still exists
+		containerName := naming.ContainerName(id)
+		if err := w.RemoveContainer(ctx, containerName); err != nil {
+			s.log.Debug("no container to remove by name during delete", "name", containerName)
+		}
 
-	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-		return fmt.Errorf("removing volume during delete: %w", err)
-	}
+		if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
+			return fmt.Errorf("removing volume during delete: %w", err)
+		}
 
-	// Clean up extracted scripts/defaults directory
-	gsDir := filepath.Join(s.dataDir, "gameservers", id)
-	if err := os.RemoveAll(gsDir); err != nil {
-		s.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
+		// Clean up extracted scripts/defaults directory
+		gsDir := filepath.Join(s.dataDir, "gameservers", id)
+		if err := os.RemoveAll(gsDir); err != nil {
+			s.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
+		}
 	}
 
 	// List backups before delete — CASCADE will remove DB records,
@@ -748,6 +754,13 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	for _, b := range backups {
 		if err := s.backupStore.Delete(ctx, id, b.ID); err != nil {
 			s.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
+		}
+	}
+
+	// Clean up archive if one exists
+	if s.backupStore != nil {
+		if err := s.backupStore.DeleteArchive(ctx, id); err != nil {
+			s.log.Warn("failed to remove archive store file", "gameserver", id, "error", err)
 		}
 	}
 

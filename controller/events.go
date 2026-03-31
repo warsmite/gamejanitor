@@ -19,6 +19,8 @@ const (
 	EventGameserverUpdateGame = "gameserver.update_game"
 	EventGameserverReinstall  = "gameserver.reinstall"
 	EventGameserverMigrate    = "gameserver.migrate"
+	EventGameserverArchive   = "gameserver.archive"
+	EventGameserverUnarchive = "gameserver.unarchive"
 	EventBackupCreate      = "backup.create"
 	EventBackupDelete      = "backup.delete"
 	EventBackupRestore     = "backup.restore"

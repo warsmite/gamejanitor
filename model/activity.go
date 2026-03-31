@@ -22,6 +22,8 @@ const (
 	OpMigrate   = "migrate"
 	OpBackup    = "backup"
 	OpRestore   = "restore"
+	OpArchive   = "archive"
+	OpUnarchive = "unarchive"
 )
 
 type Activity struct {

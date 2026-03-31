@@ -20,6 +20,11 @@ type Storage interface {
 	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
 	Delete(ctx context.Context, gameserverID string, backupID string) error
 	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
+
+	// Archive operations — one archive per gameserver, keyed by gameserver ID only.
+	SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error
+	LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error)
+	DeleteArchive(ctx context.Context, gameserverID string) error
 }
 
 // LocalStorage stores backups as files on local disk.
@@ -85,6 +90,46 @@ func (s *LocalStorage) Size(ctx context.Context, gameserverID string, backupID s
 		return 0, fmt.Errorf("stat backup file: %w", err)
 	}
 	return fi.Size(), nil
+}
+
+func (s *LocalStorage) archivePath(gameserverID string) string {
+	return filepath.Join(s.dataDir, "archives", gameserverID+".tar.gz")
+}
+
+func (s *LocalStorage) SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error {
+	path := s.archivePath(gameserverID)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating archive directory: %w", err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("creating archive file: %w", err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, reader); err != nil {
+		os.Remove(path)
+		return fmt.Errorf("writing archive data: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(path)
+		return fmt.Errorf("closing archive file: %w", err)
+	}
+	return nil
+}
+
+func (s *LocalStorage) LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error) {
+	f, err := os.Open(s.archivePath(gameserverID))
+	if err != nil {
+		return nil, fmt.Errorf("opening archive file: %w", err)
+	}
+	return f, nil
+}
+
+func (s *LocalStorage) DeleteArchive(ctx context.Context, gameserverID string) error {
+	if err := os.Remove(s.archivePath(gameserverID)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing archive file: %w", err)
+	}
+	return nil
 }
 
 // List returns backup IDs under a given gameserver/prefix directory.
@@ -190,6 +235,39 @@ func (s *S3Storage) Size(ctx context.Context, gameserverID string, backupID stri
 		return 0, fmt.Errorf("stat backup in S3: %w", err)
 	}
 	return info.Size, nil
+}
+
+func (s *S3Storage) archiveKey(gameserverID string) string {
+	return "archives/" + gameserverID + ".tar.gz"
+}
+
+func (s *S3Storage) SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error {
+	key := s.archiveKey(gameserverID)
+	info, err := s.client.PutObject(ctx, s.bucket, key, reader, -1, minio.PutObjectOptions{
+		ContentType: "application/gzip",
+	})
+	if err != nil {
+		return fmt.Errorf("uploading archive to S3: %w", err)
+	}
+	s.log.Info("archive uploaded to S3", "key", key, "size", info.Size)
+	return nil
+}
+
+func (s *S3Storage) LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error) {
+	key := s.archiveKey(gameserverID)
+	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("downloading archive from S3: %w", err)
+	}
+	return obj, nil
+}
+
+func (s *S3Storage) DeleteArchive(ctx context.Context, gameserverID string) error {
+	key := s.archiveKey(gameserverID)
+	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		return fmt.Errorf("deleting archive from S3: %w", err)
+	}
+	return nil
 }
 
 // List returns backup IDs under a given prefix (gameserver ID or "db").

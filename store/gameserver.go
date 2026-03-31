@@ -17,7 +17,7 @@ func NewGameserverStore(db *sql.DB) *GameserverStore {
 	return &GameserverStore{db: db}
 }
 
-const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, created_at, updated_at"
+const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, created_at, updated_at"
 
 // scanGameserver handles scanning JSON columns via sql.Scanner (model.Ports, model.Env, model.Labels).
 // Status and ErrorReason are not in the gameservers table — they are derived from
@@ -25,7 +25,7 @@ const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_l
 func scanGameserver(scan func(dest ...any) error) (model.Gameserver, error) {
 	var gs model.Gameserver
 	var appliedConfig model.AppliedConfig
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.Archived, &gs.CreatedAt, &gs.UpdatedAt)
 	if appliedConfig.Env != nil {
 		gs.AppliedConfig = &appliedConfig
 	}
@@ -33,7 +33,11 @@ func scanGameserver(scan func(dest ...any) error) (model.Gameserver, error) {
 		return gs, err
 	}
 	// Default status until PopulateStatus is called
-	gs.Status = "stopped"
+	if gs.Archived {
+		gs.Status = "archived"
+	} else {
+		gs.Status = "stopped"
+	}
 	return gs, nil
 }
 
@@ -117,8 +121,8 @@ func (s *GameserverStore) CreateGameserver(gs *model.Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := s.db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -130,8 +134,8 @@ func (s *GameserverStore) UpdateGameserver(gs *model.Gameserver) error {
 	gs.UpdatedAt = time.Now()
 
 	result, err := s.db.Exec(
-		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, cpu_enforced = ?, container_id = ?, volume_name = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, backup_limit = ?, storage_limit_mb = ?, node_tags = ?, auto_restart = ?, connection_address = ?, applied_config = ?, updated_at = ? WHERE id = ?",
-		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.UpdatedAt, gs.ID,
+		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, cpu_enforced = ?, container_id = ?, volume_name = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, backup_limit = ?, storage_limit_mb = ?, node_tags = ?, auto_restart = ?, connection_address = ?, applied_config = ?, archived = ?, updated_at = ? WHERE id = ?",
+		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.UpdatedAt, gs.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating gameserver %s: %w", gs.ID, err)
@@ -238,6 +242,10 @@ func (s *GameserverStore) AllocatedStorageByNodeExcluding(nodeID, excludeID stri
 // PopulateStatus derives a gameserver's status and error_reason from the latest
 // status_changed activity. If no status_changed activity exists, defaults to "stopped".
 func (s *GameserverStore) PopulateStatus(gs *model.Gameserver) {
+	if gs.Archived {
+		gs.Status = "archived"
+		return
+	}
 	var newStatus, errorReason string
 	err := s.db.QueryRow(
 		`SELECT json_extract(data, '$.new_status'), COALESCE(json_extract(data, '$.error_reason'), '')

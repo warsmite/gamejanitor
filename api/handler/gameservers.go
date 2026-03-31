@@ -199,6 +199,14 @@ func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
 	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(detachedCtx(r), id) })
 }
 
+func (h *GameserverHandlers) Archive(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Archive(detachedCtx(r), id) })
+}
+
+func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Unarchive(detachedCtx(r), id) })
+}
+
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var body struct {

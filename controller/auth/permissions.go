@@ -9,6 +9,8 @@ const (
 	PermGameserverRestart    = "gameserver.restart"
 	PermGameserverUpdateGame = "gameserver.update-game"
 	PermGameserverReinstall  = "gameserver.reinstall"
+	PermGameserverArchive    = "gameserver.archive"
+	PermGameserverUnarchive  = "gameserver.unarchive"
 
 	// Gameserver configuration (per-field)
 	PermGameserverConfigureName        = "gameserver.configure.name"
@@ -59,6 +61,7 @@ var AllPermissions = []string{
 	PermGameserverCreate, PermGameserverDelete,
 	PermGameserverStart, PermGameserverStop, PermGameserverRestart,
 	PermGameserverUpdateGame, PermGameserverReinstall,
+	PermGameserverArchive, PermGameserverUnarchive,
 	PermGameserverConfigureName, PermGameserverConfigureEnv,
 	PermGameserverConfigureResources, PermGameserverConfigurePorts,
 	PermGameserverConfigureConnection, PermGameserverConfigureAutoRestart,
