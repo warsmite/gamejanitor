@@ -47,6 +47,8 @@ func init() {
 	rootCmd.AddCommand(updateGameCmd)
 	rootCmd.AddCommand(reinstallCmd)
 	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(archiveCmd)
+	rootCmd.AddCommand(unarchiveCmd)
 
 	// Resource management
 	rootCmd.AddCommand(backupsCmd)
@@ -125,6 +127,8 @@ func customHelp(cmd *cobra.Command, args []string) {
 				{"update-game", "Update a gameserver's game version"},
 				{"reinstall", "Reinstall a gameserver"},
 				{"migrate", "Migrate a gameserver to another node"},
+				{"archive", "Archive a gameserver to storage"},
+				{"unarchive", "Restore an archived gameserver"},
 			},
 		},
 		{

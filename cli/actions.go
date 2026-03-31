@@ -53,6 +53,7 @@ func init() {
 	logsCmd.Flags().BoolP("follow", "f", false, "Stream live logs")
 	logsCmd.Flags().Bool("service", false, "Show gamejanitor service logs instead of gameserver logs")
 	migrateCmd.Flags().String("node", "", "Target worker node ID")
+	unarchiveCmd.Flags().String("node", "", "Target worker node ID (optional, auto-places if empty)")
 }
 
 // sdkAction calls the appropriate SDK method for a single gameserver action.
@@ -67,6 +68,8 @@ func sdkAction(action, id string) (*gamejanitor.Gameserver, error) {
 		return c.Gameservers.Restart(ctx(), id)
 	case "update-game":
 		return c.Gameservers.UpdateGame(ctx(), id)
+	case "archive":
+		return c.Gameservers.Archive(ctx(), id)
 	default:
 		return nil, fmt.Errorf("unknown action %q", action)
 	}
@@ -399,6 +402,79 @@ var reinstallCmd = &cobra.Command{
 }
 
 // --- Migrate ---
+
+var archiveCmd = &cobra.Command{
+	Use:     "archive <name-or-id>",
+	Short:   "Archive a gameserver to storage, freeing worker resources",
+	Example: `  gamejanitor archive "My Server"`,
+	Args:    cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		name := gameserverName(gsID)
+
+		if !confirmAction(fmt.Sprintf("Archive gameserver %s? This will stop it and remove it from the worker.", name)) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		if !jsonOutput {
+			fmt.Printf("Archiving gameserver %s...\n", name)
+		}
+
+		gs, err := getClient().Gameservers.Archive(ctx(), gsID)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSON(gs)
+			return nil
+		}
+
+		fmt.Printf("Gameserver %s archived.\n", name)
+		return nil
+	},
+}
+
+var unarchiveCmd = &cobra.Command{
+	Use:     "unarchive <name-or-id>",
+	Short:   "Restore an archived gameserver to a worker",
+	Example: `  gamejanitor unarchive "My Server"
+  gamejanitor unarchive "My Server" --node worker-2`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+		name := gameserverName(gsID)
+		nodeID, _ := cmd.Flags().GetString("node")
+
+		if !jsonOutput {
+			if nodeID != "" {
+				fmt.Printf("Unarchiving gameserver %s to node %s...\n", name, nodeID)
+			} else {
+				fmt.Printf("Unarchiving gameserver %s...\n", name)
+			}
+		}
+
+		gs, err := getClient().Gameservers.Unarchive(ctx(), gsID, nodeID)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSON(gs)
+			return nil
+		}
+
+		fmt.Printf("Gameserver %s unarchived.\n", name)
+		return nil
+	},
+}
 
 var migrateCmd = &cobra.Command{
 	Use:     "migrate <name-or-id>",

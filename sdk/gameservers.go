@@ -134,6 +134,28 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (*Gameserv
 	return &gs, nil
 }
 
+// Archive stops and archives a gameserver to storage, freeing worker resources.
+func (s *GameserverService) Archive(ctx context.Context, id string) (*Gameserver, error) {
+	var gs Gameserver
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/archive", nil, &gs); err != nil {
+		return nil, err
+	}
+	return &gs, nil
+}
+
+// Unarchive restores an archived gameserver. If nodeID is empty, placement is automatic.
+func (s *GameserverService) Unarchive(ctx context.Context, id string, nodeID string) (*Gameserver, error) {
+	var body any
+	if nodeID != "" {
+		body = map[string]string{"node_id": nodeID}
+	}
+	var gs Gameserver
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/unarchive", body, &gs); err != nil {
+		return nil, err
+	}
+	return &gs, nil
+}
+
 // Migrate moves a gameserver to a different worker node.
 func (s *GameserverService) Migrate(ctx context.Context, id string, nodeID string) (*Gameserver, error) {
 	var gs Gameserver

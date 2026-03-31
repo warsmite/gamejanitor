@@ -90,7 +90,7 @@ func registerCompletions() {
 	// Top-level gameserver commands
 	for _, cmd := range []*cobra.Command{
 		getCmd, editCmd, deleteCmd, startCmd, stopCmd, restartCmd, logsCmd, commandCmd,
-		updateGameCmd, reinstallCmd, migrateCmd,
+		updateGameCmd, reinstallCmd, migrateCmd, archiveCmd, unarchiveCmd,
 	} {
 		cmd.ValidArgsFunction = completeGameserverName
 	}
