@@ -26,7 +26,7 @@ func newTestLocalWorker(t *testing.T) *wdocker.LocalWorker {
 		t.Skipf("Docker not available: %v", err)
 	}
 	dataDir := t.TempDir()
-	return wdocker.New(dockerClient, nil, dataDir, log)
+	return wdocker.NewWorker(dockerClient, nil, dataDir, log)
 }
 
 // Unique names to avoid collisions with other test runs

@@ -33,14 +33,14 @@
           # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
           excludedPackages = [ "sdk" "games" ];
 
-          # e2e tests need Docker + a built binary; netutil DNS tests need network.
-          # worker/local tests need Docker. Skip all in the Nix sandbox.
+          # e2e tests need a built binary + runtime; netutil DNS tests need network.
+          # worker/docker tests need Docker. Skip all in the Nix sandbox.
           checkFlags = [
             "-skip" "^TestValidateExternalURL"
           ];
           preCheck = ''
             rm -rf e2e
-            rm -rf worker/local/*_test.go
+            rm -rf worker/docker/*_test.go
           '';
 
           preBuild = ''
