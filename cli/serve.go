@@ -53,6 +53,7 @@ func init() {
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
 	serveCmd.Flags().String("runtime", "", "Container runtime: docker, process, auto")
+	serveCmd.Flags().Bool("proxy", false, "Enable game traffic proxy (forward game ports to worker nodes)")
 }
 
 // loadConfig loads config file (if any) and applies CLI flag overrides.
@@ -104,6 +105,13 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 	}
 	if cmd.Flags().Changed("runtime") {
 		cfg.ContainerRuntime, _ = cmd.Flags().GetString("runtime")
+	}
+	if cmd.Flags().Changed("proxy") {
+		v, _ := cmd.Flags().GetBool("proxy")
+		if cfg.Settings == nil {
+			cfg.Settings = make(map[string]any)
+		}
+		cfg.Settings["proxy_enabled"] = v
 	}
 
 	return cfg, nil

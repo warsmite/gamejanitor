@@ -106,6 +106,7 @@
                 --property=SupplementaryGroups=docker \
                 /run/gamejanitor-dev serve \
                   --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
+                  --proxy \
                   -d /var/lib/gamejanitor
             "
             echo "  $CONTROLLER: started"
