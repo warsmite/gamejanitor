@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"log/slog"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -116,7 +116,7 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
-	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+	return chownBestEffort(hostPath)
 }
 
 // WriteFileStreamDirect streams from reader directly to the volume without buffering
@@ -148,7 +148,7 @@ func WriteFileStreamDirect(resolve VolumeResolver, ctx context.Context, volumeNa
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("closing file: %w", err)
 	}
-	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+	return chownBestEffort(hostPath)
 }
 
 func DeletePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) error {
@@ -171,7 +171,7 @@ func CreateDirectoryDirect(resolve VolumeResolver, ctx context.Context, volumeNa
 		if err != nil {
 			return err
 		}
-		return os.Chown(p, 1001, 1001)
+		return chownBestEffort(p)
 	})
 }
 
@@ -314,7 +314,7 @@ func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName
 		if err != nil {
 			return nil
 		}
-		os.Chown(path, 1001, 1001)
+		chownBestEffort(path)
 		return nil
 	})
 
@@ -387,7 +387,7 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		slog.Warn("download hash mismatch after retry, keeping file", "path", destPath)
 	}
 
-	if err := os.Chown(hostPath, model.GameserverUID, model.GameserverGID); err != nil {
+	if err := chownBestEffort(hostPath); err != nil {
 		return fmt.Errorf("setting ownership on downloaded file %s: %w", destPath, err)
 	}
 	return nil
@@ -482,13 +482,21 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 	return data, nil
 }
 
-// chownToGameserver chowns the given directory and all its parent directories
-// up to the point where they're already owned by the gameserver user.
-// This ensures that MkdirAll-created intermediate directories (e.g., /data/server/oxide/
-// when creating /data/server/oxide/plugins/) are accessible inside the instance.
+// chownBestEffort chowns a path to the gameserver UID/GID.
+// Returns nil on permission errors — sandbox runtime doesn't need chown since
+// the game process runs as the same user as gamejanitor.
+func chownBestEffort(path string) error {
+	if err := os.Chown(path, model.GameserverUID, model.GameserverGID); err != nil {
+		if os.IsPermission(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // chownToGameserver chowns the given directory and all parent directories up to
-// (and including) the volume mountpoint. Ensures directories created by MkdirAll
-// are accessible by the gameserver user inside the instance.
+// the volume mountpoint. Best-effort — silently skips if not permitted.
 func chownToGameserver(dir string, volumeRoot string) error {
 	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
 		info, err := os.Stat(p)
@@ -497,6 +505,10 @@ func chownToGameserver(dir string, volumeRoot string) error {
 		}
 		if info.IsDir() {
 			if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
+				// Skip chown failures — sandbox runtime doesn't need it
+				if os.IsPermission(err) {
+					return nil
+				}
 				return fmt.Errorf("chown %s: %w", p, err)
 			}
 		}

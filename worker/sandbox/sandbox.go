@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -427,7 +426,9 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("creating volume: %w", err)
 	}
-	return os.Chown(path, model.GameserverUID, model.GameserverGID)
+	// No chown needed — sandbox runs the game process as the same user as gamejanitor.
+	// Docker runtime chowns to UID 1001 because the container runs as a different user.
+	return nil
 }
 
 func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
