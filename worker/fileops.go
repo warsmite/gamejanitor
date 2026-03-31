@@ -275,6 +275,17 @@ func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName
 		}
 	}
 
+	// Ensure all restored files are owned by the gameserver user (UID/GID 1001).
+	// The tar may preserve ownership from the source node which differs from the
+	// target. Without this, the container process can't read/write restored files.
+	filepath.Walk(mountpoint, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		os.Chown(path, 1001, 1001)
+		return nil
+	})
+
 	return nil
 }
 
