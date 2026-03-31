@@ -202,13 +202,12 @@ YAML
               echo "  $node: clean"
             done
 
-            # Wipe S3 backup bucket (Garage on homelab)
+            # Wipe S3 backup bucket (Garage on homelab — local dev credentials, not real secrets)
             echo "Cleaning S3 backup bucket..."
-            ${pkgs.s3cmd}/bin/s3cmd --host=doc:3900 --host-bucket=doc:3900 \
-              --access_key=GKf4e7eacfd92f77f867981127 \
-              --secret_key=cb047f16267241dcf7be0836db30eaf747cdd66f7725815db98a2eb73eeb7303 \
-              --no-ssl --signature-v2 \
-              del --recursive s3://gamejanitor-backups/ 2>/dev/null || true
+            AWS_ACCESS_KEY_ID=GKf4e7eacfd92f77f867981127 \
+            AWS_SECRET_ACCESS_KEY=cb047f16267241dcf7be0836db30eaf747cdd66f7725815db98a2eb73eeb7303 \
+            ${pkgs.awscli2}/bin/aws --endpoint-url http://doc:3900 --region garage \
+              s3 rm s3://gamejanitor-backups/ --recursive 2>/dev/null || true
             echo "  s3: clean"
 
             echo "All clean. Run 'deploy' to start fresh."
