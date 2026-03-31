@@ -70,11 +70,17 @@
           deploy = pkgs.writeShellScriptBin "deploy" ''
             set -e
             NODES=("sleepy" "dopey" "grumpy")
+            FAST=false
+            if [ "$1" = "--fast" ]; then FAST=true; shift; fi
             TARGETS=("''${@:-''${NODES[@]}}")
 
-            echo "Building UI..."
-            rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
-            (cd ui && npm run build)
+            if [ "$FAST" = false ]; then
+              echo "Building UI..."
+              rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
+              (cd ui && npm run build)
+            else
+              echo "Fast mode — skipping UI build"
+            fi
 
             echo "Building binary..."
             CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
