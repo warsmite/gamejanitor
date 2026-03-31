@@ -68,27 +68,78 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 		return nil, fmt.Errorf("creating extraction dir: %w", err)
 	}
 
-	log.Info("extracting image layers", "image", imageName, "dest", extractDir)
-
-	// Extract layers individually instead of using mutate.Extract,
-	// which flattens layers and can lose symlinks when a later layer
-	// re-emits a directory entry for a path that should be a symlink.
 	layers, err := img.Layers()
 	if err != nil {
 		return nil, fmt.Errorf("getting image layers: %w", err)
 	}
 
-	for i, layer := range layers {
-		rc, err := layer.Uncompressed()
-		if err != nil {
-			return nil, fmt.Errorf("decompressing layer %d: %w", i, err)
-		}
+	layersDir := filepath.Join(destDir, "layers")
+	os.MkdirAll(layersDir, 0755)
 
-		if err := extractTarLayer(rc, extractDir); err != nil {
+	log.Info("downloading image layers", "image", imageName, "count", len(layers))
+
+	// Download and cache layers by digest (parallel)
+	layerDirs := make([]string, len(layers))
+	errCh := make(chan error, len(layers))
+
+	for i, layer := range layers {
+		i, layer := i, layer
+		go func() {
+			layerDigest, err := layer.Digest()
+			if err != nil {
+				errCh <- fmt.Errorf("layer %d digest: %w", i, err)
+				return
+			}
+
+			layerDir := filepath.Join(layersDir, layerDigest.Hex)
+			layerMarker := filepath.Join(layerDir, ".extracted")
+
+			if _, err := os.Stat(layerMarker); err == nil {
+				// Layer already cached
+				layerDirs[i] = layerDir
+				errCh <- nil
+				return
+			}
+
+			os.RemoveAll(layerDir)
+			os.MkdirAll(layerDir, 0755)
+
+			rc, err := layer.Uncompressed()
+			if err != nil {
+				errCh <- fmt.Errorf("decompressing layer %d: %w", i, err)
+				return
+			}
+
+			if err := extractTarLayer(rc, layerDir); err != nil {
+				rc.Close()
+				errCh <- fmt.Errorf("extracting layer %d: %w", i, err)
+				return
+			}
 			rc.Close()
-			return nil, fmt.Errorf("extracting layer %d: %w", i, err)
+
+			os.WriteFile(layerMarker, nil, 0644)
+			layerDirs[i] = layerDir
+			errCh <- nil
+		}()
+	}
+
+	for range layers {
+		if err := <-errCh; err != nil {
+			return nil, err
 		}
-		rc.Close()
+	}
+
+	log.Info("merging layers", "image", imageName, "layers", len(layers))
+
+	// Try overlayfs mount for zero-copy layer merging
+	if err := tryOverlayMount(layerDirs, extractDir); err != nil {
+		// Fallback: merge layers sequentially into flat directory
+		log.Info("overlayfs unavailable, extracting flat", "reason", err)
+		for i, layerDir := range layerDirs {
+			if err := mergeLayerDir(layerDir, extractDir); err != nil {
+				return nil, fmt.Errorf("merging layer %d: %w", i, err)
+			}
+		}
 	}
 
 	if err := os.WriteFile(markerFile, []byte(imageName), 0644); err != nil {
