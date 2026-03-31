@@ -402,32 +402,32 @@
           '';
 
           test-race = pkgs.writeShellScriptBin "test-race" ''
-            exec go test -race ./... "$@"
+            exec CGO_ENABLED=1 go test -race ./... "$@"
           '';
 
           test-e2e = pkgs.writeShellScriptBin "test-e2e" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
-            echo "Running e2e tests (requires Docker + root for volume chown)..."
-            exec sudo -E go test -tags e2e -timeout 5m -v ./e2e/ "$@"
+            echo "Running e2e tests..."
+            exec go test -tags e2e -timeout 5m -v ./e2e/ "$@"
           '';
 
           test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
             echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-terraria})..."
-            exec sudo -E go test -tags smoke -timeout 15m -v ./e2e/ "$@"
+            exec go test -tags smoke -timeout 15m -v ./e2e/ "$@"
           '';
 
           test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
             set -e
-            go test -coverprofile=/tmp/gamejanitor-coverage.out ./service/ ./models/ ./api/handlers/ ./games/ ./worker/ ./naming/ "$@"
+            go test -coverprofile=/tmp/gamejanitor-coverage.out ./... "$@"
             echo ""
             echo "=== Per-package coverage ==="
             go tool cover -func=/tmp/gamejanitor-coverage.out | grep "^total:"
             echo ""
             echo "=== Per-package breakdown ==="
-            go test -cover ./service/ ./models/ ./api/handlers/ ./games/ ./worker/ ./naming/ 2>&1 | grep "coverage:"
+            go test -cover ./... 2>&1 | grep "coverage:"
             echo ""
             echo "HTML report: go tool cover -html=/tmp/gamejanitor-coverage.out"
           '';
