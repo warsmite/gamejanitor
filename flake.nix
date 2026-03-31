@@ -62,7 +62,7 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
-            sudo rm -rf ui/dist
+            rm -rf ui/dist 2>/dev/null || { chmod -R u+w ui/dist && rm -rf ui/dist; }
             (cd ui && npm run build)
             go run -mod=mod . serve -d /tmp/gamejanitor-data 
           '';
@@ -82,7 +82,7 @@
 
                         if [ "$FAST" = false ]; then
                           echo "Building UI..."
-                          rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
+                          rm -rf ui/dist 2>/dev/null || rm -rf ui/dist 2>/dev/null || { chmod -R u+w ui/dist && rm -rf ui/dist; }
                           (cd ui && npm run build)
                         else
                           echo "Fast mode — skipping UI build"
@@ -259,7 +259,7 @@
           dev-multi = pkgs.writeShellScriptBin "dev-multi" ''
             set -e
             echo "Building UI..."
-            sudo rm -rf ui/dist
+            rm -rf ui/dist 2>/dev/null || { chmod -R u+w ui/dist && rm -rf ui/dist; }
             (cd ui && npm run build)
 
             CTRL_DIR=/tmp/gamejanitor-multi-controller
