@@ -17,15 +17,14 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/agent"
-	"github.com/warsmite/gamejanitor/worker/local"
+	wdocker "github.com/warsmite/gamejanitor/worker/docker"
 	"github.com/warsmite/gamejanitor/worker/pb"
-	"github.com/warsmite/gamejanitor/worker/process"
+	"github.com/warsmite/gamejanitor/worker/sandbox"
 	"google.golang.org/grpc"
 	grpcCredentials "google.golang.org/grpc/credentials"
 )
@@ -45,14 +44,14 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 
 	var localWorker worker.Worker
 	if cfg.Runtime == "process" {
-		localWorker = process.New(gameStore, cfg.DataDir, logger)
+		localWorker = sandbox.New(gameStore, cfg.DataDir, logger)
 	} else {
-		dockerClient, err := docker.New(logger, cfg.ResolveRuntimeSocket())
+		dockerClient, err := wdocker.New(logger, cfg.ResolveRuntimeSocket())
 		if err != nil {
 			return fmt.Errorf("failed to connect to runtime: %w", err)
 		}
 		defer dockerClient.Close()
-		localWorker = local.New(dockerClient, gameStore, cfg.DataDir, logger)
+		localWorker = wdocker.NewWorker(dockerClient, gameStore, cfg.DataDir, logger)
 	}
 
 	// Load worker TLS config from config file or auto-discovery

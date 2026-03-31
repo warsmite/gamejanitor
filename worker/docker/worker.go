@@ -1,4 +1,4 @@
-package local
+package docker
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
@@ -20,7 +19,7 @@ import (
 // LocalWorker implements Worker by delegating to the Docker client.
 // Used in standalone mode where controller and worker run in the same process.
 type LocalWorker struct {
-	Docker    *docker.Client
+	Docker    *Client
 	Log       *slog.Logger
 	GameStore *games.GameStore
 	DataDir   string
@@ -36,7 +35,7 @@ type VolumeSizeEntry struct {
 	MeasuredAt time.Time
 }
 
-func New(dockerClient *docker.Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
+func NewWorker(dockerClient *Client, gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	w := &LocalWorker{
 		Docker:          dockerClient,
 		Log:             log,
@@ -53,7 +52,7 @@ func (w *LocalWorker) PullImage(ctx context.Context, image string) error {
 }
 
 func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
-	return w.Docker.CreateInstance(ctx, docker.InstanceOptions{
+	return w.Docker.CreateInstance(ctx, InstanceOptions{
 		Name:          opts.Name,
 		Image:         opts.Image,
 		Env:           opts.Env,
@@ -262,10 +261,10 @@ func (w *LocalWorker) DownloadWorkshopItem(ctx context.Context, volumeName strin
 	return worker.DownloadWorkshopItem(ctx, w.DataDir, w.Log, appID, hcontentFile, filepath.Join(mountpoint, installPath))
 }
 
-func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {
-	out := make([]docker.PortBinding, len(ports))
+func toDockerPorts(ports []worker.PortBinding) []PortBinding {
+	out := make([]PortBinding, len(ports))
 	for i, p := range ports {
-		out[i] = docker.PortBinding{
+		out[i] = PortBinding{
 			HostPort:      p.HostPort,
 			ContainerPort: p.InstancePort,
 			Protocol:      p.Protocol,

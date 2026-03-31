@@ -1,6 +1,6 @@
 //go:build integration
 
-package local_test
+package docker_test
 
 import (
 	"bytes"
@@ -14,20 +14,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/docker"
+	wdocker "github.com/warsmite/gamejanitor/worker/docker"
 	"github.com/warsmite/gamejanitor/worker"
-	"github.com/warsmite/gamejanitor/worker/local"
 )
 
-func newTestLocalWorker(t *testing.T) *local.LocalWorker {
+func newTestLocalWorker(t *testing.T) *wdocker.LocalWorker {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	dockerClient, err := docker.New(log, "")
+	dockerClient, err := wdocker.New(log, "")
 	if err != nil {
 		t.Skipf("Docker not available: %v", err)
 	}
 	dataDir := t.TempDir()
-	return local.New(dockerClient, nil, dataDir, log)
+	return wdocker.New(dockerClient, nil, dataDir, log)
 }
 
 // Unique names to avoid collisions with other test runs
