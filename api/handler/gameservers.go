@@ -652,13 +652,14 @@ func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request
 
 	// Compute net I/O rates (bytes/sec) from cumulative counters
 	type statsPoint struct {
-		Timestamp       time.Time `json:"timestamp"`
-		CPUPercent      float64   `json:"cpu_percent"`
-		MemoryUsageMB   int       `json:"memory_usage_mb"`
-		MemoryLimitMB   int       `json:"memory_limit_mb"`
-		NetRxBytesPerSec float64  `json:"net_rx_bytes_per_sec"`
-		NetTxBytesPerSec float64  `json:"net_tx_bytes_per_sec"`
-		VolumeSizeBytes int64     `json:"volume_size_bytes"`
+		Timestamp        time.Time `json:"timestamp"`
+		CPUPercent       float64   `json:"cpu_percent"`
+		MemoryUsageMB    int       `json:"memory_usage_mb"`
+		MemoryLimitMB    int       `json:"memory_limit_mb"`
+		NetRxBytesPerSec float64   `json:"net_rx_bytes_per_sec"`
+		NetTxBytesPerSec float64   `json:"net_tx_bytes_per_sec"`
+		VolumeSizeBytes  int64     `json:"volume_size_bytes"`
+		PlayersOnline    int       `json:"players_online"`
 	}
 
 	points := make([]statsPoint, len(samples))
@@ -669,6 +670,7 @@ func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request
 			MemoryUsageMB:   s.MemoryUsageMB,
 			MemoryLimitMB:   s.MemoryLimitMB,
 			VolumeSizeBytes: s.VolumeSizeBytes,
+			PlayersOnline:   s.PlayersOnline,
 		}
 		if i > 0 {
 			prev := samples[i-1]

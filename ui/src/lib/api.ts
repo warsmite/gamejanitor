@@ -185,6 +185,7 @@ export interface StatsHistoryPoint {
   net_rx_bytes_per_sec: number;
   net_tx_bytes_per_sec: number;
   volume_size_bytes: number;
+  players_online: number;
 }
 
 export interface QueryData {

@@ -48,6 +48,7 @@
       net_rx_bytes_per_sec: rxRate,
       net_tx_bytes_per_sec: txRate,
       volume_size_bytes: liveStats.volume_size_bytes ?? 0,
+      players_online: gsState?.query?.players_online ?? 0,
     };
 
     const current = untrack(() => data);
@@ -115,6 +116,8 @@
   const rxPoints = $derived(scale(data.map(d => d.net_rx_bytes_per_sec), H));
   const txPoints = $derived(scale(data.map(d => d.net_tx_bytes_per_sec), H));
 
+  const playerPoints = $derived(scale(data.map(d => d.players_online), H));
+
   const cpuMax = $derived(data.length ? Math.max(...data.map(d => d.cpu_percent), 1) : 100);
   const memMax = $derived(data.length ? Math.max(...data.map(d => d.memory_usage_mb), 1) : 1);
   const memLimit = $derived(data.length && data[0].memory_limit_mb > 0 ? data[0].memory_limit_mb : null);
@@ -168,7 +171,7 @@
 
   <div class="stats-charts">
     <div class="chart-header">
-      <span class="chart-title">Resource History</span>
+      <span class="chart-title">History</span>
       <div class="period-pills">
         {#each ['1h', '24h', '7d'] as p}
           <button
@@ -299,6 +302,31 @@
         </div>
       </div>
 
+      <!-- Players -->
+      <div class="chart-row">
+        <div class="chart-label-col">
+          <span class="chart-label players">PLR</span>
+          <span class="chart-value">
+            {hoverData ? hoverData.players_online : (data.length ? data[data.length - 1].players_online : '—')}
+          </span>
+        </div>
+        <div class="chart-svg-wrap">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
+            onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
+            onmouseleave={handleMouseLeave}>
+            {#each gridYs as gy}
+              <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
+            {/each}
+            <path d={polyline(playerPoints)} class="line live" />
+            {#if hoverX !== null}
+              <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
+              <circle cx={hoverX} cy={playerPoints[hoverIndex!]?.y ?? 0} r="3" class="dot live" />
+            {/if}
+          </svg>
+        </div>
+      </div>
+
       <!-- Timestamp -->
       <div class="chart-timestamp">
         {#if hoverData}
@@ -390,6 +418,7 @@
   .chart-label.mem { color: #8b5cf6; }
   .chart-label.storage { color: var(--text-secondary); }
   .chart-label.net { color: var(--live); }
+  .chart-label.players { color: var(--live); }
 
   .chart-value {
     font-size: 0.68rem;
