@@ -27,7 +27,7 @@ func TestActivity_StartCreatesEvent(t *testing.T) {
 
 	var startEvent *model.Event
 	for i := range events {
-		if events[i].Type == model.OpStart {
+		if events[i].Type == "gameserver.start" {
 			startEvent = &events[i]
 			break
 		}
@@ -90,7 +90,7 @@ func TestActivity_RestartCreatesOneEvent(t *testing.T) {
 
 	// Should have exactly one event (restart), not three (restart + stop + start)
 	assert.Len(t, events, 1, "restart should create a single event, not nested ones")
-	assert.Equal(t, model.OpRestart, events[0].Type)
+	assert.Equal(t, "gameserver.restart", events[0].Type)
 }
 
 func TestActivity_ClearStaleOperations(t *testing.T) {
