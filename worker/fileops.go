@@ -119,6 +119,38 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
 }
 
+// WriteFileStreamDirect streams from reader directly to the volume without buffering
+// the entire file in memory. Used for large file uploads.
+func WriteFileStreamDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	mountpoint, err := resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
+	if err != nil {
+		return err
+	}
+	parentDir := filepath.Dir(hostPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("creating parent directory: %w", err)
+	}
+	if err := chownToGameserver(parentDir, mountpoint); err != nil {
+		return fmt.Errorf("setting directory ownership: %w", err)
+	}
+	f, err := os.OpenFile(hostPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, reader); err != nil {
+		f.Close()
+		return fmt.Errorf("writing file stream: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing file: %w", err)
+	}
+	return os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+}
+
 func DeletePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) error {
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {

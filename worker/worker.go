@@ -7,8 +7,7 @@ import (
 )
 
 // Worker abstracts all container and host operations.
-// LocalWorker implements this for single-node via Docker.
-// RemoteWorker (future) will implement this via gRPC to a worker agent.
+// LocalWorker implements this via Docker, RemoteWorker via gRPC to a worker agent.
 type Worker interface {
 	// Container lifecycle
 	PullImage(ctx context.Context, image string) error
@@ -31,6 +30,7 @@ type Worker interface {
 	ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error)
 	OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error)
 	WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error
+	WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error
 	DeletePath(ctx context.Context, volumeName string, path string) error
 	CreateDirectory(ctx context.Context, volumeName string, path string) error
 	RenamePath(ctx context.Context, volumeName string, from string, to string) error

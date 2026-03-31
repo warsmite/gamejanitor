@@ -29,6 +29,7 @@ service WorkerService {
     rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
     rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
     rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+    rpc WriteFileStream(stream WriteFileStreamRequest) returns (WriteFileStreamResponse);
     rpc DeletePath(DeletePathRequest) returns (DeletePathResponse);
     rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
     rpc RenamePath(RenamePathRequest) returns (RenamePathResponse);
@@ -219,6 +220,14 @@ message WriteFileRequest {
     uint32 perm = 4;
 }
 message WriteFileResponse {}
+
+message WriteFileStreamRequest {
+    string volume_name = 1;
+    string path = 2;
+    uint32 perm = 3;
+    bytes data = 4;
+}
+message WriteFileStreamResponse {}
 
 message DeletePathRequest {
     string volume_name = 1;

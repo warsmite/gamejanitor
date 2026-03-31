@@ -203,6 +203,42 @@ func (w *RemoteWorker) WriteFile(ctx context.Context, volumeName string, path st
 	return err
 }
 
+func (w *RemoteWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	stream, err := w.client.WriteFileStream(ctx)
+	if err != nil {
+		return fmt.Errorf("opening WriteFileStream to %s: %w", w.nodeID, err)
+	}
+
+	buf := make([]byte, 64*1024)
+	first := true
+	for {
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			msg := &pb.WriteFileStreamRequest{Data: buf[:n]}
+			if first {
+				msg.VolumeName = volumeName
+				msg.Path = path
+				msg.Perm = uint32(perm)
+				first = false
+			}
+			if err := stream.Send(msg); err != nil {
+				return fmt.Errorf("sending chunk to %s: %w", w.nodeID, err)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return fmt.Errorf("reading file for %s: %w", w.nodeID, readErr)
+		}
+	}
+
+	if _, err := stream.CloseAndRecv(); err != nil {
+		return fmt.Errorf("closing WriteFileStream to %s: %w", w.nodeID, err)
+	}
+	return nil
+}
+
 func (w *RemoteWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	_, err := w.client.DownloadFile(ctx, &pb.DownloadFileRequest{
 		VolumeName:   volumeName,

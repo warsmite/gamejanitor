@@ -178,6 +178,10 @@ func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path str
 	return worker.WriteFileDirect(w.Resolve, ctx, volumeName, path, content, perm)
 }
 
+func (w *LocalWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	return worker.WriteFileStreamDirect(w.Resolve, ctx, volumeName, path, reader, perm)
+}
+
 func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
 	return worker.DeletePathDirect(w.Resolve, ctx, volumeName, path)
 }

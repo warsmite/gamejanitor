@@ -1777,6 +1777,110 @@ func (*WriteFileResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{34}
 }
 
+type WriteFileStreamRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VolumeName    string                 `protobuf:"bytes,1,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Perm          uint32                 `protobuf:"varint,3,opt,name=perm,proto3" json:"perm,omitempty"`
+	Data          []byte                 `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteFileStreamRequest) Reset() {
+	*x = WriteFileStreamRequest{}
+	mi := &file_proto_worker_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteFileStreamRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteFileStreamRequest) ProtoMessage() {}
+
+func (x *WriteFileStreamRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteFileStreamRequest.ProtoReflect.Descriptor instead.
+func (*WriteFileStreamRequest) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *WriteFileStreamRequest) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
+	}
+	return ""
+}
+
+func (x *WriteFileStreamRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *WriteFileStreamRequest) GetPerm() uint32 {
+	if x != nil {
+		return x.Perm
+	}
+	return 0
+}
+
+func (x *WriteFileStreamRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type WriteFileStreamResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteFileStreamResponse) Reset() {
+	*x = WriteFileStreamResponse{}
+	mi := &file_proto_worker_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteFileStreamResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteFileStreamResponse) ProtoMessage() {}
+
+func (x *WriteFileStreamResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteFileStreamResponse.ProtoReflect.Descriptor instead.
+func (*WriteFileStreamResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{36}
+}
+
 type DeletePathRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	VolumeName    string                 `protobuf:"bytes,1,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
@@ -1787,7 +1891,7 @@ type DeletePathRequest struct {
 
 func (x *DeletePathRequest) Reset() {
 	*x = DeletePathRequest{}
-	mi := &file_proto_worker_proto_msgTypes[35]
+	mi := &file_proto_worker_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1799,7 +1903,7 @@ func (x *DeletePathRequest) String() string {
 func (*DeletePathRequest) ProtoMessage() {}
 
 func (x *DeletePathRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[35]
+	mi := &file_proto_worker_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1812,7 +1916,7 @@ func (x *DeletePathRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePathRequest.ProtoReflect.Descriptor instead.
 func (*DeletePathRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{35}
+	return file_proto_worker_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *DeletePathRequest) GetVolumeName() string {
@@ -1837,7 +1941,7 @@ type DeletePathResponse struct {
 
 func (x *DeletePathResponse) Reset() {
 	*x = DeletePathResponse{}
-	mi := &file_proto_worker_proto_msgTypes[36]
+	mi := &file_proto_worker_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1849,7 +1953,7 @@ func (x *DeletePathResponse) String() string {
 func (*DeletePathResponse) ProtoMessage() {}
 
 func (x *DeletePathResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[36]
+	mi := &file_proto_worker_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1862,7 +1966,7 @@ func (x *DeletePathResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePathResponse.ProtoReflect.Descriptor instead.
 func (*DeletePathResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{36}
+	return file_proto_worker_proto_rawDescGZIP(), []int{38}
 }
 
 type CreateDirectoryRequest struct {
@@ -1875,7 +1979,7 @@ type CreateDirectoryRequest struct {
 
 func (x *CreateDirectoryRequest) Reset() {
 	*x = CreateDirectoryRequest{}
-	mi := &file_proto_worker_proto_msgTypes[37]
+	mi := &file_proto_worker_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1887,7 +1991,7 @@ func (x *CreateDirectoryRequest) String() string {
 func (*CreateDirectoryRequest) ProtoMessage() {}
 
 func (x *CreateDirectoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[37]
+	mi := &file_proto_worker_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1900,7 +2004,7 @@ func (x *CreateDirectoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDirectoryRequest.ProtoReflect.Descriptor instead.
 func (*CreateDirectoryRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{37}
+	return file_proto_worker_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateDirectoryRequest) GetVolumeName() string {
@@ -1925,7 +2029,7 @@ type CreateDirectoryResponse struct {
 
 func (x *CreateDirectoryResponse) Reset() {
 	*x = CreateDirectoryResponse{}
-	mi := &file_proto_worker_proto_msgTypes[38]
+	mi := &file_proto_worker_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1937,7 +2041,7 @@ func (x *CreateDirectoryResponse) String() string {
 func (*CreateDirectoryResponse) ProtoMessage() {}
 
 func (x *CreateDirectoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[38]
+	mi := &file_proto_worker_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1950,7 +2054,7 @@ func (x *CreateDirectoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDirectoryResponse.ProtoReflect.Descriptor instead.
 func (*CreateDirectoryResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{38}
+	return file_proto_worker_proto_rawDescGZIP(), []int{40}
 }
 
 type RenamePathRequest struct {
@@ -1964,7 +2068,7 @@ type RenamePathRequest struct {
 
 func (x *RenamePathRequest) Reset() {
 	*x = RenamePathRequest{}
-	mi := &file_proto_worker_proto_msgTypes[39]
+	mi := &file_proto_worker_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1976,7 +2080,7 @@ func (x *RenamePathRequest) String() string {
 func (*RenamePathRequest) ProtoMessage() {}
 
 func (x *RenamePathRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[39]
+	mi := &file_proto_worker_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1989,7 +2093,7 @@ func (x *RenamePathRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenamePathRequest.ProtoReflect.Descriptor instead.
 func (*RenamePathRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{39}
+	return file_proto_worker_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RenamePathRequest) GetVolumeName() string {
@@ -2021,7 +2125,7 @@ type RenamePathResponse struct {
 
 func (x *RenamePathResponse) Reset() {
 	*x = RenamePathResponse{}
-	mi := &file_proto_worker_proto_msgTypes[40]
+	mi := &file_proto_worker_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2033,7 +2137,7 @@ func (x *RenamePathResponse) String() string {
 func (*RenamePathResponse) ProtoMessage() {}
 
 func (x *RenamePathResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[40]
+	mi := &file_proto_worker_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2046,7 +2150,7 @@ func (x *RenamePathResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenamePathResponse.ProtoReflect.Descriptor instead.
 func (*RenamePathResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{40}
+	return file_proto_worker_proto_rawDescGZIP(), []int{42}
 }
 
 type DownloadFileRequest struct {
@@ -2062,7 +2166,7 @@ type DownloadFileRequest struct {
 
 func (x *DownloadFileRequest) Reset() {
 	*x = DownloadFileRequest{}
-	mi := &file_proto_worker_proto_msgTypes[41]
+	mi := &file_proto_worker_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2074,7 +2178,7 @@ func (x *DownloadFileRequest) String() string {
 func (*DownloadFileRequest) ProtoMessage() {}
 
 func (x *DownloadFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[41]
+	mi := &file_proto_worker_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2087,7 +2191,7 @@ func (x *DownloadFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadFileRequest.ProtoReflect.Descriptor instead.
 func (*DownloadFileRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{41}
+	return file_proto_worker_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *DownloadFileRequest) GetVolumeName() string {
@@ -2133,7 +2237,7 @@ type DownloadFileResponse struct {
 
 func (x *DownloadFileResponse) Reset() {
 	*x = DownloadFileResponse{}
-	mi := &file_proto_worker_proto_msgTypes[42]
+	mi := &file_proto_worker_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2145,7 +2249,7 @@ func (x *DownloadFileResponse) String() string {
 func (*DownloadFileResponse) ProtoMessage() {}
 
 func (x *DownloadFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[42]
+	mi := &file_proto_worker_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2158,7 +2262,7 @@ func (x *DownloadFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadFileResponse.ProtoReflect.Descriptor instead.
 func (*DownloadFileResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{42}
+	return file_proto_worker_proto_rawDescGZIP(), []int{44}
 }
 
 type CopyFromContainerRequest struct {
@@ -2171,7 +2275,7 @@ type CopyFromContainerRequest struct {
 
 func (x *CopyFromContainerRequest) Reset() {
 	*x = CopyFromContainerRequest{}
-	mi := &file_proto_worker_proto_msgTypes[43]
+	mi := &file_proto_worker_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2183,7 +2287,7 @@ func (x *CopyFromContainerRequest) String() string {
 func (*CopyFromContainerRequest) ProtoMessage() {}
 
 func (x *CopyFromContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[43]
+	mi := &file_proto_worker_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2196,7 +2300,7 @@ func (x *CopyFromContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFromContainerRequest.ProtoReflect.Descriptor instead.
 func (*CopyFromContainerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{43}
+	return file_proto_worker_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *CopyFromContainerRequest) GetContainerId() string {
@@ -2222,7 +2326,7 @@ type CopyFromContainerResponse struct {
 
 func (x *CopyFromContainerResponse) Reset() {
 	*x = CopyFromContainerResponse{}
-	mi := &file_proto_worker_proto_msgTypes[44]
+	mi := &file_proto_worker_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2234,7 +2338,7 @@ func (x *CopyFromContainerResponse) String() string {
 func (*CopyFromContainerResponse) ProtoMessage() {}
 
 func (x *CopyFromContainerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[44]
+	mi := &file_proto_worker_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2247,7 +2351,7 @@ func (x *CopyFromContainerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFromContainerResponse.ProtoReflect.Descriptor instead.
 func (*CopyFromContainerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{44}
+	return file_proto_worker_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *CopyFromContainerResponse) GetContent() []byte {
@@ -2268,7 +2372,7 @@ type CopyToContainerRequest struct {
 
 func (x *CopyToContainerRequest) Reset() {
 	*x = CopyToContainerRequest{}
-	mi := &file_proto_worker_proto_msgTypes[45]
+	mi := &file_proto_worker_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2280,7 +2384,7 @@ func (x *CopyToContainerRequest) String() string {
 func (*CopyToContainerRequest) ProtoMessage() {}
 
 func (x *CopyToContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[45]
+	mi := &file_proto_worker_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2293,7 +2397,7 @@ func (x *CopyToContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyToContainerRequest.ProtoReflect.Descriptor instead.
 func (*CopyToContainerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{45}
+	return file_proto_worker_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *CopyToContainerRequest) GetContainerId() string {
@@ -2325,7 +2429,7 @@ type CopyToContainerResponse struct {
 
 func (x *CopyToContainerResponse) Reset() {
 	*x = CopyToContainerResponse{}
-	mi := &file_proto_worker_proto_msgTypes[46]
+	mi := &file_proto_worker_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2337,7 +2441,7 @@ func (x *CopyToContainerResponse) String() string {
 func (*CopyToContainerResponse) ProtoMessage() {}
 
 func (x *CopyToContainerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[46]
+	mi := &file_proto_worker_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2350,7 +2454,7 @@ func (x *CopyToContainerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyToContainerResponse.ProtoReflect.Descriptor instead.
 func (*CopyToContainerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{46}
+	return file_proto_worker_proto_rawDescGZIP(), []int{48}
 }
 
 type CopyDirFromContainerRequest struct {
@@ -2363,7 +2467,7 @@ type CopyDirFromContainerRequest struct {
 
 func (x *CopyDirFromContainerRequest) Reset() {
 	*x = CopyDirFromContainerRequest{}
-	mi := &file_proto_worker_proto_msgTypes[47]
+	mi := &file_proto_worker_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2375,7 +2479,7 @@ func (x *CopyDirFromContainerRequest) String() string {
 func (*CopyDirFromContainerRequest) ProtoMessage() {}
 
 func (x *CopyDirFromContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[47]
+	mi := &file_proto_worker_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2388,7 +2492,7 @@ func (x *CopyDirFromContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyDirFromContainerRequest.ProtoReflect.Descriptor instead.
 func (*CopyDirFromContainerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{47}
+	return file_proto_worker_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CopyDirFromContainerRequest) GetContainerId() string {
@@ -2417,7 +2521,7 @@ type CopyTarToContainerRequest struct {
 
 func (x *CopyTarToContainerRequest) Reset() {
 	*x = CopyTarToContainerRequest{}
-	mi := &file_proto_worker_proto_msgTypes[48]
+	mi := &file_proto_worker_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2429,7 +2533,7 @@ func (x *CopyTarToContainerRequest) String() string {
 func (*CopyTarToContainerRequest) ProtoMessage() {}
 
 func (x *CopyTarToContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[48]
+	mi := &file_proto_worker_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2442,7 +2546,7 @@ func (x *CopyTarToContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyTarToContainerRequest.ProtoReflect.Descriptor instead.
 func (*CopyTarToContainerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{48}
+	return file_proto_worker_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CopyTarToContainerRequest) GetContainerId() string {
@@ -2474,7 +2578,7 @@ type CopyTarToContainerResponse struct {
 
 func (x *CopyTarToContainerResponse) Reset() {
 	*x = CopyTarToContainerResponse{}
-	mi := &file_proto_worker_proto_msgTypes[49]
+	mi := &file_proto_worker_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2486,7 +2590,7 @@ func (x *CopyTarToContainerResponse) String() string {
 func (*CopyTarToContainerResponse) ProtoMessage() {}
 
 func (x *CopyTarToContainerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[49]
+	mi := &file_proto_worker_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2499,7 +2603,7 @@ func (x *CopyTarToContainerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyTarToContainerResponse.ProtoReflect.Descriptor instead.
 func (*CopyTarToContainerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{49}
+	return file_proto_worker_proto_rawDescGZIP(), []int{51}
 }
 
 type WatchEventsRequest struct {
@@ -2510,7 +2614,7 @@ type WatchEventsRequest struct {
 
 func (x *WatchEventsRequest) Reset() {
 	*x = WatchEventsRequest{}
-	mi := &file_proto_worker_proto_msgTypes[50]
+	mi := &file_proto_worker_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2522,7 +2626,7 @@ func (x *WatchEventsRequest) String() string {
 func (*WatchEventsRequest) ProtoMessage() {}
 
 func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[50]
+	mi := &file_proto_worker_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2535,7 +2639,7 @@ func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchEventsRequest.ProtoReflect.Descriptor instead.
 func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{50}
+	return file_proto_worker_proto_rawDescGZIP(), []int{52}
 }
 
 type ContainerEventMsg struct {
@@ -2549,7 +2653,7 @@ type ContainerEventMsg struct {
 
 func (x *ContainerEventMsg) Reset() {
 	*x = ContainerEventMsg{}
-	mi := &file_proto_worker_proto_msgTypes[51]
+	mi := &file_proto_worker_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2561,7 +2665,7 @@ func (x *ContainerEventMsg) String() string {
 func (*ContainerEventMsg) ProtoMessage() {}
 
 func (x *ContainerEventMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[51]
+	mi := &file_proto_worker_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2574,7 +2678,7 @@ func (x *ContainerEventMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerEventMsg.ProtoReflect.Descriptor instead.
 func (*ContainerEventMsg) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{51}
+	return file_proto_worker_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ContainerEventMsg) GetContainerId() string {
@@ -2614,7 +2718,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_proto_worker_proto_msgTypes[52]
+	mi := &file_proto_worker_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2730,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[52]
+	mi := &file_proto_worker_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2639,7 +2743,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{52}
+	return file_proto_worker_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *HeartbeatRequest) GetWorkerId() string {
@@ -2707,7 +2811,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_proto_worker_proto_msgTypes[53]
+	mi := &file_proto_worker_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2719,7 +2823,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[53]
+	mi := &file_proto_worker_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2732,7 +2836,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{53}
+	return file_proto_worker_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *HeartbeatResponse) GetAccepted() bool {
@@ -2766,7 +2870,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_proto_worker_proto_msgTypes[54]
+	mi := &file_proto_worker_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2778,7 +2882,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[54]
+	mi := &file_proto_worker_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2791,7 +2895,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{54}
+	return file_proto_worker_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *RegisterRequest) GetWorkerId() string {
@@ -2918,7 +3022,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_proto_worker_proto_msgTypes[55]
+	mi := &file_proto_worker_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2930,7 +3034,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[55]
+	mi := &file_proto_worker_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2943,7 +3047,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{55}
+	return file_proto_worker_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *RegisterResponse) GetAccepted() bool {
@@ -2984,7 +3088,7 @@ type SFTPLoginRequest struct {
 
 func (x *SFTPLoginRequest) Reset() {
 	*x = SFTPLoginRequest{}
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2996,7 +3100,7 @@ func (x *SFTPLoginRequest) String() string {
 func (*SFTPLoginRequest) ProtoMessage() {}
 
 func (x *SFTPLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3009,7 +3113,7 @@ func (x *SFTPLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SFTPLoginRequest.ProtoReflect.Descriptor instead.
 func (*SFTPLoginRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{56}
+	return file_proto_worker_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *SFTPLoginRequest) GetUsername() string {
@@ -3037,7 +3141,7 @@ type SFTPLoginResponse struct {
 
 func (x *SFTPLoginResponse) Reset() {
 	*x = SFTPLoginResponse{}
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3049,7 +3153,7 @@ func (x *SFTPLoginResponse) String() string {
 func (*SFTPLoginResponse) ProtoMessage() {}
 
 func (x *SFTPLoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3062,7 +3166,7 @@ func (x *SFTPLoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SFTPLoginResponse.ProtoReflect.Descriptor instead.
 func (*SFTPLoginResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{57}
+	return file_proto_worker_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *SFTPLoginResponse) GetValid() bool {
@@ -3094,7 +3198,7 @@ type ListGameserverContainersRequest struct {
 
 func (x *ListGameserverContainersRequest) Reset() {
 	*x = ListGameserverContainersRequest{}
-	mi := &file_proto_worker_proto_msgTypes[58]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3106,7 +3210,7 @@ func (x *ListGameserverContainersRequest) String() string {
 func (*ListGameserverContainersRequest) ProtoMessage() {}
 
 func (x *ListGameserverContainersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[58]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3119,7 +3223,7 @@ func (x *ListGameserverContainersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGameserverContainersRequest.ProtoReflect.Descriptor instead.
 func (*ListGameserverContainersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{58}
+	return file_proto_worker_proto_rawDescGZIP(), []int{60}
 }
 
 type ListGameserverContainersResponse struct {
@@ -3131,7 +3235,7 @@ type ListGameserverContainersResponse struct {
 
 func (x *ListGameserverContainersResponse) Reset() {
 	*x = ListGameserverContainersResponse{}
-	mi := &file_proto_worker_proto_msgTypes[59]
+	mi := &file_proto_worker_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3143,7 +3247,7 @@ func (x *ListGameserverContainersResponse) String() string {
 func (*ListGameserverContainersResponse) ProtoMessage() {}
 
 func (x *ListGameserverContainersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[59]
+	mi := &file_proto_worker_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3156,7 +3260,7 @@ func (x *ListGameserverContainersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGameserverContainersResponse.ProtoReflect.Descriptor instead.
 func (*ListGameserverContainersResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{59}
+	return file_proto_worker_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListGameserverContainersResponse) GetContainers() []*GameserverContainer {
@@ -3178,7 +3282,7 @@ type GameserverContainer struct {
 
 func (x *GameserverContainer) Reset() {
 	*x = GameserverContainer{}
-	mi := &file_proto_worker_proto_msgTypes[60]
+	mi := &file_proto_worker_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3190,7 +3294,7 @@ func (x *GameserverContainer) String() string {
 func (*GameserverContainer) ProtoMessage() {}
 
 func (x *GameserverContainer) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[60]
+	mi := &file_proto_worker_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3203,7 +3307,7 @@ func (x *GameserverContainer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameserverContainer.ProtoReflect.Descriptor instead.
 func (*GameserverContainer) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{60}
+	return file_proto_worker_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GameserverContainer) GetContainerId() string {
@@ -3244,7 +3348,7 @@ type PrepareGameScriptsRequest struct {
 
 func (x *PrepareGameScriptsRequest) Reset() {
 	*x = PrepareGameScriptsRequest{}
-	mi := &file_proto_worker_proto_msgTypes[61]
+	mi := &file_proto_worker_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3256,7 +3360,7 @@ func (x *PrepareGameScriptsRequest) String() string {
 func (*PrepareGameScriptsRequest) ProtoMessage() {}
 
 func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[61]
+	mi := &file_proto_worker_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3269,7 +3373,7 @@ func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsRequest.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{61}
+	return file_proto_worker_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *PrepareGameScriptsRequest) GetGameId() string {
@@ -3296,7 +3400,7 @@ type PrepareGameScriptsResponse struct {
 
 func (x *PrepareGameScriptsResponse) Reset() {
 	*x = PrepareGameScriptsResponse{}
-	mi := &file_proto_worker_proto_msgTypes[62]
+	mi := &file_proto_worker_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3308,7 +3412,7 @@ func (x *PrepareGameScriptsResponse) String() string {
 func (*PrepareGameScriptsResponse) ProtoMessage() {}
 
 func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[62]
+	mi := &file_proto_worker_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3321,7 +3425,7 @@ func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsResponse.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{62}
+	return file_proto_worker_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *PrepareGameScriptsResponse) GetScriptDir() string {
@@ -3350,7 +3454,7 @@ type EnsureDepotRequest struct {
 
 func (x *EnsureDepotRequest) Reset() {
 	*x = EnsureDepotRequest{}
-	mi := &file_proto_worker_proto_msgTypes[63]
+	mi := &file_proto_worker_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3362,7 +3466,7 @@ func (x *EnsureDepotRequest) String() string {
 func (*EnsureDepotRequest) ProtoMessage() {}
 
 func (x *EnsureDepotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[63]
+	mi := &file_proto_worker_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3375,7 +3479,7 @@ func (x *EnsureDepotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnsureDepotRequest.ProtoReflect.Descriptor instead.
 func (*EnsureDepotRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{63}
+	return file_proto_worker_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *EnsureDepotRequest) GetAppId() uint32 {
@@ -3425,7 +3529,7 @@ type EnsureDepotProgress struct {
 
 func (x *EnsureDepotProgress) Reset() {
 	*x = EnsureDepotProgress{}
-	mi := &file_proto_worker_proto_msgTypes[64]
+	mi := &file_proto_worker_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3437,7 +3541,7 @@ func (x *EnsureDepotProgress) String() string {
 func (*EnsureDepotProgress) ProtoMessage() {}
 
 func (x *EnsureDepotProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[64]
+	mi := &file_proto_worker_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3450,7 +3554,7 @@ func (x *EnsureDepotProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnsureDepotProgress.ProtoReflect.Descriptor instead.
 func (*EnsureDepotProgress) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{64}
+	return file_proto_worker_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *EnsureDepotProgress) GetDepotDir() string {
@@ -3514,7 +3618,7 @@ type DownloadWorkshopItemRequest struct {
 
 func (x *DownloadWorkshopItemRequest) Reset() {
 	*x = DownloadWorkshopItemRequest{}
-	mi := &file_proto_worker_proto_msgTypes[65]
+	mi := &file_proto_worker_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3526,7 +3630,7 @@ func (x *DownloadWorkshopItemRequest) String() string {
 func (*DownloadWorkshopItemRequest) ProtoMessage() {}
 
 func (x *DownloadWorkshopItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[65]
+	mi := &file_proto_worker_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3539,7 +3643,7 @@ func (x *DownloadWorkshopItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadWorkshopItemRequest.ProtoReflect.Descriptor instead.
 func (*DownloadWorkshopItemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{65}
+	return file_proto_worker_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DownloadWorkshopItemRequest) GetVolumeName() string {
@@ -3578,7 +3682,7 @@ type DownloadWorkshopItemResponse struct {
 
 func (x *DownloadWorkshopItemResponse) Reset() {
 	*x = DownloadWorkshopItemResponse{}
-	mi := &file_proto_worker_proto_msgTypes[66]
+	mi := &file_proto_worker_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3590,7 +3694,7 @@ func (x *DownloadWorkshopItemResponse) String() string {
 func (*DownloadWorkshopItemResponse) ProtoMessage() {}
 
 func (x *DownloadWorkshopItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[66]
+	mi := &file_proto_worker_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3603,7 +3707,7 @@ func (x *DownloadWorkshopItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadWorkshopItemResponse.ProtoReflect.Descriptor instead.
 func (*DownloadWorkshopItemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{66}
+	return file_proto_worker_proto_rawDescGZIP(), []int{68}
 }
 
 type CopyDepotToVolumeRequest struct {
@@ -3616,7 +3720,7 @@ type CopyDepotToVolumeRequest struct {
 
 func (x *CopyDepotToVolumeRequest) Reset() {
 	*x = CopyDepotToVolumeRequest{}
-	mi := &file_proto_worker_proto_msgTypes[67]
+	mi := &file_proto_worker_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3628,7 +3732,7 @@ func (x *CopyDepotToVolumeRequest) String() string {
 func (*CopyDepotToVolumeRequest) ProtoMessage() {}
 
 func (x *CopyDepotToVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[67]
+	mi := &file_proto_worker_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3641,7 +3745,7 @@ func (x *CopyDepotToVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyDepotToVolumeRequest.ProtoReflect.Descriptor instead.
 func (*CopyDepotToVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{67}
+	return file_proto_worker_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *CopyDepotToVolumeRequest) GetDepotDir() string {
@@ -3666,7 +3770,7 @@ type CopyDepotToVolumeResponse struct {
 
 func (x *CopyDepotToVolumeResponse) Reset() {
 	*x = CopyDepotToVolumeResponse{}
-	mi := &file_proto_worker_proto_msgTypes[68]
+	mi := &file_proto_worker_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3678,7 +3782,7 @@ func (x *CopyDepotToVolumeResponse) String() string {
 func (*CopyDepotToVolumeResponse) ProtoMessage() {}
 
 func (x *CopyDepotToVolumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[68]
+	mi := &file_proto_worker_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3691,7 +3795,7 @@ func (x *CopyDepotToVolumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyDepotToVolumeResponse.ProtoReflect.Descriptor instead.
 func (*CopyDepotToVolumeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{68}
+	return file_proto_worker_proto_rawDescGZIP(), []int{70}
 }
 
 var File_proto_worker_proto protoreflect.FileDescriptor
@@ -3809,7 +3913,14 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x03 \x01(\fR\acontent\x12\x12\n" +
 	"\x04perm\x18\x04 \x01(\rR\x04perm\"\x13\n" +
-	"\x11WriteFileResponse\"H\n" +
+	"\x11WriteFileResponse\"u\n" +
+	"\x16WriteFileStreamRequest\x12\x1f\n" +
+	"\vvolume_name\x18\x01 \x01(\tR\n" +
+	"volumeName\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
+	"\x04perm\x18\x03 \x01(\rR\x04perm\x12\x12\n" +
+	"\x04data\x18\x04 \x01(\fR\x04data\"\x19\n" +
+	"\x17WriteFileStreamResponse\"H\n" +
 	"\x11DeletePathRequest\x12\x1f\n" +
 	"\vvolume_name\x18\x01 \x01(\tR\n" +
 	"volumeName\x12\x12\n" +
@@ -3943,7 +4054,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir\x12\x1f\n" +
 	"\vvolume_name\x18\x02 \x01(\tR\n" +
 	"volumeName\"\x1b\n" +
-	"\x19CopyDepotToVolumeResponse2\xcc\x13\n" +
+	"\x19CopyDepotToVolumeResponse2\xa2\x14\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
 	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
@@ -3962,7 +4073,8 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\rRestoreVolume\x12\x1c.worker.RestoreVolumeRequest\x1a\x1d.worker.RestoreVolumeResponse(\x01\x12@\n" +
 	"\tListFiles\x12\x18.worker.ListFilesRequest\x1a\x19.worker.ListFilesResponse\x12=\n" +
 	"\bReadFile\x12\x17.worker.ReadFileRequest\x1a\x18.worker.ReadFileResponse\x12@\n" +
-	"\tWriteFile\x12\x18.worker.WriteFileRequest\x1a\x19.worker.WriteFileResponse\x12C\n" +
+	"\tWriteFile\x12\x18.worker.WriteFileRequest\x1a\x19.worker.WriteFileResponse\x12T\n" +
+	"\x0fWriteFileStream\x12\x1e.worker.WriteFileStreamRequest\x1a\x1f.worker.WriteFileStreamResponse(\x01\x12C\n" +
 	"\n" +
 	"DeletePath\x12\x19.worker.DeletePathRequest\x1a\x1a.worker.DeletePathResponse\x12R\n" +
 	"\x0fCreateDirectory\x12\x1e.worker.CreateDirectoryRequest\x1a\x1f.worker.CreateDirectoryResponse\x12C\n" +
@@ -3997,7 +4109,7 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 	return file_proto_worker_proto_rawDescData
 }
 
-var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
 var file_proto_worker_proto_goTypes = []any{
 	(*DataChunk)(nil),                        // 0: worker.DataChunk
 	(*PullImageRequest)(nil),                 // 1: worker.PullImageRequest
@@ -4034,45 +4146,47 @@ var file_proto_worker_proto_goTypes = []any{
 	(*ReadFileResponse)(nil),                 // 32: worker.ReadFileResponse
 	(*WriteFileRequest)(nil),                 // 33: worker.WriteFileRequest
 	(*WriteFileResponse)(nil),                // 34: worker.WriteFileResponse
-	(*DeletePathRequest)(nil),                // 35: worker.DeletePathRequest
-	(*DeletePathResponse)(nil),               // 36: worker.DeletePathResponse
-	(*CreateDirectoryRequest)(nil),           // 37: worker.CreateDirectoryRequest
-	(*CreateDirectoryResponse)(nil),          // 38: worker.CreateDirectoryResponse
-	(*RenamePathRequest)(nil),                // 39: worker.RenamePathRequest
-	(*RenamePathResponse)(nil),               // 40: worker.RenamePathResponse
-	(*DownloadFileRequest)(nil),              // 41: worker.DownloadFileRequest
-	(*DownloadFileResponse)(nil),             // 42: worker.DownloadFileResponse
-	(*CopyFromContainerRequest)(nil),         // 43: worker.CopyFromContainerRequest
-	(*CopyFromContainerResponse)(nil),        // 44: worker.CopyFromContainerResponse
-	(*CopyToContainerRequest)(nil),           // 45: worker.CopyToContainerRequest
-	(*CopyToContainerResponse)(nil),          // 46: worker.CopyToContainerResponse
-	(*CopyDirFromContainerRequest)(nil),      // 47: worker.CopyDirFromContainerRequest
-	(*CopyTarToContainerRequest)(nil),        // 48: worker.CopyTarToContainerRequest
-	(*CopyTarToContainerResponse)(nil),       // 49: worker.CopyTarToContainerResponse
-	(*WatchEventsRequest)(nil),               // 50: worker.WatchEventsRequest
-	(*ContainerEventMsg)(nil),                // 51: worker.ContainerEventMsg
-	(*HeartbeatRequest)(nil),                 // 52: worker.HeartbeatRequest
-	(*HeartbeatResponse)(nil),                // 53: worker.HeartbeatResponse
-	(*RegisterRequest)(nil),                  // 54: worker.RegisterRequest
-	(*RegisterResponse)(nil),                 // 55: worker.RegisterResponse
-	(*SFTPLoginRequest)(nil),                 // 56: worker.SFTPLoginRequest
-	(*SFTPLoginResponse)(nil),                // 57: worker.SFTPLoginResponse
-	(*ListGameserverContainersRequest)(nil),  // 58: worker.ListGameserverContainersRequest
-	(*ListGameserverContainersResponse)(nil), // 59: worker.ListGameserverContainersResponse
-	(*GameserverContainer)(nil),              // 60: worker.GameserverContainer
-	(*PrepareGameScriptsRequest)(nil),        // 61: worker.PrepareGameScriptsRequest
-	(*PrepareGameScriptsResponse)(nil),       // 62: worker.PrepareGameScriptsResponse
-	(*EnsureDepotRequest)(nil),               // 63: worker.EnsureDepotRequest
-	(*EnsureDepotProgress)(nil),              // 64: worker.EnsureDepotProgress
-	(*DownloadWorkshopItemRequest)(nil),      // 65: worker.DownloadWorkshopItemRequest
-	(*DownloadWorkshopItemResponse)(nil),     // 66: worker.DownloadWorkshopItemResponse
-	(*CopyDepotToVolumeRequest)(nil),         // 67: worker.CopyDepotToVolumeRequest
-	(*CopyDepotToVolumeResponse)(nil),        // 68: worker.CopyDepotToVolumeResponse
+	(*WriteFileStreamRequest)(nil),           // 35: worker.WriteFileStreamRequest
+	(*WriteFileStreamResponse)(nil),          // 36: worker.WriteFileStreamResponse
+	(*DeletePathRequest)(nil),                // 37: worker.DeletePathRequest
+	(*DeletePathResponse)(nil),               // 38: worker.DeletePathResponse
+	(*CreateDirectoryRequest)(nil),           // 39: worker.CreateDirectoryRequest
+	(*CreateDirectoryResponse)(nil),          // 40: worker.CreateDirectoryResponse
+	(*RenamePathRequest)(nil),                // 41: worker.RenamePathRequest
+	(*RenamePathResponse)(nil),               // 42: worker.RenamePathResponse
+	(*DownloadFileRequest)(nil),              // 43: worker.DownloadFileRequest
+	(*DownloadFileResponse)(nil),             // 44: worker.DownloadFileResponse
+	(*CopyFromContainerRequest)(nil),         // 45: worker.CopyFromContainerRequest
+	(*CopyFromContainerResponse)(nil),        // 46: worker.CopyFromContainerResponse
+	(*CopyToContainerRequest)(nil),           // 47: worker.CopyToContainerRequest
+	(*CopyToContainerResponse)(nil),          // 48: worker.CopyToContainerResponse
+	(*CopyDirFromContainerRequest)(nil),      // 49: worker.CopyDirFromContainerRequest
+	(*CopyTarToContainerRequest)(nil),        // 50: worker.CopyTarToContainerRequest
+	(*CopyTarToContainerResponse)(nil),       // 51: worker.CopyTarToContainerResponse
+	(*WatchEventsRequest)(nil),               // 52: worker.WatchEventsRequest
+	(*ContainerEventMsg)(nil),                // 53: worker.ContainerEventMsg
+	(*HeartbeatRequest)(nil),                 // 54: worker.HeartbeatRequest
+	(*HeartbeatResponse)(nil),                // 55: worker.HeartbeatResponse
+	(*RegisterRequest)(nil),                  // 56: worker.RegisterRequest
+	(*RegisterResponse)(nil),                 // 57: worker.RegisterResponse
+	(*SFTPLoginRequest)(nil),                 // 58: worker.SFTPLoginRequest
+	(*SFTPLoginResponse)(nil),                // 59: worker.SFTPLoginResponse
+	(*ListGameserverContainersRequest)(nil),  // 60: worker.ListGameserverContainersRequest
+	(*ListGameserverContainersResponse)(nil), // 61: worker.ListGameserverContainersResponse
+	(*GameserverContainer)(nil),              // 62: worker.GameserverContainer
+	(*PrepareGameScriptsRequest)(nil),        // 63: worker.PrepareGameScriptsRequest
+	(*PrepareGameScriptsResponse)(nil),       // 64: worker.PrepareGameScriptsResponse
+	(*EnsureDepotRequest)(nil),               // 65: worker.EnsureDepotRequest
+	(*EnsureDepotProgress)(nil),              // 66: worker.EnsureDepotProgress
+	(*DownloadWorkshopItemRequest)(nil),      // 67: worker.DownloadWorkshopItemRequest
+	(*DownloadWorkshopItemResponse)(nil),     // 68: worker.DownloadWorkshopItemResponse
+	(*CopyDepotToVolumeRequest)(nil),         // 69: worker.CopyDepotToVolumeRequest
+	(*CopyDepotToVolumeResponse)(nil),        // 70: worker.CopyDepotToVolumeResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
 	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
 	29, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
-	60, // 2: worker.ListGameserverContainersResponse.containers:type_name -> worker.GameserverContainer
+	62, // 2: worker.ListGameserverContainersResponse.containers:type_name -> worker.GameserverContainer
 	1,  // 3: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
 	4,  // 4: worker.WorkerService.CreateContainer:input_type -> worker.CreateContainerRequest
 	6,  // 5: worker.WorkerService.StartContainer:input_type -> worker.StartContainerRequest
@@ -4090,61 +4204,63 @@ var file_proto_worker_proto_depIdxs = []int32{
 	28, // 17: worker.WorkerService.ListFiles:input_type -> worker.ListFilesRequest
 	31, // 18: worker.WorkerService.ReadFile:input_type -> worker.ReadFileRequest
 	33, // 19: worker.WorkerService.WriteFile:input_type -> worker.WriteFileRequest
-	35, // 20: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
-	37, // 21: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
-	39, // 22: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
-	41, // 23: worker.WorkerService.DownloadFile:input_type -> worker.DownloadFileRequest
-	43, // 24: worker.WorkerService.CopyFromContainer:input_type -> worker.CopyFromContainerRequest
-	45, // 25: worker.WorkerService.CopyToContainer:input_type -> worker.CopyToContainerRequest
-	47, // 26: worker.WorkerService.CopyDirFromContainer:input_type -> worker.CopyDirFromContainerRequest
-	48, // 27: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
-	50, // 28: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
-	58, // 29: worker.WorkerService.ListGameserverContainers:input_type -> worker.ListGameserverContainersRequest
-	52, // 30: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	61, // 31: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
-	63, // 32: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
-	65, // 33: worker.WorkerService.DownloadWorkshopItem:input_type -> worker.DownloadWorkshopItemRequest
-	67, // 34: worker.WorkerService.CopyDepotToVolume:input_type -> worker.CopyDepotToVolumeRequest
-	54, // 35: worker.ControllerService.Register:input_type -> worker.RegisterRequest
-	52, // 36: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	56, // 37: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
-	2,  // 38: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 39: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
-	7,  // 40: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
-	9,  // 41: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
-	11, // 42: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
-	13, // 43: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
-	15, // 44: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 45: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
-	18, // 46: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
-	20, // 47: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
-	22, // 48: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
-	24, // 49: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
-	0,  // 50: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
-	27, // 51: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
-	30, // 52: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
-	32, // 53: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
-	34, // 54: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
-	36, // 55: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
-	38, // 56: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
-	40, // 57: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
-	42, // 58: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
-	44, // 59: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
-	46, // 60: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
-	0,  // 61: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
-	49, // 62: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
-	51, // 63: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
-	59, // 64: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
-	53, // 65: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	62, // 66: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
-	64, // 67: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
-	66, // 68: worker.WorkerService.DownloadWorkshopItem:output_type -> worker.DownloadWorkshopItemResponse
-	68, // 69: worker.WorkerService.CopyDepotToVolume:output_type -> worker.CopyDepotToVolumeResponse
-	55, // 70: worker.ControllerService.Register:output_type -> worker.RegisterResponse
-	53, // 71: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	57, // 72: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
-	38, // [38:73] is the sub-list for method output_type
-	3,  // [3:38] is the sub-list for method input_type
+	35, // 20: worker.WorkerService.WriteFileStream:input_type -> worker.WriteFileStreamRequest
+	37, // 21: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
+	39, // 22: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
+	41, // 23: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
+	43, // 24: worker.WorkerService.DownloadFile:input_type -> worker.DownloadFileRequest
+	45, // 25: worker.WorkerService.CopyFromContainer:input_type -> worker.CopyFromContainerRequest
+	47, // 26: worker.WorkerService.CopyToContainer:input_type -> worker.CopyToContainerRequest
+	49, // 27: worker.WorkerService.CopyDirFromContainer:input_type -> worker.CopyDirFromContainerRequest
+	50, // 28: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
+	52, // 29: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
+	60, // 30: worker.WorkerService.ListGameserverContainers:input_type -> worker.ListGameserverContainersRequest
+	54, // 31: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	63, // 32: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
+	65, // 33: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
+	67, // 34: worker.WorkerService.DownloadWorkshopItem:input_type -> worker.DownloadWorkshopItemRequest
+	69, // 35: worker.WorkerService.CopyDepotToVolume:input_type -> worker.CopyDepotToVolumeRequest
+	56, // 36: worker.ControllerService.Register:input_type -> worker.RegisterRequest
+	54, // 37: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	58, // 38: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
+	2,  // 39: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
+	5,  // 40: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
+	7,  // 41: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
+	9,  // 42: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
+	11, // 43: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
+	13, // 44: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
+	15, // 45: worker.WorkerService.Exec:output_type -> worker.ExecResponse
+	0,  // 46: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
+	18, // 47: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
+	20, // 48: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
+	22, // 49: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
+	24, // 50: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
+	0,  // 51: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
+	27, // 52: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
+	30, // 53: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
+	32, // 54: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
+	34, // 55: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
+	36, // 56: worker.WorkerService.WriteFileStream:output_type -> worker.WriteFileStreamResponse
+	38, // 57: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
+	40, // 58: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
+	42, // 59: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
+	44, // 60: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
+	46, // 61: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
+	48, // 62: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
+	0,  // 63: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
+	51, // 64: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
+	53, // 65: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
+	61, // 66: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
+	55, // 67: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	64, // 68: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
+	66, // 69: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
+	68, // 70: worker.WorkerService.DownloadWorkshopItem:output_type -> worker.DownloadWorkshopItemResponse
+	70, // 71: worker.WorkerService.CopyDepotToVolume:output_type -> worker.CopyDepotToVolumeResponse
+	57, // 72: worker.ControllerService.Register:output_type -> worker.RegisterResponse
+	55, // 73: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	59, // 74: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
+	39, // [39:75] is the sub-list for method output_type
+	3,  // [3:39] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -4161,7 +4277,7 @@ func file_proto_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_worker_proto_rawDesc), len(file_proto_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   69,
+			NumMessages:   71,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

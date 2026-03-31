@@ -36,6 +36,7 @@ const (
 	WorkerService_ListFiles_FullMethodName                = "/worker.WorkerService/ListFiles"
 	WorkerService_ReadFile_FullMethodName                 = "/worker.WorkerService/ReadFile"
 	WorkerService_WriteFile_FullMethodName                = "/worker.WorkerService/WriteFile"
+	WorkerService_WriteFileStream_FullMethodName          = "/worker.WorkerService/WriteFileStream"
 	WorkerService_DeletePath_FullMethodName               = "/worker.WorkerService/DeletePath"
 	WorkerService_CreateDirectory_FullMethodName          = "/worker.WorkerService/CreateDirectory"
 	WorkerService_RenamePath_FullMethodName               = "/worker.WorkerService/RenamePath"
@@ -80,6 +81,7 @@ type WorkerServiceClient interface {
 	ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error)
 	ReadFile(ctx context.Context, in *ReadFileRequest, opts ...grpc.CallOption) (*ReadFileResponse, error)
 	WriteFile(ctx context.Context, in *WriteFileRequest, opts ...grpc.CallOption) (*WriteFileResponse, error)
+	WriteFileStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteFileStreamRequest, WriteFileStreamResponse], error)
 	DeletePath(ctx context.Context, in *DeletePathRequest, opts ...grpc.CallOption) (*DeletePathResponse, error)
 	CreateDirectory(ctx context.Context, in *CreateDirectoryRequest, opts ...grpc.CallOption) (*CreateDirectoryResponse, error)
 	RenamePath(ctx context.Context, in *RenamePathRequest, opts ...grpc.CallOption) (*RenamePathResponse, error)
@@ -304,6 +306,19 @@ func (c *workerServiceClient) WriteFile(ctx context.Context, in *WriteFileReques
 	return out, nil
 }
 
+func (c *workerServiceClient) WriteFileStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteFileStreamRequest, WriteFileStreamResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_WriteFileStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WriteFileStreamRequest, WriteFileStreamResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_WriteFileStreamClient = grpc.ClientStreamingClient[WriteFileStreamRequest, WriteFileStreamResponse]
+
 func (c *workerServiceClient) DeletePath(ctx context.Context, in *DeletePathRequest, opts ...grpc.CallOption) (*DeletePathResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeletePathResponse)
@@ -366,7 +381,7 @@ func (c *workerServiceClient) CopyToContainer(ctx context.Context, in *CopyToCon
 
 func (c *workerServiceClient) CopyDirFromContainer(ctx context.Context, in *CopyDirFromContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_CopyDirFromContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyDirFromContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +400,7 @@ type WorkerService_CopyDirFromContainerClient = grpc.ServerStreamingClient[DataC
 
 func (c *workerServiceClient) CopyTarToContainer(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyTarToContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_CopyTarToContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +413,7 @@ type WorkerService_CopyTarToContainerClient = grpc.ClientStreamingClient[CopyTar
 
 func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_WatchEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_WatchEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +462,7 @@ func (c *workerServiceClient) PrepareGameScripts(ctx context.Context, in *Prepar
 
 func (c *workerServiceClient) EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EnsureDepotProgress], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_EnsureDepot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[7], WorkerService_EnsureDepot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -511,6 +526,7 @@ type WorkerServiceServer interface {
 	ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error)
 	ReadFile(context.Context, *ReadFileRequest) (*ReadFileResponse, error)
 	WriteFile(context.Context, *WriteFileRequest) (*WriteFileResponse, error)
+	WriteFileStream(grpc.ClientStreamingServer[WriteFileStreamRequest, WriteFileStreamResponse]) error
 	DeletePath(context.Context, *DeletePathRequest) (*DeletePathResponse, error)
 	CreateDirectory(context.Context, *CreateDirectoryRequest) (*CreateDirectoryResponse, error)
 	RenamePath(context.Context, *RenamePathRequest) (*RenamePathResponse, error)
@@ -594,6 +610,9 @@ func (UnimplementedWorkerServiceServer) ReadFile(context.Context, *ReadFileReque
 }
 func (UnimplementedWorkerServiceServer) WriteFile(context.Context, *WriteFileRequest) (*WriteFileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method WriteFile not implemented")
+}
+func (UnimplementedWorkerServiceServer) WriteFileStream(grpc.ClientStreamingServer[WriteFileStreamRequest, WriteFileStreamResponse]) error {
+	return status.Error(codes.Unimplemented, "method WriteFileStream not implemented")
 }
 func (UnimplementedWorkerServiceServer) DeletePath(context.Context, *DeletePathRequest) (*DeletePathResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePath not implemented")
@@ -941,6 +960,13 @@ func _WorkerService_WriteFile_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _WorkerService_WriteFileStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServiceServer).WriteFileStream(&grpc.GenericServerStream[WriteFileStreamRequest, WriteFileStreamResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_WriteFileStreamServer = grpc.ClientStreamingServer[WriteFileStreamRequest, WriteFileStreamResponse]
 
 func _WorkerService_DeletePath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeletePathRequest)
@@ -1302,6 +1328,11 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RestoreVolume",
 			Handler:       _WorkerService_RestoreVolume_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "WriteFileStream",
+			Handler:       _WorkerService_WriteFileStream_Handler,
 			ClientStreams: true,
 		},
 		{

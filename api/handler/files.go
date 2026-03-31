@@ -165,6 +165,11 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	var uploaded []uploadedFile
 
 	for _, fh := range files {
+		if fh.Size > MaxFileUploadBytes {
+			respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("%s exceeds %d MB limit, use SFTP for large files", fh.Filename, MaxFileUploadBytes/(1024*1024)))
+			return
+		}
+
 		f, err := fh.Open()
 		if err != nil {
 			h.log.Error("opening uploaded file", "filename", fh.Filename, "error", err)
@@ -172,27 +177,17 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		content, err := io.ReadAll(io.LimitReader(f, MaxFileUploadBytes+1))
-		f.Close()
-		if err != nil {
-			h.log.Error("reading uploaded file", "filename", fh.Filename, "error", err)
-			respondError(w, http.StatusInternalServerError, "failed to read uploaded file: "+fh.Filename)
-			return
-		}
-		if int64(len(content)) > MaxFileUploadBytes {
-			respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("%s exceeds %d MB limit, use SFTP for large files", fh.Filename, MaxFileUploadBytes/(1024*1024)))
-			return
-		}
-
 		destPath := dirPath + "/" + fh.Filename
-		if err := h.svc.WriteFile(r.Context(), id, destPath, content); err != nil {
+		if err := h.svc.WriteFileStream(r.Context(), id, destPath, io.LimitReader(f, MaxFileUploadBytes), 0644); err != nil {
+			f.Close()
 			h.log.Error("writing uploaded file", "gameserver", id, "path", destPath, "error", err)
 			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 			return
 		}
+		f.Close()
 
-		h.log.Info("file uploaded via API", "gameserver", id, "path", destPath, "size", len(content))
-		uploaded = append(uploaded, uploadedFile{Path: destPath, Size: len(content)})
+		h.log.Info("file uploaded via API", "gameserver", id, "path", destPath, "size", fh.Size)
+		uploaded = append(uploaded, uploadedFile{Path: destPath, Size: int(fh.Size)})
 	}
 
 	respondOK(w, uploaded)

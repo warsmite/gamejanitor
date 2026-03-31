@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"path"
 	"strings"
 
@@ -93,6 +94,25 @@ func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePa
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
 	return w.WriteFile(ctx, gs.VolumeName, relPath, content, 0644)
+}
+
+func (s *FileService) WriteFileStream(ctx context.Context, gameserverID string, filePath string, reader io.Reader, perm os.FileMode) error {
+	filePath, err := validatePath(filePath)
+	if err != nil {
+		return err
+	}
+
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return err
+	}
+
+	relPath := strings.TrimPrefix(filePath, "/data")
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.WriteFileStream(ctx, gs.VolumeName, relPath, reader, perm)
 }
 
 func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targetPath string) error {

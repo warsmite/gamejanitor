@@ -483,6 +483,10 @@ func (w *ProcessWorker) WriteFile(ctx context.Context, volumeName string, path s
 	return worker.WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 }
 
+func (w *ProcessWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	return worker.WriteFileStreamDirect(w.resolve, ctx, volumeName, path, reader, perm)
+}
+
 func (w *ProcessWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	return worker.DownloadFileDirect(w.resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
 }

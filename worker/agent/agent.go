@@ -205,6 +205,57 @@ func (a *Agent) WriteFile(ctx context.Context, req *pb.WriteFileRequest) (*pb.Wr
 	return &pb.WriteFileResponse{}, nil
 }
 
+func (a *Agent) WriteFileStream(stream pb.WorkerService_WriteFileStreamServer) error {
+	first, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("receiving first chunk: %w", err)
+	}
+	volumeName := first.VolumeName
+	path := first.Path
+	perm := os.FileMode(first.Perm)
+	if volumeName == "" || path == "" {
+		return fmt.Errorf("first message missing volume_name or path")
+	}
+
+	pr, pw := io.Pipe()
+	var writeErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		writeErr = a.worker.WriteFileStream(stream.Context(), volumeName, path, pr, perm)
+	}()
+
+	// Write data from first message
+	if len(first.Data) > 0 {
+		if _, err := pw.Write(first.Data); err != nil {
+			pw.Close()
+			<-done
+			return writeErr
+		}
+	}
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			pw.Close()
+			<-done
+			if writeErr != nil {
+				return writeErr
+			}
+			return stream.SendAndClose(&pb.WriteFileStreamResponse{})
+		}
+		if err != nil {
+			pw.CloseWithError(err)
+			<-done
+			return err
+		}
+		if _, err := pw.Write(msg.Data); err != nil {
+			pw.Close()
+			<-done
+			return writeErr
+		}
+	}
+}
+
 func (a *Agent) DownloadFile(ctx context.Context, req *pb.DownloadFileRequest) (*pb.DownloadFileResponse, error) {
 	if err := a.worker.DownloadFile(ctx, req.VolumeName, req.Url, req.DestPath, req.ExpectedHash, req.MaxBytes); err != nil {
 		return nil, err

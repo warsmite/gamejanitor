@@ -451,6 +451,28 @@ func (w *FakeWorker) WriteFile(ctx context.Context, volumeName string, path stri
 	return os.WriteFile(fullPath, content, perm)
 }
 
+func (w *FakeWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	if err := w.popFailure("WriteFileStream"); err != nil {
+		return err
+	}
+	fullPath, err := w.volumePath(volumeName, path)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, reader); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 func (w *FakeWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	if err := w.popFailure("DownloadFile"); err != nil {
 		return err
