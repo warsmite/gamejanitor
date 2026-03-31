@@ -242,6 +242,14 @@ func (w *LocalWorker) EnsureDepot(ctx context.Context, appID uint32, branch, acc
 	return worker.EnsureDepot(ctx, w.DataDir, w.Log, appID, branch, accountName, refreshToken, onProgress)
 }
 
+func (w *LocalWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
+	mountpoint, err := w.Resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
+	return worker.CopyDepotToVolume(depotDir, mountpoint)
+}
+
 func (w *LocalWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
 	mountpoint, err := w.Resolve(ctx, volumeName)
 	if err != nil {

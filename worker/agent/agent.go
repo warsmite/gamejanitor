@@ -440,6 +440,13 @@ func (a *Agent) DownloadWorkshopItem(ctx context.Context, req *pb.DownloadWorksh
 	return &pb.DownloadWorkshopItemResponse{}, nil
 }
 
+func (a *Agent) CopyDepotToVolume(ctx context.Context, req *pb.CopyDepotToVolumeRequest) (*pb.CopyDepotToVolumeResponse, error) {
+	if err := a.worker.CopyDepotToVolume(ctx, req.DepotDir, req.VolumeName); err != nil {
+		return nil, err
+	}
+	return &pb.CopyDepotToVolumeResponse{}, nil
+}
+
 func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {
 	containers, err := a.worker.ListGameserverContainers(ctx)
 	if err != nil {

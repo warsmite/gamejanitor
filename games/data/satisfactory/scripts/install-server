@@ -3,5 +3,9 @@ set -e
 
 echo "[install-server] copying pre-downloaded game files from depot cache"
 mkdir -p /data/server
-cp -a /depot/. /data/server/
+# Host-side copy pre-populates /data/server before container start.
+# Fall back to in-container copy if files aren't there (e.g. standalone mode).
+if [ -d /depot ] && [ -z "$(ls -A /data/server/ 2>/dev/null)" ]; then
+    cp -a /depot/. /data/server/
+fi
 echo "[install-server] Satisfactory dedicated server installed"

@@ -599,6 +599,14 @@ func (w *FakeWorker) EnsureDepot(ctx context.Context, appID uint32, branch, acco
 	return &worker.DepotResult{DepotDir: depotDir, Cached: true}, nil
 }
 
+func (w *FakeWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
+	mountpoint, err := w.resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
+	return worker.CopyDepotToVolume(depotDir, mountpoint)
+}
+
 func (w *FakeWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
 	return nil
 }

@@ -234,6 +234,17 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
+	// Copy depot files into the volume on the host (outside the container).
+	// Doing this inside the container hits the cgroup memory limit because
+	// the kernel page cache from copying large depots (3+ GB) counts against it.
+	if depotDir != "" && !gs.Installed {
+		s.log.Info("copying depot to volume", "gameserver", id, "depot", depotDir)
+		if err := w.CopyDepotToVolume(ctx, depotDir, gs.VolumeName); err != nil {
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to copy game files to volume.", Timestamp: time.Now()})
+			return fmt.Errorf("copying depot to volume for gameserver %s: %w", id, err)
+		}
+	}
+
 	// Reconcile mods — ensure DB-tracked mods exist on the volume before starting.
 	// Non-fatal: missing mods are logged but don't block the start.
 	if s.modReconciler != nil {

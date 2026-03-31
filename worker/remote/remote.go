@@ -486,6 +486,14 @@ func (w *RemoteWorker) RestoreVolume(ctx context.Context, volumeName string, tar
 	return err
 }
 
+func (w *RemoteWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
+	_, err := w.client.CopyDepotToVolume(ctx, &pb.CopyDepotToVolumeRequest{
+		DepotDir:   depotDir,
+		VolumeName: volumeName,
+	})
+	return err
+}
+
 func (w *RemoteWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
 	resp, err := w.client.ListGameserverContainers(ctx, &pb.ListGameserverContainersRequest{})
 	if err != nil {

@@ -595,6 +595,14 @@ func (w *ProcessWorker) EnsureDepot(ctx context.Context, appID uint32, branch, a
 	return worker.EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken, onProgress)
 }
 
+func (w *ProcessWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
+	mountpoint, err := w.resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
+	return worker.CopyDepotToVolume(depotDir, mountpoint)
+}
+
 // ListGameserverContainers scans the processes directory for gameservers and checks
 // whether their PIDs are still alive. This allows recovery after gamejanitor restarts.
 func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {

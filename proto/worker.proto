@@ -57,6 +57,9 @@ service WorkerService {
 
     // Steam Workshop — download a UGC item to a volume path
     rpc DownloadWorkshopItem(DownloadWorkshopItemRequest) returns (DownloadWorkshopItemResponse);
+
+    // Copy depot files to volume — done host-side to avoid container OOM on large depots
+    rpc CopyDepotToVolume(CopyDepotToVolumeRequest) returns (CopyDepotToVolumeResponse);
 }
 
 // ControllerService runs on the controller and accepts worker registrations/heartbeats.
@@ -391,3 +394,9 @@ message DownloadWorkshopItemRequest {
     string install_path = 4;
 }
 message DownloadWorkshopItemResponse {}
+
+message CopyDepotToVolumeRequest {
+    string depot_dir = 1;
+    string volume_name = 2;
+}
+message CopyDepotToVolumeResponse {}

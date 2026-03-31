@@ -55,6 +55,10 @@ type Worker interface {
 	// Game scripts — extract to local filesystem, return host paths for bind-mounts
 	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
 
+	// Copy depot files into a volume's /server directory on the host.
+	// Done outside the container to avoid cgroup OOM on large depots.
+	CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error
+
 	// Steam depot — download game files to local cache, return host path and download info.
 	// onProgress is called during download with progress updates. May be nil.
 	EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error)
