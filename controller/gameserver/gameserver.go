@@ -122,17 +122,35 @@ func (s *GameserverService) WatchOperation(gameserverID string) (ch <-chan *mode
 	return s.operations.Watch(gameserverID)
 }
 
-// trackActivity starts an activity if the tracker is set. Returns "" if tracker is nil (tests)
-// or if this call is already part of a larger activity (e.g. Restart → Stop → Start).
+// trackActivity starts an operation if the tracker is set. Also publishes the
+// action event to the EventBus. Returns "" if tracker is nil (tests) or if this
+// call is already part of a parent operation (e.g. Restart → Stop → Start).
 func (s *GameserverService) trackActivity(ctx context.Context, gsID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error) {
 	if s.activity == nil {
 		return "", nil
 	}
-	// Skip if we're already inside a parent activity (e.g. Restart → Stop → Start)
 	if ActivityIDFromContext(ctx) != "" {
 		return "", nil
 	}
-	return s.activity.Start(gsID, workerID, activityType, actor, data)
+	opID, err := s.activity.Start(gsID, workerID, activityType, actor, data)
+	if err != nil {
+		return "", err
+	}
+
+	// Publish action event to EventBus for SSE/webhook subscribers
+	gs, _ := s.store.GetGameserver(gsID)
+	if gs != nil {
+		s.store.PopulateNode(gs)
+		s.broadcaster.Publish(controller.GameserverActionEvent{
+			Type:         controller.EventTypeForOp(activityType),
+			Timestamp:    time.Now(),
+			Actor:        controller.ActorFromContext(ctx),
+			GameserverID: gsID,
+			Gameserver:   gs,
+		})
+	}
+
+	return opID, nil
 }
 
 func (s *GameserverService) completeActivity(gameserverID string) {
@@ -147,13 +165,28 @@ func (s *GameserverService) failActivity(gameserverID string, err error) {
 	}
 }
 
-// recordInstant records an instant (non-lifecycle) activity for CRUD operations.
-func (s *GameserverService) recordInstant(gameserverID *string, activityType string, actor json.RawMessage, data json.RawMessage) {
-	if s.activity == nil {
-		return
+// recordInstant records an instant event and publishes to EventBus for CRUD operations.
+func (s *GameserverService) recordInstant(gameserverID *string, eventType string, actor json.RawMessage, data json.RawMessage) {
+	if s.activity != nil {
+		if err := s.activity.RecordInstant(gameserverID, eventType, actor, data); err != nil {
+			s.log.Error("failed to record instant event", "type", eventType, "error", err)
+		}
 	}
-	if err := s.activity.RecordInstant(gameserverID, activityType, actor, data); err != nil {
-		s.log.Error("failed to record instant activity", "type", activityType, "error", err)
+
+	if gameserverID != nil {
+		gs, _ := s.store.GetGameserver(*gameserverID)
+		if gs != nil {
+			s.store.PopulateNode(gs)
+			var a controller.Actor
+			json.Unmarshal(actor, &a)
+			s.broadcaster.Publish(controller.GameserverActionEvent{
+				Type:         eventType,
+				Timestamp:    time.Now(),
+				Actor:        a,
+				GameserverID: *gameserverID,
+				Gameserver:   gs,
+			})
+		}
 	}
 }
 
@@ -354,17 +387,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		return "", err
 	}
 
-	s.store.PopulateNode(gs)
-
 	actor := controller.ActorFromContext(ctx)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverCreate,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gs.ID,
-		Gameserver:   gs,
-	})
-
 	actorJSON, _ := json.Marshal(actor)
 	dataJSON, _ := json.Marshal(gs)
 	s.recordInstant(&gs.ID, controller.EventGameserverCreate, actorJSON, dataJSON)
@@ -629,16 +652,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		}
 	}
 
-	s.store.PopulateNode(existing)
 	updateActor := controller.ActorFromContext(ctx)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverUpdate,
-		Timestamp:    time.Now(),
-		Actor:        updateActor,
-		GameserverID: existing.ID,
-		Gameserver:   existing,
-	})
-
 	updateActorJSON, _ := json.Marshal(updateActor)
 	updateDataJSON, _ := json.Marshal(existing)
 	s.recordInstant(&existing.ID, controller.EventGameserverUpdate, updateActorJSON, updateDataJSON)
@@ -763,14 +777,6 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 			s.log.Warn("failed to remove archive store file", "gameserver", id, "error", err)
 		}
 	}
-
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverDelete,
-		Timestamp:    time.Now(),
-		Actor:        deleteActor,
-		GameserverID: gs.ID,
-		Gameserver:   gs,
-	})
 
 	return nil
 }

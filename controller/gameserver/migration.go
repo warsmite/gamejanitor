@@ -77,15 +77,6 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	s.log.Info("migrating gameserver", "gameserver", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverMigrate,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: gameserverID,
-		Gameserver:   gs,
-	})
-
 	defer func() {
 		if err != nil {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})

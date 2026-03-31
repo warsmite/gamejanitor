@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -29,16 +28,6 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	if s.backupStore == nil {
 		return controller.ErrBadRequest("backup storage is not configured, cannot archive")
 	}
-
-	actor := controller.ActorFromContext(ctx)
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverArchive,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: id,
-		Gameserver:   gs,
-	})
 
 	// Stop if running
 	if gs.Status != controller.StatusStopped {
@@ -262,18 +251,9 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		s.completeActivity(id)
 	}
 
-	s.store.PopulateNode(gs)
 	actorJSON, _ := json.Marshal(actor)
 	dataJSON, _ := json.Marshal(gs)
 	s.recordInstant(&gs.ID, controller.EventGameserverUnarchive, actorJSON, dataJSON)
-
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverUnarchive,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: id,
-		Gameserver:   gs,
-	})
 
 	s.log.Info("gameserver unarchived", "gameserver", id, "node", nodeID)
 	return nil

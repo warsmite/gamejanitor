@@ -413,3 +413,31 @@ func (e ModActionEvent) EventType() string        { return e.Type }
 func (e ModActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ModActionEvent) EventGameserverID() string { return e.GameserverID }
 func (e ModActionEvent) EventActor() Actor          { return e.Actor }
+
+// EventTypeForOp maps an operation type (model.OpStart, etc.) to its event type constant.
+func EventTypeForOp(op string) string {
+	switch op {
+	case model.OpStart:
+		return EventGameserverStart
+	case model.OpStop:
+		return EventGameserverStop
+	case model.OpRestart:
+		return EventGameserverRestart
+	case model.OpUpdate:
+		return EventGameserverUpdateGame
+	case model.OpReinstall:
+		return EventGameserverReinstall
+	case model.OpMigrate:
+		return EventGameserverMigrate
+	case model.OpBackup:
+		return EventBackupCreate
+	case model.OpRestore:
+		return EventBackupRestore
+	case model.OpArchive:
+		return EventGameserverArchive
+	case model.OpUnarchive:
+		return EventGameserverUnarchive
+	default:
+		return "gameserver." + op
+	}
+}

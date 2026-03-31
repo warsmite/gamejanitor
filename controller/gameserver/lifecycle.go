@@ -53,15 +53,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return nil
 	}
 
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverStart,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: id,
-		Gameserver:   gs,
-	})
-
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
@@ -348,15 +339,6 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return nil
 	}
 
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverStop,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: id,
-		Gameserver:   gs,
-	})
-
 	s.broadcaster.Publish(controller.ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	workerID := ""
@@ -440,15 +422,6 @@ func (s *GameserverService) Restart(ctx context.Context, id string) (err error) 
 		}()
 	}
 
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverRestart,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: id,
-		Gameserver:   gs,
-	})
-
 	if gs.Status != controller.StatusStopped && gs.Status != controller.StatusError {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for restart: %w", err)
@@ -485,15 +458,6 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	if opID != "" {
 		ctx = WithActivityID(ctx, opID)
 	}
-
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverUpdateGame,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: id,
-		Gameserver:   gs,
-	})
 
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
@@ -592,14 +556,6 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 		ctx = WithActivityID(ctx, opID)
 	}
 
-	s.store.PopulateNode(gs)
-	s.broadcaster.Publish(controller.GameserverActionEvent{
-		Type:         controller.EventGameserverReinstall,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: id,
-		Gameserver:   gs,
-	})
 
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
