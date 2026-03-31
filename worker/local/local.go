@@ -52,8 +52,8 @@ func (w *LocalWorker) PullImage(ctx context.Context, image string) error {
 	return w.Docker.PullImage(ctx, image)
 }
 
-func (w *LocalWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
-	return w.Docker.CreateContainer(ctx, docker.ContainerOptions{
+func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
+	return w.Docker.CreateInstance(ctx, docker.InstanceOptions{
 		Name:          opts.Name,
 		Image:         opts.Image,
 		Env:           opts.Env,
@@ -68,24 +68,24 @@ func (w *LocalWorker) CreateContainer(ctx context.Context, opts worker.Container
 	})
 }
 
-func (w *LocalWorker) StartContainer(ctx context.Context, id string) error {
-	return w.Docker.StartContainer(ctx, id)
+func (w *LocalWorker) StartInstance(ctx context.Context, id string) error {
+	return w.Docker.StartInstance(ctx, id)
 }
 
-func (w *LocalWorker) StopContainer(ctx context.Context, id string, timeoutSeconds int) error {
-	return w.Docker.StopContainer(ctx, id, timeoutSeconds)
+func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
+	return w.Docker.StopInstance(ctx, id, timeoutSeconds)
 }
 
-func (w *LocalWorker) RemoveContainer(ctx context.Context, id string) error {
-	return w.Docker.RemoveContainer(ctx, id)
+func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
+	return w.Docker.RemoveInstance(ctx, id)
 }
 
-func (w *LocalWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
-	info, err := w.Docker.InspectContainer(ctx, id)
+func (w *LocalWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
+	info, err := w.Docker.InspectInstance(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return &worker.ContainerInfo{
+	return &worker.InstanceInfo{
 		ID:        info.ID,
 		State:     info.State,
 		StartedAt: info.StartedAt,
@@ -97,16 +97,16 @@ func (w *LocalWorker) Exec(ctx context.Context, containerID string, cmd []string
 	return w.Docker.Exec(ctx, containerID, cmd)
 }
 
-func (w *LocalWorker) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	return w.Docker.ContainerLogs(ctx, containerID, tail, follow)
+func (w *LocalWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+	return w.Docker.InstanceLogs(ctx, containerID, tail, follow)
 }
 
-func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
-	stats, err := w.Docker.ContainerStats(ctx, containerID)
+func (w *LocalWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
+	stats, err := w.Docker.InstanceStats(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
-	return &worker.ContainerStats{
+	return &worker.InstanceStats{
 		MemoryUsageMB: stats.MemoryUsageMB,
 		MemoryLimitMB: stats.MemoryLimitMB,
 		CPUPercent:    stats.CPUPercent,
@@ -198,10 +198,10 @@ func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from st
 	return worker.RenamePathDirect(w.Resolve, ctx, volumeName, from, to)
 }
 
-func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
+func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
 	dockerEventCh, dockerErrCh := w.Docker.WatchEvents(ctx)
 
-	eventCh := make(chan worker.ContainerEvent)
+	eventCh := make(chan worker.InstanceEvent)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -223,9 +223,9 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerE
 					return
 				}
 				select {
-				case eventCh <- worker.ContainerEvent{
-					ContainerID:   de.ContainerID,
-					ContainerName: de.ContainerName,
+				case eventCh <- worker.InstanceEvent{
+					InstanceID:   de.InstanceID,
+					InstanceName: de.InstanceName,
 					Action:        de.Action,
 				}:
 				case <-ctx.Done():
@@ -276,36 +276,36 @@ func toDockerPorts(ports []worker.PortBinding) []docker.PortBinding {
 
 // --- Copy operations (used by backup/restore) ---
 
-func (w *LocalWorker) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	return w.Docker.CopyFromContainer(ctx, containerID, path)
+func (w *LocalWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+	return w.Docker.CopyFromInstance(ctx, containerID, path)
 }
 
-func (w *LocalWorker) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	return w.Docker.CopyToContainer(ctx, containerID, path, content)
+func (w *LocalWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+	return w.Docker.CopyToInstance(ctx, containerID, path, content)
 }
 
-func (w *LocalWorker) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	return w.Docker.CopyDirFromContainer(ctx, containerID, path)
+func (w *LocalWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+	return w.Docker.CopyDirFromInstance(ctx, containerID, path)
 }
 
-func (w *LocalWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	return w.Docker.CopyTarToContainer(ctx, containerID, destPath, content)
+func (w *LocalWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+	return w.Docker.CopyTarToInstance(ctx, containerID, destPath, content)
 }
 
-func (w *LocalWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
-	containers, err := w.Docker.ListGameserverContainers(ctx)
+func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+	containers, err := w.Docker.ListGameserverInstances(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var result []worker.GameserverContainer
 	for _, c := range containers {
-		gsID, ok := naming.GameserverIDFromContainerName(c.Name)
+		gsID, ok := naming.GameserverIDFromInstanceName(c.Name)
 		if !ok {
 			continue // update/fileops/backup container, not a gameserver
 		}
 		result = append(result, worker.GameserverContainer{
-			ContainerID:   c.ID,
-			ContainerName: c.Name,
+			InstanceID:   c.ID,
+			InstanceName: c.Name,
 			GameserverID:  gsID,
 			State:         c.State,
 		})

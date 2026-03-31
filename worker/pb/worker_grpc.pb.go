@@ -19,39 +19,39 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WorkerService_PullImage_FullMethodName                = "/worker.WorkerService/PullImage"
-	WorkerService_CreateContainer_FullMethodName          = "/worker.WorkerService/CreateContainer"
-	WorkerService_StartContainer_FullMethodName           = "/worker.WorkerService/StartContainer"
-	WorkerService_StopContainer_FullMethodName            = "/worker.WorkerService/StopContainer"
-	WorkerService_RemoveContainer_FullMethodName          = "/worker.WorkerService/RemoveContainer"
-	WorkerService_InspectContainer_FullMethodName         = "/worker.WorkerService/InspectContainer"
-	WorkerService_Exec_FullMethodName                     = "/worker.WorkerService/Exec"
-	WorkerService_ContainerLogs_FullMethodName            = "/worker.WorkerService/ContainerLogs"
-	WorkerService_ContainerStats_FullMethodName           = "/worker.WorkerService/ContainerStats"
-	WorkerService_CreateVolume_FullMethodName             = "/worker.WorkerService/CreateVolume"
-	WorkerService_RemoveVolume_FullMethodName             = "/worker.WorkerService/RemoveVolume"
-	WorkerService_VolumeSize_FullMethodName               = "/worker.WorkerService/VolumeSize"
-	WorkerService_BackupVolume_FullMethodName             = "/worker.WorkerService/BackupVolume"
-	WorkerService_RestoreVolume_FullMethodName            = "/worker.WorkerService/RestoreVolume"
-	WorkerService_ListFiles_FullMethodName                = "/worker.WorkerService/ListFiles"
-	WorkerService_ReadFile_FullMethodName                 = "/worker.WorkerService/ReadFile"
-	WorkerService_WriteFile_FullMethodName                = "/worker.WorkerService/WriteFile"
-	WorkerService_WriteFileStream_FullMethodName          = "/worker.WorkerService/WriteFileStream"
-	WorkerService_DeletePath_FullMethodName               = "/worker.WorkerService/DeletePath"
-	WorkerService_CreateDirectory_FullMethodName          = "/worker.WorkerService/CreateDirectory"
-	WorkerService_RenamePath_FullMethodName               = "/worker.WorkerService/RenamePath"
-	WorkerService_DownloadFile_FullMethodName             = "/worker.WorkerService/DownloadFile"
-	WorkerService_CopyFromContainer_FullMethodName        = "/worker.WorkerService/CopyFromContainer"
-	WorkerService_CopyToContainer_FullMethodName          = "/worker.WorkerService/CopyToContainer"
-	WorkerService_CopyDirFromContainer_FullMethodName     = "/worker.WorkerService/CopyDirFromContainer"
-	WorkerService_CopyTarToContainer_FullMethodName       = "/worker.WorkerService/CopyTarToContainer"
-	WorkerService_WatchEvents_FullMethodName              = "/worker.WorkerService/WatchEvents"
-	WorkerService_ListGameserverContainers_FullMethodName = "/worker.WorkerService/ListGameserverContainers"
-	WorkerService_Heartbeat_FullMethodName                = "/worker.WorkerService/Heartbeat"
-	WorkerService_PrepareGameScripts_FullMethodName       = "/worker.WorkerService/PrepareGameScripts"
-	WorkerService_EnsureDepot_FullMethodName              = "/worker.WorkerService/EnsureDepot"
-	WorkerService_DownloadWorkshopItem_FullMethodName     = "/worker.WorkerService/DownloadWorkshopItem"
-	WorkerService_CopyDepotToVolume_FullMethodName        = "/worker.WorkerService/CopyDepotToVolume"
+	WorkerService_PullImage_FullMethodName               = "/worker.WorkerService/PullImage"
+	WorkerService_CreateInstance_FullMethodName          = "/worker.WorkerService/CreateInstance"
+	WorkerService_StartInstance_FullMethodName           = "/worker.WorkerService/StartInstance"
+	WorkerService_StopInstance_FullMethodName            = "/worker.WorkerService/StopInstance"
+	WorkerService_RemoveInstance_FullMethodName          = "/worker.WorkerService/RemoveInstance"
+	WorkerService_InspectInstance_FullMethodName         = "/worker.WorkerService/InspectInstance"
+	WorkerService_Exec_FullMethodName                    = "/worker.WorkerService/Exec"
+	WorkerService_InstanceLogs_FullMethodName            = "/worker.WorkerService/InstanceLogs"
+	WorkerService_InstanceStats_FullMethodName           = "/worker.WorkerService/InstanceStats"
+	WorkerService_CreateVolume_FullMethodName            = "/worker.WorkerService/CreateVolume"
+	WorkerService_RemoveVolume_FullMethodName            = "/worker.WorkerService/RemoveVolume"
+	WorkerService_VolumeSize_FullMethodName              = "/worker.WorkerService/VolumeSize"
+	WorkerService_BackupVolume_FullMethodName            = "/worker.WorkerService/BackupVolume"
+	WorkerService_RestoreVolume_FullMethodName           = "/worker.WorkerService/RestoreVolume"
+	WorkerService_ListFiles_FullMethodName               = "/worker.WorkerService/ListFiles"
+	WorkerService_ReadFile_FullMethodName                = "/worker.WorkerService/ReadFile"
+	WorkerService_WriteFile_FullMethodName               = "/worker.WorkerService/WriteFile"
+	WorkerService_WriteFileStream_FullMethodName         = "/worker.WorkerService/WriteFileStream"
+	WorkerService_DeletePath_FullMethodName              = "/worker.WorkerService/DeletePath"
+	WorkerService_CreateDirectory_FullMethodName         = "/worker.WorkerService/CreateDirectory"
+	WorkerService_RenamePath_FullMethodName              = "/worker.WorkerService/RenamePath"
+	WorkerService_DownloadFile_FullMethodName            = "/worker.WorkerService/DownloadFile"
+	WorkerService_CopyFromInstance_FullMethodName        = "/worker.WorkerService/CopyFromInstance"
+	WorkerService_CopyToInstance_FullMethodName          = "/worker.WorkerService/CopyToInstance"
+	WorkerService_CopyDirFromInstance_FullMethodName     = "/worker.WorkerService/CopyDirFromInstance"
+	WorkerService_CopyTarToInstance_FullMethodName       = "/worker.WorkerService/CopyTarToInstance"
+	WorkerService_WatchEvents_FullMethodName             = "/worker.WorkerService/WatchEvents"
+	WorkerService_ListGameserverInstances_FullMethodName = "/worker.WorkerService/ListGameserverInstances"
+	WorkerService_Heartbeat_FullMethodName               = "/worker.WorkerService/Heartbeat"
+	WorkerService_PrepareGameScripts_FullMethodName      = "/worker.WorkerService/PrepareGameScripts"
+	WorkerService_EnsureDepot_FullMethodName             = "/worker.WorkerService/EnsureDepot"
+	WorkerService_DownloadWorkshopItem_FullMethodName    = "/worker.WorkerService/DownloadWorkshopItem"
+	WorkerService_CopyDepotToVolume_FullMethodName       = "/worker.WorkerService/CopyDepotToVolume"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -61,16 +61,16 @@ const (
 // WorkerService is the gRPC interface between controller and worker agents.
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 type WorkerServiceClient interface {
-	// Container lifecycle
+	// Instance lifecycle
 	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error)
-	CreateContainer(ctx context.Context, in *CreateContainerRequest, opts ...grpc.CallOption) (*CreateContainerResponse, error)
-	StartContainer(ctx context.Context, in *StartContainerRequest, opts ...grpc.CallOption) (*StartContainerResponse, error)
-	StopContainer(ctx context.Context, in *StopContainerRequest, opts ...grpc.CallOption) (*StopContainerResponse, error)
-	RemoveContainer(ctx context.Context, in *RemoveContainerRequest, opts ...grpc.CallOption) (*RemoveContainerResponse, error)
-	InspectContainer(ctx context.Context, in *InspectContainerRequest, opts ...grpc.CallOption) (*InspectContainerResponse, error)
+	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
+	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
+	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
+	RemoveInstance(ctx context.Context, in *RemoveInstanceRequest, opts ...grpc.CallOption) (*RemoveInstanceResponse, error)
+	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
 	Exec(ctx context.Context, in *ExecRequest, opts ...grpc.CallOption) (*ExecResponse, error)
-	ContainerLogs(ctx context.Context, in *ContainerLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
-	ContainerStats(ctx context.Context, in *ContainerStatsRequest, opts ...grpc.CallOption) (*ContainerStatsResponse, error)
+	InstanceLogs(ctx context.Context, in *InstanceLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
+	InstanceStats(ctx context.Context, in *InstanceStatsRequest, opts ...grpc.CallOption) (*InstanceStatsResponse, error)
 	// Volumes
 	CreateVolume(ctx context.Context, in *CreateVolumeRequest, opts ...grpc.CallOption) (*CreateVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
@@ -87,14 +87,14 @@ type WorkerServiceClient interface {
 	RenamePath(ctx context.Context, in *RenamePathRequest, opts ...grpc.CallOption) (*RenamePathResponse, error)
 	DownloadFile(ctx context.Context, in *DownloadFileRequest, opts ...grpc.CallOption) (*DownloadFileResponse, error)
 	// Copy operations (streaming for large data)
-	CopyFromContainer(ctx context.Context, in *CopyFromContainerRequest, opts ...grpc.CallOption) (*CopyFromContainerResponse, error)
-	CopyToContainer(ctx context.Context, in *CopyToContainerRequest, opts ...grpc.CallOption) (*CopyToContainerResponse, error)
-	CopyDirFromContainer(ctx context.Context, in *CopyDirFromContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
-	CopyTarToContainer(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse], error)
+	CopyFromInstance(ctx context.Context, in *CopyFromInstanceRequest, opts ...grpc.CallOption) (*CopyFromInstanceResponse, error)
+	CopyToInstance(ctx context.Context, in *CopyToInstanceRequest, opts ...grpc.CallOption) (*CopyToInstanceResponse, error)
+	CopyDirFromInstance(ctx context.Context, in *CopyDirFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
+	CopyTarToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse], error)
 	// Events — long-lived server stream of Docker container events
-	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error)
+	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceEventMsg], error)
 	// Discovery
-	ListGameserverContainers(ctx context.Context, in *ListGameserverContainersRequest, opts ...grpc.CallOption) (*ListGameserverContainersResponse, error)
+	ListGameserverInstances(ctx context.Context, in *ListGameserverInstancesRequest, opts ...grpc.CallOption) (*ListGameserverInstancesResponse, error)
 	// Health
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
@@ -125,50 +125,50 @@ func (c *workerServiceClient) PullImage(ctx context.Context, in *PullImageReques
 	return out, nil
 }
 
-func (c *workerServiceClient) CreateContainer(ctx context.Context, in *CreateContainerRequest, opts ...grpc.CallOption) (*CreateContainerResponse, error) {
+func (c *workerServiceClient) CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_CreateContainer_FullMethodName, in, out, cOpts...)
+	out := new(CreateInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_CreateInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) StartContainer(ctx context.Context, in *StartContainerRequest, opts ...grpc.CallOption) (*StartContainerResponse, error) {
+func (c *workerServiceClient) StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StartContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_StartContainer_FullMethodName, in, out, cOpts...)
+	out := new(StartInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_StartInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) StopContainer(ctx context.Context, in *StopContainerRequest, opts ...grpc.CallOption) (*StopContainerResponse, error) {
+func (c *workerServiceClient) StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_StopContainer_FullMethodName, in, out, cOpts...)
+	out := new(StopInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_StopInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) RemoveContainer(ctx context.Context, in *RemoveContainerRequest, opts ...grpc.CallOption) (*RemoveContainerResponse, error) {
+func (c *workerServiceClient) RemoveInstance(ctx context.Context, in *RemoveInstanceRequest, opts ...grpc.CallOption) (*RemoveInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RemoveContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_RemoveContainer_FullMethodName, in, out, cOpts...)
+	out := new(RemoveInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_RemoveInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) InspectContainer(ctx context.Context, in *InspectContainerRequest, opts ...grpc.CallOption) (*InspectContainerResponse, error) {
+func (c *workerServiceClient) InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InspectContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_InspectContainer_FullMethodName, in, out, cOpts...)
+	out := new(InspectInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_InspectInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,13 +185,13 @@ func (c *workerServiceClient) Exec(ctx context.Context, in *ExecRequest, opts ..
 	return out, nil
 }
 
-func (c *workerServiceClient) ContainerLogs(ctx context.Context, in *ContainerLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
+func (c *workerServiceClient) InstanceLogs(ctx context.Context, in *InstanceLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_ContainerLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_InstanceLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[ContainerLogsRequest, DataChunk]{ClientStream: stream}
+	x := &grpc.GenericClientStream[InstanceLogsRequest, DataChunk]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -202,12 +202,12 @@ func (c *workerServiceClient) ContainerLogs(ctx context.Context, in *ContainerLo
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_ContainerLogsClient = grpc.ServerStreamingClient[DataChunk]
+type WorkerService_InstanceLogsClient = grpc.ServerStreamingClient[DataChunk]
 
-func (c *workerServiceClient) ContainerStats(ctx context.Context, in *ContainerStatsRequest, opts ...grpc.CallOption) (*ContainerStatsResponse, error) {
+func (c *workerServiceClient) InstanceStats(ctx context.Context, in *InstanceStatsRequest, opts ...grpc.CallOption) (*InstanceStatsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ContainerStatsResponse)
-	err := c.cc.Invoke(ctx, WorkerService_ContainerStats_FullMethodName, in, out, cOpts...)
+	out := new(InstanceStatsResponse)
+	err := c.cc.Invoke(ctx, WorkerService_InstanceStats_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -359,33 +359,33 @@ func (c *workerServiceClient) DownloadFile(ctx context.Context, in *DownloadFile
 	return out, nil
 }
 
-func (c *workerServiceClient) CopyFromContainer(ctx context.Context, in *CopyFromContainerRequest, opts ...grpc.CallOption) (*CopyFromContainerResponse, error) {
+func (c *workerServiceClient) CopyFromInstance(ctx context.Context, in *CopyFromInstanceRequest, opts ...grpc.CallOption) (*CopyFromInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CopyFromContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_CopyFromContainer_FullMethodName, in, out, cOpts...)
+	out := new(CopyFromInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_CopyFromInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) CopyToContainer(ctx context.Context, in *CopyToContainerRequest, opts ...grpc.CallOption) (*CopyToContainerResponse, error) {
+func (c *workerServiceClient) CopyToInstance(ctx context.Context, in *CopyToInstanceRequest, opts ...grpc.CallOption) (*CopyToInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CopyToContainerResponse)
-	err := c.cc.Invoke(ctx, WorkerService_CopyToContainer_FullMethodName, in, out, cOpts...)
+	out := new(CopyToInstanceResponse)
+	err := c.cc.Invoke(ctx, WorkerService_CopyToInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) CopyDirFromContainer(ctx context.Context, in *CopyDirFromContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
+func (c *workerServiceClient) CopyDirFromInstance(ctx context.Context, in *CopyDirFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyDirFromContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyDirFromInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[CopyDirFromContainerRequest, DataChunk]{ClientStream: stream}
+	x := &grpc.GenericClientStream[CopyDirFromInstanceRequest, DataChunk]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -396,28 +396,28 @@ func (c *workerServiceClient) CopyDirFromContainer(ctx context.Context, in *Copy
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_CopyDirFromContainerClient = grpc.ServerStreamingClient[DataChunk]
+type WorkerService_CopyDirFromInstanceClient = grpc.ServerStreamingClient[DataChunk]
 
-func (c *workerServiceClient) CopyTarToContainer(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse], error) {
+func (c *workerServiceClient) CopyTarToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_CopyTarToContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_CopyTarToInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[CopyTarToContainerRequest, CopyTarToContainerResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[CopyTarToInstanceRequest, CopyTarToInstanceResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_CopyTarToContainerClient = grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse]
+type WorkerService_CopyTarToInstanceClient = grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse]
 
-func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error) {
+func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceEventMsg], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_WatchEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[WatchEventsRequest, ContainerEventMsg]{ClientStream: stream}
+	x := &grpc.GenericClientStream[WatchEventsRequest, InstanceEventMsg]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -428,12 +428,12 @@ func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRe
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_WatchEventsClient = grpc.ServerStreamingClient[ContainerEventMsg]
+type WorkerService_WatchEventsClient = grpc.ServerStreamingClient[InstanceEventMsg]
 
-func (c *workerServiceClient) ListGameserverContainers(ctx context.Context, in *ListGameserverContainersRequest, opts ...grpc.CallOption) (*ListGameserverContainersResponse, error) {
+func (c *workerServiceClient) ListGameserverInstances(ctx context.Context, in *ListGameserverInstancesRequest, opts ...grpc.CallOption) (*ListGameserverInstancesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListGameserverContainersResponse)
-	err := c.cc.Invoke(ctx, WorkerService_ListGameserverContainers_FullMethodName, in, out, cOpts...)
+	out := new(ListGameserverInstancesResponse)
+	err := c.cc.Invoke(ctx, WorkerService_ListGameserverInstances_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -506,16 +506,16 @@ func (c *workerServiceClient) CopyDepotToVolume(ctx context.Context, in *CopyDep
 // WorkerService is the gRPC interface between controller and worker agents.
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 type WorkerServiceServer interface {
-	// Container lifecycle
+	// Instance lifecycle
 	PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error)
-	CreateContainer(context.Context, *CreateContainerRequest) (*CreateContainerResponse, error)
-	StartContainer(context.Context, *StartContainerRequest) (*StartContainerResponse, error)
-	StopContainer(context.Context, *StopContainerRequest) (*StopContainerResponse, error)
-	RemoveContainer(context.Context, *RemoveContainerRequest) (*RemoveContainerResponse, error)
-	InspectContainer(context.Context, *InspectContainerRequest) (*InspectContainerResponse, error)
+	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
+	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
+	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
+	RemoveInstance(context.Context, *RemoveInstanceRequest) (*RemoveInstanceResponse, error)
+	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
 	Exec(context.Context, *ExecRequest) (*ExecResponse, error)
-	ContainerLogs(*ContainerLogsRequest, grpc.ServerStreamingServer[DataChunk]) error
-	ContainerStats(context.Context, *ContainerStatsRequest) (*ContainerStatsResponse, error)
+	InstanceLogs(*InstanceLogsRequest, grpc.ServerStreamingServer[DataChunk]) error
+	InstanceStats(context.Context, *InstanceStatsRequest) (*InstanceStatsResponse, error)
 	// Volumes
 	CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
@@ -532,14 +532,14 @@ type WorkerServiceServer interface {
 	RenamePath(context.Context, *RenamePathRequest) (*RenamePathResponse, error)
 	DownloadFile(context.Context, *DownloadFileRequest) (*DownloadFileResponse, error)
 	// Copy operations (streaming for large data)
-	CopyFromContainer(context.Context, *CopyFromContainerRequest) (*CopyFromContainerResponse, error)
-	CopyToContainer(context.Context, *CopyToContainerRequest) (*CopyToContainerResponse, error)
-	CopyDirFromContainer(*CopyDirFromContainerRequest, grpc.ServerStreamingServer[DataChunk]) error
-	CopyTarToContainer(grpc.ClientStreamingServer[CopyTarToContainerRequest, CopyTarToContainerResponse]) error
+	CopyFromInstance(context.Context, *CopyFromInstanceRequest) (*CopyFromInstanceResponse, error)
+	CopyToInstance(context.Context, *CopyToInstanceRequest) (*CopyToInstanceResponse, error)
+	CopyDirFromInstance(*CopyDirFromInstanceRequest, grpc.ServerStreamingServer[DataChunk]) error
+	CopyTarToInstance(grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]) error
 	// Events — long-lived server stream of Docker container events
-	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[ContainerEventMsg]) error
+	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[InstanceEventMsg]) error
 	// Discovery
-	ListGameserverContainers(context.Context, *ListGameserverContainersRequest) (*ListGameserverContainersResponse, error)
+	ListGameserverInstances(context.Context, *ListGameserverInstancesRequest) (*ListGameserverInstancesResponse, error)
 	// Health
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Game scripts — worker extracts scripts locally from embedded game data
@@ -563,29 +563,29 @@ type UnimplementedWorkerServiceServer struct{}
 func (UnimplementedWorkerServiceServer) PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PullImage not implemented")
 }
-func (UnimplementedWorkerServiceServer) CreateContainer(context.Context, *CreateContainerRequest) (*CreateContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateContainer not implemented")
+func (UnimplementedWorkerServiceServer) CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) StartContainer(context.Context, *StartContainerRequest) (*StartContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StartContainer not implemented")
+func (UnimplementedWorkerServiceServer) StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) StopContainer(context.Context, *StopContainerRequest) (*StopContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopContainer not implemented")
+func (UnimplementedWorkerServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) RemoveContainer(context.Context, *RemoveContainerRequest) (*RemoveContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RemoveContainer not implemented")
+func (UnimplementedWorkerServiceServer) RemoveInstance(context.Context, *RemoveInstanceRequest) (*RemoveInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) InspectContainer(context.Context, *InspectContainerRequest) (*InspectContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method InspectContainer not implemented")
+func (UnimplementedWorkerServiceServer) InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectInstance not implemented")
 }
 func (UnimplementedWorkerServiceServer) Exec(context.Context, *ExecRequest) (*ExecResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Exec not implemented")
 }
-func (UnimplementedWorkerServiceServer) ContainerLogs(*ContainerLogsRequest, grpc.ServerStreamingServer[DataChunk]) error {
-	return status.Error(codes.Unimplemented, "method ContainerLogs not implemented")
+func (UnimplementedWorkerServiceServer) InstanceLogs(*InstanceLogsRequest, grpc.ServerStreamingServer[DataChunk]) error {
+	return status.Error(codes.Unimplemented, "method InstanceLogs not implemented")
 }
-func (UnimplementedWorkerServiceServer) ContainerStats(context.Context, *ContainerStatsRequest) (*ContainerStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ContainerStats not implemented")
+func (UnimplementedWorkerServiceServer) InstanceStats(context.Context, *InstanceStatsRequest) (*InstanceStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InstanceStats not implemented")
 }
 func (UnimplementedWorkerServiceServer) CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateVolume not implemented")
@@ -626,23 +626,23 @@ func (UnimplementedWorkerServiceServer) RenamePath(context.Context, *RenamePathR
 func (UnimplementedWorkerServiceServer) DownloadFile(context.Context, *DownloadFileRequest) (*DownloadFileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DownloadFile not implemented")
 }
-func (UnimplementedWorkerServiceServer) CopyFromContainer(context.Context, *CopyFromContainerRequest) (*CopyFromContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CopyFromContainer not implemented")
+func (UnimplementedWorkerServiceServer) CopyFromInstance(context.Context, *CopyFromInstanceRequest) (*CopyFromInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyFromInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) CopyToContainer(context.Context, *CopyToContainerRequest) (*CopyToContainerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CopyToContainer not implemented")
+func (UnimplementedWorkerServiceServer) CopyToInstance(context.Context, *CopyToInstanceRequest) (*CopyToInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyToInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) CopyDirFromContainer(*CopyDirFromContainerRequest, grpc.ServerStreamingServer[DataChunk]) error {
-	return status.Error(codes.Unimplemented, "method CopyDirFromContainer not implemented")
+func (UnimplementedWorkerServiceServer) CopyDirFromInstance(*CopyDirFromInstanceRequest, grpc.ServerStreamingServer[DataChunk]) error {
+	return status.Error(codes.Unimplemented, "method CopyDirFromInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) CopyTarToContainer(grpc.ClientStreamingServer[CopyTarToContainerRequest, CopyTarToContainerResponse]) error {
-	return status.Error(codes.Unimplemented, "method CopyTarToContainer not implemented")
+func (UnimplementedWorkerServiceServer) CopyTarToInstance(grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]) error {
+	return status.Error(codes.Unimplemented, "method CopyTarToInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[ContainerEventMsg]) error {
+func (UnimplementedWorkerServiceServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[InstanceEventMsg]) error {
 	return status.Error(codes.Unimplemented, "method WatchEvents not implemented")
 }
-func (UnimplementedWorkerServiceServer) ListGameserverContainers(context.Context, *ListGameserverContainersRequest) (*ListGameserverContainersResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListGameserverContainers not implemented")
+func (UnimplementedWorkerServiceServer) ListGameserverInstances(context.Context, *ListGameserverInstancesRequest) (*ListGameserverInstancesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGameserverInstances not implemented")
 }
 func (UnimplementedWorkerServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
@@ -698,92 +698,92 @@ func _WorkerService_PullImage_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_CreateContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateContainerRequest)
+func _WorkerService_CreateInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).CreateContainer(ctx, in)
+		return srv.(WorkerServiceServer).CreateInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_CreateContainer_FullMethodName,
+		FullMethod: WorkerService_CreateInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).CreateContainer(ctx, req.(*CreateContainerRequest))
+		return srv.(WorkerServiceServer).CreateInstance(ctx, req.(*CreateInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_StartContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartContainerRequest)
+func _WorkerService_StartInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).StartContainer(ctx, in)
+		return srv.(WorkerServiceServer).StartInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_StartContainer_FullMethodName,
+		FullMethod: WorkerService_StartInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).StartContainer(ctx, req.(*StartContainerRequest))
+		return srv.(WorkerServiceServer).StartInstance(ctx, req.(*StartInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_StopContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopContainerRequest)
+func _WorkerService_StopInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).StopContainer(ctx, in)
+		return srv.(WorkerServiceServer).StopInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_StopContainer_FullMethodName,
+		FullMethod: WorkerService_StopInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).StopContainer(ctx, req.(*StopContainerRequest))
+		return srv.(WorkerServiceServer).StopInstance(ctx, req.(*StopInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_RemoveContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RemoveContainerRequest)
+func _WorkerService_RemoveInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).RemoveContainer(ctx, in)
+		return srv.(WorkerServiceServer).RemoveInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_RemoveContainer_FullMethodName,
+		FullMethod: WorkerService_RemoveInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).RemoveContainer(ctx, req.(*RemoveContainerRequest))
+		return srv.(WorkerServiceServer).RemoveInstance(ctx, req.(*RemoveInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_InspectContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InspectContainerRequest)
+func _WorkerService_InspectInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).InspectContainer(ctx, in)
+		return srv.(WorkerServiceServer).InspectInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_InspectContainer_FullMethodName,
+		FullMethod: WorkerService_InspectInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).InspectContainer(ctx, req.(*InspectContainerRequest))
+		return srv.(WorkerServiceServer).InspectInstance(ctx, req.(*InspectInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -806,31 +806,31 @@ func _WorkerService_Exec_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_ContainerLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ContainerLogsRequest)
+func _WorkerService_InstanceLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(InstanceLogsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(WorkerServiceServer).ContainerLogs(m, &grpc.GenericServerStream[ContainerLogsRequest, DataChunk]{ServerStream: stream})
+	return srv.(WorkerServiceServer).InstanceLogs(m, &grpc.GenericServerStream[InstanceLogsRequest, DataChunk]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_ContainerLogsServer = grpc.ServerStreamingServer[DataChunk]
+type WorkerService_InstanceLogsServer = grpc.ServerStreamingServer[DataChunk]
 
-func _WorkerService_ContainerStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ContainerStatsRequest)
+func _WorkerService_InstanceStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstanceStatsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).ContainerStats(ctx, in)
+		return srv.(WorkerServiceServer).InstanceStats(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_ContainerStats_FullMethodName,
+		FullMethod: WorkerService_InstanceStats_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).ContainerStats(ctx, req.(*ContainerStatsRequest))
+		return srv.(WorkerServiceServer).InstanceStats(ctx, req.(*InstanceStatsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1040,85 +1040,85 @@ func _WorkerService_DownloadFile_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_CopyFromContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CopyFromContainerRequest)
+func _WorkerService_CopyFromInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyFromInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).CopyFromContainer(ctx, in)
+		return srv.(WorkerServiceServer).CopyFromInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_CopyFromContainer_FullMethodName,
+		FullMethod: WorkerService_CopyFromInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).CopyFromContainer(ctx, req.(*CopyFromContainerRequest))
+		return srv.(WorkerServiceServer).CopyFromInstance(ctx, req.(*CopyFromInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_CopyToContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CopyToContainerRequest)
+func _WorkerService_CopyToInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyToInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).CopyToContainer(ctx, in)
+		return srv.(WorkerServiceServer).CopyToInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_CopyToContainer_FullMethodName,
+		FullMethod: WorkerService_CopyToInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).CopyToContainer(ctx, req.(*CopyToContainerRequest))
+		return srv.(WorkerServiceServer).CopyToInstance(ctx, req.(*CopyToInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_CopyDirFromContainer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(CopyDirFromContainerRequest)
+func _WorkerService_CopyDirFromInstance_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(CopyDirFromInstanceRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(WorkerServiceServer).CopyDirFromContainer(m, &grpc.GenericServerStream[CopyDirFromContainerRequest, DataChunk]{ServerStream: stream})
+	return srv.(WorkerServiceServer).CopyDirFromInstance(m, &grpc.GenericServerStream[CopyDirFromInstanceRequest, DataChunk]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_CopyDirFromContainerServer = grpc.ServerStreamingServer[DataChunk]
+type WorkerService_CopyDirFromInstanceServer = grpc.ServerStreamingServer[DataChunk]
 
-func _WorkerService_CopyTarToContainer_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).CopyTarToContainer(&grpc.GenericServerStream[CopyTarToContainerRequest, CopyTarToContainerResponse]{ServerStream: stream})
+func _WorkerService_CopyTarToInstance_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServiceServer).CopyTarToInstance(&grpc.GenericServerStream[CopyTarToInstanceRequest, CopyTarToInstanceResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_CopyTarToContainerServer = grpc.ClientStreamingServer[CopyTarToContainerRequest, CopyTarToContainerResponse]
+type WorkerService_CopyTarToInstanceServer = grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]
 
 func _WorkerService_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchEventsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(WorkerServiceServer).WatchEvents(m, &grpc.GenericServerStream[WatchEventsRequest, ContainerEventMsg]{ServerStream: stream})
+	return srv.(WorkerServiceServer).WatchEvents(m, &grpc.GenericServerStream[WatchEventsRequest, InstanceEventMsg]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_WatchEventsServer = grpc.ServerStreamingServer[ContainerEventMsg]
+type WorkerService_WatchEventsServer = grpc.ServerStreamingServer[InstanceEventMsg]
 
-func _WorkerService_ListGameserverContainers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListGameserverContainersRequest)
+func _WorkerService_ListGameserverInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGameserverInstancesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).ListGameserverContainers(ctx, in)
+		return srv.(WorkerServiceServer).ListGameserverInstances(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_ListGameserverContainers_FullMethodName,
+		FullMethod: WorkerService_ListGameserverInstances_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).ListGameserverContainers(ctx, req.(*ListGameserverContainersRequest))
+		return srv.(WorkerServiceServer).ListGameserverInstances(ctx, req.(*ListGameserverInstancesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1218,32 +1218,32 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkerService_PullImage_Handler,
 		},
 		{
-			MethodName: "CreateContainer",
-			Handler:    _WorkerService_CreateContainer_Handler,
+			MethodName: "CreateInstance",
+			Handler:    _WorkerService_CreateInstance_Handler,
 		},
 		{
-			MethodName: "StartContainer",
-			Handler:    _WorkerService_StartContainer_Handler,
+			MethodName: "StartInstance",
+			Handler:    _WorkerService_StartInstance_Handler,
 		},
 		{
-			MethodName: "StopContainer",
-			Handler:    _WorkerService_StopContainer_Handler,
+			MethodName: "StopInstance",
+			Handler:    _WorkerService_StopInstance_Handler,
 		},
 		{
-			MethodName: "RemoveContainer",
-			Handler:    _WorkerService_RemoveContainer_Handler,
+			MethodName: "RemoveInstance",
+			Handler:    _WorkerService_RemoveInstance_Handler,
 		},
 		{
-			MethodName: "InspectContainer",
-			Handler:    _WorkerService_InspectContainer_Handler,
+			MethodName: "InspectInstance",
+			Handler:    _WorkerService_InspectInstance_Handler,
 		},
 		{
 			MethodName: "Exec",
 			Handler:    _WorkerService_Exec_Handler,
 		},
 		{
-			MethodName: "ContainerStats",
-			Handler:    _WorkerService_ContainerStats_Handler,
+			MethodName: "InstanceStats",
+			Handler:    _WorkerService_InstanceStats_Handler,
 		},
 		{
 			MethodName: "CreateVolume",
@@ -1286,16 +1286,16 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkerService_DownloadFile_Handler,
 		},
 		{
-			MethodName: "CopyFromContainer",
-			Handler:    _WorkerService_CopyFromContainer_Handler,
+			MethodName: "CopyFromInstance",
+			Handler:    _WorkerService_CopyFromInstance_Handler,
 		},
 		{
-			MethodName: "CopyToContainer",
-			Handler:    _WorkerService_CopyToContainer_Handler,
+			MethodName: "CopyToInstance",
+			Handler:    _WorkerService_CopyToInstance_Handler,
 		},
 		{
-			MethodName: "ListGameserverContainers",
-			Handler:    _WorkerService_ListGameserverContainers_Handler,
+			MethodName: "ListGameserverInstances",
+			Handler:    _WorkerService_ListGameserverInstances_Handler,
 		},
 		{
 			MethodName: "Heartbeat",
@@ -1316,8 +1316,8 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ContainerLogs",
-			Handler:       _WorkerService_ContainerLogs_Handler,
+			StreamName:    "InstanceLogs",
+			Handler:       _WorkerService_InstanceLogs_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -1336,13 +1336,13 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "CopyDirFromContainer",
-			Handler:       _WorkerService_CopyDirFromContainer_Handler,
+			StreamName:    "CopyDirFromInstance",
+			Handler:       _WorkerService_CopyDirFromInstance_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "CopyTarToContainer",
-			Handler:       _WorkerService_CopyTarToContainer_Handler,
+			StreamName:    "CopyTarToInstance",
+			Handler:       _WorkerService_CopyTarToInstance_Handler,
 			ClientStreams: true,
 		},
 		{

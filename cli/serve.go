@@ -105,7 +105,7 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 		cfg.WorkerToken, _ = cmd.Flags().GetString("worker-token")
 	}
 	if cmd.Flags().Changed("runtime") {
-		cfg.ContainerRuntime, _ = cmd.Flags().GetString("runtime")
+		cfg.Runtime, _ = cmd.Flags().GetString("runtime")
 	}
 	if cmd.Flags().Changed("proxy") {
 		v, _ := cmd.Flags().GetBool("proxy")
@@ -388,8 +388,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			SFTPPort:          0,
 			ControllerAddress: fmt.Sprintf("127.0.0.1:%d", cfg.GRPCPort),
 			WorkerToken:       rawToken,
-			ContainerRuntime:  cfg.ContainerRuntime,
-			ContainerSocket:   cfg.ContainerSocket,
+			Runtime:  cfg.Runtime,
+			RuntimeSocket:   cfg.RuntimeSocket,
 			AdvertiseAddress:  fmt.Sprintf("%s:%d", advertiseHost, cfg.WorkerGRPCPort),
 		}
 		go func() {

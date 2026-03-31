@@ -372,8 +372,8 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 		ErrorReason: gs.ErrorReason,
 	}
 
-	if gs.ContainerID != nil {
-		info, err := h.svc.GetContainerInfo(r.Context(), id)
+	if gs.InstanceID != nil {
+		info, err := h.svc.GetInstanceInfo(r.Context(), id)
 		if err != nil {
 			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
 		} else {
@@ -527,7 +527,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader, err := h.svc.GetContainerLogs(r.Context(), id, tail)
+	reader, err := h.svc.GetInstanceLogs(r.Context(), id, tail)
 	if err != nil {
 		// Fall back to historical logs from volume
 		lines, histErr := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, 0, tail)

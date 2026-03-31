@@ -29,7 +29,7 @@ type Gameserver struct {
 	MemoryLimitMB  int             `json:"memory_limit_mb"`
 	CPULimit       float64         `json:"cpu_limit"`
 	CPUEnforced    bool            `json:"cpu_enforced"`
-	ContainerID    *string         `json:"container_id"`
+	InstanceID    *string         `json:"instance_id"`
 	VolumeName     string          `json:"volume_name"`
 	Status         string          `json:"status"`
 	ErrorReason    string          `json:"error_reason"`
@@ -96,7 +96,7 @@ func (gs *Gameserver) SnapshotConfig() *AppliedConfig {
 // ComputeRestartRequired sets RestartRequired by comparing the applied config
 // against the current desired state. Only meaningful when the gameserver is running.
 func (gs *Gameserver) ComputeRestartRequired() {
-	if gs.AppliedConfig == nil || gs.ContainerID == nil {
+	if gs.AppliedConfig == nil || gs.InstanceID == nil {
 		gs.RestartRequired = false
 		return
 	}

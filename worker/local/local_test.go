@@ -35,20 +35,20 @@ func testVolumeName(t *testing.T) string {
 	return "gamejanitor-test-" + t.Name()
 }
 
-func testContainerName(t *testing.T) string {
+func testInstanceName(t *testing.T) string {
 	return "gamejanitor-test-" + t.Name()
 }
 
 func TestWorker_ContainerLifecycle(t *testing.T) {
 	w := newTestLocalWorker(t)
 	ctx := context.Background()
-	containerName := testContainerName(t)
+	containerName := testInstanceName(t)
 
 	// Pull a small image
 	require.NoError(t, w.PullImage(ctx, "alpine:latest"))
 
 	// Create container
-	id, err := w.CreateContainer(ctx, worker.ContainerOptions{
+	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       containerName,
 		Image:      "alpine:latest",
 		Entrypoint: []string{"sleep", "30"},
@@ -57,33 +57,33 @@ func TestWorker_ContainerLifecycle(t *testing.T) {
 	assert.NotEmpty(t, id)
 
 	t.Cleanup(func() {
-		w.StopContainer(context.Background(), id, 1)
-		w.RemoveContainer(context.Background(), id)
+		w.StopInstance(context.Background(), id, 1)
+		w.RemoveInstance(context.Background(), id)
 	})
 
 	// Start
-	require.NoError(t, w.StartContainer(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id))
 
 	// Inspect — should be running
-	info, err := w.InspectContainer(ctx, id)
+	info, err := w.InspectInstance(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "running", info.State)
 
 	// Stats
-	stats, err := w.ContainerStats(ctx, id)
+	stats, err := w.InstanceStats(ctx, id)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, stats.MemoryLimitMB, 0)
 
 	// Stop
-	require.NoError(t, w.StopContainer(ctx, id, 5))
+	require.NoError(t, w.StopInstance(ctx, id, 5))
 
 	// Inspect — should be exited
-	info, err = w.InspectContainer(ctx, id)
+	info, err = w.InspectInstance(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "exited", info.State)
 
 	// Remove
-	require.NoError(t, w.RemoveContainer(ctx, id))
+	require.NoError(t, w.RemoveInstance(ctx, id))
 }
 
 func TestWorker_VolumeOperations(t *testing.T) {
@@ -231,30 +231,30 @@ func TestWorker_WatchEvents(t *testing.T) {
 
 	// Pull and start a container to generate events
 	require.NoError(t, w.PullImage(ctx, "alpine:latest"))
-	containerName := testContainerName(t)
-	id, err := w.CreateContainer(ctx, worker.ContainerOptions{
+	containerName := testInstanceName(t)
+	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       containerName,
 		Image:      "alpine:latest",
 		Entrypoint: []string{"sleep", "5"},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		w.StopContainer(context.Background(), id, 1)
-		w.RemoveContainer(context.Background(), id)
+		w.StopInstance(context.Background(), id, 1)
+		w.RemoveInstance(context.Background(), id)
 	})
 
-	require.NoError(t, w.StartContainer(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id))
 
 	// Should receive a "start" event for our container.
 	// Filter out events from other containers on the host.
 	for {
 		select {
 		case evt := <-events:
-			if evt.ContainerID != id {
+			if evt.InstanceID != id {
 				continue // skip events from other containers
 			}
 			assert.Equal(t, "start", evt.Action)
-			assert.Equal(t, id, evt.ContainerID)
+			assert.Equal(t, id, evt.InstanceID)
 			return
 		case err := <-errs:
 			t.Fatalf("error watching events: %v", err)

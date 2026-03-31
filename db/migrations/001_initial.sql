@@ -7,7 +7,7 @@ CREATE TABLE gameservers (
     memory_limit_mb INTEGER NOT NULL DEFAULT 0,
     cpu_limit REAL NOT NULL DEFAULT 0,
     cpu_enforced INTEGER NOT NULL DEFAULT 0,
-    container_id TEXT,
+    instance_id TEXT,
     volume_name TEXT NOT NULL,
     port_mode TEXT NOT NULL DEFAULT 'auto',
     node_id TEXT,

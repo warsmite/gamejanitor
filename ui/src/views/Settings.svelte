@@ -363,7 +363,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">Runtime</span>
-              <span class="info-value">{config.container_runtime || 'auto'}</span>
+              <span class="info-value">{config.runtime || 'auto'}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Backups</span>

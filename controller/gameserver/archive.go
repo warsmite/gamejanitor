@@ -99,8 +99,8 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	s.log.Info("archive saved to store", "gameserver", id)
 
 	// Remove container and volume from worker
-	if gs.ContainerID != nil {
-		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+	if gs.InstanceID != nil {
+		if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
 			s.log.Warn("failed to remove container during archive", "gameserver", id, "error", err)
 		}
 	}
@@ -111,7 +111,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	// Update gameserver record
 	gs.Archived = true
 	gs.Status = controller.StatusArchived
-	gs.ContainerID = nil
+	gs.InstanceID = nil
 	gs.NodeID = nil
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		if opID != "" {

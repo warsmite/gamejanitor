@@ -205,7 +205,7 @@ func (x *PortBinding) GetProtocol() string {
 	return ""
 }
 
-type CreateContainerRequest struct {
+type CreateInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Image         string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
@@ -222,20 +222,20 @@ type CreateContainerRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateContainerRequest) Reset() {
-	*x = CreateContainerRequest{}
+func (x *CreateInstanceRequest) Reset() {
+	*x = CreateInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateContainerRequest) String() string {
+func (x *CreateInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateContainerRequest) ProtoMessage() {}
+func (*CreateInstanceRequest) ProtoMessage() {}
 
-func (x *CreateContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *CreateInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -247,109 +247,109 @@ func (x *CreateContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateContainerRequest.ProtoReflect.Descriptor instead.
-func (*CreateContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateInstanceRequest.ProtoReflect.Descriptor instead.
+func (*CreateInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *CreateContainerRequest) GetName() string {
+func (x *CreateInstanceRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *CreateContainerRequest) GetImage() string {
+func (x *CreateInstanceRequest) GetImage() string {
 	if x != nil {
 		return x.Image
 	}
 	return ""
 }
 
-func (x *CreateContainerRequest) GetEnv() []string {
+func (x *CreateInstanceRequest) GetEnv() []string {
 	if x != nil {
 		return x.Env
 	}
 	return nil
 }
 
-func (x *CreateContainerRequest) GetPorts() []*PortBinding {
+func (x *CreateInstanceRequest) GetPorts() []*PortBinding {
 	if x != nil {
 		return x.Ports
 	}
 	return nil
 }
 
-func (x *CreateContainerRequest) GetVolumeName() string {
+func (x *CreateInstanceRequest) GetVolumeName() string {
 	if x != nil {
 		return x.VolumeName
 	}
 	return ""
 }
 
-func (x *CreateContainerRequest) GetMemoryLimitMb() int32 {
+func (x *CreateInstanceRequest) GetMemoryLimitMb() int32 {
 	if x != nil {
 		return x.MemoryLimitMb
 	}
 	return 0
 }
 
-func (x *CreateContainerRequest) GetCpuLimit() float64 {
+func (x *CreateInstanceRequest) GetCpuLimit() float64 {
 	if x != nil {
 		return x.CpuLimit
 	}
 	return 0
 }
 
-func (x *CreateContainerRequest) GetEntrypoint() []string {
+func (x *CreateInstanceRequest) GetEntrypoint() []string {
 	if x != nil {
 		return x.Entrypoint
 	}
 	return nil
 }
 
-func (x *CreateContainerRequest) GetUser() string {
+func (x *CreateInstanceRequest) GetUser() string {
 	if x != nil {
 		return x.User
 	}
 	return ""
 }
 
-func (x *CreateContainerRequest) GetBinds() []string {
+func (x *CreateInstanceRequest) GetBinds() []string {
 	if x != nil {
 		return x.Binds
 	}
 	return nil
 }
 
-func (x *CreateContainerRequest) GetCpuEnforced() bool {
+func (x *CreateInstanceRequest) GetCpuEnforced() bool {
 	if x != nil {
 		return x.CpuEnforced
 	}
 	return false
 }
 
-type CreateContainerResponse struct {
+type CreateInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateContainerResponse) Reset() {
-	*x = CreateContainerResponse{}
+func (x *CreateInstanceResponse) Reset() {
+	*x = CreateInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateContainerResponse) String() string {
+func (x *CreateInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateContainerResponse) ProtoMessage() {}
+func (*CreateInstanceResponse) ProtoMessage() {}
 
-func (x *CreateContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *CreateInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -361,39 +361,39 @@ func (x *CreateContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateContainerResponse.ProtoReflect.Descriptor instead.
-func (*CreateContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateInstanceResponse.ProtoReflect.Descriptor instead.
+func (*CreateInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *CreateContainerResponse) GetContainerId() string {
+func (x *CreateInstanceResponse) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type StartContainerRequest struct {
+type StartInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StartContainerRequest) Reset() {
-	*x = StartContainerRequest{}
+func (x *StartInstanceRequest) Reset() {
+	*x = StartInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StartContainerRequest) String() string {
+func (x *StartInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StartContainerRequest) ProtoMessage() {}
+func (*StartInstanceRequest) ProtoMessage() {}
 
-func (x *StartContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *StartInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -405,38 +405,38 @@ func (x *StartContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StartContainerRequest.ProtoReflect.Descriptor instead.
-func (*StartContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use StartInstanceRequest.ProtoReflect.Descriptor instead.
+func (*StartInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *StartContainerRequest) GetContainerId() string {
+func (x *StartInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type StartContainerResponse struct {
+type StartInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StartContainerResponse) Reset() {
-	*x = StartContainerResponse{}
+func (x *StartInstanceResponse) Reset() {
+	*x = StartInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StartContainerResponse) String() string {
+func (x *StartInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StartContainerResponse) ProtoMessage() {}
+func (*StartInstanceResponse) ProtoMessage() {}
 
-func (x *StartContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *StartInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -448,33 +448,33 @@ func (x *StartContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StartContainerResponse.ProtoReflect.Descriptor instead.
-func (*StartContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use StartInstanceResponse.ProtoReflect.Descriptor instead.
+func (*StartInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{7}
 }
 
-type StopContainerRequest struct {
+type StopInstanceRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId    string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId     string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	TimeoutSeconds int32                  `protobuf:"varint,2,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *StopContainerRequest) Reset() {
-	*x = StopContainerRequest{}
+func (x *StopInstanceRequest) Reset() {
+	*x = StopInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopContainerRequest) String() string {
+func (x *StopInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopContainerRequest) ProtoMessage() {}
+func (*StopInstanceRequest) ProtoMessage() {}
 
-func (x *StopContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *StopInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -486,45 +486,45 @@ func (x *StopContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopContainerRequest.ProtoReflect.Descriptor instead.
-func (*StopContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopInstanceRequest.ProtoReflect.Descriptor instead.
+func (*StopInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *StopContainerRequest) GetContainerId() string {
+func (x *StopInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *StopContainerRequest) GetTimeoutSeconds() int32 {
+func (x *StopInstanceRequest) GetTimeoutSeconds() int32 {
 	if x != nil {
 		return x.TimeoutSeconds
 	}
 	return 0
 }
 
-type StopContainerResponse struct {
+type StopInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StopContainerResponse) Reset() {
-	*x = StopContainerResponse{}
+func (x *StopInstanceResponse) Reset() {
+	*x = StopInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopContainerResponse) String() string {
+func (x *StopInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopContainerResponse) ProtoMessage() {}
+func (*StopInstanceResponse) ProtoMessage() {}
 
-func (x *StopContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *StopInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -536,32 +536,32 @@ func (x *StopContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopContainerResponse.ProtoReflect.Descriptor instead.
-func (*StopContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopInstanceResponse.ProtoReflect.Descriptor instead.
+func (*StopInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{9}
 }
 
-type RemoveContainerRequest struct {
+type RemoveInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RemoveContainerRequest) Reset() {
-	*x = RemoveContainerRequest{}
+func (x *RemoveInstanceRequest) Reset() {
+	*x = RemoveInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RemoveContainerRequest) String() string {
+func (x *RemoveInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveContainerRequest) ProtoMessage() {}
+func (*RemoveInstanceRequest) ProtoMessage() {}
 
-func (x *RemoveContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *RemoveInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -573,38 +573,38 @@ func (x *RemoveContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveContainerRequest.ProtoReflect.Descriptor instead.
-func (*RemoveContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use RemoveInstanceRequest.ProtoReflect.Descriptor instead.
+func (*RemoveInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *RemoveContainerRequest) GetContainerId() string {
+func (x *RemoveInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type RemoveContainerResponse struct {
+type RemoveInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RemoveContainerResponse) Reset() {
-	*x = RemoveContainerResponse{}
+func (x *RemoveInstanceResponse) Reset() {
+	*x = RemoveInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RemoveContainerResponse) String() string {
+func (x *RemoveInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveContainerResponse) ProtoMessage() {}
+func (*RemoveInstanceResponse) ProtoMessage() {}
 
-func (x *RemoveContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *RemoveInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -616,32 +616,32 @@ func (x *RemoveContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveContainerResponse.ProtoReflect.Descriptor instead.
-func (*RemoveContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use RemoveInstanceResponse.ProtoReflect.Descriptor instead.
+func (*RemoveInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{11}
 }
 
-type InspectContainerRequest struct {
+type InspectInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InspectContainerRequest) Reset() {
-	*x = InspectContainerRequest{}
+func (x *InspectInstanceRequest) Reset() {
+	*x = InspectInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InspectContainerRequest) String() string {
+func (x *InspectInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InspectContainerRequest) ProtoMessage() {}
+func (*InspectInstanceRequest) ProtoMessage() {}
 
-func (x *InspectContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *InspectInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -653,19 +653,19 @@ func (x *InspectContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InspectContainerRequest.ProtoReflect.Descriptor instead.
-func (*InspectContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use InspectInstanceRequest.ProtoReflect.Descriptor instead.
+func (*InspectInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *InspectContainerRequest) GetContainerId() string {
+func (x *InspectInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type InspectContainerResponse struct {
+type InspectInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
@@ -675,20 +675,20 @@ type InspectContainerResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InspectContainerResponse) Reset() {
-	*x = InspectContainerResponse{}
+func (x *InspectInstanceResponse) Reset() {
+	*x = InspectInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InspectContainerResponse) String() string {
+func (x *InspectInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InspectContainerResponse) ProtoMessage() {}
+func (*InspectInstanceResponse) ProtoMessage() {}
 
-func (x *InspectContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *InspectInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -700,33 +700,33 @@ func (x *InspectContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InspectContainerResponse.ProtoReflect.Descriptor instead.
-func (*InspectContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use InspectInstanceResponse.ProtoReflect.Descriptor instead.
+func (*InspectInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *InspectContainerResponse) GetId() string {
+func (x *InspectInstanceResponse) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *InspectContainerResponse) GetState() string {
+func (x *InspectInstanceResponse) GetState() string {
 	if x != nil {
 		return x.State
 	}
 	return ""
 }
 
-func (x *InspectContainerResponse) GetStartedAtUnix() int64 {
+func (x *InspectInstanceResponse) GetStartedAtUnix() int64 {
 	if x != nil {
 		return x.StartedAtUnix
 	}
 	return 0
 }
 
-func (x *InspectContainerResponse) GetExitCode() int32 {
+func (x *InspectInstanceResponse) GetExitCode() int32 {
 	if x != nil {
 		return x.ExitCode
 	}
@@ -735,7 +735,7 @@ func (x *InspectContainerResponse) GetExitCode() int32 {
 
 type ExecRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Cmd           []string               `protobuf:"bytes,2,rep,name=cmd,proto3" json:"cmd,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -771,9 +771,9 @@ func (*ExecRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *ExecRequest) GetContainerId() string {
+func (x *ExecRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
@@ -845,29 +845,29 @@ func (x *ExecResponse) GetStderr() string {
 	return ""
 }
 
-type ContainerLogsRequest struct {
+type InstanceLogsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Tail          int32                  `protobuf:"varint,2,opt,name=tail,proto3" json:"tail,omitempty"`
 	Follow        bool                   `protobuf:"varint,3,opt,name=follow,proto3" json:"follow,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ContainerLogsRequest) Reset() {
-	*x = ContainerLogsRequest{}
+func (x *InstanceLogsRequest) Reset() {
+	*x = InstanceLogsRequest{}
 	mi := &file_proto_worker_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ContainerLogsRequest) String() string {
+func (x *InstanceLogsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ContainerLogsRequest) ProtoMessage() {}
+func (*InstanceLogsRequest) ProtoMessage() {}
 
-func (x *ContainerLogsRequest) ProtoReflect() protoreflect.Message {
+func (x *InstanceLogsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -879,53 +879,53 @@ func (x *ContainerLogsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ContainerLogsRequest.ProtoReflect.Descriptor instead.
-func (*ContainerLogsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use InstanceLogsRequest.ProtoReflect.Descriptor instead.
+func (*InstanceLogsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ContainerLogsRequest) GetContainerId() string {
+func (x *InstanceLogsRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *ContainerLogsRequest) GetTail() int32 {
+func (x *InstanceLogsRequest) GetTail() int32 {
 	if x != nil {
 		return x.Tail
 	}
 	return 0
 }
 
-func (x *ContainerLogsRequest) GetFollow() bool {
+func (x *InstanceLogsRequest) GetFollow() bool {
 	if x != nil {
 		return x.Follow
 	}
 	return false
 }
 
-type ContainerStatsRequest struct {
+type InstanceStatsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ContainerStatsRequest) Reset() {
-	*x = ContainerStatsRequest{}
+func (x *InstanceStatsRequest) Reset() {
+	*x = InstanceStatsRequest{}
 	mi := &file_proto_worker_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ContainerStatsRequest) String() string {
+func (x *InstanceStatsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ContainerStatsRequest) ProtoMessage() {}
+func (*InstanceStatsRequest) ProtoMessage() {}
 
-func (x *ContainerStatsRequest) ProtoReflect() protoreflect.Message {
+func (x *InstanceStatsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -937,19 +937,19 @@ func (x *ContainerStatsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ContainerStatsRequest.ProtoReflect.Descriptor instead.
-func (*ContainerStatsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use InstanceStatsRequest.ProtoReflect.Descriptor instead.
+func (*InstanceStatsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ContainerStatsRequest) GetContainerId() string {
+func (x *InstanceStatsRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type ContainerStatsResponse struct {
+type InstanceStatsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MemoryUsageMb int32                  `protobuf:"varint,1,opt,name=memory_usage_mb,json=memoryUsageMb,proto3" json:"memory_usage_mb,omitempty"`
 	MemoryLimitMb int32                  `protobuf:"varint,2,opt,name=memory_limit_mb,json=memoryLimitMb,proto3" json:"memory_limit_mb,omitempty"`
@@ -960,20 +960,20 @@ type ContainerStatsResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ContainerStatsResponse) Reset() {
-	*x = ContainerStatsResponse{}
+func (x *InstanceStatsResponse) Reset() {
+	*x = InstanceStatsResponse{}
 	mi := &file_proto_worker_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ContainerStatsResponse) String() string {
+func (x *InstanceStatsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ContainerStatsResponse) ProtoMessage() {}
+func (*InstanceStatsResponse) ProtoMessage() {}
 
-func (x *ContainerStatsResponse) ProtoReflect() protoreflect.Message {
+func (x *InstanceStatsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -985,40 +985,40 @@ func (x *ContainerStatsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ContainerStatsResponse.ProtoReflect.Descriptor instead.
-func (*ContainerStatsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use InstanceStatsResponse.ProtoReflect.Descriptor instead.
+func (*InstanceStatsResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{18}
 }
 
-func (x *ContainerStatsResponse) GetMemoryUsageMb() int32 {
+func (x *InstanceStatsResponse) GetMemoryUsageMb() int32 {
 	if x != nil {
 		return x.MemoryUsageMb
 	}
 	return 0
 }
 
-func (x *ContainerStatsResponse) GetMemoryLimitMb() int32 {
+func (x *InstanceStatsResponse) GetMemoryLimitMb() int32 {
 	if x != nil {
 		return x.MemoryLimitMb
 	}
 	return 0
 }
 
-func (x *ContainerStatsResponse) GetCpuPercent() float64 {
+func (x *InstanceStatsResponse) GetCpuPercent() float64 {
 	if x != nil {
 		return x.CpuPercent
 	}
 	return 0
 }
 
-func (x *ContainerStatsResponse) GetNetRxBytes() int64 {
+func (x *InstanceStatsResponse) GetNetRxBytes() int64 {
 	if x != nil {
 		return x.NetRxBytes
 	}
 	return 0
 }
 
-func (x *ContainerStatsResponse) GetNetTxBytes() int64 {
+func (x *InstanceStatsResponse) GetNetTxBytes() int64 {
 	if x != nil {
 		return x.NetTxBytes
 	}
@@ -2265,28 +2265,28 @@ func (*DownloadFileResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{44}
 }
 
-type CopyFromContainerRequest struct {
+type CopyFromInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyFromContainerRequest) Reset() {
-	*x = CopyFromContainerRequest{}
+func (x *CopyFromInstanceRequest) Reset() {
+	*x = CopyFromInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyFromContainerRequest) String() string {
+func (x *CopyFromInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyFromContainerRequest) ProtoMessage() {}
+func (*CopyFromInstanceRequest) ProtoMessage() {}
 
-func (x *CopyFromContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *CopyFromInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2298,46 +2298,46 @@ func (x *CopyFromContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyFromContainerRequest.ProtoReflect.Descriptor instead.
-func (*CopyFromContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyFromInstanceRequest.ProtoReflect.Descriptor instead.
+func (*CopyFromInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{45}
 }
 
-func (x *CopyFromContainerRequest) GetContainerId() string {
+func (x *CopyFromInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *CopyFromContainerRequest) GetPath() string {
+func (x *CopyFromInstanceRequest) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-type CopyFromContainerResponse struct {
+type CopyFromInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Content       []byte                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyFromContainerResponse) Reset() {
-	*x = CopyFromContainerResponse{}
+func (x *CopyFromInstanceResponse) Reset() {
+	*x = CopyFromInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyFromContainerResponse) String() string {
+func (x *CopyFromInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyFromContainerResponse) ProtoMessage() {}
+func (*CopyFromInstanceResponse) ProtoMessage() {}
 
-func (x *CopyFromContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *CopyFromInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2349,41 +2349,41 @@ func (x *CopyFromContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyFromContainerResponse.ProtoReflect.Descriptor instead.
-func (*CopyFromContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyFromInstanceResponse.ProtoReflect.Descriptor instead.
+func (*CopyFromInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{46}
 }
 
-func (x *CopyFromContainerResponse) GetContent() []byte {
+func (x *CopyFromInstanceResponse) GetContent() []byte {
 	if x != nil {
 		return x.Content
 	}
 	return nil
 }
 
-type CopyToContainerRequest struct {
+type CopyToInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	Content       []byte                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyToContainerRequest) Reset() {
-	*x = CopyToContainerRequest{}
+func (x *CopyToInstanceRequest) Reset() {
+	*x = CopyToInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyToContainerRequest) String() string {
+func (x *CopyToInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyToContainerRequest) ProtoMessage() {}
+func (*CopyToInstanceRequest) ProtoMessage() {}
 
-func (x *CopyToContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *CopyToInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2395,52 +2395,52 @@ func (x *CopyToContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyToContainerRequest.ProtoReflect.Descriptor instead.
-func (*CopyToContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyToInstanceRequest.ProtoReflect.Descriptor instead.
+func (*CopyToInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{47}
 }
 
-func (x *CopyToContainerRequest) GetContainerId() string {
+func (x *CopyToInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *CopyToContainerRequest) GetPath() string {
+func (x *CopyToInstanceRequest) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-func (x *CopyToContainerRequest) GetContent() []byte {
+func (x *CopyToInstanceRequest) GetContent() []byte {
 	if x != nil {
 		return x.Content
 	}
 	return nil
 }
 
-type CopyToContainerResponse struct {
+type CopyToInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyToContainerResponse) Reset() {
-	*x = CopyToContainerResponse{}
+func (x *CopyToInstanceResponse) Reset() {
+	*x = CopyToInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyToContainerResponse) String() string {
+func (x *CopyToInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyToContainerResponse) ProtoMessage() {}
+func (*CopyToInstanceResponse) ProtoMessage() {}
 
-func (x *CopyToContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *CopyToInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2452,33 +2452,33 @@ func (x *CopyToContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyToContainerResponse.ProtoReflect.Descriptor instead.
-func (*CopyToContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyToInstanceResponse.ProtoReflect.Descriptor instead.
+func (*CopyToInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{48}
 }
 
-type CopyDirFromContainerRequest struct {
+type CopyDirFromInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyDirFromContainerRequest) Reset() {
-	*x = CopyDirFromContainerRequest{}
+func (x *CopyDirFromInstanceRequest) Reset() {
+	*x = CopyDirFromInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyDirFromContainerRequest) String() string {
+func (x *CopyDirFromInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyDirFromContainerRequest) ProtoMessage() {}
+func (*CopyDirFromInstanceRequest) ProtoMessage() {}
 
-func (x *CopyDirFromContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *CopyDirFromInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2490,19 +2490,19 @@ func (x *CopyDirFromContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyDirFromContainerRequest.ProtoReflect.Descriptor instead.
-func (*CopyDirFromContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyDirFromInstanceRequest.ProtoReflect.Descriptor instead.
+func (*CopyDirFromInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{49}
 }
 
-func (x *CopyDirFromContainerRequest) GetContainerId() string {
+func (x *CopyDirFromInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *CopyDirFromContainerRequest) GetPath() string {
+func (x *CopyDirFromInstanceRequest) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
@@ -2510,29 +2510,29 @@ func (x *CopyDirFromContainerRequest) GetPath() string {
 }
 
 // First message carries metadata, all messages carry data
-type CopyTarToContainerRequest struct {
+type CopyTarToInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	DestPath      string                 `protobuf:"bytes,2,opt,name=dest_path,json=destPath,proto3" json:"dest_path,omitempty"`
 	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyTarToContainerRequest) Reset() {
-	*x = CopyTarToContainerRequest{}
+func (x *CopyTarToInstanceRequest) Reset() {
+	*x = CopyTarToInstanceRequest{}
 	mi := &file_proto_worker_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyTarToContainerRequest) String() string {
+func (x *CopyTarToInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyTarToContainerRequest) ProtoMessage() {}
+func (*CopyTarToInstanceRequest) ProtoMessage() {}
 
-func (x *CopyTarToContainerRequest) ProtoReflect() protoreflect.Message {
+func (x *CopyTarToInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2544,52 +2544,52 @@ func (x *CopyTarToContainerRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyTarToContainerRequest.ProtoReflect.Descriptor instead.
-func (*CopyTarToContainerRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyTarToInstanceRequest.ProtoReflect.Descriptor instead.
+func (*CopyTarToInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{50}
 }
 
-func (x *CopyTarToContainerRequest) GetContainerId() string {
+func (x *CopyTarToInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *CopyTarToContainerRequest) GetDestPath() string {
+func (x *CopyTarToInstanceRequest) GetDestPath() string {
 	if x != nil {
 		return x.DestPath
 	}
 	return ""
 }
 
-func (x *CopyTarToContainerRequest) GetData() []byte {
+func (x *CopyTarToInstanceRequest) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-type CopyTarToContainerResponse struct {
+type CopyTarToInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CopyTarToContainerResponse) Reset() {
-	*x = CopyTarToContainerResponse{}
+func (x *CopyTarToInstanceResponse) Reset() {
+	*x = CopyTarToInstanceResponse{}
 	mi := &file_proto_worker_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CopyTarToContainerResponse) String() string {
+func (x *CopyTarToInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CopyTarToContainerResponse) ProtoMessage() {}
+func (*CopyTarToInstanceResponse) ProtoMessage() {}
 
-func (x *CopyTarToContainerResponse) ProtoReflect() protoreflect.Message {
+func (x *CopyTarToInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2601,8 +2601,8 @@ func (x *CopyTarToContainerResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CopyTarToContainerResponse.ProtoReflect.Descriptor instead.
-func (*CopyTarToContainerResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyTarToInstanceResponse.ProtoReflect.Descriptor instead.
+func (*CopyTarToInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{51}
 }
 
@@ -2642,29 +2642,29 @@ func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{52}
 }
 
-type ContainerEventMsg struct {
+type InstanceEventMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ContainerName string                 `protobuf:"bytes,2,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	InstanceName  string                 `protobuf:"bytes,2,opt,name=instance_name,json=instanceName,proto3" json:"instance_name,omitempty"`
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ContainerEventMsg) Reset() {
-	*x = ContainerEventMsg{}
+func (x *InstanceEventMsg) Reset() {
+	*x = InstanceEventMsg{}
 	mi := &file_proto_worker_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ContainerEventMsg) String() string {
+func (x *InstanceEventMsg) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ContainerEventMsg) ProtoMessage() {}
+func (*InstanceEventMsg) ProtoMessage() {}
 
-func (x *ContainerEventMsg) ProtoReflect() protoreflect.Message {
+func (x *InstanceEventMsg) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2676,26 +2676,26 @@ func (x *ContainerEventMsg) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ContainerEventMsg.ProtoReflect.Descriptor instead.
-func (*ContainerEventMsg) Descriptor() ([]byte, []int) {
+// Deprecated: Use InstanceEventMsg.ProtoReflect.Descriptor instead.
+func (*InstanceEventMsg) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{53}
 }
 
-func (x *ContainerEventMsg) GetContainerId() string {
+func (x *InstanceEventMsg) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *ContainerEventMsg) GetContainerName() string {
+func (x *InstanceEventMsg) GetInstanceName() string {
 	if x != nil {
-		return x.ContainerName
+		return x.InstanceName
 	}
 	return ""
 }
 
-func (x *ContainerEventMsg) GetAction() string {
+func (x *InstanceEventMsg) GetAction() string {
 	if x != nil {
 		return x.Action
 	}
@@ -3190,26 +3190,26 @@ func (x *SFTPLoginResponse) GetVolumeName() string {
 	return ""
 }
 
-type ListGameserverContainersRequest struct {
+type ListGameserverInstancesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListGameserverContainersRequest) Reset() {
-	*x = ListGameserverContainersRequest{}
+func (x *ListGameserverInstancesRequest) Reset() {
+	*x = ListGameserverInstancesRequest{}
 	mi := &file_proto_worker_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListGameserverContainersRequest) String() string {
+func (x *ListGameserverInstancesRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListGameserverContainersRequest) ProtoMessage() {}
+func (*ListGameserverInstancesRequest) ProtoMessage() {}
 
-func (x *ListGameserverContainersRequest) ProtoReflect() protoreflect.Message {
+func (x *ListGameserverInstancesRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3221,32 +3221,32 @@ func (x *ListGameserverContainersRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListGameserverContainersRequest.ProtoReflect.Descriptor instead.
-func (*ListGameserverContainersRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListGameserverInstancesRequest.ProtoReflect.Descriptor instead.
+func (*ListGameserverInstancesRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{60}
 }
 
-type ListGameserverContainersResponse struct {
+type ListGameserverInstancesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Containers    []*GameserverContainer `protobuf:"bytes,1,rep,name=containers,proto3" json:"containers,omitempty"`
+	Containers    []*GameserverInstance  `protobuf:"bytes,1,rep,name=containers,proto3" json:"containers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListGameserverContainersResponse) Reset() {
-	*x = ListGameserverContainersResponse{}
+func (x *ListGameserverInstancesResponse) Reset() {
+	*x = ListGameserverInstancesResponse{}
 	mi := &file_proto_worker_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListGameserverContainersResponse) String() string {
+func (x *ListGameserverInstancesResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListGameserverContainersResponse) ProtoMessage() {}
+func (*ListGameserverInstancesResponse) ProtoMessage() {}
 
-func (x *ListGameserverContainersResponse) ProtoReflect() protoreflect.Message {
+func (x *ListGameserverInstancesResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3258,42 +3258,42 @@ func (x *ListGameserverContainersResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListGameserverContainersResponse.ProtoReflect.Descriptor instead.
-func (*ListGameserverContainersResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListGameserverInstancesResponse.ProtoReflect.Descriptor instead.
+func (*ListGameserverInstancesResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{61}
 }
 
-func (x *ListGameserverContainersResponse) GetContainers() []*GameserverContainer {
+func (x *ListGameserverInstancesResponse) GetContainers() []*GameserverInstance {
 	if x != nil {
 		return x.Containers
 	}
 	return nil
 }
 
-type GameserverContainer struct {
+type GameserverInstance struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ContainerName string                 `protobuf:"bytes,2,opt,name=container_name,json=containerName,proto3" json:"container_name,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	InstanceName  string                 `protobuf:"bytes,2,opt,name=instance_name,json=instanceName,proto3" json:"instance_name,omitempty"`
 	GameserverId  string                 `protobuf:"bytes,3,opt,name=gameserver_id,json=gameserverId,proto3" json:"gameserver_id,omitempty"` // extracted from container name
 	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                                   // running, exited, etc.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GameserverContainer) Reset() {
-	*x = GameserverContainer{}
+func (x *GameserverInstance) Reset() {
+	*x = GameserverInstance{}
 	mi := &file_proto_worker_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GameserverContainer) String() string {
+func (x *GameserverInstance) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GameserverContainer) ProtoMessage() {}
+func (*GameserverInstance) ProtoMessage() {}
 
-func (x *GameserverContainer) ProtoReflect() protoreflect.Message {
+func (x *GameserverInstance) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3305,33 +3305,33 @@ func (x *GameserverContainer) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GameserverContainer.ProtoReflect.Descriptor instead.
-func (*GameserverContainer) Descriptor() ([]byte, []int) {
+// Deprecated: Use GameserverInstance.ProtoReflect.Descriptor instead.
+func (*GameserverInstance) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{62}
 }
 
-func (x *GameserverContainer) GetContainerId() string {
+func (x *GameserverInstance) GetInstanceId() string {
 	if x != nil {
-		return x.ContainerId
+		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *GameserverContainer) GetContainerName() string {
+func (x *GameserverInstance) GetInstanceName() string {
 	if x != nil {
-		return x.ContainerName
+		return x.InstanceName
 	}
 	return ""
 }
 
-func (x *GameserverContainer) GetGameserverId() string {
+func (x *GameserverInstance) GetGameserverId() string {
 	if x != nil {
 		return x.GameserverId
 	}
 	return ""
 }
 
-func (x *GameserverContainer) GetState() string {
+func (x *GameserverInstance) GetState() string {
 	if x != nil {
 		return x.State
 	}
@@ -3811,8 +3811,8 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\vPortBinding\x12\x1b\n" +
 	"\thost_port\x18\x01 \x01(\x05R\bhostPort\x12%\n" +
 	"\x0econtainer_port\x18\x02 \x01(\x05R\rcontainerPort\x12\x1a\n" +
-	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd2\x02\n" +
-	"\x16CreateContainerRequest\x12\x12\n" +
+	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd1\x02\n" +
+	"\x15CreateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12\x10\n" +
 	"\x03env\x18\x03 \x03(\tR\x03env\x12)\n" +
@@ -3827,40 +3827,48 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x04user\x18\t \x01(\tR\x04user\x12\x14\n" +
 	"\x05binds\x18\n" +
 	" \x03(\tR\x05binds\x12!\n" +
-	"\fcpu_enforced\x18\v \x01(\bR\vcpuEnforced\"<\n" +
-	"\x17CreateContainerResponse\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\":\n" +
-	"\x15StartContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\x18\n" +
-	"\x16StartContainerResponse\"b\n" +
-	"\x14StopContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12'\n" +
-	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\"\x17\n" +
-	"\x15StopContainerResponse\";\n" +
-	"\x16RemoveContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\x19\n" +
-	"\x17RemoveContainerResponse\"<\n" +
-	"\x17InspectContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\x85\x01\n" +
-	"\x18InspectContainerResponse\x12\x0e\n" +
+	"\fcpu_enforced\x18\v \x01(\bR\vcpuEnforced\"9\n" +
+	"\x16CreateInstanceResponse\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"7\n" +
+	"\x14StartInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\x17\n" +
+	"\x15StartInstanceResponse\"_\n" +
+	"\x13StopInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12'\n" +
+	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\"\x16\n" +
+	"\x14StopInstanceResponse\"8\n" +
+	"\x15RemoveInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\x18\n" +
+	"\x16RemoveInstanceResponse\"9\n" +
+	"\x16InspectInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\x84\x01\n" +
+	"\x17InspectInstanceResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12&\n" +
 	"\x0fstarted_at_unix\x18\x03 \x01(\x03R\rstartedAtUnix\x12\x1b\n" +
-	"\texit_code\x18\x04 \x01(\x05R\bexitCode\"B\n" +
-	"\vExecRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x10\n" +
+	"\texit_code\x18\x04 \x01(\x05R\bexitCode\"@\n" +
+	"\vExecRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x10\n" +
 	"\x03cmd\x18\x02 \x03(\tR\x03cmd\"[\n" +
 	"\fExecResponse\x12\x1b\n" +
 	"\texit_code\x18\x01 \x01(\x05R\bexitCode\x12\x16\n" +
 	"\x06stdout\x18\x02 \x01(\tR\x06stdout\x12\x16\n" +
-	"\x06stderr\x18\x03 \x01(\tR\x06stderr\"e\n" +
-	"\x14ContainerLogsRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x12\n" +
+	"\x06stderr\x18\x03 \x01(\tR\x06stderr\"b\n" +
+	"\x13InstanceLogsRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x12\n" +
 	"\x04tail\x18\x02 \x01(\x05R\x04tail\x12\x16\n" +
-	"\x06follow\x18\x03 \x01(\bR\x06follow\":\n" +
-	"\x15ContainerStatsRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\xcd\x01\n" +
-	"\x16ContainerStatsResponse\x12&\n" +
+	"\x06follow\x18\x03 \x01(\bR\x06follow\"7\n" +
+	"\x14InstanceStatsRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\xcc\x01\n" +
+	"\x15InstanceStatsResponse\x12&\n" +
 	"\x0fmemory_usage_mb\x18\x01 \x01(\x05R\rmemoryUsageMb\x12&\n" +
 	"\x0fmemory_limit_mb\x18\x02 \x01(\x05R\rmemoryLimitMb\x12\x1f\n" +
 	"\vcpu_percent\x18\x03 \x01(\x01R\n" +
@@ -3944,29 +3952,34 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\tdest_path\x18\x03 \x01(\tR\bdestPath\x12#\n" +
 	"\rexpected_hash\x18\x04 \x01(\tR\fexpectedHash\x12\x1b\n" +
 	"\tmax_bytes\x18\x05 \x01(\x03R\bmaxBytes\"\x16\n" +
-	"\x14DownloadFileResponse\"Q\n" +
-	"\x18CopyFromContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\"5\n" +
-	"\x19CopyFromContainerResponse\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\fR\acontent\"i\n" +
-	"\x16CopyToContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x12\n" +
+	"\x14DownloadFileResponse\"N\n" +
+	"\x17CopyFromInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\"4\n" +
+	"\x18CopyFromInstanceResponse\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\fR\acontent\"f\n" +
+	"\x15CopyToInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x03 \x01(\fR\acontent\"\x19\n" +
-	"\x17CopyToContainerResponse\"T\n" +
-	"\x1bCopyDirFromContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\"o\n" +
-	"\x19CopyTarToContainerRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12\x1b\n" +
+	"\acontent\x18\x03 \x01(\fR\acontent\"\x18\n" +
+	"\x16CopyToInstanceResponse\"Q\n" +
+	"\x1aCopyDirFromInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\"l\n" +
+	"\x18CopyTarToInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x1b\n" +
 	"\tdest_path\x18\x02 \x01(\tR\bdestPath\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data\"\x1c\n" +
-	"\x1aCopyTarToContainerResponse\"\x14\n" +
-	"\x12WatchEventsRequest\"u\n" +
-	"\x11ContainerEventMsg\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12%\n" +
-	"\x0econtainer_name\x18\x02 \x01(\tR\rcontainerName\x12\x16\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"\x1b\n" +
+	"\x19CopyTarToInstanceResponse\"\x14\n" +
+	"\x12WatchEventsRequest\"p\n" +
+	"\x10InstanceEventMsg\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12#\n" +
+	"\rinstance_name\x18\x02 \x01(\tR\finstanceName\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\"\xac\x02\n" +
 	"\x10HeartbeatRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1b\n" +
@@ -4011,15 +4024,16 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid\x12#\n" +
 	"\rgameserver_id\x18\x02 \x01(\tR\fgameserverId\x12\x1f\n" +
 	"\vvolume_name\x18\x03 \x01(\tR\n" +
-	"volumeName\"!\n" +
-	"\x1fListGameserverContainersRequest\"_\n" +
-	" ListGameserverContainersResponse\x12;\n" +
+	"volumeName\" \n" +
+	"\x1eListGameserverInstancesRequest\"]\n" +
+	"\x1fListGameserverInstancesResponse\x12:\n" +
 	"\n" +
-	"containers\x18\x01 \x03(\v2\x1b.worker.GameserverContainerR\n" +
-	"containers\"\x9a\x01\n" +
-	"\x13GameserverContainer\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12%\n" +
-	"\x0econtainer_name\x18\x02 \x01(\tR\rcontainerName\x12#\n" +
+	"containers\x18\x01 \x03(\v2\x1a.worker.GameserverInstanceR\n" +
+	"containers\"\x95\x01\n" +
+	"\x12GameserverInstance\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12#\n" +
+	"\rinstance_name\x18\x02 \x01(\tR\finstanceName\x12#\n" +
 	"\rgameserver_id\x18\x03 \x01(\tR\fgameserverId\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\"Y\n" +
 	"\x19PrepareGameScriptsRequest\x12\x17\n" +
@@ -4054,17 +4068,17 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir\x12\x1f\n" +
 	"\vvolume_name\x18\x02 \x01(\tR\n" +
 	"volumeName\"\x1b\n" +
-	"\x19CopyDepotToVolumeResponse2\xa2\x14\n" +
+	"\x19CopyDepotToVolumeResponse2\xff\x13\n" +
 	"\rWorkerService\x12@\n" +
-	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12R\n" +
-	"\x0fCreateContainer\x12\x1e.worker.CreateContainerRequest\x1a\x1f.worker.CreateContainerResponse\x12O\n" +
-	"\x0eStartContainer\x12\x1d.worker.StartContainerRequest\x1a\x1e.worker.StartContainerResponse\x12L\n" +
-	"\rStopContainer\x12\x1c.worker.StopContainerRequest\x1a\x1d.worker.StopContainerResponse\x12R\n" +
-	"\x0fRemoveContainer\x12\x1e.worker.RemoveContainerRequest\x1a\x1f.worker.RemoveContainerResponse\x12U\n" +
-	"\x10InspectContainer\x12\x1f.worker.InspectContainerRequest\x1a .worker.InspectContainerResponse\x121\n" +
-	"\x04Exec\x12\x13.worker.ExecRequest\x1a\x14.worker.ExecResponse\x12B\n" +
-	"\rContainerLogs\x12\x1c.worker.ContainerLogsRequest\x1a\x11.worker.DataChunk0\x01\x12O\n" +
-	"\x0eContainerStats\x12\x1d.worker.ContainerStatsRequest\x1a\x1e.worker.ContainerStatsResponse\x12I\n" +
+	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12O\n" +
+	"\x0eCreateInstance\x12\x1d.worker.CreateInstanceRequest\x1a\x1e.worker.CreateInstanceResponse\x12L\n" +
+	"\rStartInstance\x12\x1c.worker.StartInstanceRequest\x1a\x1d.worker.StartInstanceResponse\x12I\n" +
+	"\fStopInstance\x12\x1b.worker.StopInstanceRequest\x1a\x1c.worker.StopInstanceResponse\x12O\n" +
+	"\x0eRemoveInstance\x12\x1d.worker.RemoveInstanceRequest\x1a\x1e.worker.RemoveInstanceResponse\x12R\n" +
+	"\x0fInspectInstance\x12\x1e.worker.InspectInstanceRequest\x1a\x1f.worker.InspectInstanceResponse\x121\n" +
+	"\x04Exec\x12\x13.worker.ExecRequest\x1a\x14.worker.ExecResponse\x12@\n" +
+	"\fInstanceLogs\x12\x1b.worker.InstanceLogsRequest\x1a\x11.worker.DataChunk0\x01\x12L\n" +
+	"\rInstanceStats\x12\x1c.worker.InstanceStatsRequest\x1a\x1d.worker.InstanceStatsResponse\x12I\n" +
 	"\fCreateVolume\x12\x1b.worker.CreateVolumeRequest\x1a\x1c.worker.CreateVolumeResponse\x12I\n" +
 	"\fRemoveVolume\x12\x1b.worker.RemoveVolumeRequest\x1a\x1c.worker.RemoveVolumeResponse\x12C\n" +
 	"\n" +
@@ -4080,13 +4094,13 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x0fCreateDirectory\x12\x1e.worker.CreateDirectoryRequest\x1a\x1f.worker.CreateDirectoryResponse\x12C\n" +
 	"\n" +
 	"RenamePath\x12\x19.worker.RenamePathRequest\x1a\x1a.worker.RenamePathResponse\x12I\n" +
-	"\fDownloadFile\x12\x1b.worker.DownloadFileRequest\x1a\x1c.worker.DownloadFileResponse\x12X\n" +
-	"\x11CopyFromContainer\x12 .worker.CopyFromContainerRequest\x1a!.worker.CopyFromContainerResponse\x12R\n" +
-	"\x0fCopyToContainer\x12\x1e.worker.CopyToContainerRequest\x1a\x1f.worker.CopyToContainerResponse\x12P\n" +
-	"\x14CopyDirFromContainer\x12#.worker.CopyDirFromContainerRequest\x1a\x11.worker.DataChunk0\x01\x12]\n" +
-	"\x12CopyTarToContainer\x12!.worker.CopyTarToContainerRequest\x1a\".worker.CopyTarToContainerResponse(\x01\x12F\n" +
-	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x19.worker.ContainerEventMsg0\x01\x12m\n" +
-	"\x18ListGameserverContainers\x12'.worker.ListGameserverContainersRequest\x1a(.worker.ListGameserverContainersResponse\x12@\n" +
+	"\fDownloadFile\x12\x1b.worker.DownloadFileRequest\x1a\x1c.worker.DownloadFileResponse\x12U\n" +
+	"\x10CopyFromInstance\x12\x1f.worker.CopyFromInstanceRequest\x1a .worker.CopyFromInstanceResponse\x12O\n" +
+	"\x0eCopyToInstance\x12\x1d.worker.CopyToInstanceRequest\x1a\x1e.worker.CopyToInstanceResponse\x12N\n" +
+	"\x13CopyDirFromInstance\x12\".worker.CopyDirFromInstanceRequest\x1a\x11.worker.DataChunk0\x01\x12Z\n" +
+	"\x11CopyTarToInstance\x12 .worker.CopyTarToInstanceRequest\x1a!.worker.CopyTarToInstanceResponse(\x01\x12E\n" +
+	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x18.worker.InstanceEventMsg0\x01\x12j\n" +
+	"\x17ListGameserverInstances\x12&.worker.ListGameserverInstancesRequest\x1a'.worker.ListGameserverInstancesResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
 	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse\x12H\n" +
 	"\vEnsureDepot\x12\x1a.worker.EnsureDepotRequest\x1a\x1b.worker.EnsureDepotProgress0\x01\x12a\n" +
@@ -4111,91 +4125,91 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 
 var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
 var file_proto_worker_proto_goTypes = []any{
-	(*DataChunk)(nil),                        // 0: worker.DataChunk
-	(*PullImageRequest)(nil),                 // 1: worker.PullImageRequest
-	(*PullImageResponse)(nil),                // 2: worker.PullImageResponse
-	(*PortBinding)(nil),                      // 3: worker.PortBinding
-	(*CreateContainerRequest)(nil),           // 4: worker.CreateContainerRequest
-	(*CreateContainerResponse)(nil),          // 5: worker.CreateContainerResponse
-	(*StartContainerRequest)(nil),            // 6: worker.StartContainerRequest
-	(*StartContainerResponse)(nil),           // 7: worker.StartContainerResponse
-	(*StopContainerRequest)(nil),             // 8: worker.StopContainerRequest
-	(*StopContainerResponse)(nil),            // 9: worker.StopContainerResponse
-	(*RemoveContainerRequest)(nil),           // 10: worker.RemoveContainerRequest
-	(*RemoveContainerResponse)(nil),          // 11: worker.RemoveContainerResponse
-	(*InspectContainerRequest)(nil),          // 12: worker.InspectContainerRequest
-	(*InspectContainerResponse)(nil),         // 13: worker.InspectContainerResponse
-	(*ExecRequest)(nil),                      // 14: worker.ExecRequest
-	(*ExecResponse)(nil),                     // 15: worker.ExecResponse
-	(*ContainerLogsRequest)(nil),             // 16: worker.ContainerLogsRequest
-	(*ContainerStatsRequest)(nil),            // 17: worker.ContainerStatsRequest
-	(*ContainerStatsResponse)(nil),           // 18: worker.ContainerStatsResponse
-	(*CreateVolumeRequest)(nil),              // 19: worker.CreateVolumeRequest
-	(*CreateVolumeResponse)(nil),             // 20: worker.CreateVolumeResponse
-	(*RemoveVolumeRequest)(nil),              // 21: worker.RemoveVolumeRequest
-	(*RemoveVolumeResponse)(nil),             // 22: worker.RemoveVolumeResponse
-	(*VolumeSizeRequest)(nil),                // 23: worker.VolumeSizeRequest
-	(*VolumeSizeResponse)(nil),               // 24: worker.VolumeSizeResponse
-	(*BackupVolumeRequest)(nil),              // 25: worker.BackupVolumeRequest
-	(*RestoreVolumeRequest)(nil),             // 26: worker.RestoreVolumeRequest
-	(*RestoreVolumeResponse)(nil),            // 27: worker.RestoreVolumeResponse
-	(*ListFilesRequest)(nil),                 // 28: worker.ListFilesRequest
-	(*FileEntryMsg)(nil),                     // 29: worker.FileEntryMsg
-	(*ListFilesResponse)(nil),                // 30: worker.ListFilesResponse
-	(*ReadFileRequest)(nil),                  // 31: worker.ReadFileRequest
-	(*ReadFileResponse)(nil),                 // 32: worker.ReadFileResponse
-	(*WriteFileRequest)(nil),                 // 33: worker.WriteFileRequest
-	(*WriteFileResponse)(nil),                // 34: worker.WriteFileResponse
-	(*WriteFileStreamRequest)(nil),           // 35: worker.WriteFileStreamRequest
-	(*WriteFileStreamResponse)(nil),          // 36: worker.WriteFileStreamResponse
-	(*DeletePathRequest)(nil),                // 37: worker.DeletePathRequest
-	(*DeletePathResponse)(nil),               // 38: worker.DeletePathResponse
-	(*CreateDirectoryRequest)(nil),           // 39: worker.CreateDirectoryRequest
-	(*CreateDirectoryResponse)(nil),          // 40: worker.CreateDirectoryResponse
-	(*RenamePathRequest)(nil),                // 41: worker.RenamePathRequest
-	(*RenamePathResponse)(nil),               // 42: worker.RenamePathResponse
-	(*DownloadFileRequest)(nil),              // 43: worker.DownloadFileRequest
-	(*DownloadFileResponse)(nil),             // 44: worker.DownloadFileResponse
-	(*CopyFromContainerRequest)(nil),         // 45: worker.CopyFromContainerRequest
-	(*CopyFromContainerResponse)(nil),        // 46: worker.CopyFromContainerResponse
-	(*CopyToContainerRequest)(nil),           // 47: worker.CopyToContainerRequest
-	(*CopyToContainerResponse)(nil),          // 48: worker.CopyToContainerResponse
-	(*CopyDirFromContainerRequest)(nil),      // 49: worker.CopyDirFromContainerRequest
-	(*CopyTarToContainerRequest)(nil),        // 50: worker.CopyTarToContainerRequest
-	(*CopyTarToContainerResponse)(nil),       // 51: worker.CopyTarToContainerResponse
-	(*WatchEventsRequest)(nil),               // 52: worker.WatchEventsRequest
-	(*ContainerEventMsg)(nil),                // 53: worker.ContainerEventMsg
-	(*HeartbeatRequest)(nil),                 // 54: worker.HeartbeatRequest
-	(*HeartbeatResponse)(nil),                // 55: worker.HeartbeatResponse
-	(*RegisterRequest)(nil),                  // 56: worker.RegisterRequest
-	(*RegisterResponse)(nil),                 // 57: worker.RegisterResponse
-	(*SFTPLoginRequest)(nil),                 // 58: worker.SFTPLoginRequest
-	(*SFTPLoginResponse)(nil),                // 59: worker.SFTPLoginResponse
-	(*ListGameserverContainersRequest)(nil),  // 60: worker.ListGameserverContainersRequest
-	(*ListGameserverContainersResponse)(nil), // 61: worker.ListGameserverContainersResponse
-	(*GameserverContainer)(nil),              // 62: worker.GameserverContainer
-	(*PrepareGameScriptsRequest)(nil),        // 63: worker.PrepareGameScriptsRequest
-	(*PrepareGameScriptsResponse)(nil),       // 64: worker.PrepareGameScriptsResponse
-	(*EnsureDepotRequest)(nil),               // 65: worker.EnsureDepotRequest
-	(*EnsureDepotProgress)(nil),              // 66: worker.EnsureDepotProgress
-	(*DownloadWorkshopItemRequest)(nil),      // 67: worker.DownloadWorkshopItemRequest
-	(*DownloadWorkshopItemResponse)(nil),     // 68: worker.DownloadWorkshopItemResponse
-	(*CopyDepotToVolumeRequest)(nil),         // 69: worker.CopyDepotToVolumeRequest
-	(*CopyDepotToVolumeResponse)(nil),        // 70: worker.CopyDepotToVolumeResponse
+	(*DataChunk)(nil),                       // 0: worker.DataChunk
+	(*PullImageRequest)(nil),                // 1: worker.PullImageRequest
+	(*PullImageResponse)(nil),               // 2: worker.PullImageResponse
+	(*PortBinding)(nil),                     // 3: worker.PortBinding
+	(*CreateInstanceRequest)(nil),           // 4: worker.CreateInstanceRequest
+	(*CreateInstanceResponse)(nil),          // 5: worker.CreateInstanceResponse
+	(*StartInstanceRequest)(nil),            // 6: worker.StartInstanceRequest
+	(*StartInstanceResponse)(nil),           // 7: worker.StartInstanceResponse
+	(*StopInstanceRequest)(nil),             // 8: worker.StopInstanceRequest
+	(*StopInstanceResponse)(nil),            // 9: worker.StopInstanceResponse
+	(*RemoveInstanceRequest)(nil),           // 10: worker.RemoveInstanceRequest
+	(*RemoveInstanceResponse)(nil),          // 11: worker.RemoveInstanceResponse
+	(*InspectInstanceRequest)(nil),          // 12: worker.InspectInstanceRequest
+	(*InspectInstanceResponse)(nil),         // 13: worker.InspectInstanceResponse
+	(*ExecRequest)(nil),                     // 14: worker.ExecRequest
+	(*ExecResponse)(nil),                    // 15: worker.ExecResponse
+	(*InstanceLogsRequest)(nil),             // 16: worker.InstanceLogsRequest
+	(*InstanceStatsRequest)(nil),            // 17: worker.InstanceStatsRequest
+	(*InstanceStatsResponse)(nil),           // 18: worker.InstanceStatsResponse
+	(*CreateVolumeRequest)(nil),             // 19: worker.CreateVolumeRequest
+	(*CreateVolumeResponse)(nil),            // 20: worker.CreateVolumeResponse
+	(*RemoveVolumeRequest)(nil),             // 21: worker.RemoveVolumeRequest
+	(*RemoveVolumeResponse)(nil),            // 22: worker.RemoveVolumeResponse
+	(*VolumeSizeRequest)(nil),               // 23: worker.VolumeSizeRequest
+	(*VolumeSizeResponse)(nil),              // 24: worker.VolumeSizeResponse
+	(*BackupVolumeRequest)(nil),             // 25: worker.BackupVolumeRequest
+	(*RestoreVolumeRequest)(nil),            // 26: worker.RestoreVolumeRequest
+	(*RestoreVolumeResponse)(nil),           // 27: worker.RestoreVolumeResponse
+	(*ListFilesRequest)(nil),                // 28: worker.ListFilesRequest
+	(*FileEntryMsg)(nil),                    // 29: worker.FileEntryMsg
+	(*ListFilesResponse)(nil),               // 30: worker.ListFilesResponse
+	(*ReadFileRequest)(nil),                 // 31: worker.ReadFileRequest
+	(*ReadFileResponse)(nil),                // 32: worker.ReadFileResponse
+	(*WriteFileRequest)(nil),                // 33: worker.WriteFileRequest
+	(*WriteFileResponse)(nil),               // 34: worker.WriteFileResponse
+	(*WriteFileStreamRequest)(nil),          // 35: worker.WriteFileStreamRequest
+	(*WriteFileStreamResponse)(nil),         // 36: worker.WriteFileStreamResponse
+	(*DeletePathRequest)(nil),               // 37: worker.DeletePathRequest
+	(*DeletePathResponse)(nil),              // 38: worker.DeletePathResponse
+	(*CreateDirectoryRequest)(nil),          // 39: worker.CreateDirectoryRequest
+	(*CreateDirectoryResponse)(nil),         // 40: worker.CreateDirectoryResponse
+	(*RenamePathRequest)(nil),               // 41: worker.RenamePathRequest
+	(*RenamePathResponse)(nil),              // 42: worker.RenamePathResponse
+	(*DownloadFileRequest)(nil),             // 43: worker.DownloadFileRequest
+	(*DownloadFileResponse)(nil),            // 44: worker.DownloadFileResponse
+	(*CopyFromInstanceRequest)(nil),         // 45: worker.CopyFromInstanceRequest
+	(*CopyFromInstanceResponse)(nil),        // 46: worker.CopyFromInstanceResponse
+	(*CopyToInstanceRequest)(nil),           // 47: worker.CopyToInstanceRequest
+	(*CopyToInstanceResponse)(nil),          // 48: worker.CopyToInstanceResponse
+	(*CopyDirFromInstanceRequest)(nil),      // 49: worker.CopyDirFromInstanceRequest
+	(*CopyTarToInstanceRequest)(nil),        // 50: worker.CopyTarToInstanceRequest
+	(*CopyTarToInstanceResponse)(nil),       // 51: worker.CopyTarToInstanceResponse
+	(*WatchEventsRequest)(nil),              // 52: worker.WatchEventsRequest
+	(*InstanceEventMsg)(nil),                // 53: worker.InstanceEventMsg
+	(*HeartbeatRequest)(nil),                // 54: worker.HeartbeatRequest
+	(*HeartbeatResponse)(nil),               // 55: worker.HeartbeatResponse
+	(*RegisterRequest)(nil),                 // 56: worker.RegisterRequest
+	(*RegisterResponse)(nil),                // 57: worker.RegisterResponse
+	(*SFTPLoginRequest)(nil),                // 58: worker.SFTPLoginRequest
+	(*SFTPLoginResponse)(nil),               // 59: worker.SFTPLoginResponse
+	(*ListGameserverInstancesRequest)(nil),  // 60: worker.ListGameserverInstancesRequest
+	(*ListGameserverInstancesResponse)(nil), // 61: worker.ListGameserverInstancesResponse
+	(*GameserverInstance)(nil),              // 62: worker.GameserverInstance
+	(*PrepareGameScriptsRequest)(nil),       // 63: worker.PrepareGameScriptsRequest
+	(*PrepareGameScriptsResponse)(nil),      // 64: worker.PrepareGameScriptsResponse
+	(*EnsureDepotRequest)(nil),              // 65: worker.EnsureDepotRequest
+	(*EnsureDepotProgress)(nil),             // 66: worker.EnsureDepotProgress
+	(*DownloadWorkshopItemRequest)(nil),     // 67: worker.DownloadWorkshopItemRequest
+	(*DownloadWorkshopItemResponse)(nil),    // 68: worker.DownloadWorkshopItemResponse
+	(*CopyDepotToVolumeRequest)(nil),        // 69: worker.CopyDepotToVolumeRequest
+	(*CopyDepotToVolumeResponse)(nil),       // 70: worker.CopyDepotToVolumeResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
-	3,  // 0: worker.CreateContainerRequest.ports:type_name -> worker.PortBinding
+	3,  // 0: worker.CreateInstanceRequest.ports:type_name -> worker.PortBinding
 	29, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
-	62, // 2: worker.ListGameserverContainersResponse.containers:type_name -> worker.GameserverContainer
+	62, // 2: worker.ListGameserverInstancesResponse.containers:type_name -> worker.GameserverInstance
 	1,  // 3: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
-	4,  // 4: worker.WorkerService.CreateContainer:input_type -> worker.CreateContainerRequest
-	6,  // 5: worker.WorkerService.StartContainer:input_type -> worker.StartContainerRequest
-	8,  // 6: worker.WorkerService.StopContainer:input_type -> worker.StopContainerRequest
-	10, // 7: worker.WorkerService.RemoveContainer:input_type -> worker.RemoveContainerRequest
-	12, // 8: worker.WorkerService.InspectContainer:input_type -> worker.InspectContainerRequest
+	4,  // 4: worker.WorkerService.CreateInstance:input_type -> worker.CreateInstanceRequest
+	6,  // 5: worker.WorkerService.StartInstance:input_type -> worker.StartInstanceRequest
+	8,  // 6: worker.WorkerService.StopInstance:input_type -> worker.StopInstanceRequest
+	10, // 7: worker.WorkerService.RemoveInstance:input_type -> worker.RemoveInstanceRequest
+	12, // 8: worker.WorkerService.InspectInstance:input_type -> worker.InspectInstanceRequest
 	14, // 9: worker.WorkerService.Exec:input_type -> worker.ExecRequest
-	16, // 10: worker.WorkerService.ContainerLogs:input_type -> worker.ContainerLogsRequest
-	17, // 11: worker.WorkerService.ContainerStats:input_type -> worker.ContainerStatsRequest
+	16, // 10: worker.WorkerService.InstanceLogs:input_type -> worker.InstanceLogsRequest
+	17, // 11: worker.WorkerService.InstanceStats:input_type -> worker.InstanceStatsRequest
 	19, // 12: worker.WorkerService.CreateVolume:input_type -> worker.CreateVolumeRequest
 	21, // 13: worker.WorkerService.RemoveVolume:input_type -> worker.RemoveVolumeRequest
 	23, // 14: worker.WorkerService.VolumeSize:input_type -> worker.VolumeSizeRequest
@@ -4209,12 +4223,12 @@ var file_proto_worker_proto_depIdxs = []int32{
 	39, // 22: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
 	41, // 23: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
 	43, // 24: worker.WorkerService.DownloadFile:input_type -> worker.DownloadFileRequest
-	45, // 25: worker.WorkerService.CopyFromContainer:input_type -> worker.CopyFromContainerRequest
-	47, // 26: worker.WorkerService.CopyToContainer:input_type -> worker.CopyToContainerRequest
-	49, // 27: worker.WorkerService.CopyDirFromContainer:input_type -> worker.CopyDirFromContainerRequest
-	50, // 28: worker.WorkerService.CopyTarToContainer:input_type -> worker.CopyTarToContainerRequest
+	45, // 25: worker.WorkerService.CopyFromInstance:input_type -> worker.CopyFromInstanceRequest
+	47, // 26: worker.WorkerService.CopyToInstance:input_type -> worker.CopyToInstanceRequest
+	49, // 27: worker.WorkerService.CopyDirFromInstance:input_type -> worker.CopyDirFromInstanceRequest
+	50, // 28: worker.WorkerService.CopyTarToInstance:input_type -> worker.CopyTarToInstanceRequest
 	52, // 29: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
-	60, // 30: worker.WorkerService.ListGameserverContainers:input_type -> worker.ListGameserverContainersRequest
+	60, // 30: worker.WorkerService.ListGameserverInstances:input_type -> worker.ListGameserverInstancesRequest
 	54, // 31: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
 	63, // 32: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
 	65, // 33: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
@@ -4224,14 +4238,14 @@ var file_proto_worker_proto_depIdxs = []int32{
 	54, // 37: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
 	58, // 38: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
 	2,  // 39: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 40: worker.WorkerService.CreateContainer:output_type -> worker.CreateContainerResponse
-	7,  // 41: worker.WorkerService.StartContainer:output_type -> worker.StartContainerResponse
-	9,  // 42: worker.WorkerService.StopContainer:output_type -> worker.StopContainerResponse
-	11, // 43: worker.WorkerService.RemoveContainer:output_type -> worker.RemoveContainerResponse
-	13, // 44: worker.WorkerService.InspectContainer:output_type -> worker.InspectContainerResponse
+	5,  // 40: worker.WorkerService.CreateInstance:output_type -> worker.CreateInstanceResponse
+	7,  // 41: worker.WorkerService.StartInstance:output_type -> worker.StartInstanceResponse
+	9,  // 42: worker.WorkerService.StopInstance:output_type -> worker.StopInstanceResponse
+	11, // 43: worker.WorkerService.RemoveInstance:output_type -> worker.RemoveInstanceResponse
+	13, // 44: worker.WorkerService.InspectInstance:output_type -> worker.InspectInstanceResponse
 	15, // 45: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 46: worker.WorkerService.ContainerLogs:output_type -> worker.DataChunk
-	18, // 47: worker.WorkerService.ContainerStats:output_type -> worker.ContainerStatsResponse
+	0,  // 46: worker.WorkerService.InstanceLogs:output_type -> worker.DataChunk
+	18, // 47: worker.WorkerService.InstanceStats:output_type -> worker.InstanceStatsResponse
 	20, // 48: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
 	22, // 49: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
 	24, // 50: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
@@ -4245,12 +4259,12 @@ var file_proto_worker_proto_depIdxs = []int32{
 	40, // 58: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
 	42, // 59: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
 	44, // 60: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
-	46, // 61: worker.WorkerService.CopyFromContainer:output_type -> worker.CopyFromContainerResponse
-	48, // 62: worker.WorkerService.CopyToContainer:output_type -> worker.CopyToContainerResponse
-	0,  // 63: worker.WorkerService.CopyDirFromContainer:output_type -> worker.DataChunk
-	51, // 64: worker.WorkerService.CopyTarToContainer:output_type -> worker.CopyTarToContainerResponse
-	53, // 65: worker.WorkerService.WatchEvents:output_type -> worker.ContainerEventMsg
-	61, // 66: worker.WorkerService.ListGameserverContainers:output_type -> worker.ListGameserverContainersResponse
+	46, // 61: worker.WorkerService.CopyFromInstance:output_type -> worker.CopyFromInstanceResponse
+	48, // 62: worker.WorkerService.CopyToInstance:output_type -> worker.CopyToInstanceResponse
+	0,  // 63: worker.WorkerService.CopyDirFromInstance:output_type -> worker.DataChunk
+	51, // 64: worker.WorkerService.CopyTarToInstance:output_type -> worker.CopyTarToInstanceResponse
+	53, // 65: worker.WorkerService.WatchEvents:output_type -> worker.InstanceEventMsg
+	61, // 66: worker.WorkerService.ListGameserverInstances:output_type -> worker.ListGameserverInstancesResponse
 	55, // 67: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
 	64, // 68: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
 	66, // 69: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress

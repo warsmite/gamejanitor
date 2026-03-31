@@ -36,8 +36,8 @@ func (w *RemoteWorker) PullImage(ctx context.Context, image string) error {
 	return err
 }
 
-func (w *RemoteWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
-	req := &pb.CreateContainerRequest{
+func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
+	req := &pb.CreateInstanceRequest{
 		Name:          opts.Name,
 		Image:         opts.Image,
 		Env:           opts.Env,
@@ -57,37 +57,37 @@ func (w *RemoteWorker) CreateContainer(ctx context.Context, opts worker.Containe
 		})
 	}
 
-	resp, err := w.client.CreateContainer(ctx, req)
+	resp, err := w.client.CreateInstance(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	return resp.ContainerId, nil
+	return resp.InstanceId, nil
 }
 
-func (w *RemoteWorker) StartContainer(ctx context.Context, id string) error {
-	_, err := w.client.StartContainer(ctx, &pb.StartContainerRequest{ContainerId: id})
+func (w *RemoteWorker) StartInstance(ctx context.Context, id string) error {
+	_, err := w.client.StartInstance(ctx, &pb.StartInstanceRequest{InstanceId: id})
 	return err
 }
 
-func (w *RemoteWorker) StopContainer(ctx context.Context, id string, timeoutSeconds int) error {
-	_, err := w.client.StopContainer(ctx, &pb.StopContainerRequest{
-		ContainerId:    id,
+func (w *RemoteWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
+	_, err := w.client.StopInstance(ctx, &pb.StopInstanceRequest{
+		InstanceId:    id,
 		TimeoutSeconds: int32(timeoutSeconds),
 	})
 	return err
 }
 
-func (w *RemoteWorker) RemoveContainer(ctx context.Context, id string) error {
-	_, err := w.client.RemoveContainer(ctx, &pb.RemoveContainerRequest{ContainerId: id})
+func (w *RemoteWorker) RemoveInstance(ctx context.Context, id string) error {
+	_, err := w.client.RemoveInstance(ctx, &pb.RemoveInstanceRequest{InstanceId: id})
 	return err
 }
 
-func (w *RemoteWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
-	resp, err := w.client.InspectContainer(ctx, &pb.InspectContainerRequest{ContainerId: id})
+func (w *RemoteWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
+	resp, err := w.client.InspectInstance(ctx, &pb.InspectInstanceRequest{InstanceId: id})
 	if err != nil {
 		return nil, err
 	}
-	return &worker.ContainerInfo{
+	return &worker.InstanceInfo{
 		ID:        resp.Id,
 		State:     resp.State,
 		StartedAt: time.Unix(resp.StartedAtUnix, 0),
@@ -97,7 +97,7 @@ func (w *RemoteWorker) InspectContainer(ctx context.Context, id string) (*worker
 
 func (w *RemoteWorker) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
 	resp, err := w.client.Exec(ctx, &pb.ExecRequest{
-		ContainerId: containerID,
+		InstanceId: containerID,
 		Cmd:         cmd,
 	})
 	if err != nil {
@@ -106,9 +106,9 @@ func (w *RemoteWorker) Exec(ctx context.Context, containerID string, cmd []strin
 	return int(resp.ExitCode), resp.Stdout, resp.Stderr, nil
 }
 
-func (w *RemoteWorker) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	stream, err := w.client.ContainerLogs(ctx, &pb.ContainerLogsRequest{
-		ContainerId: containerID,
+func (w *RemoteWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+	stream, err := w.client.InstanceLogs(ctx, &pb.InstanceLogsRequest{
+		InstanceId: containerID,
 		Tail:        int32(tail),
 		Follow:      follow,
 	})
@@ -118,12 +118,12 @@ func (w *RemoteWorker) ContainerLogs(ctx context.Context, containerID string, ta
 	return &grpcStreamReader{stream: stream}, nil
 }
 
-func (w *RemoteWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
-	resp, err := w.client.ContainerStats(ctx, &pb.ContainerStatsRequest{ContainerId: containerID})
+func (w *RemoteWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
+	resp, err := w.client.InstanceStats(ctx, &pb.InstanceStatsRequest{InstanceId: containerID})
 	if err != nil {
 		return nil, err
 	}
-	return &worker.ContainerStats{
+	return &worker.InstanceStats{
 		MemoryUsageMB: int(resp.MemoryUsageMb),
 		MemoryLimitMB: int(resp.MemoryLimitMb),
 		CPUPercent:    resp.CpuPercent,
@@ -275,9 +275,9 @@ func (w *RemoteWorker) RenamePath(ctx context.Context, volumeName string, from s
 	return err
 }
 
-func (w *RemoteWorker) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	resp, err := w.client.CopyFromContainer(ctx, &pb.CopyFromContainerRequest{
-		ContainerId: containerID,
+func (w *RemoteWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+	resp, err := w.client.CopyFromInstance(ctx, &pb.CopyFromInstanceRequest{
+		InstanceId: containerID,
 		Path:        path,
 	})
 	if err != nil {
@@ -286,18 +286,18 @@ func (w *RemoteWorker) CopyFromContainer(ctx context.Context, containerID string
 	return resp.Content, nil
 }
 
-func (w *RemoteWorker) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	_, err := w.client.CopyToContainer(ctx, &pb.CopyToContainerRequest{
-		ContainerId: containerID,
+func (w *RemoteWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+	_, err := w.client.CopyToInstance(ctx, &pb.CopyToInstanceRequest{
+		InstanceId: containerID,
 		Path:        path,
 		Content:     content,
 	})
 	return err
 }
 
-func (w *RemoteWorker) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	stream, err := w.client.CopyDirFromContainer(ctx, &pb.CopyDirFromContainerRequest{
-		ContainerId: containerID,
+func (w *RemoteWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+	stream, err := w.client.CopyDirFromInstance(ctx, &pb.CopyDirFromInstanceRequest{
+		InstanceId: containerID,
 		Path:        path,
 	})
 	if err != nil {
@@ -306,8 +306,8 @@ func (w *RemoteWorker) CopyDirFromContainer(ctx context.Context, containerID str
 	return &grpcStreamReader{stream: stream}, nil
 }
 
-func (w *RemoteWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	stream, err := w.client.CopyTarToContainer(ctx)
+func (w *RemoteWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+	stream, err := w.client.CopyTarToInstance(ctx)
 	if err != nil {
 		return err
 	}
@@ -317,9 +317,9 @@ func (w *RemoteWorker) CopyTarToContainer(ctx context.Context, containerID strin
 	for {
 		n, readErr := content.Read(buf)
 		if n > 0 {
-			msg := &pb.CopyTarToContainerRequest{Data: buf[:n]}
+			msg := &pb.CopyTarToInstanceRequest{Data: buf[:n]}
 			if first {
-				msg.ContainerId = containerID
+				msg.InstanceId = containerID
 				msg.DestPath = destPath
 				first = false
 			}
@@ -339,8 +339,8 @@ func (w *RemoteWorker) CopyTarToContainer(ctx context.Context, containerID strin
 	return err
 }
 
-func (w *RemoteWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
-	events := make(chan worker.ContainerEvent, 64)
+func (w *RemoteWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
+	events := make(chan worker.InstanceEvent, 64)
 	errs := make(chan error, 1)
 
 	stream, err := w.client.WatchEvents(ctx, &pb.WatchEventsRequest{})
@@ -363,9 +363,9 @@ func (w *RemoteWorker) WatchEvents(ctx context.Context) (<-chan worker.Container
 				return
 			}
 			select {
-			case events <- worker.ContainerEvent{
-				ContainerID:   msg.ContainerId,
-				ContainerName: msg.ContainerName,
+			case events <- worker.InstanceEvent{
+				InstanceID:   msg.InstanceId,
+				InstanceName: msg.InstanceName,
 				Action:        msg.Action,
 			}:
 			case <-ctx.Done():
@@ -530,16 +530,16 @@ func (w *RemoteWorker) CopyDepotToVolume(ctx context.Context, depotDir string, v
 	return err
 }
 
-func (w *RemoteWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
-	resp, err := w.client.ListGameserverContainers(ctx, &pb.ListGameserverContainersRequest{})
+func (w *RemoteWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+	resp, err := w.client.ListGameserverInstances(ctx, &pb.ListGameserverInstancesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("listing gameserver containers on %s: %w", w.nodeID, err)
 	}
 	var result []worker.GameserverContainer
 	for _, c := range resp.Containers {
 		result = append(result, worker.GameserverContainer{
-			ContainerID:   c.ContainerId,
-			ContainerName: c.ContainerName,
+			InstanceID:   c.InstanceId,
+			InstanceName: c.InstanceName,
 			GameserverID:  c.GameserverId,
 			State:         c.State,
 		})

@@ -709,7 +709,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 			if err := s.Stop(ctx, id); err != nil {
 				return fmt.Errorf("stopping gameserver before delete: %w", err)
 			}
-			// Re-read after stop — Stop() clears ContainerID in DB
+			// Re-read after stop — Stop() clears InstanceID in DB
 			gs, err = s.store.GetGameserver(id)
 			if err != nil {
 				return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
@@ -723,14 +723,14 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		if w == nil {
 			return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
 		}
-		if gs.ContainerID != nil {
-			if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+		if gs.InstanceID != nil {
+			if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
 				s.log.Warn("failed to remove container by id during delete", "id", id, "error", err)
 			}
 		}
-		// Also try by name in case ContainerID was cleared but container still exists
-		containerName := naming.ContainerName(id)
-		if err := w.RemoveContainer(ctx, containerName); err != nil {
+		// Also try by name in case InstanceID was cleared but container still exists
+		containerName := naming.InstanceName(id)
+		if err := w.RemoveInstance(ctx, containerName); err != nil {
 			s.log.Debug("no container to remove by name during delete", "name", containerName)
 		}
 

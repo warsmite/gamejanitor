@@ -44,10 +44,10 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 	}
 
 	var localWorker worker.Worker
-	if cfg.ContainerRuntime == "process" {
+	if cfg.Runtime == "process" {
 		localWorker = process.New(gameStore, cfg.DataDir, logger)
 	} else {
-		dockerClient, err := docker.New(logger, cfg.ResolveContainerSocket())
+		dockerClient, err := docker.New(logger, cfg.ResolveRuntimeSocket())
 		if err != nil {
 			return fmt.Errorf("failed to connect to container runtime: %w", err)
 		}

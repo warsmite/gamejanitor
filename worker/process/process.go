@@ -36,7 +36,7 @@ type ProcessWorker struct {
 	processes map[string]*managedProcess
 
 	eventMu     sync.Mutex
-	eventCh     chan worker.ContainerEvent
+	eventCh     chan worker.InstanceEvent
 	eventActive bool
 }
 
@@ -52,7 +52,7 @@ type managedProcess struct {
 	done      chan struct{}
 }
 
-// processManifest is persisted to disk so StartContainer can find the config.
+// processManifest is persisted to disk so StartInstance can find the config.
 type processManifest struct {
 	Name          string              `json:"name"`
 	Image         string              `json:"image"`
@@ -70,7 +70,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *ProcessW
 		gameStore: gameStore,
 		dataDir:   dataDir,
 		processes: make(map[string]*managedProcess),
-		eventCh:   make(chan worker.ContainerEvent, 64),
+		eventCh:   make(chan worker.InstanceEvent, 64),
 	}
 	w.resolve = w.processVolumeResolver()
 	w.resolvConf = ensureResolvConf(dataDir)
@@ -110,7 +110,7 @@ func (w *ProcessWorker) PullImage(ctx context.Context, image string) error {
 	return err
 }
 
-func (w *ProcessWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
+func (w *ProcessWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
 	id := opts.Name // reuse the container name as the process ID
 
 	dir := w.processDir(id)
@@ -140,7 +140,7 @@ func (w *ProcessWorker) CreateContainer(ctx context.Context, opts worker.Contain
 	return id, nil
 }
 
-func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
+func (w *ProcessWorker) StartInstance(ctx context.Context, id string) error {
 	dir := w.processDir(id)
 	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -249,9 +249,9 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 
 		if active {
 			select {
-			case w.eventCh <- worker.ContainerEvent{
-				ContainerID:   id,
-				ContainerName: manifest.Name,
+			case w.eventCh <- worker.InstanceEvent{
+				InstanceID:   id,
+				InstanceName: manifest.Name,
 				Action:        "die",
 			}:
 			default:
@@ -263,7 +263,7 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 	return nil
 }
 
-func (w *ProcessWorker) StopContainer(ctx context.Context, id string, timeoutSeconds int) error {
+func (w *ProcessWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
 	w.mu.Lock()
 	proc, ok := w.processes[id]
 	w.mu.Unlock()
@@ -293,7 +293,7 @@ func (w *ProcessWorker) StopContainer(ctx context.Context, id string, timeoutSec
 	}
 }
 
-func (w *ProcessWorker) RemoveContainer(ctx context.Context, id string) error {
+func (w *ProcessWorker) RemoveInstance(ctx context.Context, id string) error {
 	w.mu.Lock()
 	proc, ok := w.processes[id]
 	if ok {
@@ -313,7 +313,7 @@ func (w *ProcessWorker) RemoveContainer(ctx context.Context, id string) error {
 	return nil
 }
 
-func (w *ProcessWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
+func (w *ProcessWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[id]
 	w.mu.Unlock()
@@ -327,7 +327,7 @@ func (w *ProcessWorker) InspectContainer(ctx context.Context, id string) (*worke
 		state = "exited"
 	}
 
-	return &worker.ContainerInfo{
+	return &worker.InstanceInfo{
 		ID:        proc.id,
 		State:     state,
 		StartedAt: proc.startedAt,
@@ -394,7 +394,7 @@ func (w *ProcessWorker) Exec(ctx context.Context, containerID string, cmd []stri
 	return exitCode, stdout.String(), stderr.String(), nil
 }
 
-func (w *ProcessWorker) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+func (w *ProcessWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
 	dir := w.processDir(containerID)
 	logPath := filepath.Join(dir, "output.log")
 
@@ -420,19 +420,19 @@ func (w *ProcessWorker) ContainerLogs(ctx context.Context, containerID string, t
 	return f, nil
 }
 
-func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
+func (w *ProcessWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
 
 	if !ok || proc.exited || proc.cmd.Process == nil {
-		return &worker.ContainerStats{}, nil
+		return &worker.InstanceStats{}, nil
 	}
 
 	pid := proc.cmd.Process.Pid
 	memBytes, err := readProcMemory(pid)
 	if err != nil {
-		return &worker.ContainerStats{}, nil
+		return &worker.InstanceStats{}, nil
 	}
 
 	cpuPercent, err := readProcCPU(pid)
@@ -440,7 +440,7 @@ func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) 
 		cpuPercent = 0
 	}
 
-	return &worker.ContainerStats{
+	return &worker.InstanceStats{
 		MemoryUsageMB: int(memBytes / (1024 * 1024)),
 		CPUPercent:    cpuPercent,
 	}, nil
@@ -505,7 +505,7 @@ func (w *ProcessWorker) RenamePath(ctx context.Context, volumeName string, from 
 
 // --- Copy operations (direct filesystem for process worker) ---
 
-func (w *ProcessWorker) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
+func (w *ProcessWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
@@ -518,7 +518,7 @@ func (w *ProcessWorker) CopyFromContainer(ctx context.Context, containerID strin
 	return os.ReadFile(fullPath)
 }
 
-func (w *ProcessWorker) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
+func (w *ProcessWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
@@ -534,7 +534,7 @@ func (w *ProcessWorker) CopyToContainer(ctx context.Context, containerID string,
 	return os.WriteFile(fullPath, content, 0644)
 }
 
-func (w *ProcessWorker) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+func (w *ProcessWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
@@ -547,7 +547,7 @@ func (w *ProcessWorker) CopyDirFromContainer(ctx context.Context, containerID st
 	return tarDirectory(fullPath)
 }
 
-func (w *ProcessWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+func (w *ProcessWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
 	w.mu.Lock()
 	proc, ok := w.processes[containerID]
 	w.mu.Unlock()
@@ -572,7 +572,7 @@ func (w *ProcessWorker) RestoreVolume(ctx context.Context, volumeName string, ta
 
 // --- Events ---
 
-func (w *ProcessWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
+func (w *ProcessWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
 	w.eventMu.Lock()
 	w.eventActive = true
 	w.eventMu.Unlock()
@@ -607,9 +607,9 @@ func (w *ProcessWorker) CopyDepotToVolume(ctx context.Context, depotDir string, 
 	return worker.CopyDepotToVolume(depotDir, mountpoint)
 }
 
-// ListGameserverContainers scans the processes directory for gameservers and checks
+// ListGameserverInstances scans the processes directory for gameservers and checks
 // whether their PIDs are still alive. This allows recovery after gamejanitor restarts.
-func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *ProcessWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
 	processesDir := filepath.Join(w.dataDir, "processes")
 	entries, err := os.ReadDir(processesDir)
 	if err != nil {
@@ -648,8 +648,8 @@ func (w *ProcessWorker) ListGameserverContainers(ctx context.Context) ([]worker.
 		}
 
 		containers = append(containers, worker.GameserverContainer{
-			ContainerID:   id,
-			ContainerName: manifest.Name,
+			InstanceID:   id,
+			InstanceName: manifest.Name,
 			GameserverID:  id,
 			State:         state,
 		})

@@ -15,7 +15,7 @@ type Gameserver struct {
 	MemoryLimitMB     int               `json:"memory_limit_mb"`
 	CPULimit          float64           `json:"cpu_limit"`
 	CPUEnforced       bool              `json:"cpu_enforced"`
-	ContainerID       *string           `json:"container_id"`
+	InstanceID       *string           `json:"instance_id"`
 	VolumeName        string            `json:"volume_name"`
 	Status            string            `json:"status"`
 	ErrorReason       string            `json:"error_reason"`
@@ -122,11 +122,11 @@ type BulkActionResult struct {
 type GameserverStatus struct {
 	Status      string         `json:"status"`
 	ErrorReason string         `json:"error_reason,omitempty"`
-	Container   *ContainerInfo `json:"container"`
+	Container   *InstanceInfo `json:"container"`
 }
 
-// ContainerInfo describes the underlying container state.
-type ContainerInfo struct {
+// InstanceInfo describes the underlying container state.
+type InstanceInfo struct {
 	State     string    `json:"state"`
 	StartedAt time.Time `json:"started_at"`
 }
@@ -600,7 +600,7 @@ type ConfigStatus struct {
 	GRPCPort         int    `json:"grpc_port"`
 	SFTPPort         int    `json:"sftp_port"`
 	DataDir          string `json:"data_dir"`
-	ContainerRuntime string `json:"container_runtime"`
+	Runtime string `json:"runtime"`
 	BackupStoreType  string `json:"backup_store_type"`
 	WebUI            bool   `json:"web_ui"`
 	Controller       bool   `json:"controller"`

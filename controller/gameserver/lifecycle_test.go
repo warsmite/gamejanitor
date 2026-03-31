@@ -27,7 +27,7 @@ func TestLifecycle_Start_HappyPath(t *testing.T) {
 	// Verify gameserver has container ID in DB
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	assert.NotNil(t, fetched.ContainerID)
+	assert.NotNil(t, fetched.InstanceID)
 }
 
 func TestLifecycle_Stop_HappyPath(t *testing.T) {

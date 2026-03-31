@@ -78,21 +78,21 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 	switch e := event.(type) {
 	case controller.ImagePullingEvent:
 		s.setStatus(e.GameserverID, controller.StatusInstalling, "")
-	case controller.ContainerCreatingEvent:
+	case controller.InstanceCreatingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStarting, "")
-	case controller.ContainerStartedEvent:
+	case controller.InstanceStartedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case controller.GameserverReadyEvent:
 		s.setStatus(e.GameserverID, controller.StatusRunning, "")
 		s.clearOperation(e.GameserverID)
 		s.startPolling(e.GameserverID)
-	case controller.ContainerStoppingEvent:
+	case controller.InstanceStoppingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopping, "")
-	case controller.ContainerStoppedEvent:
+	case controller.InstanceStoppedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopped, "")
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
-	case controller.ContainerExitedEvent:
+	case controller.InstanceExitedEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)

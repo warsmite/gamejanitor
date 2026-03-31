@@ -46,13 +46,13 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 
 	// Set up running state directly — avoids triggering ReadyWatcher goroutines
 	// which cause flaky cleanup races under parallel test load.
-	containerID, err := fw.CreateContainer(ctx, worker.ContainerOptions{Name: "test-cmd"})
+	containerID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "test-cmd"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartContainer(ctx, containerID))
+	require.NoError(t, fw.StartInstance(ctx, containerID))
 
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.ContainerID = &containerID
+	fetched.InstanceID = &containerID
 	s.UpdateGameserver(fetched)
 	testutil.SetGameserverStatus(t, s, gs.ID, "running")
 

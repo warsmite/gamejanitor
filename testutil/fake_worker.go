@@ -22,7 +22,7 @@ type FakeWorker struct {
 	mu         sync.Mutex
 	volumes    map[string]string            // volume name → temp dir path
 	containers map[string]*fakeContainer
-	events     chan worker.ContainerEvent
+	events     chan worker.InstanceEvent
 	failures   map[string]error // method name → error to return once
 	t          *testing.T
 	tmpDir     string // parent dir for volume temp dirs
@@ -38,7 +38,7 @@ type FakeWorker struct {
 type fakeContainer struct {
 	id     string
 	name   string
-	opts   worker.ContainerOptions
+	opts   worker.InstanceOptions
 	state  string // "created", "running", "stopped"
 	logBuf bytes.Buffer
 }
@@ -52,7 +52,7 @@ func NewFakeWorker(t *testing.T) *FakeWorker {
 	fw := &FakeWorker{
 		volumes:    make(map[string]string),
 		containers: make(map[string]*fakeContainer),
-		events:     make(chan worker.ContainerEvent, 64),
+		events:     make(chan worker.InstanceEvent, 64),
 		failures:   make(map[string]error),
 		t:          t,
 		tmpDir:     tmpDir,
@@ -69,7 +69,7 @@ func (w *FakeWorker) AddFakeContainer(gameserverID string) string {
 	w.mu.Lock()
 	w.containers[id] = &fakeContainer{
 		id:    id,
-		name:  naming.ContainerName(gameserverID),
+		name:  naming.InstanceName(gameserverID),
 		state: "running",
 	}
 	w.mu.Unlock()
@@ -133,8 +133,8 @@ func (w *FakeWorker) PullImage(ctx context.Context, image string) error {
 	return nil
 }
 
-func (w *FakeWorker) CreateContainer(ctx context.Context, opts worker.ContainerOptions) (string, error) {
-	if err := w.popFailure("CreateContainer"); err != nil {
+func (w *FakeWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
+	if err := w.popFailure("CreateInstance"); err != nil {
 		return "", err
 	}
 
@@ -152,8 +152,8 @@ func (w *FakeWorker) CreateContainer(ctx context.Context, opts worker.ContainerO
 	return id, nil
 }
 
-func (w *FakeWorker) StartContainer(ctx context.Context, id string) error {
-	if err := w.popFailure("StartContainer"); err != nil {
+func (w *FakeWorker) StartInstance(ctx context.Context, id string) error {
+	if err := w.popFailure("StartInstance"); err != nil {
 		return err
 	}
 
@@ -173,17 +173,17 @@ func (w *FakeWorker) StartContainer(ctx context.Context, id string) error {
 	w.mu.Unlock()
 
 	// Emit start event
-	w.events <- worker.ContainerEvent{
-		ContainerID:   id,
-		ContainerName: c.name,
+	w.events <- worker.InstanceEvent{
+		InstanceID:   id,
+		InstanceName: c.name,
 		Action:        "start",
 	}
 
 	return nil
 }
 
-func (w *FakeWorker) StopContainer(ctx context.Context, id string, timeoutSeconds int) error {
-	if err := w.popFailure("StopContainer"); err != nil {
+func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
+	if err := w.popFailure("StopInstance"); err != nil {
 		return err
 	}
 
@@ -199,11 +199,11 @@ func (w *FakeWorker) StopContainer(ctx context.Context, id string, timeoutSecond
 	// No "die" event here. In real Docker, "die" is emitted for ALL container
 	// exits (expected and unexpected). StatusManager distinguishes them by checking
 	// if the gameserver is in "stopping" state. But because the lifecycle publishes
-	// ContainerStoppingEvent and the StatusSubscriber processes it asynchronously,
+	// InstanceStoppingEvent and the StatusSubscriber processes it asynchronously,
 	// there's a race window where "die" arrives before the subscriber has set
 	// "stopping" — causing a false "unexpected death" error.
 	//
-	// The lifecycle code handles expected stops by publishing ContainerStoppedEvent
+	// The lifecycle code handles expected stops by publishing InstanceStoppedEvent
 	// directly. The "die" event path is only needed for crash detection (unexpected
 	// exits). Use SimulateCrash() to test that path explicitly.
 
@@ -220,15 +220,15 @@ func (w *FakeWorker) SimulateCrash(containerID string) {
 	}
 	w.mu.Unlock()
 
-	w.events <- worker.ContainerEvent{
-		ContainerID:   containerID,
-		ContainerName: c.name,
+	w.events <- worker.InstanceEvent{
+		InstanceID:   containerID,
+		InstanceName: c.name,
 		Action:        "die",
 	}
 }
 
-func (w *FakeWorker) RemoveContainer(ctx context.Context, id string) error {
-	if err := w.popFailure("RemoveContainer"); err != nil {
+func (w *FakeWorker) RemoveInstance(ctx context.Context, id string) error {
+	if err := w.popFailure("RemoveInstance"); err != nil {
 		return err
 	}
 
@@ -238,8 +238,8 @@ func (w *FakeWorker) RemoveContainer(ctx context.Context, id string) error {
 	return nil
 }
 
-func (w *FakeWorker) InspectContainer(ctx context.Context, id string) (*worker.ContainerInfo, error) {
-	if err := w.popFailure("InspectContainer"); err != nil {
+func (w *FakeWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
+	if err := w.popFailure("InspectInstance"); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (w *FakeWorker) InspectContainer(ctx context.Context, id string) (*worker.C
 		w.mu.Unlock()
 		return nil, fmt.Errorf("container %s not found", id)
 	}
-	info := &worker.ContainerInfo{
+	info := &worker.InstanceInfo{
 		ID:        c.id,
 		State:     c.state,
 		StartedAt: time.Now(),
@@ -265,8 +265,8 @@ func (w *FakeWorker) Exec(ctx context.Context, containerID string, cmd []string)
 	return 0, "", "", nil
 }
 
-func (w *FakeWorker) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	if err := w.popFailure("ContainerLogs"); err != nil {
+func (w *FakeWorker) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+	if err := w.popFailure("InstanceLogs"); err != nil {
 		return nil, err
 	}
 
@@ -283,11 +283,11 @@ func (w *FakeWorker) ContainerLogs(ctx context.Context, containerID string, tail
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func (w *FakeWorker) ContainerStats(ctx context.Context, containerID string) (*worker.ContainerStats, error) {
-	if err := w.popFailure("ContainerStats"); err != nil {
+func (w *FakeWorker) InstanceStats(ctx context.Context, containerID string) (*worker.InstanceStats, error) {
+	if err := w.popFailure("InstanceStats"); err != nil {
 		return nil, err
 	}
-	return &worker.ContainerStats{
+	return &worker.InstanceStats{
 		MemoryUsageMB: 128,
 		MemoryLimitMB: 512,
 		CPUPercent:    5.0,
@@ -527,29 +527,29 @@ func (w *FakeWorker) RenamePath(ctx context.Context, volumeName string, from str
 
 // Copy operations
 
-func (w *FakeWorker) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	if err := w.popFailure("CopyFromContainer"); err != nil {
+func (w *FakeWorker) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+	if err := w.popFailure("CopyFromInstance"); err != nil {
 		return nil, err
 	}
 	return []byte{}, nil
 }
 
-func (w *FakeWorker) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	if err := w.popFailure("CopyToContainer"); err != nil {
+func (w *FakeWorker) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+	if err := w.popFailure("CopyToInstance"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (w *FakeWorker) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	if err := w.popFailure("CopyDirFromContainer"); err != nil {
+func (w *FakeWorker) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+	if err := w.popFailure("CopyDirFromInstance"); err != nil {
 		return nil, err
 	}
 	return io.NopCloser(bytes.NewReader(nil)), nil
 }
 
-func (w *FakeWorker) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	if err := w.popFailure("CopyTarToContainer"); err != nil {
+func (w *FakeWorker) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+	if err := w.popFailure("CopyTarToInstance"); err != nil {
 		return err
 	}
 	return nil
@@ -573,9 +573,9 @@ func (w *FakeWorker) RestoreVolume(ctx context.Context, volumeName string, tarSt
 
 // Events
 
-func (w *FakeWorker) WatchEvents(ctx context.Context) (<-chan worker.ContainerEvent, <-chan error) {
+func (w *FakeWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
 	errCh := make(chan error, 1)
-	outCh := make(chan worker.ContainerEvent, 64)
+	outCh := make(chan worker.InstanceEvent, 64)
 
 	go func() {
 		defer close(outCh)
@@ -633,7 +633,7 @@ func (w *FakeWorker) DownloadWorkshopItem(ctx context.Context, volumeName string
 	return nil
 }
 
-func (w *FakeWorker) ListGameserverContainers(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *FakeWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
 	return nil, nil
 }
 

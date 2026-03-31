@@ -11,14 +11,14 @@ import (
 type Worker interface {
 	// Container lifecycle
 	PullImage(ctx context.Context, image string) error
-	CreateContainer(ctx context.Context, opts ContainerOptions) (string, error)
-	StartContainer(ctx context.Context, id string) error
-	StopContainer(ctx context.Context, id string, timeoutSeconds int) error
-	RemoveContainer(ctx context.Context, id string) error
-	InspectContainer(ctx context.Context, id string) (*ContainerInfo, error)
+	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
+	StartInstance(ctx context.Context, id string) error
+	StopInstance(ctx context.Context, id string, timeoutSeconds int) error
+	RemoveInstance(ctx context.Context, id string) error
+	InspectInstance(ctx context.Context, id string) (*InstanceInfo, error)
 	Exec(ctx context.Context, containerID string, cmd []string) (exitCode int, stdout string, stderr string, err error)
-	ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error)
-	ContainerStats(ctx context.Context, containerID string) (*ContainerStats, error)
+	InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error)
+	InstanceStats(ctx context.Context, containerID string) (*InstanceStats, error)
 
 	// Volumes
 	CreateVolume(ctx context.Context, name string) error
@@ -37,20 +37,20 @@ type Worker interface {
 	DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error
 
 	// Copy operations (used by config file read/write)
-	CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error)
-	CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error
-	CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error)
-	CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error
+	CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error)
+	CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error
+	CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error)
+	CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error
 
 	// Volume-level backup operations (container-independent)
 	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
 	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
 
 	// Discovery
-	ListGameserverContainers(ctx context.Context) ([]GameserverContainer, error)
+	ListGameserverInstances(ctx context.Context) ([]GameserverContainer, error)
 
 	// Events
-	WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error)
+	WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan error)
 
 	// Game scripts — extract to local filesystem, return host paths for bind-mounts
 	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)

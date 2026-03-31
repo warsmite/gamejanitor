@@ -44,8 +44,8 @@ type Config struct {
 	TLS *TLSConfig `yaml:"tls"`
 
 	// Container runtime
-	ContainerRuntime string `yaml:"container_runtime"` // "docker", "process", or "auto" (default)
-	ContainerSocket  string `yaml:"container_socket"`  // explicit socket path; auto-detected if empty
+	Runtime string `yaml:"runtime"` // "docker", "process", or "auto" (default)
+	RuntimeSocket  string `yaml:"runtime_socket"`  // explicit socket path; auto-detected if empty
 
 	// Backup storage
 	BackupStore *BackupStoreConfig `yaml:"backup_store"`
@@ -182,14 +182,14 @@ func (c *Config) WorkerOnly() bool {
 	return c.Worker && !c.Controller
 }
 
-// ResolveContainerSocket returns the container runtime socket path.
+// ResolveRuntimeSocket returns the container runtime socket path.
 // Auto-detects Docker socket if not explicitly configured.
-func (c *Config) ResolveContainerSocket() string {
-	if c.ContainerSocket != "" {
-		return c.ContainerSocket
+func (c *Config) ResolveRuntimeSocket() string {
+	if c.RuntimeSocket != "" {
+		return c.RuntimeSocket
 	}
 
-	switch c.ContainerRuntime {
+	switch c.Runtime {
 	case "process":
 		return ""
 	case "docker":

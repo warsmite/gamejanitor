@@ -41,7 +41,7 @@ type configStatus struct {
 	GRPCPort         int    `json:"grpc_port"`
 	SFTPPort         int    `json:"sftp_port"`
 	DataDir          string `json:"data_dir"`
-	ContainerRuntime string `json:"container_runtime"`
+	Runtime string `json:"runtime"`
 	BackupStoreType  string `json:"backup_store_type"`
 	WebUI            bool   `json:"web_ui"`
 	Controller       bool   `json:"controller"`
@@ -93,7 +93,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			GRPCPort:         h.cfg.GRPCPort,
 			SFTPPort:         h.cfg.SFTPPort,
 			DataDir:          h.cfg.DataDir,
-			ContainerRuntime: h.cfg.ContainerRuntime,
+			Runtime: h.cfg.Runtime,
 			BackupStoreType:  backupStoreType,
 			WebUI:            h.cfg.WebUI,
 			Controller:       h.cfg.Controller,

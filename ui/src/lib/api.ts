@@ -143,7 +143,7 @@ export interface Gameserver {
   cpu_enforced: boolean;
   storage_limit_mb?: number;
   backup_limit?: number;
-  container_id?: string;
+  instance_id?: string;
   volume_name: string;
   port_mode: string;
   node_id?: string;

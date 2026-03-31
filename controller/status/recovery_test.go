@@ -45,14 +45,14 @@ func TestRecovery_RunningInDB_ContainerGone(t *testing.T) {
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	require.NotNil(t, fetched.ContainerID)
+	require.NotNil(t, fetched.InstanceID)
 
 	// Set status to "running" via activity to simulate a crash recovery scenario
 	s := store.New(svc.DB)
 	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 
-	// Remove the container from the fake worker so InspectContainer fails
-	fw.FailNext("InspectContainer", fmt.Errorf("container not found"))
+	// Remove the container from the fake worker so InspectInstance fails
+	fw.FailNext("InspectInstance", fmt.Errorf("container not found"))
 
 	sm := newTestStatusManager(t, svc)
 	require.NoError(t, sm.RecoverOnStartup(context.Background()))
@@ -88,7 +88,7 @@ func TestRecovery_RunningInDB_ContainerRunning(t *testing.T) {
 	containerID := fw.AddFakeContainer(gs.ID)
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.ContainerID = &containerID
+	fetched.InstanceID = &containerID
 	require.NoError(t, s.UpdateGameserver(fetched))
 	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
 

@@ -46,7 +46,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	if gs == nil {
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if gs.ContainerID == nil {
+	if gs.InstanceID == nil {
 		return nil, controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
 	if !controller.IsRunningStatus(gs.Status) {
@@ -65,8 +65,8 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	if w == nil {
 		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
-	s.log.Info("streaming logs", "gameserver", gameserverID, "container_id", (*gs.ContainerID)[:12])
-	return w.ContainerLogs(ctx, *gs.ContainerID, tail, true)
+	s.log.Info("streaming logs", "gameserver", gameserverID, "instance_id", (*gs.InstanceID)[:12])
+	return w.InstanceLogs(ctx, *gs.InstanceID, tail, true)
 }
 
 // SendCommand executes a command inside a running gameserver's container via /scripts/send-command.
@@ -80,7 +80,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 	if gs == nil {
 		return "", controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if gs.ContainerID == nil {
+	if gs.InstanceID == nil {
 		return "", controller.ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
 	if !controller.IsRunningStatus(gs.Status) {
@@ -102,7 +102,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 
 	s.log.Info("sending command", "gameserver", gameserverID, "command", command)
 
-	exitCode, stdout, stderr, err := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
+	exitCode, stdout, stderr, err := w.Exec(ctx, *gs.InstanceID, []string{"/scripts/send-command", command})
 	if err != nil {
 		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}

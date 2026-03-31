@@ -255,20 +255,20 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Remove old container if exists (stale from prior run/crash).
-	// Clear ContainerID first so late Docker "die" events from the old container
+	// Clear InstanceID first so late Docker "die" events from the old container
 	// are recognized as stale by the StatusManager.
-	containerName := naming.ContainerName(id)
-	if gs.ContainerID != nil {
-		oldID := *gs.ContainerID
-		gs.ContainerID = nil
+	containerName := naming.InstanceName(id)
+	if gs.InstanceID != nil {
+		oldID := *gs.InstanceID
+		gs.InstanceID = nil
 		if err := s.store.UpdateGameserver(gs); err != nil {
 			s.log.Warn("failed to clear old container ID", "gameserver", id, "error", err)
 		}
-		if err := w.RemoveContainer(ctx, oldID); err != nil {
+		if err := w.RemoveInstance(ctx, oldID); err != nil {
 			s.log.Warn("failed to remove old container by id", "gameserver", id, "error", err)
 		}
 	}
-	if err := w.RemoveContainer(ctx, containerName); err != nil {
+	if err := w.RemoveInstance(ctx, containerName); err != nil {
 		s.log.Debug("no stale container to remove by name", "name", containerName)
 	}
 
@@ -276,7 +276,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhaseInstalling)
 	}
-	containerID, err := w.CreateContainer(ctx, worker.ContainerOptions{
+	containerID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:          containerName,
 		Image:         game.ResolveImage(map[string]string(gs.Env)),
 		Env:           env,
@@ -293,21 +293,21 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Save container ID and snapshot the applied config for restart-required detection
-	gs.ContainerID = &containerID
+	gs.InstanceID = &containerID
 	gs.AppliedConfig = gs.SnapshotConfig()
 	if err := s.store.UpdateGameserver(gs); err != nil {
-		w.RemoveContainer(ctx, containerID)
+		w.RemoveInstance(ctx, containerID)
 		return err
 	}
-	s.broadcaster.Publish(controller.ContainerCreatingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.InstanceCreatingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Start container
-	if err := w.StartContainer(ctx, containerID); err != nil {
+	if err := w.StartInstance(ctx, containerID); err != nil {
 		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to start container", err), Timestamp: time.Now()})
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	s.broadcaster.Publish(controller.ContainerStartedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.InstanceStartedEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhaseStarting)
@@ -317,7 +317,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		s.readyWatcher.Watch(id, w, containerID)
 	}
 
-	s.log.Info("gameserver started", "gameserver", id, "container_id", containerID[:12])
+	s.log.Info("gameserver started", "gameserver", id, "instance_id", containerID[:12])
 	return nil
 }
 
@@ -339,7 +339,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return nil
 	}
 
-	s.broadcaster.Publish(controller.ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -357,20 +357,20 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		}()
 	}
 
-	if gs.ContainerID != nil {
+	if gs.InstanceID != nil {
 		w := s.dispatcher.WorkerFor(id)
 		if w == nil {
 			s.log.Warn("worker unavailable during stop, skipping container cleanup", "gameserver", id)
 		} else {
 			// Run stop-server script if it exists — announces shutdown, saves world
-			_, _, _, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/stop-server"})
+			_, _, _, execErr := w.Exec(ctx, *gs.InstanceID, []string{"/scripts/stop-server"})
 			if execErr != nil {
 				s.log.Debug("stop-server script not available or failed, proceeding with container stop", "gameserver", id, "error", execErr)
 			}
-			if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
+			if err := w.StopInstance(ctx, *gs.InstanceID, 10); err != nil {
 				s.log.Warn("failed to stop container gracefully", "gameserver", id, "error", err)
 			}
-			if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
+			if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
 				s.log.Warn("failed to remove container", "gameserver", id, "error", err)
 			}
 		}
@@ -384,12 +384,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	if gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
-	gs.ContainerID = nil
+	gs.InstanceID = nil
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
 	}
 
-	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: id, Timestamp: time.Now()})
 	s.log.Info("gameserver stopped", "gameserver", id)
 	return nil
 }
@@ -499,8 +499,8 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	}
 
 	// Run update-server in temp container
-	tempName := naming.UpdateContainerName(id)
-	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
+	tempName := naming.UpdateInstanceName(id)
+	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
 		Image:      game.ResolveImage(map[string]string(gs.Env)),
 		Env:        env,
@@ -510,9 +510,9 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	if err != nil {
 		return fmt.Errorf("creating temp container for update: %w", err)
 	}
-	defer w.RemoveContainer(ctx, tempID)
+	defer w.RemoveInstance(ctx, tempID)
 
-	if err := w.StartContainer(ctx, tempID); err != nil {
+	if err := w.StartInstance(ctx, tempID); err != nil {
 		return fmt.Errorf("starting temp container for update: %w", err)
 	}
 
@@ -525,7 +525,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
-	if err := w.StopContainer(ctx, tempID, 10); err != nil {
+	if err := w.StopInstance(ctx, tempID, 10); err != nil {
 		s.log.Warn("failed to stop temp update container", "gameserver", id, "error", err)
 	}
 

@@ -7,16 +7,16 @@ option go_package = "github.com/warsmite/gamejanitor/worker/pb";
 // WorkerService is the gRPC interface between controller and worker agents.
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 service WorkerService {
-    // Container lifecycle
+    // Instance lifecycle
     rpc PullImage(PullImageRequest) returns (PullImageResponse);
-    rpc CreateContainer(CreateContainerRequest) returns (CreateContainerResponse);
-    rpc StartContainer(StartContainerRequest) returns (StartContainerResponse);
-    rpc StopContainer(StopContainerRequest) returns (StopContainerResponse);
-    rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse);
-    rpc InspectContainer(InspectContainerRequest) returns (InspectContainerResponse);
+    rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
+    rpc StartInstance(StartInstanceRequest) returns (StartInstanceResponse);
+    rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
+    rpc RemoveInstance(RemoveInstanceRequest) returns (RemoveInstanceResponse);
+    rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
     rpc Exec(ExecRequest) returns (ExecResponse);
-    rpc ContainerLogs(ContainerLogsRequest) returns (stream DataChunk);
-    rpc ContainerStats(ContainerStatsRequest) returns (ContainerStatsResponse);
+    rpc InstanceLogs(InstanceLogsRequest) returns (stream DataChunk);
+    rpc InstanceStats(InstanceStatsRequest) returns (InstanceStatsResponse);
 
     // Volumes
     rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
@@ -36,16 +36,16 @@ service WorkerService {
     rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
 
     // Copy operations (streaming for large data)
-    rpc CopyFromContainer(CopyFromContainerRequest) returns (CopyFromContainerResponse);
-    rpc CopyToContainer(CopyToContainerRequest) returns (CopyToContainerResponse);
-    rpc CopyDirFromContainer(CopyDirFromContainerRequest) returns (stream DataChunk);
-    rpc CopyTarToContainer(stream CopyTarToContainerRequest) returns (CopyTarToContainerResponse);
+    rpc CopyFromInstance(CopyFromInstanceRequest) returns (CopyFromInstanceResponse);
+    rpc CopyToInstance(CopyToInstanceRequest) returns (CopyToInstanceResponse);
+    rpc CopyDirFromInstance(CopyDirFromInstanceRequest) returns (stream DataChunk);
+    rpc CopyTarToInstance(stream CopyTarToInstanceRequest) returns (CopyTarToInstanceResponse);
 
     // Events — long-lived server stream of Docker container events
-    rpc WatchEvents(WatchEventsRequest) returns (stream ContainerEventMsg);
+    rpc WatchEvents(WatchEventsRequest) returns (stream InstanceEventMsg);
 
     // Discovery
-    rpc ListGameserverContainers(ListGameserverContainersRequest) returns (ListGameserverContainersResponse);
+    rpc ListGameserverInstances(ListGameserverInstancesRequest) returns (ListGameserverInstancesResponse);
 
     // Health
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -76,7 +76,7 @@ message DataChunk {
     bytes data = 1;
 }
 
-// Container lifecycle
+// Instance lifecycle
 
 message PullImageRequest {
     string image = 1;
@@ -89,7 +89,7 @@ message PortBinding {
     string protocol = 3;
 }
 
-message CreateContainerRequest {
+message CreateInstanceRequest {
     string name = 1;
     string image = 2;
     repeated string env = 3;
@@ -102,30 +102,30 @@ message CreateContainerRequest {
     repeated string binds = 10;
     bool cpu_enforced = 11;
 }
-message CreateContainerResponse {
-    string container_id = 1;
+message CreateInstanceResponse {
+    string instance_id = 1;
 }
 
-message StartContainerRequest {
-    string container_id = 1;
+message StartInstanceRequest {
+    string instance_id = 1;
 }
-message StartContainerResponse {}
+message StartInstanceResponse {}
 
-message StopContainerRequest {
-    string container_id = 1;
+message StopInstanceRequest {
+    string instance_id = 1;
     int32 timeout_seconds = 2;
 }
-message StopContainerResponse {}
+message StopInstanceResponse {}
 
-message RemoveContainerRequest {
-    string container_id = 1;
+message RemoveInstanceRequest {
+    string instance_id = 1;
 }
-message RemoveContainerResponse {}
+message RemoveInstanceResponse {}
 
-message InspectContainerRequest {
-    string container_id = 1;
+message InspectInstanceRequest {
+    string instance_id = 1;
 }
-message InspectContainerResponse {
+message InspectInstanceResponse {
     string id = 1;
     string state = 2;
     int64 started_at_unix = 3;
@@ -133,7 +133,7 @@ message InspectContainerResponse {
 }
 
 message ExecRequest {
-    string container_id = 1;
+    string instance_id = 1;
     repeated string cmd = 2;
 }
 message ExecResponse {
@@ -142,16 +142,16 @@ message ExecResponse {
     string stderr = 3;
 }
 
-message ContainerLogsRequest {
-    string container_id = 1;
+message InstanceLogsRequest {
+    string instance_id = 1;
     int32 tail = 2;
     bool follow = 3;
 }
 
-message ContainerStatsRequest {
-    string container_id = 1;
+message InstanceStatsRequest {
+    string instance_id = 1;
 }
-message ContainerStatsResponse {
+message InstanceStatsResponse {
     int32 memory_usage_mb = 1;
     int32 memory_limit_mb = 2;
     double cpu_percent = 3;
@@ -259,40 +259,40 @@ message DownloadFileResponse {}
 
 // Copy operations
 
-message CopyFromContainerRequest {
-    string container_id = 1;
+message CopyFromInstanceRequest {
+    string instance_id = 1;
     string path = 2;
 }
-message CopyFromContainerResponse {
+message CopyFromInstanceResponse {
     bytes content = 1;
 }
 
-message CopyToContainerRequest {
-    string container_id = 1;
+message CopyToInstanceRequest {
+    string instance_id = 1;
     string path = 2;
     bytes content = 3;
 }
-message CopyToContainerResponse {}
+message CopyToInstanceResponse {}
 
-message CopyDirFromContainerRequest {
-    string container_id = 1;
+message CopyDirFromInstanceRequest {
+    string instance_id = 1;
     string path = 2;
 }
 
 // First message carries metadata, all messages carry data
-message CopyTarToContainerRequest {
-    string container_id = 1;
+message CopyTarToInstanceRequest {
+    string instance_id = 1;
     string dest_path = 2;
     bytes data = 3;
 }
-message CopyTarToContainerResponse {}
+message CopyTarToInstanceResponse {}
 
 // Events
 
 message WatchEventsRequest {}
-message ContainerEventMsg {
-    string container_id = 1;
-    string container_name = 2;
+message InstanceEventMsg {
+    string instance_id = 1;
+    string instance_name = 2;
     string action = 3;
 }
 
@@ -353,13 +353,13 @@ message SFTPLoginResponse {
 
 // Discovery
 
-message ListGameserverContainersRequest {}
-message ListGameserverContainersResponse {
-    repeated GameserverContainer containers = 1;
+message ListGameserverInstancesRequest {}
+message ListGameserverInstancesResponse {
+    repeated GameserverInstance containers = 1;
 }
-message GameserverContainer {
-    string container_id = 1;
-    string container_name = 2;
+message GameserverInstance {
+    string instance_id = 1;
+    string instance_name = 2;
     string gameserver_id = 3; // extracted from container name
     string state = 4;         // running, exited, etc.
 }

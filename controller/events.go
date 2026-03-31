@@ -38,12 +38,12 @@ const (
 	EventDepotCached       = "gameserver.depot_cached"
 	EventImagePulling      = "gameserver.image_pulling"
 	EventImagePulled       = "gameserver.image_pulled"
-	EventContainerCreating = "gameserver.container_creating"
-	EventContainerStarted  = "gameserver.container_started"
+	EventInstanceCreating = "gameserver.instance_creating"
+	EventInstanceStarted  = "gameserver.instance_started"
 	EventGameserverReady   = "gameserver.ready"
-	EventContainerStopping = "gameserver.container_stopping"
-	EventContainerStopped  = "gameserver.container_stopped"
-	EventContainerExited   = "gameserver.container_exited"
+	EventInstanceStopping = "gameserver.instance_stopping"
+	EventInstanceStopped  = "gameserver.instance_stopped"
+	EventInstanceExited   = "gameserver.instance_exited"
 	EventGameserverError   = "gameserver.error"
 	EventGameserverOperation = "gameserver.operation"
 )
@@ -78,9 +78,9 @@ var AllEventTypes = []string{
 	// Lifecycle outcomes
 	EventDepotDownloading, EventDepotComplete, EventDepotCached,
 	EventImagePulling, EventImagePulled,
-	EventContainerCreating, EventContainerStarted,
+	EventInstanceCreating, EventInstanceStarted,
 	EventGameserverReady,
-	EventContainerStopping, EventContainerStopped, EventContainerExited,
+	EventInstanceStopping, EventInstanceStopped, EventInstanceExited,
 	EventGameserverError,
 	EventGameserverOperation,
 	// Operation outcomes
@@ -165,25 +165,25 @@ func (e ImagePulledEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e ImagePulledEvent) EventGameserverID() string { return e.GameserverID }
 func (e ImagePulledEvent) EventActor() Actor          { return SystemActor }
 
-type ContainerCreatingEvent struct {
+type InstanceCreatingEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e ContainerCreatingEvent) EventType() string        { return EventContainerCreating }
-func (e ContainerCreatingEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e ContainerCreatingEvent) EventGameserverID() string { return e.GameserverID }
-func (e ContainerCreatingEvent) EventActor() Actor          { return SystemActor }
+func (e InstanceCreatingEvent) EventType() string        { return EventInstanceCreating }
+func (e InstanceCreatingEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e InstanceCreatingEvent) EventGameserverID() string { return e.GameserverID }
+func (e InstanceCreatingEvent) EventActor() Actor          { return SystemActor }
 
-type ContainerStartedEvent struct {
+type InstanceStartedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e ContainerStartedEvent) EventType() string        { return EventContainerStarted }
-func (e ContainerStartedEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e ContainerStartedEvent) EventGameserverID() string { return e.GameserverID }
-func (e ContainerStartedEvent) EventActor() Actor          { return SystemActor }
+func (e InstanceStartedEvent) EventType() string        { return EventInstanceStarted }
+func (e InstanceStartedEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e InstanceStartedEvent) EventGameserverID() string { return e.GameserverID }
+func (e InstanceStartedEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverReadyEvent struct {
 	GameserverID string    `json:"gameserver_id"`
@@ -195,35 +195,35 @@ func (e GameserverReadyEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverReadyEvent) EventGameserverID() string { return e.GameserverID }
 func (e GameserverReadyEvent) EventActor() Actor          { return SystemActor }
 
-type ContainerStoppingEvent struct {
+type InstanceStoppingEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e ContainerStoppingEvent) EventType() string        { return EventContainerStopping }
-func (e ContainerStoppingEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e ContainerStoppingEvent) EventGameserverID() string { return e.GameserverID }
-func (e ContainerStoppingEvent) EventActor() Actor          { return SystemActor }
+func (e InstanceStoppingEvent) EventType() string        { return EventInstanceStopping }
+func (e InstanceStoppingEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e InstanceStoppingEvent) EventGameserverID() string { return e.GameserverID }
+func (e InstanceStoppingEvent) EventActor() Actor          { return SystemActor }
 
-type ContainerStoppedEvent struct {
+type InstanceStoppedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e ContainerStoppedEvent) EventType() string        { return EventContainerStopped }
-func (e ContainerStoppedEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e ContainerStoppedEvent) EventGameserverID() string { return e.GameserverID }
-func (e ContainerStoppedEvent) EventActor() Actor          { return SystemActor }
+func (e InstanceStoppedEvent) EventType() string        { return EventInstanceStopped }
+func (e InstanceStoppedEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e InstanceStoppedEvent) EventGameserverID() string { return e.GameserverID }
+func (e InstanceStoppedEvent) EventActor() Actor          { return SystemActor }
 
-type ContainerExitedEvent struct {
+type InstanceExitedEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e ContainerExitedEvent) EventType() string        { return EventContainerExited }
-func (e ContainerExitedEvent) EventTimestamp() time.Time { return e.Timestamp }
-func (e ContainerExitedEvent) EventGameserverID() string { return e.GameserverID }
-func (e ContainerExitedEvent) EventActor() Actor          { return SystemActor }
+func (e InstanceExitedEvent) EventType() string        { return EventInstanceExited }
+func (e InstanceExitedEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e InstanceExitedEvent) EventGameserverID() string { return e.GameserverID }
+func (e InstanceExitedEvent) EventActor() Actor          { return SystemActor }
 
 type GameserverErrorEvent struct {
 	GameserverID string    `json:"gameserver_id"`

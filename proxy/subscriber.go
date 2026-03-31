@@ -46,9 +46,9 @@ func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.Ev
 func (s *Subscriber) listen(ch <-chan controller.WebhookEvent) {
 	for event := range ch {
 		switch event.EventType() {
-		case controller.EventContainerStarted, controller.EventGameserverReady:
+		case controller.EventInstanceStarted, controller.EventGameserverReady:
 			s.addRoutes(event.EventGameserverID())
-		case controller.EventContainerStopped, controller.EventContainerExited, controller.EventGameserverError:
+		case controller.EventInstanceStopped, controller.EventInstanceExited, controller.EventGameserverError:
 			s.removeRoutes(event.EventGameserverID())
 		}
 	}

@@ -114,7 +114,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 		w.log.Info("watching container logs for install marker", "gameserver", gameserverID)
 	}
 
-	reader, err := wkr.ContainerLogs(ctx, containerID, 0, true)
+	reader, err := wkr.InstanceLogs(ctx, containerID, 0, true)
 	if err != nil {
 		w.log.Error("failed to follow container logs", "gameserver", gameserverID, "error", err)
 		if pattern != nil {

@@ -191,8 +191,8 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		Timestamp:      time.Now(),
 	}
 
-	if gs.ContainerID != nil {
-		cs, err := w.ContainerStats(ctx, *gs.ContainerID)
+	if gs.InstanceID != nil {
+		cs, err := w.InstanceStats(ctx, *gs.InstanceID)
 		if err == nil {
 			event.MemoryUsageMB = cs.MemoryUsageMB
 			event.MemoryLimitMB = cs.MemoryLimitMB

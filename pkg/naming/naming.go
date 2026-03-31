@@ -8,11 +8,11 @@ const (
 	FileopsContainerPrefix = ContainerPrefix + "fileops-"
 )
 
-func ContainerName(gameserverID string) string {
+func InstanceName(gameserverID string) string {
 	return ContainerPrefix + gameserverID
 }
 
-func UpdateContainerName(gameserverID string) string {
+func UpdateInstanceName(gameserverID string) string {
 	return UpdateContainerPrefix + gameserverID
 }
 
@@ -20,9 +20,9 @@ func VolumeName(gameserverID string) string {
 	return ContainerPrefix + gameserverID
 }
 
-// GameserverIDFromContainerName extracts a gameserver ID from a container name.
+// GameserverIDFromInstanceName extracts a gameserver ID from a container name.
 // Returns empty string and false for non-gameserver containers (fileops, update, etc).
-func GameserverIDFromContainerName(name string) (string, bool) {
+func GameserverIDFromInstanceName(name string) (string, bool) {
 	if !strings.HasPrefix(name, ContainerPrefix) {
 		return "", false
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID string) (*worker.ContainerInfo, error) {
+func (s *GameserverService) GetInstanceInfo(ctx context.Context, gameserverID string) (*worker.InstanceInfo, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -17,14 +17,14 @@ func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID s
 	if gs == nil {
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if gs.ContainerID == nil {
+	if gs.InstanceID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
 		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
-	return w.InspectContainer(ctx, *gs.ContainerID)
+	return w.InspectInstance(ctx, *gs.InstanceID)
 }
 
 func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
@@ -45,8 +45,8 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 	}
 
 	// Container stats only available when running
-	if gs.ContainerID != nil {
-		cs, err := w.ContainerStats(ctx, *gs.ContainerID)
+	if gs.InstanceID != nil {
+		cs, err := w.InstanceStats(ctx, *gs.InstanceID)
 		if err == nil {
 			stats.MemoryUsageMB = cs.MemoryUsageMB
 			stats.MemoryLimitMB = cs.MemoryLimitMB
@@ -82,7 +82,7 @@ func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID stri
 	return w.VolumeSize(ctx, gs.VolumeName)
 }
 
-func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
+func (s *GameserverService) GetInstanceLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -90,12 +90,12 @@ func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID s
 	if gs == nil {
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
-	if gs.ContainerID == nil {
+	if gs.InstanceID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
 		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
-	return w.ContainerLogs(ctx, *gs.ContainerID, tail, false)
+	return w.InstanceLogs(ctx, *gs.InstanceID, tail, false)
 }

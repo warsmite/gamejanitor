@@ -36,8 +36,8 @@ func (a *Agent) PullImage(ctx context.Context, req *pb.PullImageRequest) (*pb.Pu
 	return &pb.PullImageResponse{}, nil
 }
 
-func (a *Agent) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*pb.CreateContainerResponse, error) {
-	opts := worker.ContainerOptions{
+func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceRequest) (*pb.CreateInstanceResponse, error) {
+	opts := worker.InstanceOptions{
 		Name:          req.Name,
 		Image:         req.Image,
 		Env:           req.Env,
@@ -57,40 +57,40 @@ func (a *Agent) CreateContainer(ctx context.Context, req *pb.CreateContainerRequ
 		})
 	}
 
-	id, err := a.worker.CreateContainer(ctx, opts)
+	id, err := a.worker.CreateInstance(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.CreateContainerResponse{ContainerId: id}, nil
+	return &pb.CreateInstanceResponse{InstanceId: id}, nil
 }
 
-func (a *Agent) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*pb.StartContainerResponse, error) {
-	if err := a.worker.StartContainer(ctx, req.ContainerId); err != nil {
+func (a *Agent) StartInstance(ctx context.Context, req *pb.StartInstanceRequest) (*pb.StartInstanceResponse, error) {
+	if err := a.worker.StartInstance(ctx, req.InstanceId); err != nil {
 		return nil, err
 	}
-	return &pb.StartContainerResponse{}, nil
+	return &pb.StartInstanceResponse{}, nil
 }
 
-func (a *Agent) StopContainer(ctx context.Context, req *pb.StopContainerRequest) (*pb.StopContainerResponse, error) {
-	if err := a.worker.StopContainer(ctx, req.ContainerId, int(req.TimeoutSeconds)); err != nil {
+func (a *Agent) StopInstance(ctx context.Context, req *pb.StopInstanceRequest) (*pb.StopInstanceResponse, error) {
+	if err := a.worker.StopInstance(ctx, req.InstanceId, int(req.TimeoutSeconds)); err != nil {
 		return nil, err
 	}
-	return &pb.StopContainerResponse{}, nil
+	return &pb.StopInstanceResponse{}, nil
 }
 
-func (a *Agent) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*pb.RemoveContainerResponse, error) {
-	if err := a.worker.RemoveContainer(ctx, req.ContainerId); err != nil {
+func (a *Agent) RemoveInstance(ctx context.Context, req *pb.RemoveInstanceRequest) (*pb.RemoveInstanceResponse, error) {
+	if err := a.worker.RemoveInstance(ctx, req.InstanceId); err != nil {
 		return nil, err
 	}
-	return &pb.RemoveContainerResponse{}, nil
+	return &pb.RemoveInstanceResponse{}, nil
 }
 
-func (a *Agent) InspectContainer(ctx context.Context, req *pb.InspectContainerRequest) (*pb.InspectContainerResponse, error) {
-	info, err := a.worker.InspectContainer(ctx, req.ContainerId)
+func (a *Agent) InspectInstance(ctx context.Context, req *pb.InspectInstanceRequest) (*pb.InspectInstanceResponse, error) {
+	info, err := a.worker.InspectInstance(ctx, req.InstanceId)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.InspectContainerResponse{
+	return &pb.InspectInstanceResponse{
 		Id:             info.ID,
 		State:          info.State,
 		StartedAtUnix:  info.StartedAt.Unix(),
@@ -99,7 +99,7 @@ func (a *Agent) InspectContainer(ctx context.Context, req *pb.InspectContainerRe
 }
 
 func (a *Agent) Exec(ctx context.Context, req *pb.ExecRequest) (*pb.ExecResponse, error) {
-	exitCode, stdout, stderr, err := a.worker.Exec(ctx, req.ContainerId, req.Cmd)
+	exitCode, stdout, stderr, err := a.worker.Exec(ctx, req.InstanceId, req.Cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func (a *Agent) Exec(ctx context.Context, req *pb.ExecRequest) (*pb.ExecResponse
 	}, nil
 }
 
-func (a *Agent) ContainerLogs(req *pb.ContainerLogsRequest, stream pb.WorkerService_ContainerLogsServer) error {
-	reader, err := a.worker.ContainerLogs(stream.Context(), req.ContainerId, int(req.Tail), req.Follow)
+func (a *Agent) InstanceLogs(req *pb.InstanceLogsRequest, stream pb.WorkerService_InstanceLogsServer) error {
+	reader, err := a.worker.InstanceLogs(stream.Context(), req.InstanceId, int(req.Tail), req.Follow)
 	if err != nil {
 		return err
 	}
@@ -136,12 +136,12 @@ func (a *Agent) ContainerLogs(req *pb.ContainerLogsRequest, stream pb.WorkerServ
 	}
 }
 
-func (a *Agent) ContainerStats(ctx context.Context, req *pb.ContainerStatsRequest) (*pb.ContainerStatsResponse, error) {
-	stats, err := a.worker.ContainerStats(ctx, req.ContainerId)
+func (a *Agent) InstanceStats(ctx context.Context, req *pb.InstanceStatsRequest) (*pb.InstanceStatsResponse, error) {
+	stats, err := a.worker.InstanceStats(ctx, req.InstanceId)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.ContainerStatsResponse{
+	return &pb.InstanceStatsResponse{
 		MemoryUsageMb: int32(stats.MemoryUsageMB),
 		MemoryLimitMb: int32(stats.MemoryLimitMB),
 		CpuPercent:    stats.CPUPercent,
@@ -284,23 +284,23 @@ func (a *Agent) RenamePath(ctx context.Context, req *pb.RenamePathRequest) (*pb.
 	return &pb.RenamePathResponse{}, nil
 }
 
-func (a *Agent) CopyFromContainer(ctx context.Context, req *pb.CopyFromContainerRequest) (*pb.CopyFromContainerResponse, error) {
-	content, err := a.worker.CopyFromContainer(ctx, req.ContainerId, req.Path)
+func (a *Agent) CopyFromInstance(ctx context.Context, req *pb.CopyFromInstanceRequest) (*pb.CopyFromInstanceResponse, error) {
+	content, err := a.worker.CopyFromInstance(ctx, req.InstanceId, req.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.CopyFromContainerResponse{Content: content}, nil
+	return &pb.CopyFromInstanceResponse{Content: content}, nil
 }
 
-func (a *Agent) CopyToContainer(ctx context.Context, req *pb.CopyToContainerRequest) (*pb.CopyToContainerResponse, error) {
-	if err := a.worker.CopyToContainer(ctx, req.ContainerId, req.Path, req.Content); err != nil {
+func (a *Agent) CopyToInstance(ctx context.Context, req *pb.CopyToInstanceRequest) (*pb.CopyToInstanceResponse, error) {
+	if err := a.worker.CopyToInstance(ctx, req.InstanceId, req.Path, req.Content); err != nil {
 		return nil, err
 	}
-	return &pb.CopyToContainerResponse{}, nil
+	return &pb.CopyToInstanceResponse{}, nil
 }
 
-func (a *Agent) CopyDirFromContainer(req *pb.CopyDirFromContainerRequest, stream pb.WorkerService_CopyDirFromContainerServer) error {
-	reader, err := a.worker.CopyDirFromContainer(stream.Context(), req.ContainerId, req.Path)
+func (a *Agent) CopyDirFromInstance(req *pb.CopyDirFromInstanceRequest, stream pb.WorkerService_CopyDirFromInstanceServer) error {
+	reader, err := a.worker.CopyDirFromInstance(stream.Context(), req.InstanceId, req.Path)
 	if err != nil {
 		return err
 	}
@@ -325,16 +325,16 @@ func (a *Agent) CopyDirFromContainer(req *pb.CopyDirFromContainerRequest, stream
 	}
 }
 
-func (a *Agent) CopyTarToContainer(stream pb.WorkerService_CopyTarToContainerServer) error {
+func (a *Agent) CopyTarToInstance(stream pb.WorkerService_CopyTarToInstanceServer) error {
 	// Read the first message to get container ID and dest path
 	first, err := stream.Recv()
 	if err != nil {
 		return fmt.Errorf("no messages received: %w", err)
 	}
-	containerID := first.ContainerId
+	containerID := first.InstanceId
 	destPath := first.DestPath
 	if containerID == "" {
-		return fmt.Errorf("first message missing container_id")
+		return fmt.Errorf("first message missing instance_id")
 	}
 
 	// Stream remaining chunks through a pipe to avoid buffering the entire tar
@@ -363,11 +363,11 @@ func (a *Agent) CopyTarToContainer(stream pb.WorkerService_CopyTarToContainerSer
 		}
 	}()
 
-	copyErr = a.worker.CopyTarToContainer(stream.Context(), containerID, destPath, pr)
+	copyErr = a.worker.CopyTarToInstance(stream.Context(), containerID, destPath, pr)
 	if copyErr != nil {
 		return copyErr
 	}
-	return stream.SendAndClose(&pb.CopyTarToContainerResponse{})
+	return stream.SendAndClose(&pb.CopyTarToInstanceResponse{})
 }
 
 func (a *Agent) BackupVolume(req *pb.BackupVolumeRequest, stream pb.WorkerService_BackupVolumeServer) error {
@@ -460,9 +460,9 @@ func (a *Agent) WatchEvents(req *pb.WatchEventsRequest, stream pb.WorkerService_
 			if !ok {
 				return nil
 			}
-			if err := stream.Send(&pb.ContainerEventMsg{
-				ContainerId:   event.ContainerID,
-				ContainerName: event.ContainerName,
+			if err := stream.Send(&pb.InstanceEventMsg{
+				InstanceId:   event.InstanceID,
+				InstanceName: event.InstanceName,
 				Action:        event.Action,
 			}); err != nil {
 				return err
@@ -538,21 +538,21 @@ func (a *Agent) CopyDepotToVolume(ctx context.Context, req *pb.CopyDepotToVolume
 	return &pb.CopyDepotToVolumeResponse{}, nil
 }
 
-func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGameserverContainersRequest) (*pb.ListGameserverContainersResponse, error) {
-	containers, err := a.worker.ListGameserverContainers(ctx)
+func (a *Agent) ListGameserverInstances(ctx context.Context, req *pb.ListGameserverInstancesRequest) (*pb.ListGameserverInstancesResponse, error) {
+	containers, err := a.worker.ListGameserverInstances(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var pbContainers []*pb.GameserverContainer
+	var pbContainers []*pb.GameserverInstance
 	for _, c := range containers {
-		pbContainers = append(pbContainers, &pb.GameserverContainer{
-			ContainerId:   c.ContainerID,
-			ContainerName: c.ContainerName,
+		pbContainers = append(pbContainers, &pb.GameserverInstance{
+			InstanceId:   c.InstanceID,
+			InstanceName: c.InstanceName,
 			GameserverId:  c.GameserverID,
 			State:         c.State,
 		})
 	}
-	return &pb.ListGameserverContainersResponse{Containers: pbContainers}, nil
+	return &pb.ListGameserverInstancesResponse{Containers: pbContainers}, nil
 }
 
 func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {

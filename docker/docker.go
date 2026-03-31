@@ -32,7 +32,7 @@ type Client struct {
 	log *slog.Logger
 }
 
-type ContainerOptions struct {
+type InstanceOptions struct {
 	Name          string
 	Image         string
 	Env           []string // "KEY=VALUE" format
@@ -59,14 +59,14 @@ type PortBinding struct {
 	Protocol      string // "tcp" or "udp"
 }
 
-type ContainerInfo struct {
+type InstanceInfo struct {
 	ID        string
 	State     string // "running", "exited", etc.
 	StartedAt time.Time
 	ExitCode  int
 }
 
-type ContainerStats struct {
+type InstanceStats struct {
 	MemoryUsageMB int
 	MemoryLimitMB int
 	CPUPercent    float64
@@ -74,9 +74,9 @@ type ContainerStats struct {
 	NetTxBytes    int64
 }
 
-type ContainerEvent struct {
-	ContainerID   string
-	ContainerName string
+type InstanceEvent struct {
+	InstanceID   string
+	InstanceName string
 	Action        string // "start", "stop", "die", "kill", etc.
 }
 
@@ -188,7 +188,7 @@ func (c *Client) VolumeMountpoint(ctx context.Context, name string) (string, err
 	return vol.Mountpoint, nil
 }
 
-func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (string, error) {
+func (c *Client) CreateInstance(ctx context.Context, opts InstanceOptions) (string, error) {
 	c.log.Info("creating container", "name", opts.Name, "image", opts.Image)
 
 	exposedPorts := nat.PortSet{}
@@ -241,12 +241,12 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 		return "", fmt.Errorf("creating container %s: %w", opts.Name, err)
 	}
 
-	c.log.Info("container created", "name", opts.Name, "container_id", resp.ID[:12])
+	c.log.Info("container created", "name", opts.Name, "instance_id", resp.ID[:12])
 	return resp.ID, nil
 }
 
-func (c *Client) StartContainer(ctx context.Context, containerID string) error {
-	c.log.Debug("starting container", "container_id", shortID(containerID))
+func (c *Client) StartInstance(ctx context.Context, containerID string) error {
+	c.log.Debug("starting container", "instance_id", shortID(containerID))
 
 	if err := c.cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("starting container %s: %w", shortID(containerID), err)
@@ -254,8 +254,8 @@ func (c *Client) StartContainer(ctx context.Context, containerID string) error {
 	return nil
 }
 
-func (c *Client) StopContainer(ctx context.Context, containerID string, timeoutSeconds int) error {
-	c.log.Debug("stopping container", "container_id", shortID(containerID), "timeout", timeoutSeconds)
+func (c *Client) StopInstance(ctx context.Context, containerID string, timeoutSeconds int) error {
+	c.log.Debug("stopping container", "instance_id", shortID(containerID), "timeout", timeoutSeconds)
 
 	timeout := timeoutSeconds
 	if err := c.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
@@ -264,8 +264,8 @@ func (c *Client) StopContainer(ctx context.Context, containerID string, timeoutS
 	return nil
 }
 
-func (c *Client) RemoveContainer(ctx context.Context, containerID string) error {
-	c.log.Debug("removing container", "container_id", shortID(containerID))
+func (c *Client) RemoveInstance(ctx context.Context, containerID string) error {
+	c.log.Debug("removing container", "instance_id", shortID(containerID))
 
 	if err := c.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
 		return fmt.Errorf("removing container %s: %w", shortID(containerID), err)
@@ -273,7 +273,7 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string) error 
 	return nil
 }
 
-func (c *Client) InspectContainer(ctx context.Context, containerID string) (*ContainerInfo, error) {
+func (c *Client) InspectInstance(ctx context.Context, containerID string) (*InstanceInfo, error) {
 	resp, err := c.cli.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting container %s: %w", shortID(containerID), err)
@@ -281,10 +281,10 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (*Con
 
 	startedAt, err := time.Parse(time.RFC3339Nano, resp.State.StartedAt)
 	if err != nil {
-		c.log.Warn("failed to parse container started_at", "container_id", shortID(containerID), "raw", resp.State.StartedAt, "error", err)
+		c.log.Warn("failed to parse container started_at", "instance_id", shortID(containerID), "raw", resp.State.StartedAt, "error", err)
 	}
 
-	return &ContainerInfo{
+	return &InstanceInfo{
 		ID:        resp.ID,
 		State:     resp.State.Status,
 		StartedAt: startedAt,
@@ -294,7 +294,7 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (*Con
 
 // Exec runs a command inside a container and returns the output.
 func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (int, string, string, error) {
-	c.log.Debug("exec in container", "container_id", shortID(containerID), "cmd", cmd)
+	c.log.Debug("exec in container", "instance_id", shortID(containerID), "cmd", cmd)
 
 	execConfig := container.ExecOptions{
 		Cmd:          cmd,
@@ -349,9 +349,9 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string) (in
 	return inspectResp.ExitCode, stdout.String(), stderr.String(), nil
 }
 
-// ContainerLogs returns a log stream from the container.
-func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
-	c.log.Debug("reading container logs", "container_id", shortID(containerID), "tail", tail, "follow", follow)
+// InstanceLogs returns a log stream from the container.
+func (c *Client) InstanceLogs(ctx context.Context, containerID string, tail int, follow bool) (io.ReadCloser, error) {
+	c.log.Debug("reading container logs", "instance_id", shortID(containerID), "tail", tail, "follow", follow)
 
 	tailStr := "all"
 	if tail > 0 {
@@ -446,8 +446,8 @@ func ParseLogStream(r io.Reader, lines chan<- string) {
 	}
 }
 
-// ContainerStats returns current resource usage for a container.
-func (c *Client) ContainerStats(ctx context.Context, containerID string) (*ContainerStats, error) {
+// InstanceStats returns current resource usage for a container.
+func (c *Client) InstanceStats(ctx context.Context, containerID string) (*InstanceStats, error) {
 	// stream=false (not one-shot) waits to collect two samples for accurate CPU delta
 	resp, err := c.cli.ContainerStats(ctx, containerID, false)
 	if err != nil {
@@ -478,7 +478,7 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 		netTx += int64(iface.TxBytes)
 	}
 
-	return &ContainerStats{
+	return &InstanceStats{
 		MemoryUsageMB: memUsageMB,
 		MemoryLimitMB: memLimitMB,
 		CPUPercent:    cpuPercent,
@@ -487,9 +487,9 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 	}, nil
 }
 
-// CopyFromContainer reads a single file from the container and returns its contents.
-func (c *Client) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
-	c.log.Debug("copying from container", "container_id", shortID(containerID), "path", path)
+// CopyFromInstance reads a single file from the container and returns its contents.
+func (c *Client) CopyFromInstance(ctx context.Context, containerID string, path string) ([]byte, error) {
+	c.log.Debug("copying from container", "instance_id", shortID(containerID), "path", path)
 
 	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
@@ -513,16 +513,16 @@ func (c *Client) CopyFromContainer(ctx context.Context, containerID string, path
 	return content, nil
 }
 
-// CopyToContainer writes a single file into the container at the given path.
-func (c *Client) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
-	c.log.Debug("copying to container", "container_id", shortID(containerID), "path", path)
+// CopyToInstance writes a single file into the container at the given path.
+func (c *Client) CopyToInstance(ctx context.Context, containerID string, path string, content []byte) error {
+	c.log.Debug("copying to container", "instance_id", shortID(containerID), "path", path)
 
 	dir := filepath.Dir(path)
 	filename := filepath.Base(path)
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	// Files must be owned by gameserver (1001:1001) — Docker's CopyToContainer
+	// Files must be owned by gameserver (1001:1001) — Docker's CopyToInstance
 	// extracts as root, so without explicit UID/GID files end up root-owned
 	// and game scripts running as gameserver can't modify them.
 	if err := tw.WriteHeader(&tar.Header{
@@ -548,10 +548,10 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 	return nil
 }
 
-// CopyDirFromContainer returns a tar stream of a directory from the container.
+// CopyDirFromInstance returns a tar stream of a directory from the container.
 // The caller is responsible for closing the returned ReadCloser.
-func (c *Client) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
-	c.log.Debug("copying directory from container", "container_id", shortID(containerID), "path", path)
+func (c *Client) CopyDirFromInstance(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+	c.log.Debug("copying directory from container", "instance_id", shortID(containerID), "path", path)
 
 	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
@@ -560,9 +560,9 @@ func (c *Client) CopyDirFromContainer(ctx context.Context, containerID string, p
 	return reader, nil
 }
 
-// CopyTarToContainer extracts a tar stream into a directory in the container.
-func (c *Client) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
-	c.log.Debug("copying tar to container", "container_id", shortID(containerID), "path", destPath)
+// CopyTarToInstance extracts a tar stream into a directory in the container.
+func (c *Client) CopyTarToInstance(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+	c.log.Debug("copying tar to container", "instance_id", shortID(containerID), "path", destPath)
 
 	if err := c.cli.CopyToContainer(ctx, containerID, destPath, content, container.CopyToContainerOptions{}); err != nil {
 		return fmt.Errorf("copying tar to %s:%s: %w", shortID(containerID), destPath, err)
@@ -571,10 +571,10 @@ func (c *Client) CopyTarToContainer(ctx context.Context, containerID string, des
 }
 
 // WatchEvents subscribes to container runtime events for gamejanitor containers.
-func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error) {
+func (c *Client) WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan error) {
 	c.log.Info("starting container event watcher")
 
-	eventCh := make(chan ContainerEvent)
+	eventCh := make(chan InstanceEvent)
 	errCh := make(chan error, 1)
 
 	msgCh, msgErrCh := c.cli.Events(ctx, events.ListOptions{
@@ -610,9 +610,9 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 					continue
 				}
 
-				event := ContainerEvent{
-					ContainerID:   msg.Actor.ID,
-					ContainerName: name,
+				event := InstanceEvent{
+					InstanceID:   msg.Actor.ID,
+					InstanceName: name,
 					Action:        string(msg.Action),
 				}
 				c.log.Debug("container event", "container", name, "action", event.Action)
@@ -629,8 +629,8 @@ func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan
 	return eventCh, errCh
 }
 
-// ListGameserverContainers returns all containers matching the gamejanitor naming prefix.
-func (c *Client) ListGameserverContainers(ctx context.Context) ([]GameserverContainerInfo, error) {
+// ListGameserverInstances returns all containers matching the gamejanitor naming prefix.
+func (c *Client) ListGameserverInstances(ctx context.Context) ([]GameserverInstanceInfo, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("name", naming.ContainerPrefix)),
@@ -638,13 +638,13 @@ func (c *Client) ListGameserverContainers(ctx context.Context) ([]GameserverCont
 	if err != nil {
 		return nil, err
 	}
-	var result []GameserverContainerInfo
+	var result []GameserverInstanceInfo
 	for _, ct := range containers {
 		name := ""
 		if len(ct.Names) > 0 {
 			name = strings.TrimPrefix(ct.Names[0], "/")
 		}
-		result = append(result, GameserverContainerInfo{
+		result = append(result, GameserverInstanceInfo{
 			ID:    ct.ID,
 			Name:  name,
 			State: ct.State,
@@ -653,7 +653,7 @@ func (c *Client) ListGameserverContainers(ctx context.Context) ([]GameserverCont
 	return result, nil
 }
 
-type GameserverContainerInfo struct {
+type GameserverInstanceInfo struct {
 	ID    string
 	Name  string
 	State string

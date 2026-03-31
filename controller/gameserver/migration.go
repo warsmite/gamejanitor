@@ -210,10 +210,10 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		if err := s.Start(ctx, gameserverID); err != nil {
 			s.log.Error("failed to restart gameserver after migration", "gameserver", gameserverID, "error", err)
 			// Migration succeeded but restart failed — don't return error, data is safe
-			s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 		}
 	} else {
-		s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	}
 
 	return nil

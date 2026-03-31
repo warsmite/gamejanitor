@@ -376,12 +376,12 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Set up a running container directly (avoids lifecycle goroutine races)
-	containerID, err := fw.CreateContainer(ctx, worker.ContainerOptions{Name: "cmd-test"})
+	containerID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "cmd-test"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartContainer(ctx, containerID))
+	require.NoError(t, fw.StartInstance(ctx, containerID))
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	fetched.ContainerID = &containerID
+	fetched.InstanceID = &containerID
 	store.New(svc.DB).UpdateGameserver(fetched)
 	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
 

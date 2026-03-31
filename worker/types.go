@@ -17,7 +17,7 @@ type DepotProgress struct {
 	TotalChunks     int
 }
 
-type ContainerOptions struct {
+type InstanceOptions struct {
 	Name          string
 	Image         string
 	Env           []string // "KEY=VALUE" format
@@ -37,14 +37,14 @@ type PortBinding struct {
 	Protocol      string // "tcp" or "udp"
 }
 
-type ContainerInfo struct {
+type InstanceInfo struct {
 	ID        string
 	State     string // "running", "exited", etc.
 	StartedAt time.Time
 	ExitCode  int
 }
 
-type ContainerStats struct {
+type InstanceStats struct {
 	MemoryUsageMB int
 	MemoryLimitMB int
 	CPUPercent    float64
@@ -62,15 +62,15 @@ type GameserverStats struct {
 	StorageLimitMB  *int
 }
 
-type ContainerEvent struct {
-	ContainerID   string
-	ContainerName string
+type InstanceEvent struct {
+	InstanceID   string
+	InstanceName string
 	Action        string // "start", "stop", "die", "kill", etc.
 }
 
 type GameserverContainer struct {
-	ContainerID   string
-	ContainerName string
+	InstanceID   string
+	InstanceName string
 	GameserverID  string // extracted from container name
 	State         string // running, exited, etc.
 }

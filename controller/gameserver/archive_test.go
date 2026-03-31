@@ -28,7 +28,7 @@ func TestArchive_HappyPath(t *testing.T) {
 	assert.True(t, fetched.Archived)
 	assert.Equal(t, "archived", fetched.Status)
 	assert.Nil(t, fetched.NodeID)
-	assert.Nil(t, fetched.ContainerID)
+	assert.Nil(t, fetched.InstanceID)
 
 	// Volume should be removed from worker
 	_, err = w.ReadFile(ctx, gs.VolumeName, "server.properties")
