@@ -71,6 +71,9 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 	}
 	w.resolve = w.volumeResolver()
 
+	// Kill orphaned namespace holders from a previous crash
+	cleanupOrphanHolders(log)
+
 	// Ensure sandbox binaries are available
 	bwrapPath, err := ensureBwrap(dataDir, log)
 	if err != nil {

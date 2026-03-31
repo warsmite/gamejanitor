@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 )
@@ -29,6 +33,38 @@ func readBwrapChildPID(infoPath string) int {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return 0
+}
+
+// cleanupOrphanHolders kills any leftover namespace holder processes from a previous
+// gamejanitor crash. Scans /proc for "unshare" processes with "sleep infinity".
+func cleanupOrphanHolders(log *slog.Logger) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return
+	}
+	killed := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+		if err != nil {
+			continue
+		}
+		// cmdline is null-separated
+		cmd := strings.ReplaceAll(string(cmdline), "\x00", " ")
+		if strings.Contains(cmd, "unshare") && strings.Contains(cmd, "sleep infinity") {
+			syscall.Kill(pid, syscall.SIGKILL)
+			killed++
+		}
+	}
+	if killed > 0 {
+		log.Warn("killed orphaned namespace holders from previous run", "count", killed)
+	}
 }
 
 // safeBuffer is a bytes.Buffer safe for concurrent stdout/stderr capture.
