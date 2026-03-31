@@ -21,6 +21,10 @@ CREATE TABLE gameservers (
     connection_address TEXT,
     applied_config JSON,
     archived BOOLEAN NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'stopped',
+    error_reason TEXT NOT NULL DEFAULT '',
+    operation TEXT,
+    operation_id TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -43,6 +47,7 @@ CREATE TABLE backups (
     id TEXT PRIMARY KEY,
     gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'in_progress',
     size_bytes INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -90,24 +95,19 @@ CREATE TABLE worker_nodes (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE activity (
+CREATE TABLE events (
     id TEXT PRIMARY KEY,
     gameserver_id TEXT REFERENCES gameservers(id) ON DELETE SET NULL,
     worker_id TEXT NOT NULL DEFAULT '',
     type TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'running',
     actor TEXT NOT NULL DEFAULT '{}',
     data TEXT NOT NULL DEFAULT '{}',
-    error TEXT NOT NULL DEFAULT '',
-    started_at DATETIME NOT NULL,
-    completed_at DATETIME
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_activity_gameserver_id ON activity(gameserver_id);
-CREATE INDEX IF NOT EXISTS idx_activity_status ON activity(status);
-CREATE INDEX IF NOT EXISTS idx_activity_type ON activity(type);
-CREATE INDEX IF NOT EXISTS idx_activity_status_changed ON activity(gameserver_id, type, started_at DESC) WHERE type = 'status_changed';
-CREATE INDEX IF NOT EXISTS idx_activity_worker_id ON activity(worker_id);
+CREATE INDEX IF NOT EXISTS idx_events_gs_time ON events(gameserver_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_worker_id ON events(worker_id);
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE INDEX IF NOT EXISTS idx_gameservers_node_id ON gameservers(node_id) WHERE node_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';

@@ -4,27 +4,27 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// ActivityStore is the persistence interface for the history service.
-type ActivityStore interface {
-	ListActivities(f model.ActivityFilter) ([]model.Activity, error)
+// EventStore is the persistence interface for the history service.
+type EventStore interface {
+	ListEvents(f model.EventFilter) ([]model.Event, error)
 }
 
-// EventHistoryService queries persisted activity history from the DB.
+// EventHistoryService queries persisted event history from the DB.
 type EventHistoryService struct {
-	store ActivityStore
+	store EventStore
 }
 
-func NewEventHistoryService(store ActivityStore) *EventHistoryService {
+func NewEventHistoryService(store EventStore) *EventHistoryService {
 	return &EventHistoryService{store: store}
 }
 
-func (s *EventHistoryService) List(filter model.ActivityFilter) ([]model.Activity, error) {
-	activities, err := s.store.ListActivities(filter)
+func (s *EventHistoryService) List(filter model.EventFilter) ([]model.Event, error) {
+	events, err := s.store.ListEvents(filter)
 	if err != nil {
 		return nil, err
 	}
-	if activities == nil {
-		activities = []model.Activity{}
+	if events == nil {
+		events = []model.Event{}
 	}
-	return activities, nil
+	return events, nil
 }

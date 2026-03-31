@@ -46,9 +46,9 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failActivity(opID, err)
+				s.failActivity(gameserverID, err)
 			} else {
-				s.completeActivity(opID)
+				s.completeActivity(gameserverID)
 			}
 		}()
 	}

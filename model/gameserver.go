@@ -47,6 +47,8 @@ type Gameserver struct {
 	ConnectionAddress  *string         `json:"connection_address"`
 	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
 	Archived           bool            `json:"archived"`
+	OperationType      *string         `json:"operation_type"`   // current running operation (start, stop, backup, etc.), nil when idle
+	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
 	RestartRequired    bool            `json:"restart_required"` // derived, not stored
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`

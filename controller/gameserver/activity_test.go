@@ -1,7 +1,6 @@
 package gameserver_test
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
-func TestActivity_StartCreatesRecord(t *testing.T) {
+func TestActivity_StartCreatesEvent(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
@@ -22,22 +21,18 @@ func TestActivity_StartCreatesRecord(t *testing.T) {
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
 	s := store.New(svc.DB)
-	activities, err := s.ListActivities(model.ActivityFilter{GameserverID: &gs.ID})
+	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
 	require.NoError(t, err)
-	require.NotEmpty(t, activities, "start should create an activity record")
+	require.NotEmpty(t, events, "start should create an event record")
 
-	// Find the start activity (there may also be a create activity)
-	var startActivity *model.Activity
-	for i := range activities {
-		if activities[i].Type == model.OpStart {
-			startActivity = &activities[i]
+	var startEvent *model.Event
+	for i := range events {
+		if events[i].Type == model.OpStart {
+			startEvent = &events[i]
 			break
 		}
 	}
-	require.NotNil(t, startActivity, "should have a start activity")
-	assert.Equal(t, model.ActivityCompleted, startActivity.Status)
-	assert.Equal(t, "worker-1", startActivity.WorkerID)
-	assert.NotNil(t, startActivity.CompletedAt)
+	require.NotNil(t, startEvent, "should have a start event")
 }
 
 func TestActivity_MutexRejectsConcurrent(t *testing.T) {
@@ -46,20 +41,12 @@ func TestActivity_MutexRejectsConcurrent(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Insert a fake running activity
-	s := store.New(svc.DB)
-	require.NoError(t, s.CreateActivity(&model.Activity{
-		ID:           "activity-running",
-		GameserverID: &gs.ID,
-		WorkerID:     "worker-1",
-		Type:         model.OpBackup,
-		Status:       model.ActivityRunning,
-		Actor:        json.RawMessage(`{}`),
-		Data:         json.RawMessage(`{}`),
-		StartedAt:    time.Now(),
-	}))
+	// Set an operation in progress on the gameserver row
+	gs.OperationType = ptrStr(model.OpBackup)
+	gs.OperationID = ptrStr("fake-op")
+	require.NoError(t, store.New(svc.DB).UpdateGameserver(gs))
 
-	// Start should be rejected — there's already a running activity
+	// Start should be rejected — there's already an operation in progress
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already has an operation in progress")
@@ -71,83 +58,62 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start the gameserver first
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
-	// Insert a fake running activity
-	s := store.New(svc.DB)
-	require.NoError(t, s.CreateActivity(&model.Activity{
-		ID:           "activity-running-2",
-		GameserverID: &gs.ID,
-		WorkerID:     "worker-1",
-		Type:         model.OpBackup,
-		Status:       model.ActivityRunning,
-		Actor:        json.RawMessage(`{}`),
-		Data:         json.RawMessage(`{}`),
-		StartedAt:    time.Now(),
-	}))
+	// Set an operation in progress
+	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched.OperationType = ptrStr(model.OpBackup)
+	fetched.OperationID = ptrStr("fake-op")
+	require.NoError(t, store.New(svc.DB).UpdateGameserver(fetched))
 
-	// Stop should still work despite the running activity
+	// Stop should still work despite the running operation
 	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 }
 
-func TestActivity_RestartCreatesOneRecord(t *testing.T) {
+func TestActivity_RestartCreatesOneEvent(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start first so restart has something to stop
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
-	// Clear activities from the start
-	svc.DB.Exec("DELETE FROM activity")
+	// Clear events from the start
+	svc.DB.Exec("DELETE FROM events")
 
 	require.NoError(t, svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID))
 
 	s := store.New(svc.DB)
-	activities, err := s.ListActivities(model.ActivityFilter{GameserverID: &gs.ID})
+	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
 	require.NoError(t, err)
 
-	// Should have exactly one activity (restart), not three (restart + stop + start)
-	assert.Len(t, activities, 1, "restart should create a single activity, not nested ones")
-	assert.Equal(t, model.OpRestart, activities[0].Type)
-	assert.Equal(t, model.ActivityCompleted, activities[0].Status)
+	// Should have exactly one event (restart), not three (restart + stop + start)
+	assert.Len(t, events, 1, "restart should create a single event, not nested ones")
+	assert.Equal(t, model.OpRestart, events[0].Type)
 }
 
-func TestActivity_AbandonOnStartup(t *testing.T) {
+func TestActivity_ClearStaleOperations(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 	s := store.New(svc.DB)
 
-	// Insert a "running" activity as if the controller crashed
-	require.NoError(t, s.CreateActivity(&model.Activity{
-		ID:           "activity-stale",
-		GameserverID: &gs.ID,
-		WorkerID:     "worker-1",
-		Type:         model.OpBackup,
-		Status:       model.ActivityRunning,
-		Actor:        json.RawMessage(`{}`),
-		Data:         json.RawMessage(`{}`),
-		StartedAt:    time.Now(),
-	}))
+	// Simulate a stale operation from a crash
+	gs.OperationType = ptrStr(model.OpBackup)
+	gs.OperationID = ptrStr("stale-op")
+	require.NoError(t, s.UpdateGameserver(gs))
 
-	abandoned, err := s.AbandonRunningActivities()
+	cleared, err := s.ClearStaleOperations()
 	require.NoError(t, err)
-	assert.Equal(t, 1, abandoned)
+	assert.Equal(t, 1, cleared)
 
-	a, err := s.GetActivity("activity-stale")
-	require.NoError(t, err)
-	assert.Equal(t, model.ActivityAbandoned, a.Status)
-	assert.Equal(t, "controller restarted", a.Error)
-	assert.NotNil(t, a.CompletedAt)
+	fetched, _ := s.GetGameserver(gs.ID)
+	assert.Nil(t, fetched.OperationType)
+	assert.Nil(t, fetched.OperationID)
 }
 
-// TestActivity_BackupBlocksStart verifies that starting a gameserver is rejected
-// while a backup is in progress — the real concurrent scenario, not a fake activity.
 func TestActivity_BackupBlocksStart(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
@@ -155,39 +121,25 @@ func TestActivity_BackupBlocksStart(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	ctx := testutil.TestContext()
 
-	// Start the gameserver first so it has a container for backup
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
 
-	// Trigger a backup — this spawns an async goroutine with a running activity
+	// Trigger a backup
 	_, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "test-backup")
 	require.NoError(t, err)
 
-	// Give the async goroutine a moment to start and register the activity
 	time.Sleep(100 * time.Millisecond)
 
-	// Check that a backup activity is running
-	s := store.New(svc.DB)
-	running := model.ActivityRunning
-	activities, err := s.ListActivities(model.ActivityFilter{
-		GameserverID: &gs.ID,
-		Status:       &running,
-	})
-	require.NoError(t, err)
-
-	if len(activities) > 0 {
-		// Backup is in progress — restart should be rejected
+	// Check if operation is set
+	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
+	if fetched.OperationType != nil {
 		err = svc.GameserverSvc.Restart(ctx, gs.ID)
 		assert.Error(t, err, "restart should be rejected while backup is running")
 		assert.Contains(t, err.Error(), "already has an operation in progress")
 	} else {
-		// Backup completed too fast (FakeWorker is instant) — that's OK,
-		// the mutex test with fake activities covers this case
 		t.Log("backup completed before we could test mutex — skipping concurrent check")
 	}
 }
 
-// TestActivity_MultipleStopsAllowed verifies that stop operations don't block
-// each other — multiple stop calls should succeed (idempotent).
 func TestActivity_MultipleStopsAllowed(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
@@ -197,6 +149,7 @@ func TestActivity_MultipleStopsAllowed(t *testing.T) {
 
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
-	// Second stop on already-stopped server should succeed (idempotent)
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
 }
+
+func ptrStr(s string) *string { return &s }

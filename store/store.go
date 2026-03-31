@@ -7,7 +7,7 @@ import "database/sql"
 type DB struct {
 	*GameserverStore
 	*BackupStore
-	*ActivityStore
+	*EventStore
 	*ScheduleStore
 	*TokenStore
 	*WebhookStore
@@ -21,7 +21,7 @@ func New(db *sql.DB) *DB {
 	return &DB{
 		GameserverStore:      NewGameserverStore(db),
 		BackupStore:          NewBackupStore(db),
-		ActivityStore:        NewActivityStore(db),
+		EventStore:           NewEventStore(db),
 		ScheduleStore:        NewScheduleStore(db),
 		TokenStore:           NewTokenStore(db),
 		WebhookStore:         NewWebhookStore(db),

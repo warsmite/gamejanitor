@@ -59,7 +59,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	w := s.dispatcher.WorkerFor(id)
 	if w == nil {
 		if opID != "" {
-			s.failActivity(opID, fmt.Errorf("worker unavailable"))
+			s.failActivity(id, fmt.Errorf("worker unavailable"))
 		}
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
 	}
@@ -68,7 +68,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("backing up volume for archive: %w", err)
 	}
@@ -95,14 +95,14 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 
 	if err := s.backupStore.SaveArchive(ctx, id, pr); err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("saving archive to store: %w", err)
 	}
 	if compressErr != nil {
 		s.backupStore.DeleteArchive(ctx, id)
 		if opID != "" {
-			s.failActivity(opID, compressErr)
+			s.failActivity(id, compressErr)
 		}
 		return compressErr
 	}
@@ -121,17 +121,18 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 
 	// Update gameserver record
 	gs.Archived = true
+	gs.Status = controller.StatusArchived
 	gs.ContainerID = nil
 	gs.NodeID = nil
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("updating gameserver as archived: %w", err)
 	}
 
 	if opID != "" {
-		s.completeActivity(opID)
+		s.completeActivity(id)
 	}
 
 	s.log.Info("gameserver archived", "gameserver", id)
@@ -180,7 +181,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 	if err != nil || w == nil {
 		if opID != "" {
-			s.failActivity(opID, fmt.Errorf("worker unavailable"))
+			s.failActivity(id, fmt.Errorf("worker unavailable"))
 		}
 		return controller.ErrUnavailablef("worker %s unavailable", nodeID)
 	}
@@ -188,7 +189,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	// Create volume on target node
 	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("creating volume for unarchive: %w", err)
 	}
@@ -197,7 +198,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	reader, err := s.backupStore.LoadArchive(ctx, id)
 	if err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("loading archive from store: %w", err)
 	}
@@ -206,7 +207,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	if err != nil {
 		reader.Close()
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("decompressing archive: %w", err)
 	}
@@ -215,7 +216,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		gzReader.Close()
 		reader.Close()
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("restoring archive to volume: %w", err)
 	}
@@ -224,6 +225,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 
 	// Update gameserver record
 	gs.Archived = false
+	gs.Status = controller.StatusStopped
 	gs.NodeID = &nodeID
 
 	// Reallocate ports if using per-node port scope
@@ -233,7 +235,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		if game == nil {
 			s.placementMu.Unlock()
 			if opID != "" {
-				s.failActivity(opID, fmt.Errorf("game %s not found", gs.GameID))
+				s.failActivity(id, fmt.Errorf("game %s not found", gs.GameID))
 			}
 			return controller.ErrNotFoundf("game %s not found", gs.GameID)
 		}
@@ -241,7 +243,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		if err != nil {
 			s.placementMu.Unlock()
 			if opID != "" {
-				s.failActivity(opID, err)
+				s.failActivity(id, err)
 			}
 			return fmt.Errorf("allocating ports on target node: %w", err)
 		}
@@ -251,13 +253,13 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		if opID != "" {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 		}
 		return fmt.Errorf("updating gameserver after unarchive: %w", err)
 	}
 
 	if opID != "" {
-		s.completeActivity(opID)
+		s.completeActivity(id)
 	}
 
 	s.store.PopulateNode(gs)

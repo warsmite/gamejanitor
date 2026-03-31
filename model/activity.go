@@ -5,14 +5,8 @@ import (
 	"time"
 )
 
-const (
-	ActivityRunning   = "running"
-	ActivityCompleted = "completed"
-	ActivityFailed    = "failed"
-	ActivityAbandoned = "abandoned"
-)
-
-// Activity type constants for stateful worker dispatches.
+// Operation type constants — used as event types for lifecycle operations
+// and as the value of Gameserver.OperationType while an operation is in progress.
 const (
 	OpStart     = "start"
 	OpStop      = "stop"
@@ -26,23 +20,20 @@ const (
 	OpUnarchive = "unarchive"
 )
 
-type Activity struct {
+// Event represents a persisted event in the events table.
+type Event struct {
 	ID           string          `json:"id"`
 	GameserverID *string         `json:"gameserver_id,omitempty"`
 	WorkerID     string          `json:"worker_id,omitempty"`
 	Type         string          `json:"type"`
-	Status       string          `json:"status"`
 	Actor        json.RawMessage `json:"actor"`
 	Data         json.RawMessage `json:"data"`
-	Error        string          `json:"error,omitempty"`
-	StartedAt    time.Time       `json:"started_at"`
-	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
-type ActivityFilter struct {
+type EventFilter struct {
 	GameserverID *string
 	Type         *string
-	Status       *string
 	WorkerID     *string
 	Pagination
 }

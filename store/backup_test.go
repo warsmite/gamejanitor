@@ -21,6 +21,7 @@ func TestBackup_CreateAndGet(t *testing.T) {
 		ID:           "bak-1",
 		GameserverID: "gs-bak",
 		Name:         "world-backup",
+		Status:       model.BackupStatusCompleted,
 		SizeBytes:    1048576,
 	}
 	require.NoError(t, db.CreateBackup(b))
@@ -111,32 +112,25 @@ func TestBackup_PopulateStatusFromActivity(t *testing.T) {
 		ID:           "bak-pop",
 		GameserverID: "gs-pop",
 		Name:         "status-backup",
+		Status:       model.BackupStatusCompleted,
 	}
 	require.NoError(t, db.CreateBackup(b))
 
-	// No activity yet — should default to completed
 	got, err := db.GetBackup("bak-pop")
 	require.NoError(t, err)
 	assert.Equal(t, model.BackupStatusCompleted, got.Status)
 
-	// Create a running activity for this backup
-	gsID := "gs-pop"
-	a := &model.Activity{
-		ID:           "act-run",
-		GameserverID: &gsID,
-		Type:         "backup",
-		Status:       "running",
-		Actor:        []byte(`{}`),
-		Data:         []byte(`{"backup_id":"bak-pop"}`),
-	}
-	require.NoError(t, db.CreateActivity(a))
+	// Update status to in_progress
+	got.Status = model.BackupStatusInProgress
+	require.NoError(t, db.UpdateBackup(got))
 
 	got, err = db.GetBackup("bak-pop")
 	require.NoError(t, err)
 	assert.Equal(t, model.BackupStatusInProgress, got.Status)
 
-	// Complete the activity
-	require.NoError(t, db.CompleteActivity("act-run"))
+	// Complete it
+	got.Status = model.BackupStatusCompleted
+	require.NoError(t, db.UpdateBackup(got))
 
 	got, err = db.GetBackup("bak-pop")
 	require.NoError(t, err)
@@ -157,23 +151,16 @@ func TestBackup_PopulateStatusFailed(t *testing.T) {
 	}
 	require.NoError(t, db.CreateBackup(b))
 
-	gsID := "gs-fail"
-	a := &model.Activity{
-		ID:           "act-fail",
-		GameserverID: &gsID,
-		Type:         "backup",
-		Status:       "running",
-		Actor:        []byte(`{}`),
-		Data:         []byte(`{"backup_id":"bak-fail"}`),
-	}
-	require.NoError(t, db.CreateActivity(a))
-	require.NoError(t, db.FailActivity("act-fail", "disk full"))
-
 	got, err := db.GetBackup("bak-fail")
 	require.NoError(t, err)
 	require.NotNil(t, got)
+
+	got.Status = model.BackupStatusFailed
+	require.NoError(t, db.UpdateBackup(got))
+
+	got, err = db.GetBackup("bak-fail")
+	require.NoError(t, err)
 	assert.Equal(t, model.BackupStatusFailed, got.Status)
-	assert.Equal(t, "disk full", got.ErrorReason)
 }
 
 func TestBackup_Delete(t *testing.T) {

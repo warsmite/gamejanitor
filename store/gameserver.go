@@ -17,28 +17,16 @@ func NewGameserverStore(db *sql.DB) *GameserverStore {
 	return &GameserverStore{db: db}
 }
 
-const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, created_at, updated_at"
+const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, status, error_reason, operation, operation_id, created_at, updated_at"
 
-// scanGameserver handles scanning JSON columns via sql.Scanner (model.Ports, model.Env, model.Labels).
-// Status and ErrorReason are not in the gameservers table — they are derived from
-// the latest status_changed activity via PopulateStatus/PopulateStatuses.
 func scanGameserver(scan func(dest ...any) error) (model.Gameserver, error) {
 	var gs model.Gameserver
 	var appliedConfig model.AppliedConfig
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.Archived, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.Archived, &gs.Status, &gs.ErrorReason, &gs.OperationType, &gs.OperationID, &gs.CreatedAt, &gs.UpdatedAt)
 	if appliedConfig.Env != nil {
 		gs.AppliedConfig = &appliedConfig
 	}
-	if err != nil {
-		return gs, err
-	}
-	// Default status until PopulateStatus is called
-	if gs.Archived {
-		gs.Status = "archived"
-	} else {
-		gs.Status = "stopped"
-	}
-	return gs, nil
+	return gs, err
 }
 
 func (s *GameserverStore) ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error) {
@@ -65,6 +53,10 @@ func (s *GameserverStore) ListGameservers(filter model.GameserverFilter) ([]mode
 			args = append(args, id)
 		}
 	}
+	if filter.Status != nil {
+		query += " AND status = ?"
+		args = append(args, *filter.Status)
+	}
 	query += " ORDER BY name"
 	query = filter.Pagination.ApplyToQuery(query, 0)
 
@@ -86,19 +78,6 @@ func (s *GameserverStore) ListGameservers(filter model.GameserverFilter) ([]mode
 		return nil, err
 	}
 
-	s.PopulateStatuses(gameservers)
-
-	// Status filter is applied post-query since status is derived from the activity table
-	if filter.Status != nil {
-		filtered := gameservers[:0]
-		for _, gs := range gameservers {
-			if gs.Status == *filter.Status {
-				filtered = append(filtered, gs)
-			}
-		}
-		gameservers = filtered
-	}
-
 	return gameservers, nil
 }
 
@@ -111,7 +90,6 @@ func (s *GameserverStore) GetGameserver(id string) (*model.Gameserver, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", id, err)
 	}
-	s.PopulateStatus(&gs)
 	return &gs, nil
 }
 
@@ -121,8 +99,8 @@ func (s *GameserverStore) CreateGameserver(gs *model.Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := s.db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, archived, status, error_reason, operation, operation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.Status, gs.ErrorReason, gs.OperationType, gs.OperationID, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -134,8 +112,8 @@ func (s *GameserverStore) UpdateGameserver(gs *model.Gameserver) error {
 	gs.UpdatedAt = time.Now()
 
 	result, err := s.db.Exec(
-		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, cpu_enforced = ?, container_id = ?, volume_name = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, backup_limit = ?, storage_limit_mb = ?, node_tags = ?, auto_restart = ?, connection_address = ?, applied_config = ?, archived = ?, updated_at = ? WHERE id = ?",
-		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.UpdatedAt, gs.ID,
+		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, cpu_enforced = ?, container_id = ?, volume_name = ?, port_mode = ?, node_id = ?, sftp_username = ?, hashed_sftp_password = ?, installed = ?, backup_limit = ?, storage_limit_mb = ?, node_tags = ?, auto_restart = ?, connection_address = ?, applied_config = ?, archived = ?, status = ?, error_reason = ?, operation = ?, operation_id = ?, updated_at = ? WHERE id = ?",
+		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.ContainerID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.Archived, gs.Status, gs.ErrorReason, gs.OperationType, gs.OperationID, gs.UpdatedAt, gs.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating gameserver %s: %w", gs.ID, err)
@@ -176,8 +154,18 @@ func (s *GameserverStore) GetGameserverBySFTPUsername(username string) (*model.G
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver by sftp username %s: %w", username, err)
 	}
-	s.PopulateStatus(&gs)
 	return &gs, nil
+}
+
+// ClearStaleOperations resets operation state on all gameservers that have one in progress.
+// Called on startup to clean up after a crash.
+func (s *GameserverStore) ClearStaleOperations() (int, error) {
+	result, err := s.db.Exec("UPDATE gameservers SET operation = NULL, operation_id = NULL WHERE operation IS NOT NULL")
+	if err != nil {
+		return 0, fmt.Errorf("clearing stale operations: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	return int(rows), nil
 }
 
 // AllocatedMemoryByNode returns the total memory_limit_mb allocated to gameservers on a node.
@@ -237,75 +225,6 @@ func (s *GameserverStore) AllocatedStorageByNodeExcluding(nodeID, excludeID stri
 		return 0, fmt.Errorf("querying allocated storage for node %s excluding %s: %w", nodeID, excludeID, err)
 	}
 	return total, nil
-}
-
-// PopulateStatus derives a gameserver's status and error_reason from the latest
-// status_changed activity. If no status_changed activity exists, defaults to "stopped".
-func (s *GameserverStore) PopulateStatus(gs *model.Gameserver) {
-	if gs.Archived {
-		gs.Status = "archived"
-		return
-	}
-	var newStatus, errorReason string
-	err := s.db.QueryRow(
-		`SELECT json_extract(data, '$.new_status'), COALESCE(json_extract(data, '$.error_reason'), '')
-		 FROM activity WHERE gameserver_id = ? AND type = 'status_changed'
-		 ORDER BY started_at DESC LIMIT 1`, gs.ID).Scan(&newStatus, &errorReason)
-	if err != nil || newStatus == "" {
-		gs.Status = "stopped"
-		gs.ErrorReason = ""
-		return
-	}
-	gs.Status = newStatus
-	gs.ErrorReason = errorReason
-}
-
-// PopulateStatuses derives status for a slice of gameservers in a single batch query.
-func (s *GameserverStore) PopulateStatuses(gameservers []model.Gameserver) {
-	if len(gameservers) == 0 {
-		return
-	}
-
-	// Build a map for O(1) lookup
-	byID := make(map[string]*model.Gameserver, len(gameservers))
-	placeholders := make([]string, len(gameservers))
-	args := make([]any, len(gameservers))
-	for i := range gameservers {
-		byID[gameservers[i].ID] = &gameservers[i]
-		placeholders[i] = "?"
-		args[i] = gameservers[i].ID
-	}
-
-	// Single query: get the latest status_changed activity per gameserver
-	query := `SELECT gameserver_id, json_extract(data, '$.new_status'), COALESCE(json_extract(data, '$.error_reason'), '')
-		FROM activity a1
-		WHERE a1.type = 'status_changed'
-		AND a1.gameserver_id IN (` + strings.Join(placeholders, ",") + `)
-		AND a1.started_at = (
-			SELECT MAX(a2.started_at) FROM activity a2
-			WHERE a2.gameserver_id = a1.gameserver_id AND a2.type = 'status_changed'
-		)`
-
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		// Fall back to individual queries
-		for i := range gameservers {
-			s.PopulateStatus(&gameservers[i])
-		}
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var gsID, newStatus, errorReason string
-		if err := rows.Scan(&gsID, &newStatus, &errorReason); err != nil {
-			continue
-		}
-		if gs, ok := byID[gsID]; ok && newStatus != "" {
-			gs.Status = newStatus
-			gs.ErrorReason = errorReason
-		}
-	}
 }
 
 // PopulateNode resolves the node data from the worker_nodes table.

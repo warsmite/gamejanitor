@@ -135,15 +135,15 @@ func (s *GameserverService) trackActivity(ctx context.Context, gsID, workerID, a
 	return s.activity.Start(gsID, workerID, activityType, actor, data)
 }
 
-func (s *GameserverService) completeActivity(activityID string) {
+func (s *GameserverService) completeActivity(gameserverID string) {
 	if s.activity != nil {
-		s.activity.Complete(activityID)
+		s.activity.Complete(gameserverID)
 	}
 }
 
-func (s *GameserverService) failActivity(activityID string, err error) {
+func (s *GameserverService) failActivity(gameserverID string, err error) {
 	if s.activity != nil {
-		s.activity.Fail(activityID, err)
+		s.activity.Fail(gameserverID, err)
 	}
 }
 

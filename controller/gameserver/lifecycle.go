@@ -125,9 +125,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failActivity(opID, err)
+				s.failActivity(id, err)
 			} else {
-				s.completeActivity(opID)
+				s.completeActivity(id)
 			}
 		}()
 	}
@@ -368,9 +368,9 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failActivity(opID, err)
+				s.failActivity(id, err)
 			} else {
-				s.completeActivity(opID)
+				s.completeActivity(id)
 			}
 		}()
 	}
@@ -433,9 +433,9 @@ func (s *GameserverService) Restart(ctx context.Context, id string) (err error) 
 		ctx = WithActivityID(ctx, opID)
 		defer func() {
 			if err != nil {
-				s.failActivity(opID, err)
+				s.failActivity(id, err)
 			} else {
-				s.completeActivity(opID)
+				s.completeActivity(id)
 			}
 		}()
 	}
@@ -498,10 +498,10 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
 		} else {
-			s.completeActivity(opID)
+			s.completeActivity(id)
 		}
 	}()
 
@@ -604,10 +604,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.failActivity(opID, err)
+			s.failActivity(id, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
 		} else {
-			s.completeActivity(opID)
+			s.completeActivity(id)
 		}
 	}()
 

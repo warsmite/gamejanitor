@@ -236,7 +236,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		defer bgWg.Done()
 		retDays := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
-			if pruned, err := db.PruneActivities(retDays); err != nil {
+			if pruned, err := db.PruneEvents(retDays); err != nil {
 				logger.Error("failed to prune activities on startup", "error", err)
 			} else if pruned > 0 {
 				logger.Info("pruned old activities", "count", pruned, "retention_days", retDays)
@@ -251,7 +251,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			case <-ticker.C:
 				days := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
 				if days > 0 {
-					if pruned, err := db.PruneActivities(days); err != nil {
+					if pruned, err := db.PruneEvents(days); err != nil {
 						logger.Error("failed to prune activities", "error", err)
 					} else if pruned > 0 {
 						logger.Info("pruned old activities", "count", pruned, "retention_days", days)
@@ -423,11 +423,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		logger.Error("failed to recover gameserver status on startup", "error", err)
 	}
 
-	// Mark any activities still "running" from a previous crash as abandoned.
-	if abandoned, err := db.AbandonRunningActivities(); err != nil {
-		logger.Error("failed to abandon stale activities", "error", err)
-	} else if abandoned > 0 {
-		logger.Warn("abandoned stale activities from previous run", "count", abandoned)
+	// Clear any operations still in-progress from a previous crash.
+	if cleared, err := db.ClearStaleOperations(); err != nil {
+		logger.Error("failed to clear stale operations", "error", err)
+	} else if cleared > 0 {
+		logger.Warn("cleared stale operations from previous run", "count", cleared)
 	}
 
 	// --- 7. HTTP, SFTP, and listen ---

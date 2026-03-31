@@ -200,7 +200,7 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	if newStatus != controller.StatusError {
 		errorReason = ""
 	}
-	if err := recordStatusActivity(m.store, id, newStatus, errorReason); err != nil {
+	if err := setGameserverStatus(m.store, id, newStatus, errorReason); err != nil {
 		m.log.Error("recovery: failed to record status_changed activity", "gameserver", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -216,7 +216,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStat
 		m.log.Error("recovery: failed to clear container", "gameserver", gs.ID, "error", err)
 		return
 	}
-	if err := recordStatusActivity(m.store, gs.ID, newStatus, ""); err != nil {
+	if err := setGameserverStatus(m.store, gs.ID, newStatus, ""); err != nil {
 		m.log.Error("recovery: failed to record status_changed activity", "gameserver", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}

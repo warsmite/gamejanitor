@@ -42,7 +42,7 @@ type RouterOptions struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	WebhookSvc      *webhook.WebhookEndpointService
 	EventHistorySvc *event.EventHistoryService
-	ActivityStore   handler.ActivityStore
+	ActivityStore   handler.EventStore
 	StatsHistory    handler.StatsHistoryQuerier
 	Broadcaster     *controller.EventBus
 	Log             *slog.Logger

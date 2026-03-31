@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -61,22 +59,13 @@ func SeedVolumeData(t *testing.T, worker *FakeWorker, volumeName string) {
 // through the full lifecycle.
 func SetGameserverStatus(t *testing.T, db *store.DB, gameserverID, newStatus string) {
 	t.Helper()
-	data, _ := json.Marshal(map[string]string{
-		"new_status":   newStatus,
-		"error_reason": "",
-	})
-	now := time.Now()
-	a := &model.Activity{
-		ID:           uuid.New().String(),
-		GameserverID: &gameserverID,
-		Type:         "status_changed",
-		Status:       model.ActivityCompleted,
-		Actor:        json.RawMessage(`{}`),
-		Data:         data,
-		StartedAt:    now,
-		CompletedAt:  &now,
+	gs, err := db.GetGameserver(gameserverID)
+	if err != nil || gs == nil {
+		t.Fatalf("getting gameserver for status update: %v", err)
 	}
-	if err := db.CreateActivity(a); err != nil {
+	gs.Status = newStatus
+	gs.ErrorReason = ""
+	if err := db.UpdateGameserver(gs); err != nil {
 		t.Fatalf("setting gameserver status: %v", err)
 	}
 }

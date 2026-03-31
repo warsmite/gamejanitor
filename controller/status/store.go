@@ -7,5 +7,5 @@ type Store interface {
 	GetGameserver(id string) (*model.Gameserver, error)
 	UpdateGameserver(gs *model.Gameserver) error
 	ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error)
-	CreateActivity(a *model.Activity) error
+	CreateEvent(e *model.Event) error
 }

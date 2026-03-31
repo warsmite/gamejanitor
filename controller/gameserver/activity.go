@@ -11,110 +11,102 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-type activityContextKey struct{}
+type operationContextKey struct{}
 
-// WithActivityID attaches an activity ID to the context.
-// Inner operations (e.g. Stop/Start within Restart) check this to avoid
-// creating nested activities.
+// WithActivityID attaches an operation/event ID to the context.
 func WithActivityID(ctx context.Context, activityID string) context.Context {
-	return context.WithValue(ctx, activityContextKey{}, activityID)
+	return context.WithValue(ctx, operationContextKey{}, activityID)
 }
 
-// ActivityIDFromContext returns the activity ID from context, if any.
+// ActivityIDFromContext returns the operation ID from context, if any.
 func ActivityIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(activityContextKey{}).(string); ok {
+	if v, ok := ctx.Value(operationContextKey{}).(string); ok {
 		return v
 	}
 	return ""
 }
 
-// ActivityStore abstracts activity persistence.
-type ActivityStore interface {
-	CreateActivity(a *model.Activity) error
-	CompleteActivity(id string) error
-	FailActivity(id string, errMsg string) error
-	HasRunningActivity(gameserverID string) (bool, error)
+// EventRecorder abstracts event persistence and gameserver status updates.
+type EventRecorder interface {
+	CreateEvent(e *model.Event) error
+	GetGameserver(id string) (*model.Gameserver, error)
+	UpdateGameserver(gs *model.Gameserver) error
 }
 
-// ActivityTracker manages the lifecycle of activities.
-// Shared between GameserverService and BackupService.
+// ActivityTracker manages operation lifecycle via events and gameserver status.
 type ActivityTracker struct {
-	store ActivityStore
+	store EventRecorder
 	log   *slog.Logger
 }
 
-func NewActivityTracker(store ActivityStore, log *slog.Logger) *ActivityTracker {
+func NewActivityTracker(store EventRecorder, log *slog.Logger) *ActivityTracker {
 	return &ActivityTracker{store: store, log: log}
 }
 
-// Start records a new running activity. Returns the activity ID.
-// Returns an error if the gameserver already has a running activity
-// (unless the new activity is a stop — you should always be able to stop).
-func (t *ActivityTracker) Start(gameserverID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error) {
-	if activityType != model.OpStop {
-		busy, err := t.store.HasRunningActivity(gameserverID)
-		if err != nil {
-			return "", err
-		}
-		if busy {
-			return "", fmt.Errorf("gameserver %s already has an operation in progress", gameserverID)
-		}
+// Start records a new operation. Sets gameservers.operation to block concurrent ops.
+// Returns the event ID. Stop is always allowed (no mutex check).
+func (t *ActivityTracker) Start(gameserverID, workerID, opType string, actor json.RawMessage, data json.RawMessage) (string, error) {
+	gs, err := t.store.GetGameserver(gameserverID)
+	if err != nil {
+		return "", err
+	}
+	if gs == nil {
+		return "", fmt.Errorf("gameserver %s not found", gameserverID)
 	}
 
-	if actor == nil {
-		actor = json.RawMessage(`{}`)
-	}
-	if data == nil {
-		data = json.RawMessage(`{}`)
+	if opType != model.OpStop && gs.OperationType != nil {
+		return "", fmt.Errorf("gameserver %s already has an operation in progress (%s)", gameserverID, *gs.OperationType)
 	}
 
-	a := &model.Activity{
-		ID:           uuid.New().String(),
-		GameserverID: &gameserverID,
-		WorkerID:     workerID,
-		Type:         activityType,
-		Status:       model.ActivityRunning,
-		Actor:        actor,
-		Data:         data,
-		StartedAt:    time.Now(),
-	}
-
-	if err := t.store.CreateActivity(a); err != nil {
-		t.log.Error("failed to create activity record", "type", activityType, "gameserver", gameserverID, "error", err)
+	eventID := uuid.New().String()
+	if err := t.recordEvent(eventID, &gameserverID, workerID, opType, actor, data); err != nil {
 		return "", err
 	}
 
-	t.log.Info("activity started", "activity", a.ID, "type", activityType, "gameserver", gameserverID, "worker", workerID)
-	return a.ID, nil
+	gs.OperationType = &opType
+	gs.OperationID = &eventID
+	if err := t.store.UpdateGameserver(gs); err != nil {
+		t.log.Error("failed to set operation on gameserver", "gameserver", gameserverID, "error", err)
+	}
+
+	t.log.Info("operation started", "event", eventID, "type", opType, "gameserver", gameserverID)
+	return eventID, nil
 }
 
-// Complete marks an activity as completed.
-func (t *ActivityTracker) Complete(activityID string) {
-	if activityID == "" {
+// Complete clears the active operation on the gameserver.
+func (t *ActivityTracker) Complete(gameserverID string) {
+	if gameserverID == "" {
 		return
 	}
-	if err := t.store.CompleteActivity(activityID); err != nil {
-		t.log.Error("failed to complete activity", "activity", activityID, "error", err)
-	}
+	t.clearOperation(gameserverID)
 }
 
-// Fail marks an activity as failed with an error message.
-func (t *ActivityTracker) Fail(activityID string, reason error) {
-	if activityID == "" {
+// Fail clears the active operation on the gameserver.
+func (t *ActivityTracker) Fail(gameserverID string, reason error) {
+	if gameserverID == "" {
 		return
 	}
-	errMsg := ""
-	if reason != nil {
-		errMsg = reason.Error()
+	t.clearOperation(gameserverID)
+}
+
+func (t *ActivityTracker) clearOperation(gameserverID string) {
+	gs, err := t.store.GetGameserver(gameserverID)
+	if err != nil || gs == nil {
+		return
 	}
-	if err := t.store.FailActivity(activityID, errMsg); err != nil {
-		t.log.Error("failed to fail activity", "activity", activityID, "error", err)
+	gs.OperationType = nil
+	gs.OperationID = nil
+	if err := t.store.UpdateGameserver(gs); err != nil {
+		t.log.Error("failed to clear operation", "gameserver", gameserverID, "error", err)
 	}
 }
 
-// RecordInstant creates and immediately completes an activity for events that
-// have no lifecycle (CRUD operations, status changes).
-func (t *ActivityTracker) RecordInstant(gameserverID *string, activityType string, actor json.RawMessage, data json.RawMessage) error {
+// RecordInstant creates an event for operations that complete immediately (CRUD, etc.).
+func (t *ActivityTracker) RecordInstant(gameserverID *string, eventType string, actor json.RawMessage, data json.RawMessage) error {
+	return t.recordEvent(uuid.New().String(), gameserverID, "", eventType, actor, data)
+}
+
+func (t *ActivityTracker) recordEvent(id string, gameserverID *string, workerID, eventType string, actor json.RawMessage, data json.RawMessage) error {
 	if actor == nil {
 		actor = json.RawMessage(`{}`)
 	}
@@ -122,20 +114,18 @@ func (t *ActivityTracker) RecordInstant(gameserverID *string, activityType strin
 		data = json.RawMessage(`{}`)
 	}
 
-	now := time.Now()
-	a := &model.Activity{
-		ID:           uuid.New().String(),
+	e := &model.Event{
+		ID:           id,
 		GameserverID: gameserverID,
-		Type:         activityType,
-		Status:       model.ActivityCompleted,
+		WorkerID:     workerID,
+		Type:         eventType,
 		Actor:        actor,
 		Data:         data,
-		StartedAt:    now,
-		CompletedAt:  &now,
+		CreatedAt:    time.Now(),
 	}
 
-	if err := t.store.CreateActivity(a); err != nil {
-		t.log.Error("failed to record instant activity", "type", activityType, "error", err)
+	if err := t.store.CreateEvent(e); err != nil {
+		t.log.Error("failed to record event", "type", eventType, "error", err)
 		return err
 	}
 	return nil

@@ -24,6 +24,7 @@ type Store interface {
 	GetBackup(id string) (*model.Backup, error)
 	CreateBackup(b *model.Backup) error
 	UpdateBackupSize(id string, sizeBytes int64) error
+	UpdateBackup(b *model.Backup) error
 	DeleteBackup(id string) error
 	DeleteBackupsByGameserver(gameserverID string) error
 	TotalBackupSizeByGameserver(gameserverID string) (int64, error)
@@ -95,15 +96,15 @@ func (s *BackupService) startActivity(gsID, workerID, activityType string, data 
 	return activityID
 }
 
-func (s *BackupService) completeActivity(activityID string) {
-	if s.activity != nil && activityID != "" {
-		s.activity.Complete(activityID)
+func (s *BackupService) completeActivity(gameserverID string) {
+	if s.activity != nil && gameserverID != "" {
+		s.activity.Complete(gameserverID)
 	}
 }
 
-func (s *BackupService) failActivityRecord(activityID string, reason error) {
-	if s.activity != nil && activityID != "" {
-		s.activity.Fail(activityID, reason)
+func (s *BackupService) failActivityRecord(gameserverID string, reason error) {
+	if s.activity != nil && gameserverID != "" {
+		s.activity.Fail(gameserverID, reason)
 	}
 }
 
@@ -234,12 +235,12 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		workerID = *gs.NodeID
 	}
 	backupMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
-	opID := s.startActivity(gameserverID, workerID, model.OpBackup, backupMetaJSON)
+	s.startActivity(gameserverID, workerID, model.OpBackup, backupMetaJSON)
 
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
-		s.failActivityRecord(opID, fmt.Errorf("worker unavailable"))
+		s.failActivityRecord(gameserverID, fmt.Errorf("worker unavailable"))
 		s.failBackup(ctx, gameserverID, backupID, name, actor, "worker unavailable for backup")
 		return
 	}
@@ -258,7 +259,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	// Get tar stream from volume
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		s.failActivityRecord(opID, err)
+		s.failActivityRecord(gameserverID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("backing up volume: %v", err))
 		return
 	}
@@ -285,13 +286,13 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}()
 
 	if err := s.storage.Save(ctx, gameserverID, backupID, pr); err != nil {
-		s.failActivityRecord(opID, err)
+		s.failActivityRecord(gameserverID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("saving to store: %v", err))
 		return
 	}
 	if compressErr != nil {
 		s.storage.Delete(ctx, gameserverID, backupID)
-		s.failActivityRecord(opID, compressErr)
+		s.failActivityRecord(gameserverID, compressErr)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, compressErr.Error())
 		return
 	}
@@ -301,11 +302,15 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		s.log.Warn("failed to get backup size", "backup", backupID, "error", err)
 	}
 
-	if err := s.store.UpdateBackupSize(backupID, sizeBytes); err != nil {
-		s.log.Error("failed to update backup size", "backup", backupID, "error", err)
+	if b, err := s.store.GetBackup(backupID); err == nil && b != nil {
+		b.SizeBytes = sizeBytes
+		b.Status = model.BackupStatusCompleted
+		if err := s.store.UpdateBackup(b); err != nil {
+			s.log.Error("failed to update backup", "backup", backupID, "error", err)
+		}
 	}
 
-	s.completeActivity(opID)
+	s.completeActivity(gameserverID)
 	s.log.Info("backup completed", "gameserver", gameserverID, "backup", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
@@ -326,7 +331,12 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 		s.log.Warn("failed to clean up partial backup data", "backup", backupID, "error", err)
 	}
 
-	// Status is derived from the activity table — no DB update needed here
+	// Update backup status to failed
+	if b, err := s.store.GetBackup(backupID); err == nil && b != nil {
+		b.Status = model.BackupStatusFailed
+		s.store.UpdateBackup(b)
+	}
+
 	failedBackup, _ := s.store.GetBackup(backupID)
 	s.broadcaster.Publish(controller.BackupActionEvent{
 		Type:         controller.EventBackupFailed,
@@ -397,13 +407,13 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 		workerID = *gs.NodeID
 	}
 	restoreMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
-	opID := s.startActivity(gameserverID, workerID, model.OpRestore, restoreMetaJSON)
+	s.startActivity(gameserverID, workerID, model.OpRestore, restoreMetaJSON)
 	opSucceeded := false
 	defer func() {
 		if opSucceeded {
-			s.completeActivity(opID)
+			s.completeActivity(gameserverID)
 		} else {
-			s.failActivityRecord(opID, fmt.Errorf("restore failed"))
+			s.failActivityRecord(gameserverID, fmt.Errorf("restore failed"))
 		}
 	}()
 

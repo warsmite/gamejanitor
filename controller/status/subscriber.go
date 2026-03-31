@@ -2,14 +2,10 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/model"
 )
 
 // OperationClearer clears the active operation for a gameserver.
@@ -130,7 +126,7 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 	}
 
 	// Record status as a status_changed activity instead of writing to the gameserver table
-	if err := recordStatusActivity(s.store, gameserverID, newStatus, errorReason); err != nil {
+	if err := setGameserverStatus(s.store, gameserverID, newStatus, errorReason); err != nil {
 		s.log.Error("status subscriber: failed to record status_changed activity", "gameserver", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
@@ -156,26 +152,14 @@ func (s *StatusSubscriber) stopPolling(gameserverID string) {
 	}
 }
 
-// recordStatusActivity writes a status_changed activity to the activity table.
-// This is the single source of truth for gameserver status.
-func recordStatusActivity(store Store, gameserverID, newStatus, errorReason string) error {
-	data, _ := json.Marshal(map[string]string{
-		"new_status":   newStatus,
-		"error_reason": errorReason,
-	})
-
-	now := time.Now()
-	a := &model.Activity{
-		ID:           uuid.New().String(),
-		GameserverID: &gameserverID,
-		Type:         "status_changed",
-		Status:       model.ActivityCompleted,
-		Actor:        json.RawMessage(`{}`),
-		Data:         data,
-		StartedAt:    now,
-		CompletedAt:  &now,
+// setGameserverStatus updates the status and error_reason columns directly on the gameserver row.
+func setGameserverStatus(store Store, gameserverID, newStatus, errorReason string) error {
+	gs, err := store.GetGameserver(gameserverID)
+	if err != nil || gs == nil {
+		return err
 	}
-
-	return store.CreateActivity(a)
+	gs.Status = newStatus
+	gs.ErrorReason = errorReason
+	return store.UpdateGameserver(gs)
 }
 
