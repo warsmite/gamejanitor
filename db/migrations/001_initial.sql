@@ -189,7 +189,8 @@ CREATE TABLE gameserver_stats (
     memory_limit_mb   INTEGER NOT NULL,
     net_rx_bytes      INTEGER NOT NULL DEFAULT 0,
     net_tx_bytes      INTEGER NOT NULL DEFAULT 0,
-    volume_size_bytes INTEGER NOT NULL DEFAULT 0
+    volume_size_bytes INTEGER NOT NULL DEFAULT 0,
+    players_online    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_gs_stats_query ON gameserver_stats(gameserver_id, resolution, timestamp);

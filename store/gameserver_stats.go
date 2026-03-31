@@ -29,8 +29,8 @@ func (s *GameserverStatsStore) InsertBatch(samples []model.StatsSample) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`INSERT INTO gameserver_stats
-		(gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes)
-		VALUES (?, 'raw', ?, ?, ?, ?, ?, ?, ?)`)
+		(gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes, players_online)
+		VALUES (?, 'raw', ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("preparing stats insert: %w", err)
 	}
@@ -40,7 +40,7 @@ func (s *GameserverStatsStore) InsertBatch(samples []model.StatsSample) error {
 		if _, err := stmt.Exec(
 			s.GameserverID, s.Timestamp.UTC(),
 			s.CPUPercent, s.MemoryUsageMB, s.MemoryLimitMB,
-			s.NetRxBytes, s.NetTxBytes, s.VolumeSizeBytes,
+			s.NetRxBytes, s.NetTxBytes, s.VolumeSizeBytes, s.PlayersOnline,
 		); err != nil {
 			return fmt.Errorf("inserting stats sample: %w", err)
 		}
@@ -71,7 +71,7 @@ func (s *GameserverStatsStore) QueryHistory(gameserverID string, period model.St
 	}
 
 	rows, err := s.db.Query(
-		`SELECT gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes
+		`SELECT gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes, players_online
 		FROM gameserver_stats
 		WHERE gameserver_id = ? AND resolution = ? AND timestamp >= ?
 		ORDER BY timestamp`,
@@ -85,7 +85,7 @@ func (s *GameserverStatsStore) QueryHistory(gameserverID string, period model.St
 	var samples []model.StatsSample
 	for rows.Next() {
 		var s model.StatsSample
-		if err := rows.Scan(&s.GameserverID, &s.Resolution, &s.Timestamp, &s.CPUPercent, &s.MemoryUsageMB, &s.MemoryLimitMB, &s.NetRxBytes, &s.NetTxBytes, &s.VolumeSizeBytes); err != nil {
+		if err := rows.Scan(&s.GameserverID, &s.Resolution, &s.Timestamp, &s.CPUPercent, &s.MemoryUsageMB, &s.MemoryLimitMB, &s.NetRxBytes, &s.NetTxBytes, &s.VolumeSizeBytes, &s.PlayersOnline); err != nil {
 			return nil, fmt.Errorf("scanning stats row: %w", err)
 		}
 		samples = append(samples, s)
@@ -111,7 +111,7 @@ func (s *GameserverStatsStore) Downsample(fromRes, toRes string, olderThan time.
 	// Insert aggregated rows
 	_, err = tx.Exec(`
 		INSERT INTO gameserver_stats
-			(gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes)
+			(gameserver_id, resolution, timestamp, cpu_percent, memory_usage_mb, memory_limit_mb, net_rx_bytes, net_tx_bytes, volume_size_bytes, players_online)
 		SELECT
 			gameserver_id,
 			?,
@@ -121,7 +121,8 @@ func (s *GameserverStatsStore) Downsample(fromRes, toRes string, olderThan time.
 			MAX(memory_limit_mb),
 			MAX(net_rx_bytes),
 			MAX(net_tx_bytes),
-			MAX(volume_size_bytes)
+			MAX(volume_size_bytes),
+			MAX(players_online)
 		FROM gameserver_stats
 		WHERE resolution = ? AND timestamp < ?
 		GROUP BY gameserver_id, CAST(strftime('%s', timestamp) AS INTEGER) / ?`,

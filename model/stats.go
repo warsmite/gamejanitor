@@ -12,6 +12,7 @@ type StatsSample struct {
 	NetRxBytes      int64     `json:"net_rx_bytes"`
 	NetTxBytes      int64     `json:"net_tx_bytes"`
 	VolumeSizeBytes int64     `json:"volume_size_bytes"`
+	PlayersOnline   int       `json:"players_online"`
 }
 
 type StatsPeriod string

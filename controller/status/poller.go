@@ -32,7 +32,8 @@ type StatsPoller struct {
 	cache       map[string]*controller.GameserverStatsEvent
 
 	// Stats history persistence
-	statsWriter StatsHistoryWriter
+	statsWriter    StatsHistoryWriter
+	playerCountFn  func(gameserverID string) int
 	bufMu       sync.Mutex
 	statsBuf    []model.StatsSample
 	flusherWg   sync.WaitGroup
@@ -49,6 +50,11 @@ func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaste
 		pollers:     make(map[string]context.CancelFunc),
 		cache:       make(map[string]*controller.GameserverStatsEvent),
 	}
+}
+
+// SetPlayerCountFn sets a function to look up current player count for a gameserver.
+func (s *StatsPoller) SetPlayerCountFn(fn func(string) int) {
+	s.playerCountFn = fn
 }
 
 // GetCachedStats returns the latest polled stats, or nil if not available.
@@ -210,6 +216,10 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 	// Buffer for history persistence
 	if s.statsWriter != nil {
 		s.bufMu.Lock()
+		var players int
+		if s.playerCountFn != nil {
+			players = s.playerCountFn(gameserverID)
+		}
 		s.statsBuf = append(s.statsBuf, model.StatsSample{
 			GameserverID:    gameserverID,
 			Timestamp:       event.Timestamp,
@@ -219,6 +229,7 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 			NetRxBytes:      event.NetRxBytes,
 			NetTxBytes:      event.NetTxBytes,
 			VolumeSizeBytes: event.VolumeSizeBytes,
+			PlayersOnline:   players,
 		})
 		s.bufMu.Unlock()
 	}

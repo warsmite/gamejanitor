@@ -77,6 +77,12 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
 	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
+	statsPoller.SetPlayerCountFn(func(gsID string) int {
+		if q := querySvc.GetQueryData(gsID); q != nil {
+			return q.PlayersOnline
+		}
+		return 0
+	})
 	readyWatcher := status.NewReadyWatcher(db, broadcaster, gameStore, logger)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
