@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/worker"
@@ -30,12 +31,13 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	}
 
 	// Step 1: Create a process that holds the user+network namespace open
-	holder := exec.Command("unshare", "--user", "--net", "--map-root-user", "--", "sh", "-c", "echo ready; exec sleep infinity")
+	holder := exec.Command("unshare", "--user", "--net", "--map-root-user", "--fork", "--kill-child", "--", "sh", "-c", "echo ready; exec sleep infinity")
 	holderOut, err := holder.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("creating holder pipe: %w", err)
 	}
 	holder.Stderr = os.Stderr
+	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 
 	if err := holder.Start(); err != nil {
 		return nil, fmt.Errorf("starting namespace holder: %w", err)
@@ -65,6 +67,7 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 
 	slirpCmd := exec.Command(slirpPath, slirpArgs...)
 	slirpCmd.Stderr = os.Stderr
+	slirpCmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
 
 	if err := slirpCmd.Start(); err != nil {
 		holder.Process.Kill()
