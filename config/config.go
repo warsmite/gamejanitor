@@ -44,7 +44,7 @@ type Config struct {
 	TLS *TLSConfig `yaml:"tls"`
 
 	// Runtime
-	Runtime string `yaml:"runtime"` // "docker", "process", or "auto" (default)
+	Runtime string `yaml:"runtime"` // "sandbox" (default), "docker", or "auto"
 	RuntimeSocket  string `yaml:"runtime_socket"`  // explicit socket path; auto-detected if empty
 
 	// Backup storage
@@ -182,24 +182,16 @@ func (c *Config) WorkerOnly() bool {
 	return c.Worker && !c.Controller
 }
 
-// ResolveRuntimeSocket returns the runtime socket path.
-// Auto-detects Docker socket if not explicitly configured.
+// ResolveRuntimeSocket returns the Docker socket path.
+// Only relevant when using the docker runtime.
 func (c *Config) ResolveRuntimeSocket() string {
 	if c.RuntimeSocket != "" {
 		return c.RuntimeSocket
 	}
-
-	switch c.Runtime {
-	case "process":
-		return ""
-	case "docker":
+	if _, err := os.Stat("/var/run/docker.sock"); err == nil {
 		return "/var/run/docker.sock"
-	default:
-		if _, err := os.Stat("/var/run/docker.sock"); err == nil {
-			return "/var/run/docker.sock"
-		}
-		return "" // fall back to DOCKER_HOST env var
 	}
+	return ""
 }
 
 // isSocketAccessible checks that a unix socket has a healthy daemon behind it.

@@ -53,7 +53,7 @@ func init() {
 	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
-	serveCmd.Flags().String("runtime", "", "Runtime: docker, process, auto")
+	serveCmd.Flags().String("runtime", "", "Runtime: sandbox (default), docker, auto")
 	serveCmd.Flags().Bool("proxy", false, "Enable game traffic proxy (forward game ports to worker nodes)")
 }
 

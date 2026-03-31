@@ -47,20 +47,21 @@ chmod +x "$TMP"
 mv "$TMP" "${INSTALL_DIR}/${BINARY}"
 echo "Binary installed to ${INSTALL_DIR}/${BINARY}"
 
-# Require Docker
-if ! command -v docker >/dev/null 2>&1; then
-    echo "ERROR: Docker is required but not installed."
-    echo "  Install Docker: https://docs.docker.com/engine/install/"
+# Check systemd (required for sandbox runtime)
+if ! command -v systemctl >/dev/null 2>&1; then
+    echo "ERROR: systemd is required but not found."
+    echo "  Gamejanitor uses systemd for process management and resource limits."
     exit 1
 fi
 
-if ! docker info >/dev/null 2>&1; then
-    echo "ERROR: Docker is installed but the daemon is not running."
-    echo "  Start Docker: sudo systemctl start docker"
-    exit 1
+# Detect runtime
+RUNTIME_FLAG=""
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    echo "Docker detected. Gamejanitor will auto-select the sandbox runtime."
+    echo "  To use Docker instead: gamejanitor serve --runtime docker"
+else
+    echo "Using sandbox runtime (no Docker needed)."
 fi
-
-echo "Docker detected."
 
 # Install systemd service
 echo "Setting up systemd service..."

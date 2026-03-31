@@ -19,7 +19,7 @@ var installCmd = &cobra.Command{
 }
 
 func init() {
-	installCmd.Flags().String("runtime", "auto", "Runtime: docker, process, auto")
+	installCmd.Flags().String("runtime", "auto", "Runtime: sandbox (default), docker, auto")
 	installCmd.Flags().String("data-dir", "", "Data directory (default: /var/lib/gamejanitor on Linux, ~/Library/Application Support/gamejanitor on macOS)")
 }
 
@@ -64,9 +64,9 @@ func installSystemd(runtimeFlag, dataDir string) error {
 		execStart += " --runtime " + runtimeFlag
 	}
 
-	// Only depend on Docker if not explicitly using process runtime
+	// Only depend on Docker if explicitly using docker runtime
 	afterUnits := "network-online.target"
-	if runtimeFlag != "process" {
+	if runtimeFlag == "docker" {
 		afterUnits += " docker.service"
 	}
 

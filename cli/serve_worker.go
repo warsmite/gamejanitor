@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -43,15 +44,17 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 	}
 
 	var localWorker worker.Worker
-	if cfg.Runtime == "process" {
-		localWorker = sandbox.New(gameStore, cfg.DataDir, logger)
-	} else {
+	runtime := resolveRuntime(cfg, logger)
+	switch runtime {
+	case "docker":
 		dockerClient, err := wdocker.New(logger, cfg.ResolveRuntimeSocket())
 		if err != nil {
-			return fmt.Errorf("failed to connect to runtime: %w", err)
+			return fmt.Errorf("docker is not available: %w", err)
 		}
 		defer dockerClient.Close()
 		localWorker = wdocker.NewWorker(dockerClient, gameStore, cfg.DataDir, logger)
+	default:
+		localWorker = sandbox.New(gameStore, cfg.DataDir, logger)
 	}
 
 	// Load worker TLS config from config file or auto-discovery
@@ -350,6 +353,32 @@ func loadOrGenerateWorkerID(dataDir string, logger *slog.Logger) string {
 }
 
 // generateShortID produces a short random hex string for worker IDs.
+// resolveRuntime determines which runtime to use.
+// "sandbox" (default), "docker" (explicit opt-in), or "auto" (sandbox if systemd available, else docker).
+func resolveRuntime(cfg config.Config, log *slog.Logger) string {
+	switch cfg.Runtime {
+	case "sandbox", "process":
+		log.Info("using sandbox runtime")
+		return "sandbox"
+	case "docker":
+		log.Info("using docker runtime")
+		return "docker"
+	default:
+		// Auto: prefer sandbox when systemd is available
+		if hasSystemdRun() {
+			log.Info("auto-detected sandbox runtime (systemd available)")
+			return "sandbox"
+		}
+		log.Info("auto-detected docker runtime (no systemd)")
+		return "docker"
+	}
+}
+
+func hasSystemdRun() bool {
+	_, err := exec.LookPath("systemd-run")
+	return err == nil
+}
+
 // Not a full UUID — readable enough for CLI/UI use.
 func generateShortID() string {
 	b := make([]byte, 8)
