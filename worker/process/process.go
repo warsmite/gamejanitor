@@ -609,7 +609,7 @@ func (w *ProcessWorker) CopyDepotToVolume(ctx context.Context, depotDir string, 
 
 // ListGameserverInstances scans the processes directory for gameservers and checks
 // whether their PIDs are still alive. This allows recovery after gamejanitor restarts.
-func (w *ProcessWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *ProcessWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	processesDir := filepath.Join(w.dataDir, "processes")
 	entries, err := os.ReadDir(processesDir)
 	if err != nil {
@@ -619,7 +619,7 @@ func (w *ProcessWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 		return nil, fmt.Errorf("reading processes dir: %w", err)
 	}
 
-	var containers []worker.GameserverContainer
+	var containers []worker.GameserverInstance
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -647,7 +647,7 @@ func (w *ProcessWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 			}
 		}
 
-		containers = append(containers, worker.GameserverContainer{
+		containers = append(containers, worker.GameserverInstance{
 			InstanceID:   id,
 			InstanceName: manifest.Name,
 			GameserverID:  id,

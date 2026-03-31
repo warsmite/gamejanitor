@@ -122,7 +122,7 @@ type BulkActionResult struct {
 type GameserverStatus struct {
 	Status      string         `json:"status"`
 	ErrorReason string         `json:"error_reason,omitempty"`
-	Container   *InstanceInfo `json:"container"`
+	Instance    *InstanceInfo `json:"instance"`
 }
 
 // InstanceInfo describes the underlying container state.

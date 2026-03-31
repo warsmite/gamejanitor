@@ -121,7 +121,7 @@
 
   onMount(() => {
     uptimeInterval = setInterval(() => {
-      uptime = gsState?.containerStartedAt ? formatUptime(gsState.containerStartedAt) : '';
+      uptime = gsState?.instanceStartedAt ? formatUptime(gsState.instanceStartedAt) : '';
     }, 1000);
   });
 

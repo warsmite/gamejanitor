@@ -633,7 +633,7 @@ func (w *FakeWorker) DownloadWorkshopItem(ctx context.Context, volumeName string
 	return nil
 }
 
-func (w *FakeWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *FakeWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	return nil, nil
 }
 

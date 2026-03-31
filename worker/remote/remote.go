@@ -530,14 +530,14 @@ func (w *RemoteWorker) CopyDepotToVolume(ctx context.Context, depotDir string, v
 	return err
 }
 
-func (w *RemoteWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *RemoteWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	resp, err := w.client.ListGameserverInstances(ctx, &pb.ListGameserverInstancesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("listing gameserver containers on %s: %w", w.nodeID, err)
 	}
-	var result []worker.GameserverContainer
+	var result []worker.GameserverInstance
 	for _, c := range resp.Containers {
-		result = append(result, worker.GameserverContainer{
+		result = append(result, worker.GameserverInstance{
 			InstanceID:   c.InstanceId,
 			InstanceName: c.InstanceName,
 			GameserverID:  c.GameserverId,

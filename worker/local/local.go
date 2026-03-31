@@ -292,18 +292,18 @@ func (w *LocalWorker) CopyTarToInstance(ctx context.Context, containerID string,
 	return w.Docker.CopyTarToInstance(ctx, containerID, destPath, content)
 }
 
-func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverContainer, error) {
+func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	containers, err := w.Docker.ListGameserverInstances(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var result []worker.GameserverContainer
+	var result []worker.GameserverInstance
 	for _, c := range containers {
 		gsID, ok := naming.GameserverIDFromInstanceName(c.Name)
 		if !ok {
 			continue // update/fileops/backup container, not a gameserver
 		}
-		result = append(result, worker.GameserverContainer{
+		result = append(result, worker.GameserverInstance{
 			InstanceID:   c.ID,
 			InstanceName: c.Name,
 			GameserverID:  gsID,

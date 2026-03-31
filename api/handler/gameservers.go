@@ -338,7 +338,7 @@ func detachedCtx(r *http.Request) context.Context {
 type statusResponse struct {
 	Status      string         `json:"status"`
 	ErrorReason string         `json:"error_reason,omitempty"`
-	Container   *containerInfo `json:"container"`
+	Instance    *instanceInfo `json:"instance"`
 }
 
 type queryInfo struct {
@@ -349,7 +349,7 @@ type queryInfo struct {
 	Version       string   `json:"version"`
 }
 
-type containerInfo struct {
+type instanceInfo struct {
 	State     string    `json:"state"`
 	StartedAt time.Time `json:"started_at"`
 }
@@ -377,7 +377,7 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
 		} else {
-			resp.Container = &containerInfo{
+			resp.Instance = &instanceInfo{
 				State:     info.State,
 				StartedAt: info.StartedAt,
 			}

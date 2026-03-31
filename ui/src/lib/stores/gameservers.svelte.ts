@@ -10,7 +10,7 @@ export interface GameserverState {
   stats: GameserverStats | null;
   query: QueryData | null;
   logLines: string[];
-  containerStartedAt: string;
+  instanceStartedAt: string;
   backups: Backup[] | null;       // null = not loaded yet
   schedules: Schedule[] | null;   // null = not loaded yet
 }
@@ -163,8 +163,8 @@ class GameserverStore {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.status(gs.id).then(s => {
-            if (s?.container?.started_at && this.gameservers[gs.id]) {
-              this.gameservers[gs.id].containerStartedAt = s.container.started_at;
+            if (s?.instance?.started_at && this.gameservers[gs.id]) {
+              this.gameservers[gs.id].instanceStartedAt = s.instance.started_at;
             }
           }).catch((e) => { console.warn('gameserverStore:', e); });
         }
@@ -227,11 +227,11 @@ class GameserverStore {
       if (!state) return;
 
       // Uptime tracking
-      if (data.type === 'gameserver.container_started' || data.type === 'gameserver.ready') {
-        state.containerStartedAt = new Date().toISOString();
+      if (data.type === 'gameserver.instance_started' || data.type === 'gameserver.ready') {
+        state.instanceStartedAt = new Date().toISOString();
       }
-      if (data.type === 'gameserver.container_stopped' || data.type === 'gameserver.container_exited') {
-        state.containerStartedAt = '';
+      if (data.type === 'gameserver.instance_stopped' || data.type === 'gameserver.instance_exited') {
+        state.instanceStartedAt = '';
       }
 
       // Derive status from lifecycle events (replaces status_changed)
@@ -239,11 +239,11 @@ class GameserverStore {
         'gameserver.image_pulling': 'installing',
         'gameserver.depot_downloading': 'installing',
         'gameserver.container_creating': 'starting',
-        'gameserver.container_started': 'started',
+        'gameserver.instance_started': 'started',
         'gameserver.ready': 'running',
         'gameserver.container_stopping': 'stopping',
-        'gameserver.container_stopped': 'stopped',
-        'gameserver.container_exited': 'error',
+        'gameserver.instance_stopped': 'stopped',
+        'gameserver.instance_exited': 'error',
         'gameserver.error': 'error',
       };
       if (data.type in statusMap) {
@@ -261,7 +261,7 @@ class GameserverStore {
           state.stats = null;
           state.query = null;
           state.logLines = [];
-          state.containerStartedAt = '';
+          state.instanceStartedAt = '';
         } else {
           this.connectLogStream(data.gameserver_id);
         }
@@ -327,7 +327,7 @@ class GameserverStore {
       stats: null,
       query: null,
       logLines: [],
-      containerStartedAt: '',
+      instanceStartedAt: '',
       backups: null,
       schedules: null,
     };
@@ -378,9 +378,9 @@ class GameserverStore {
 
 export const gameserverStore = new GameserverStore();
 
-export function formatUptime(containerStartedAt: string): string {
-  if (!containerStartedAt) return '';
-  const started = new Date(containerStartedAt).getTime();
+export function formatUptime(instanceStartedAt: string): string {
+  if (!instanceStartedAt) return '';
+  const started = new Date(instanceStartedAt).getTime();
   const diff = Math.max(0, Math.floor((Date.now() - started) / 1000));
 
   const days = Math.floor(diff / 86400);

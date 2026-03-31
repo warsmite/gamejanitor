@@ -47,7 +47,7 @@ type Worker interface {
 	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
 
 	// Discovery
-	ListGameserverInstances(ctx context.Context) ([]GameserverContainer, error)
+	ListGameserverInstances(ctx context.Context) ([]GameserverInstance, error)
 
 	// Events
 	WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan error)

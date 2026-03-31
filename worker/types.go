@@ -68,7 +68,7 @@ type InstanceEvent struct {
 	Action        string // "start", "stop", "die", "kill", etc.
 }
 
-type GameserverContainer struct {
+type GameserverInstance struct {
 	InstanceID   string
 	InstanceName string
 	GameserverID  string // extracted from container name

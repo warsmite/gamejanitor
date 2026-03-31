@@ -161,7 +161,7 @@ export interface Gameserver {
 export interface GameserverStatus {
   status: string;
   error_reason?: string;
-  container?: {
+  instance?: {
     state: string;
     started_at: string;
   };
