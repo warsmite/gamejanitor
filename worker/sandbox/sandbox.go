@@ -172,10 +172,14 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	// Build bwrap command with full isolation
 	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.dataDir)
 
-	// Add network namespace isolation when slirp4netns is available
+	// Add network namespace isolation — slirp4netns will provide connectivity
 	if w.slirpPath != "" {
 		bwrapArgs = append([]string{"--unshare-net"}, bwrapArgs...)
 	}
+
+	// Use --info-fd to get the child PID (needed for slirp4netns)
+	infoPath := filepath.Join(dir, "info.json")
+	bwrapArgs = append([]string{"--info-fd", "3"}, bwrapArgs...)
 
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
@@ -190,18 +194,31 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
+	// Pipe for bwrap --info-fd (FD 3)
+	infoFile, err := os.OpenFile(infoPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		logFile.Close()
+		return fmt.Errorf("creating info file: %w", err)
+	}
+
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	cmd.ExtraFiles = []*os.File{infoFile} // FD 3 = ExtraFiles[0]
 
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
+		infoFile.Close()
 		return fmt.Errorf("starting instance: %w", err)
 	}
+	infoFile.Close()
 
 	pid := 0
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
 	}
+
+	// Read bwrap child PID from info file for slirp4netns
+	childPID := readBwrapChildPID(infoPath)
 
 	inst := &managedInstance{
 		id:        id,
@@ -214,9 +231,9 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		unitName:  "gj-" + id,
 	}
 
-	// Set up network namespace with slirp4netns
-	if w.slirpPath != "" && pid > 0 {
-		si, err := setupNetworkNamespace(id, pid, manifest.Ports, w.dataDir, w.slirpPath, w.log)
+	// Set up network namespace with slirp4netns using the bwrap child PID
+	if w.slirpPath != "" && childPID > 0 {
+		si, err := setupNetworkNamespace(id, childPID, manifest.Ports, w.dataDir, w.slirpPath, w.log)
 		if err != nil {
 			w.log.Warn("failed to set up network namespace, instance has no network", "id", id, "error", err)
 		} else {

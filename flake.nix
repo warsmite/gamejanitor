@@ -12,44 +12,50 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      packages.${system} = let
-        ui = pkgs.buildNpmPackage {
-          pname = "gamejanitor-ui";
-          version = "0.1.0";
-          src = ./ui;
-          npmDepsHash = "sha256-b09AEsgcy52kcGj7rMuriVJcSimjZRzxTB0BOSvqY+w=";
-          installPhase = ''
-            cp -r dist $out
-          '';
+      packages.${system} =
+        let
+          ui = pkgs.buildNpmPackage {
+            pname = "gamejanitor-ui";
+            version = "0.1.0";
+            src = ./ui;
+            npmDepsHash = "sha256-b09AEsgcy52kcGj7rMuriVJcSimjZRzxTB0BOSvqY+w=";
+            installPhase = ''
+              cp -r dist $out
+            '';
+          };
+        in
+        {
+          default = pkgs.buildGoModule {
+            pname = "gamejanitor";
+            version = "0.1.0";
+            src = ./.;
+            vendorHash = "sha256-Aakk1e8WQvw2KmmkshQ6Nswb6WzWuupGEenq4vcLps8=";
+            env.CGO_ENABLED = "0";
+
+            # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
+            excludedPackages = [
+              "sdk"
+              "games"
+            ];
+
+            # e2e tests need a built binary + runtime; netutil DNS tests need network.
+            # worker/docker tests need Docker. Skip all in the Nix sandbox.
+            checkFlags = [
+              "-skip"
+              "^TestValidateExternalURL"
+            ];
+            preCheck = ''
+              rm -rf e2e
+              rm -rf worker/docker/*_test.go
+            '';
+
+            preBuild = ''
+              rm -rf ui/dist
+              cp -r ${ui} ui/dist
+              chmod -R u+w ui/dist
+            '';
+          };
         };
-      in {
-        default = pkgs.buildGoModule {
-          pname = "gamejanitor";
-          version = "0.1.0";
-          src = ./.;
-          vendorHash = "sha256-Aakk1e8WQvw2KmmkshQ6Nswb6WzWuupGEenq4vcLps8=";
-          env.CGO_ENABLED = "0";
-
-          # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
-          excludedPackages = [ "sdk" "games" ];
-
-          # e2e tests need a built binary + runtime; netutil DNS tests need network.
-          # worker/docker tests need Docker. Skip all in the Nix sandbox.
-          checkFlags = [
-            "-skip" "^TestValidateExternalURL"
-          ];
-          preCheck = ''
-            rm -rf e2e
-            rm -rf worker/docker/*_test.go
-          '';
-
-          preBuild = ''
-            rm -rf ui/dist
-            cp -r ${ui} ui/dist
-            chmod -R u+w ui/dist
-          '';
-        };
-      };
 
       nixosModules.default = import ./nixos/module.nix self;
 
@@ -58,7 +64,7 @@
           dev = pkgs.writeShellScriptBin "dev" ''
             sudo rm -rf ui/dist
             (cd ui && npm run build)
-            exec sudo -E go run -mod=mod . serve -d /tmp/gamejanitor-data "$@"
+            go run -mod=mod . serve -d /tmp/gamejanitor-data 
           '';
 
           # Deploy to homelab — build binary + UI, ship to all nodes, restart services.
@@ -68,99 +74,99 @@
           # Stops the NixOS service and runs the dev binary directly so we skip Nix rebuilds.
           # Use `deploy --restore` to go back to the NixOS-managed binary.
           deploy = pkgs.writeShellScriptBin "deploy" ''
-            set -e
-            NODES=("sleepy" "dopey" "grumpy")
-            FAST=false
-            if [ "$1" = "--fast" ]; then FAST=true; shift; fi
-            TARGETS=("''${@:-''${NODES[@]}}")
+                        set -e
+                        NODES=("sleepy" "dopey" "grumpy")
+                        FAST=false
+                        if [ "$1" = "--fast" ]; then FAST=true; shift; fi
+                        TARGETS=("''${@:-''${NODES[@]}}")
 
-            if [ "$FAST" = false ]; then
-              echo "Building UI..."
-              rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
-              (cd ui && npm run build)
-            else
-              echo "Fast mode — skipping UI build"
-            fi
+                        if [ "$FAST" = false ]; then
+                          echo "Building UI..."
+                          rm -rf ui/dist 2>/dev/null || sudo rm -rf ui/dist
+                          (cd ui && npm run build)
+                        else
+                          echo "Fast mode — skipping UI build"
+                        fi
 
-            echo "Building binary..."
-            CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
-            echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
+                        echo "Building binary..."
+                        CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
+                        echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
 
-            # Ship binary to all targets
-            for node in "''${TARGETS[@]}"; do
-              echo "Shipping binary to $node..."
-              scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy"
-              ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev"
-            done
+                        # Ship binary to all targets
+                        for node in "''${TARGETS[@]}"; do
+                          echo "Shipping binary to $node..."
+                          scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy"
+                          ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev"
+                        done
 
-            # Start controller first (sleepy), create worker tokens
-            CONTROLLER="sleepy"
-            WORKERS=("dopey" "grumpy")
+                        # Start controller first (sleepy), create worker tokens
+                        CONTROLLER="sleepy"
+                        WORKERS=("dopey" "grumpy")
 
-            # Write dev config with S3 backup store (Garage on homelab)
-            # These are local-only dev credentials, not real secrets.
-            ssh "$CONTROLLER" "sudo tee /var/lib/gamejanitor/dev-config.yaml > /dev/null" <<'YAML'
-backup_store:
-  type: s3
-  endpoint: "doc:3900"
-  region: garage
-  bucket: gamejanitor-backups
-  path_style: true
-  use_ssl: false
-  access_key: "GKf4e7eacfd92f77f867981127"
-  secret_key: "cb047f16267241dcf7be0836db30eaf747cdd66f7725815db98a2eb73eeb7303"
-YAML
+                        # Write dev config with S3 backup store (Garage on homelab)
+                        # These are local-only dev credentials, not real secrets.
+                        ssh "$CONTROLLER" "sudo tee /var/lib/gamejanitor/dev-config.yaml > /dev/null" <<'YAML'
+            backup_store:
+              type: s3
+              endpoint: "doc:3900"
+              region: garage
+              bucket: gamejanitor-backups
+              path_style: true
+              use_ssl: false
+              access_key: "GKf4e7eacfd92f77f867981127"
+              secret_key: "cb047f16267241dcf7be0836db30eaf747cdd66f7725815db98a2eb73eeb7303"
+            YAML
 
-            echo "Starting controller ($CONTROLLER)..."
-            ssh "$CONTROLLER" "
-              sudo systemctl stop gamejanitor-dev 2>/dev/null || true
-              sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
-              sudo systemctl stop gamejanitor 2>/dev/null || true
-              sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                --property=SupplementaryGroups=docker \
-                /run/gamejanitor-dev serve \
-                  --config /var/lib/gamejanitor/dev-config.yaml \
-                  --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
-                  --proxy \
-                  -d /var/lib/gamejanitor
-            "
-            echo "  $CONTROLLER: started"
+                        echo "Starting controller ($CONTROLLER)..."
+                        ssh "$CONTROLLER" "
+                          sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                          sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                          sudo systemctl stop gamejanitor 2>/dev/null || true
+                          sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
+                            --property=SupplementaryGroups=docker \
+                            /run/gamejanitor-dev serve \
+                              --config /var/lib/gamejanitor/dev-config.yaml \
+                              --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
+                              --proxy \
+                              -d /var/lib/gamejanitor
+                        "
+                        echo "  $CONTROLLER: started"
 
-            # Wait for controller DB to be ready
-            sleep 2
+                        # Wait for controller DB to be ready
+                        sleep 2
 
-            # Create/rotate worker tokens on controller DB
-            for w in "''${WORKERS[@]}"; do
-              echo "Creating worker token for $w..."
-              TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline create --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null || true")
-              if [ -z "$TOKEN" ]; then
-                TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline rotate --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null")
-              fi
-              if [ -z "$TOKEN" ]; then
-                echo "  WARNING: failed to get token for $w, skipping"
-                continue
-              fi
-              echo "  token created for $w"
+                        # Create/rotate worker tokens on controller DB
+                        for w in "''${WORKERS[@]}"; do
+                          echo "Creating worker token for $w..."
+                          TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline create --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null || true")
+                          if [ -z "$TOKEN" ]; then
+                            TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline rotate --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null")
+                          fi
+                          if [ -z "$TOKEN" ]; then
+                            echo "  WARNING: failed to get token for $w, skipping"
+                            continue
+                          fi
+                          echo "  token created for $w"
 
-              echo "Starting worker $w..."
-              ssh "$w" "
-                sudo systemctl stop gamejanitor-dev 2>/dev/null || true
-                sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
-                sudo systemctl stop gamejanitor 2>/dev/null || true
-                sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                  --property=SupplementaryGroups=docker \
-                  /run/gamejanitor-dev serve \
-                    --worker --controller=false \
-                    --bind 0.0.0.0 --sftp-port 2222 \
-                    --controller-address $CONTROLLER:9090 \
-                    --worker-token '$TOKEN' \
-                    -d /var/lib/gamejanitor
-              "
-              echo "  $w: started"
-            done
+                          echo "Starting worker $w..."
+                          ssh "$w" "
+                            sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                            sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                            sudo systemctl stop gamejanitor 2>/dev/null || true
+                            sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
+                              --property=SupplementaryGroups=docker \
+                              /run/gamejanitor-dev serve \
+                                --worker --controller=false \
+                                --bind 0.0.0.0 --sftp-port 2222 \
+                                --controller-address $CONTROLLER:9090 \
+                                --worker-token '$TOKEN' \
+                                -d /var/lib/gamejanitor
+                          "
+                          echo "  $w: started"
+                        done
 
-            echo "Deployed to: ''${TARGETS[*]}"
-            echo "Run 'deploy-restore' to switch back to NixOS-managed binary"
+                        echo "Deployed to: ''${TARGETS[*]}"
+                        echo "Run 'deploy-restore' to switch back to NixOS-managed binary"
           '';
 
           deploy-restore = pkgs.writeShellScriptBin "deploy-restore" ''

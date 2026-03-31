@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"strings"
@@ -11,6 +12,24 @@ import (
 	"time"
 
 )
+
+// readBwrapChildPID reads the child PID from bwrap's --info-fd JSON output.
+// Retries briefly since bwrap writes this asynchronously after startup.
+func readBwrapChildPID(infoPath string) int {
+	for i := 0; i < 20; i++ {
+		data, err := os.ReadFile(infoPath)
+		if err == nil && len(data) > 0 {
+			var info struct {
+				ChildPID int `json:"child-pid"`
+			}
+			if json.Unmarshal(data, &info) == nil && info.ChildPID > 0 {
+				return info.ChildPID
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return 0
+}
 
 // safeBuffer is a bytes.Buffer safe for concurrent stdout/stderr capture.
 type safeBuffer struct {
