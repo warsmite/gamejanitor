@@ -171,54 +171,45 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 
 	// Build bwrap command with full isolation
 	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.dataDir)
-
-	// Add network namespace isolation — slirp4netns will provide connectivity
-	if w.slirpPath != "" {
-		bwrapArgs = append([]string{"--unshare-net"}, bwrapArgs...)
-	}
-
-	// Use --info-fd to get the child PID (needed for slirp4netns)
-	infoPath := filepath.Join(dir, "info.json")
-	bwrapArgs = append([]string{"--info-fd", "3"}, bwrapArgs...)
-
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
 
-	// Wrap in systemd-run for lifecycle + cgroups
-	cmd := buildSystemdCommand(id, manifest, bwrapArgs, w.bwrapPath)
+	// Set up network namespace before starting bwrap
+	var slirpInst *slirpInstance
+	if w.slirpPath != "" {
+		si, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.slirpPath, w.log)
+		if err != nil {
+			w.log.Warn("network isolation unavailable", "id", id, "error", err)
+		} else {
+			slirpInst = si
+		}
+	}
+
+	// Wrap in systemd-run for lifecycle + cgroups.
+	// If we have a network namespace, wrap bwrap in nsenter to join it.
+	cmd := buildSystemdCommandWithNetns(id, manifest, bwrapArgs, w.bwrapPath, slirpInst)
 
 	// Log file
 	logPath := filepath.Join(dir, "output.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("creating log file: %w", err)
-	}
-
-	// Pipe for bwrap --info-fd (FD 3)
-	infoFile, err := os.OpenFile(infoPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-	if err != nil {
-		logFile.Close()
-		return fmt.Errorf("creating info file: %w", err)
 	}
 
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	cmd.ExtraFiles = []*os.File{infoFile} // FD 3 = ExtraFiles[0]
 
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
-		infoFile.Close()
+		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("starting instance: %w", err)
 	}
-	infoFile.Close()
 
 	pid := 0
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
 	}
-
-	// Read bwrap child PID from info file for slirp4netns
-	childPID := readBwrapChildPID(infoPath)
 
 	inst := &managedInstance{
 		id:        id,
@@ -229,16 +220,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		logFile:   logFile,
 		done:      make(chan struct{}),
 		unitName:  "gj-" + id,
-	}
-
-	// Set up network namespace with slirp4netns using the bwrap child PID
-	if w.slirpPath != "" && childPID > 0 {
-		si, err := setupNetworkNamespace(id, childPID, manifest.Ports, w.dataDir, w.slirpPath, w.log)
-		if err != nil {
-			w.log.Warn("failed to set up network namespace, instance has no network", "id", id, "error", err)
-		} else {
-			inst.slirp = si
-		}
+		slirp:     slirpInst,
 	}
 
 	w.mu.Lock()

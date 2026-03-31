@@ -54,6 +54,54 @@ func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []strin
 	return exec.Command("systemd-run", sdArgs...)
 }
 
+// buildSystemdCommandWithNetns wraps bwrap in systemd-run, optionally using
+// nsenter to join an existing network namespace from slirp4netns.
+func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArgs []string, bwrapPath string, si *slirpInstance) *exec.Cmd {
+	if bwrapPath == "" {
+		bwrapPath = "bwrap"
+	}
+
+	// Build the actual command: nsenter (if netns) + bwrap
+	var innerArgs []string
+	if si != nil {
+		innerArgs = append(nsenterPrefix(si.nsPID), bwrapPath)
+	} else {
+		innerArgs = []string{bwrapPath}
+	}
+	innerArgs = append(innerArgs, bwrapArgs...)
+
+	if !hasSystemdRun() {
+		return exec.Command(innerArgs[0], innerArgs[1:]...)
+	}
+
+	unitName := "gj-" + id
+	sdArgs := []string{
+		"--user", "--scope",
+		"--unit=" + unitName,
+	}
+
+	if manifest.MemoryLimitMB > 0 {
+		sdArgs = append(sdArgs, fmt.Sprintf("--property=MemoryMax=%dM", manifest.MemoryLimitMB))
+	}
+	if manifest.CPULimit > 0 {
+		sdArgs = append(sdArgs, fmt.Sprintf("--property=CPUQuota=%d%%", int(manifest.CPULimit*100)))
+	}
+
+	for _, p := range manifest.Ports {
+		if p.HostPort > 0 {
+			sdArgs = append(sdArgs, fmt.Sprintf("--property=SocketBindAllow=%d", p.HostPort))
+		}
+	}
+	if len(manifest.Ports) > 0 {
+		sdArgs = append(sdArgs, "--property=SocketBindDeny=any")
+	}
+
+	sdArgs = append(sdArgs, "--")
+	sdArgs = append(sdArgs, innerArgs...)
+
+	return exec.Command("systemd-run", sdArgs...)
+}
+
 // buildExecCommand builds a bwrap command for exec (no systemd wrapping needed).
 func buildExecCommand(bwrapArgs []string, bwrapPath string) *exec.Cmd {
 	if bwrapPath == "" {

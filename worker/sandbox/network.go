@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,52 +14,65 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// slirpInstance manages a slirp4netns process for a single game server.
+// slirpInstance manages the network namespace holder and slirp4netns process.
 type slirpInstance struct {
-	cmd     *exec.Cmd
+	holder  *exec.Cmd // unshare process holding the netns open
+	slirp   *exec.Cmd
 	apiSock string
-	pid     int // PID of the child process inside the netns
+	nsPID   int // PID of the namespace holder (for nsenter)
 }
 
-// setupNetworkNamespace creates a network namespace and starts slirp4netns
-// for the given instance. Returns the slirp instance for cleanup.
-//
-// The caller must have already started the game process with --unshare-net.
-// slirp4netns attaches to the process's network namespace and provides:
-// - Outbound connectivity (game can reach the internet)
-// - Port forwarding from host ports to the namespace
-func setupNetworkNamespace(instanceID string, pid int, ports []worker.PortBinding, dataDir string, slirpPath string, log *slog.Logger) (*slirpInstance, error) {
+// setupNetworkNamespace creates a user+network namespace, starts slirp4netns
+// for connectivity, and returns the namespace PID for nsenter.
+func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDir string, slirpPath string, log *slog.Logger) (*slirpInstance, error) {
 	if slirpPath == "" {
 		return nil, fmt.Errorf("slirp4netns binary not available")
 	}
 
-	apiSock := filepath.Join(dataDir, "instances", instanceID, "slirp.sock")
+	// Step 1: Create a process that holds the user+network namespace open
+	holder := exec.Command("unshare", "--user", "--net", "--map-root-user", "--", "sh", "-c", "echo ready; exec sleep infinity")
+	holderOut, err := holder.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("creating holder pipe: %w", err)
+	}
+	holder.Stderr = os.Stderr
 
-	// Start slirp4netns attached to the game process's network namespace
-	args := []string{
+	if err := holder.Start(); err != nil {
+		return nil, fmt.Errorf("starting namespace holder: %w", err)
+	}
+
+	// Wait for "ready" signal
+	scanner := bufio.NewScanner(holderOut)
+	if !scanner.Scan() {
+		holder.Process.Kill()
+		holder.Wait()
+		return nil, fmt.Errorf("namespace holder did not signal ready")
+	}
+
+	nsPID := holder.Process.Pid
+	log.Debug("network namespace created", "holder_pid", nsPID)
+
+	// Step 2: Start slirp4netns attached to the namespace holder
+	apiSock := filepath.Join(dataDir, "instances", instanceID, "slirp.sock")
+	slirpArgs := []string{
 		"--configure",
 		"--mtu=65520",
-		"--disable-host-loopback", // game cannot connect to host localhost
+		"--disable-host-loopback",
 		"--api-socket", apiSock,
-		fmt.Sprintf("%d", pid),
+		fmt.Sprintf("%d", nsPID),
 		"tap0",
 	}
 
-	cmd := exec.Command(slirpPath, args...)
-	cmd.Stdout = os.Stderr // slirp logs to stderr
-	cmd.Stderr = os.Stderr
+	slirpCmd := exec.Command(slirpPath, slirpArgs...)
+	slirpCmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
+	if err := slirpCmd.Start(); err != nil {
+		holder.Process.Kill()
+		holder.Wait()
 		return nil, fmt.Errorf("starting slirp4netns: %w", err)
 	}
 
-	si := &slirpInstance{
-		cmd:     cmd,
-		apiSock: apiSock,
-		pid:     pid,
-	}
-
-	// Wait for API socket to appear
+	// Wait for API socket
 	for i := 0; i < 50; i++ {
 		if _, err := os.Stat(apiSock); err == nil {
 			break
@@ -66,7 +80,7 @@ func setupNetworkNamespace(instanceID string, pid int, ports []worker.PortBindin
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Add port forwards for each allocated port
+	// Step 3: Add port forwards
 	for _, p := range ports {
 		if p.HostPort > 0 {
 			proto := p.Protocol
@@ -75,14 +89,31 @@ func setupNetworkNamespace(instanceID string, pid int, ports []worker.PortBindin
 			}
 			if err := addPortForward(apiSock, p.HostPort, p.HostPort, proto); err != nil {
 				log.Warn("failed to add port forward", "host_port", p.HostPort, "proto", proto, "error", err)
-			} else {
-				log.Debug("port forward added", "host_port", p.HostPort, "proto", proto)
 			}
 		}
 	}
 
-	log.Info("network namespace ready", "instance", instanceID, "pid", pid, "ports", len(ports))
+	si := &slirpInstance{
+		holder:  holder,
+		slirp:   slirpCmd,
+		apiSock: apiSock,
+		nsPID:   nsPID,
+	}
+
+	log.Info("network namespace ready", "instance", instanceID, "ns_pid", nsPID, "ports", len(ports))
 	return si, nil
+}
+
+// nsenterPrefix returns the nsenter command prefix to run a process inside
+// the network namespace. Used to wrap bwrap so it inherits the netns.
+func nsenterPrefix(nsPID int) []string {
+	return []string{
+		"nsenter",
+		"--preserve-credentials",
+		fmt.Sprintf("--user=/proc/%d/ns/user", nsPID),
+		fmt.Sprintf("--net=/proc/%d/ns/net", nsPID),
+		"--",
+	}
 }
 
 // addPortForward tells slirp4netns to forward a host port into the namespace.
@@ -105,12 +136,13 @@ func addPortForward(apiSock string, hostPort, guestPort int, proto string) error
 	}
 
 	data, _ := json.Marshal(req)
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	if _, err := conn.Write(data); err != nil {
 		return fmt.Errorf("sending port forward request: %w", err)
 	}
 
-	// Read response
 	buf := make([]byte, 4096)
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("reading port forward response: %w", err)
@@ -118,23 +150,28 @@ func addPortForward(apiSock string, hostPort, guestPort int, proto string) error
 
 	var resp map[string]any
 	if err := json.Unmarshal(buf[:n], &resp); err != nil {
-		return fmt.Errorf("parsing port forward response: %w", err)
+		return fmt.Errorf("parsing response: %w", err)
 	}
-
 	if errMsg, ok := resp["error"]; ok {
-		return fmt.Errorf("slirp port forward error: %v", errMsg)
+		return fmt.Errorf("slirp error: %v", errMsg)
 	}
 
 	return nil
 }
 
-// stopSlirp kills the slirp4netns process and cleans up.
+// stopSlirp kills the slirp4netns process and namespace holder.
 func stopSlirp(si *slirpInstance, log *slog.Logger) {
-	if si == nil || si.cmd == nil || si.cmd.Process == nil {
+	if si == nil {
 		return
 	}
-	si.cmd.Process.Kill()
-	si.cmd.Wait()
+	if si.slirp != nil && si.slirp.Process != nil {
+		si.slirp.Process.Kill()
+		si.slirp.Wait()
+	}
+	if si.holder != nil && si.holder.Process != nil {
+		si.holder.Process.Kill()
+		si.holder.Wait()
+	}
 	os.Remove(si.apiSock)
-	log.Debug("slirp4netns stopped", "pid", si.pid)
+	log.Debug("network namespace cleaned up", "ns_pid", si.nsPID)
 }
