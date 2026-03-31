@@ -214,15 +214,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Game traffic proxy — forwards game ports from controller to worker nodes.
 	// Enables stable connect addresses across migrations.
-	if svcs.SettingsSvc.GetBool(settings.SettingProxyEnabled) {
-		proxyMgr := gjproxy.NewManager(cfg.Bind, logger)
-		proxySub := gjproxy.NewSubscriber(proxyMgr, svcs.GameserverSvc, svcs.Broadcaster, logger)
-		defer proxySub.Stop()
-
-		proxySub.SyncExisting(ctx)
-		logger.Info("game proxy enabled", "bind", cfg.Bind)
-	}
-
 	reachabilityChecker := browser.New(svcs.Broadcaster, svcs.SettingsSvc, db, logger)
 	reachabilityChecker.Start(ctx)
 	defer reachabilityChecker.Stop()
@@ -381,6 +372,22 @@ func runServe(cmd *cobra.Command, args []string) error {
 				logger.Error("local worker agent failed", "error", err)
 			}
 		}()
+	}
+
+	// --- 5b. Game traffic proxy ---
+	// Must start after the local worker so we can read its worker-id.
+	if svcs.SettingsSvc.GetBool(settings.SettingProxyEnabled) {
+		localNodeID := ""
+		if cfg.HasWorker() {
+			if idBytes, err := os.ReadFile(filepath.Join(cfg.DataDir, "worker-id")); err == nil {
+				localNodeID = string(idBytes)
+			}
+		}
+		proxyMgr := gjproxy.NewManager(cfg.Bind, logger)
+		proxySub := gjproxy.NewSubscriber(proxyMgr, svcs.GameserverSvc, svcs.Broadcaster, localNodeID, logger)
+		defer proxySub.Stop()
+		proxySub.SyncExisting(ctx)
+		logger.Info("game proxy enabled", "bind", cfg.Bind, "local_node", localNodeID)
 	}
 
 	// --- 6. Startup recovery ---

@@ -18,18 +18,22 @@ type GameserverLookup interface {
 // Subscriber listens to the event bus and updates proxy routes when
 // gameservers start, stop, or migrate.
 type Subscriber struct {
-	manager *Manager
-	lookup  GameserverLookup
-	log     *slog.Logger
-	unsub   func()
+	manager     *Manager
+	lookup      GameserverLookup
+	localNodeID string // controller's own worker ID — skip proxying for local gameservers
+	log         *slog.Logger
+	unsub       func()
 }
 
 // NewSubscriber creates a proxy subscriber that syncs routes from events.
-func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.EventBus, log *slog.Logger) *Subscriber {
+// localNodeID is the controller's own worker ID (empty if controller-only, no local worker).
+// Gameservers on the local node are served directly by Docker — no proxy needed.
+func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.EventBus, localNodeID string, log *slog.Logger) *Subscriber {
 	s := &Subscriber{
-		manager: manager,
-		lookup:  lookup,
-		log:     log,
+		manager:     manager,
+		lookup:      lookup,
+		localNodeID: localNodeID,
+		log:         log,
 	}
 
 	ch, unsub := bus.Subscribe()
@@ -55,6 +59,12 @@ func (s *Subscriber) addRoutes(gsID string) {
 	if err != nil || gs == nil {
 		return
 	}
+
+	// Skip local gameservers — Docker binds the ports directly
+	if s.localNodeID != "" && gs.NodeID != nil && *gs.NodeID == s.localNodeID {
+		return
+	}
+
 	if gs.Node == nil || gs.Node.LanIP == "" {
 		s.log.Warn("proxy: cannot route, no node LAN IP", "gameserver", gsID)
 		return
