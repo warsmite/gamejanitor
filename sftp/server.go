@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	gosftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -46,12 +47,13 @@ type FileEntry struct {
 type FileOperatorFactory func(gameserverID string) FileOperator
 
 type Server struct {
-	listener     net.Listener
-	sshConfig    *ssh.ServerConfig
-	auth         SFTPAuth
+	listener      net.Listener
+	sshConfig     *ssh.ServerConfig
+	auth          SFTPAuth
 	fileOpFactory FileOperatorFactory
-	log          *slog.Logger
-	done         chan struct{}
+	rateLimiter   *authRateLimiter
+	log           *slog.Logger
+	done          chan struct{}
 }
 
 func NewServer(auth SFTPAuth, fileOpFactory FileOperatorFactory, hostKeyPath string, log *slog.Logger) (*Server, error) {
@@ -63,6 +65,7 @@ func NewServer(auth SFTPAuth, fileOpFactory FileOperatorFactory, hostKeyPath str
 	s := &Server{
 		auth:          auth,
 		fileOpFactory: fileOpFactory,
+		rateLimiter:   newAuthRateLimiter(5, 15*time.Minute),
 		log:           log,
 		done:          make(chan struct{}),
 	}
@@ -77,11 +80,21 @@ func NewServer(auth SFTPAuth, fileOpFactory FileOperatorFactory, hostKeyPath str
 }
 
 func (s *Server) passwordCallback(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+
+	if err := s.rateLimiter.check(ip); err != nil {
+		s.log.Warn("sftp login blocked by rate limiter", "ip", ip, "user", conn.User())
+		return nil, fmt.Errorf("too many failed attempts, try again later")
+	}
+
 	gameserverID, volumeName, err := s.auth.ValidateLogin(conn.User(), string(password))
 	if err != nil {
+		s.rateLimiter.recordFailure(ip)
+		s.log.Info("sftp login failed", "ip", ip, "user", conn.User())
 		return nil, err
 	}
 
+	s.rateLimiter.recordSuccess(ip)
 	return &ssh.Permissions{
 		Extensions: map[string]string{
 			"gameserver_id": gameserverID,
@@ -97,6 +110,8 @@ func (s *Server) ListenAndServe(addr string) error {
 	}
 	s.listener = listener
 	s.log.Info("sftp server listening", "addr", addr)
+
+	go s.cleanupLoop()
 
 	for {
 		conn, err := listener.Accept()
@@ -119,6 +134,19 @@ func (s *Server) Close() error {
 		return s.listener.Close()
 	}
 	return nil
+}
+
+func (s *Server) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.rateLimiter.cleanup()
+		}
+	}
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
