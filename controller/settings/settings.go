@@ -40,6 +40,7 @@ const (
 	SettingStorageWarningThreshold = "storage_warning_threshold"
 	SettingStorageCriticalThreshold = "storage_critical_threshold"
 	SettingRegisterWithBrowser     = "register_with_browser"
+	SettingProxyEnabled            = "proxy_enabled"
 	SettingRestrictDownloadURLs     = "restrict_download_urls"
 	SettingSteamAPIKey             = "steam_api_key"
 	SettingSteamRefreshToken       = "steam_refresh_token"
@@ -75,6 +76,7 @@ var Defaults = map[string]any{
 	SettingStorageWarningThreshold: 90,
 	SettingStorageCriticalThreshold: 100,
 	SettingRegisterWithBrowser:     false,
+	SettingProxyEnabled:             false,
 	SettingRestrictDownloadURLs:     false,
 	SettingSteamAPIKey:             "",
 	SettingSteamRefreshToken:       "",

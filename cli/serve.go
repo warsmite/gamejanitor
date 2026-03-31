@@ -24,6 +24,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/warning"
+	gjproxy "github.com/warsmite/gamejanitor/proxy"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
@@ -210,6 +211,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	warningSubscriber := warning.New(svcs.Broadcaster, svcs.SettingsSvc, logger)
 	warningSubscriber.Start(ctx)
 	defer warningSubscriber.Stop()
+
+	// Game traffic proxy — forwards game ports from controller to worker nodes.
+	// Enables stable connect addresses across migrations.
+	if svcs.SettingsSvc.GetBool(settings.SettingProxyEnabled) {
+		proxyMgr := gjproxy.NewManager(cfg.Bind, logger)
+		proxySub := gjproxy.NewSubscriber(proxyMgr, svcs.GameserverSvc, svcs.Broadcaster, logger)
+		defer proxySub.Stop()
+
+		proxySub.SyncExisting(ctx)
+		logger.Info("game proxy enabled", "bind", cfg.Bind)
+	}
 
 	reachabilityChecker := browser.New(svcs.Broadcaster, svcs.SettingsSvc, db, logger)
 	reachabilityChecker.Start(ctx)
