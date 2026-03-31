@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/browser"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -259,6 +260,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}()
+
+	// Periodic DB backup to backup storage
+	dbBackupInterval := svcs.SettingsSvc.GetInt(settings.SettingDBBackupIntervalHours)
+	if dbBackupInterval > 0 {
+		dbBackupRetention := svcs.SettingsSvc.GetInt(settings.SettingDBBackupRetention)
+		dbBackupScheduler := backup.NewDBBackupScheduler(database, svcs.BackupSvc.Storage(), dbBackupInterval, dbBackupRetention, logger)
+		bgWg.Add(1)
+		go func() {
+			defer bgWg.Done()
+			dbBackupScheduler.Start(ctx)
+		}()
+		logger.Info("db backup enabled", "interval_hours", dbBackupInterval, "retention", dbBackupRetention)
+	}
 
 	// Downsample and prune stats history hourly
 	bgWg.Add(1)

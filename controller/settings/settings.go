@@ -41,6 +41,8 @@ const (
 	SettingStorageCriticalThreshold = "storage_critical_threshold"
 	SettingRegisterWithBrowser     = "register_with_browser"
 	SettingProxyEnabled            = "proxy_enabled"
+	SettingDBBackupIntervalHours   = "db_backup_interval_hours"
+	SettingDBBackupRetention       = "db_backup_retention"
 	SettingRestrictDownloadURLs     = "restrict_download_urls"
 	SettingSteamAPIKey             = "steam_api_key"
 	SettingSteamRefreshToken       = "steam_refresh_token"
@@ -77,6 +79,8 @@ var Defaults = map[string]any{
 	SettingStorageCriticalThreshold: 100,
 	SettingRegisterWithBrowser:     false,
 	SettingProxyEnabled:             false,
+	SettingDBBackupIntervalHours:   6,
+	SettingDBBackupRetention:       3,
 	SettingRestrictDownloadURLs:     false,
 	SettingSteamAPIKey:             "",
 	SettingSteamRefreshToken:       "",

@@ -75,6 +75,10 @@ type BackupService struct {
 	sem           chan struct{} // concurrency limiter for backup/restore goroutines
 }
 
+func (s *BackupService) Storage() Storage {
+	return s.storage
+}
+
 func (s *BackupService) SetActivityTracker(tracker ActivityTracker) {
 	s.activity = tracker
 }

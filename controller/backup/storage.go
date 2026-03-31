@@ -87,6 +87,34 @@ func (s *LocalStorage) Size(ctx context.Context, gameserverID string, backupID s
 	return fi.Size(), nil
 }
 
+// List returns backup IDs under a given gameserver/prefix directory.
+func (s *LocalStorage) List(ctx context.Context, prefix string) ([]string, error) {
+	dir := filepath.Join(s.dataDir, "backups", prefix)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var ids []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Strip .tar.gz suffix to get the backup ID
+		if ext := filepath.Ext(name); ext != "" {
+			name = name[:len(name)-len(ext)]
+			if ext2 := filepath.Ext(name); ext2 == ".tar" {
+				name = name[:len(name)-len(ext2)]
+			}
+		}
+		ids = append(ids, name)
+	}
+	return ids, nil
+}
+
 // S3Storage stores backups in an S3-compatible bucket.
 type S3Storage struct {
 	client *minio.Client
@@ -162,4 +190,27 @@ func (s *S3Storage) Size(ctx context.Context, gameserverID string, backupID stri
 		return 0, fmt.Errorf("stat backup in S3: %w", err)
 	}
 	return info.Size, nil
+}
+
+// List returns backup IDs under a given prefix (gameserver ID or "db").
+func (s *S3Storage) List(ctx context.Context, prefix string) ([]string, error) {
+	objectPrefix := "backups/" + prefix + "/"
+	var ids []string
+	for obj := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: objectPrefix}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		// Extract backup ID from key: "backups/{prefix}/{id}.tar.gz" → "{id}"
+		name := obj.Key[len(objectPrefix):]
+		if ext := filepath.Ext(name); ext != "" {
+			name = name[:len(name)-len(ext)]
+			if ext2 := filepath.Ext(name); ext2 == ".tar" {
+				name = name[:len(name)-len(ext2)]
+			}
+		}
+		if name != "" {
+			ids = append(ids, name)
+		}
+	}
+	return ids, nil
 }
