@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
@@ -202,6 +203,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
@@ -270,7 +272,10 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
-	// Use systemctl stop for clean shutdown
+	// Send SIGTERM to the process group and systemd unit
+	if inst.pid > 0 {
+		syscall.Kill(-inst.pid, syscall.SIGTERM)
+	}
 	stopSystemdUnit(inst.unitName, w.log)
 
 	select {
@@ -278,6 +283,9 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
+		if inst.pid > 0 {
+			syscall.Kill(-inst.pid, syscall.SIGKILL)
+		}
 		killSystemdUnit(inst.unitName, w.log)
 		<-inst.done
 		return nil
@@ -434,7 +442,18 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 }
 
 func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
-	return os.RemoveAll(filepath.Join(w.dataDir, "volumes", name))
+	path := filepath.Join(w.dataDir, "volumes", name)
+	err := os.RemoveAll(path)
+	if err != nil {
+		// Files created inside a user namespace may be owned by mapped UIDs
+		// that the current user can't delete. Use unshare to enter a matching
+		// user namespace where we have permission.
+		cmd := exec.Command("unshare", "--user", "--map-root-user", "--", "rm", "-rf", path)
+		if rmErr := cmd.Run(); rmErr != nil {
+			return fmt.Errorf("removing volume %s: %w (fallback also failed: %v)", name, err, rmErr)
+		}
+	}
+	return nil
 }
 
 func (w *SandboxWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
