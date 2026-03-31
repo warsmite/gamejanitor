@@ -24,10 +24,11 @@
     return counts;
   });
 
-  async function handleAction(gsId: string, action: 'start' | 'stop' | 'restart') {
+  async function handleAction(gsId: string, action: string) {
     try {
-      const fn = api.gameservers[action];
-      await fn(gsId);
+      if (action === 'archive') await api.gameservers.archive(gsId);
+      else if (action === 'unarchive') await api.gameservers.unarchive(gsId);
+      else await api.gameservers[action as 'start' | 'stop' | 'restart'](gsId);
     } catch (e: any) {
       toast(`Failed to ${action}: ${e.message}`, 'error');
     }

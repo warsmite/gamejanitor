@@ -21,6 +21,7 @@
 
   const isRunning = $derived(gameserver.status === 'running' || gameserver.status === 'started');
   const isStopped = $derived(gameserver.status === 'stopped');
+  const isArchived = $derived(gameserver.archived === true);
 
   const memPercent = $derived(
     stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0
@@ -56,7 +57,7 @@
     {/if}
   </div>
 
-  {#if !isStopped}
+  {#if !isStopped && !isArchived}
     <!-- Telemetry -->
     <div class="telemetry">
       <TelemetryCell
@@ -97,7 +98,12 @@
   <!-- Actions -->
   <div class="actions" onclick={(e) => e.preventDefault()}>
     <div class="actions-left">
-      {#if isStopped}
+      {#if isArchived}
+        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('unarchive'); }}>
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+          Unarchive
+        </button>
+      {:else if isStopped}
         <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
           Start
@@ -113,12 +119,14 @@
         </button>
       {/if}
     </div>
-    <div class="shortcuts">
-      <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
-      <a href="/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
-      <a href="/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
-      <a href="/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
-    </div>
+    {#if !isArchived}
+      <div class="shortcuts">
+        <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
+        <a href="/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
+        <a href="/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
+        <a href="/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
+      </div>
+    {/if}
   </div>
 </div>
 

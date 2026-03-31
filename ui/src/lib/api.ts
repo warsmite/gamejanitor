@@ -153,6 +153,7 @@ export interface Gameserver {
   installed: boolean;
   auto_restart: boolean;
   connection_address?: string;
+  archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -479,6 +480,8 @@ export const api = {
     updateGame: (id: string) => post<Gameserver>(`/api/gameservers/${id}/update-game`),
     reinstall: (id: string) => post<Gameserver>(`/api/gameservers/${id}/reinstall`),
     migrate: (id: string, nodeId: string) => post<Gameserver>(`/api/gameservers/${id}/migrate`, { node_id: nodeId }),
+    archive: (id: string) => post<Gameserver>(`/api/gameservers/${id}/archive`),
+    unarchive: (id: string, nodeId?: string) => post<Gameserver>(`/api/gameservers/${id}/unarchive`, nodeId ? { node_id: nodeId } : undefined),
     bulk: (action: string, ids: string[]) => post<any>('/api/gameservers/bulk', { action, all: ids.length === 0 }),
     regenerateSftpPassword: (id: string) => post<{ sftp_password: string }>(`/api/gameservers/${id}/regenerate-sftp-password`),
     status: (id: string) => get<GameserverStatus>(`/api/gameservers/${id}/status`),

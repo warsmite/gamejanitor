@@ -91,6 +91,7 @@
   const logLines = $derived(gsState?.logLines ?? []);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
+  const isArchived = $derived(gameserver?.archived === true);
   const isTransitioning = $derived(() => {
     const s = gameserver?.status;
     return s === 'starting' || s === 'installing' || s === 'stopping';
@@ -130,11 +131,11 @@
 
   const tabs = $derived([
     { label: 'Overview', path: '' },
-    ...(can('gameserver.logs') ? [{ label: 'Console', path: '/console' }] : []),
-    ...(can('gameserver.files.read') ? [{ label: 'Files', path: '/files' }] : []),
+    ...(!isArchived && can('gameserver.logs') ? [{ label: 'Console', path: '/console' }] : []),
+    ...(!isArchived && can('gameserver.files.read') ? [{ label: 'Files', path: '/files' }] : []),
     ...(can('backup.read') ? [{ label: 'Backups', path: '/backups' }] : []),
-    ...(can('schedule.read') ? [{ label: 'Schedules', path: '/schedules' }] : []),
-    ...(hasModsSupport && can('gameserver.mods.read') ? [{ label: 'Mods', path: '/mods' }] : []),
+    ...(!isArchived && can('schedule.read') ? [{ label: 'Schedules', path: '/schedules' }] : []),
+    ...(!isArchived && hasModsSupport && can('gameserver.mods.read') ? [{ label: 'Mods', path: '/mods' }] : []),
     { label: 'Settings', path: '/settings' },
   ]);
 
@@ -161,6 +162,8 @@
       if (action === 'start') await api.gameservers.start(id);
       else if (action === 'stop') await api.gameservers.stop(id);
       else if (action === 'restart') await api.gameservers.restart(id);
+      else if (action === 'archive') await api.gameservers.archive(id);
+      else if (action === 'unarchive') await api.gameservers.unarchive(id);
     } catch (e: any) {
       toast(`Failed to ${action}: ${e.message}`, 'error');
     }
@@ -220,11 +223,24 @@
 
       <div class="srv-actions">
         <div class="srv-actions-left">
-          {#if isStopped}
+          {#if isArchived}
+            {#if can('gameserver.unarchive')}
+              <button class="btn-action start" onclick={() => handleAction('unarchive')} disabled={!!operation}>
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                Unarchive
+              </button>
+            {/if}
+          {:else if isStopped}
             {#if can('gameserver.start')}
               <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning() || !!operation}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
                 Start
+              </button>
+            {/if}
+            {#if can('gameserver.archive')}
+              <button class="btn-action stop" onclick={() => handleAction('archive')} disabled={!!operation}>
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3A1.5 1.5 0 0 0 2 4.5V5h12v-.5A1.5 1.5 0 0 0 12.5 3h-9zM2 7v6.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V7H2zm5 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1A.5.5 0 0 1 7 9z"/></svg>
+                Archive
               </button>
             {/if}
           {:else}
