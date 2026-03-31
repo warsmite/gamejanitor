@@ -97,6 +97,20 @@
             CONTROLLER="sleepy"
             WORKERS=("dopey" "grumpy")
 
+            # Write dev config with S3 backup store (Garage on homelab)
+            # These are local-only dev credentials, not real secrets.
+            ssh "$CONTROLLER" "sudo tee /var/lib/gamejanitor/dev-config.yaml > /dev/null" <<'YAML'
+backup_store:
+  type: s3
+  endpoint: "doc:3900"
+  region: garage
+  bucket: gamejanitor-backups
+  path_style: true
+  use_ssl: false
+  access_key: "GKf4e7eacfd92f77f867981127"
+  secret_key: "cb047f16267241dcf7be0836db30eaf747cdd66f7725815db98a2eb73eeb7303"
+YAML
+
             echo "Starting controller ($CONTROLLER)..."
             ssh "$CONTROLLER" "
               sudo systemctl stop gamejanitor-dev 2>/dev/null || true
@@ -105,6 +119,7 @@
               sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
                 --property=SupplementaryGroups=docker \
                 /run/gamejanitor-dev serve \
+                  --config /var/lib/gamejanitor/dev-config.yaml \
                   --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
                   --proxy \
                   -d /var/lib/gamejanitor
