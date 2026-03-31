@@ -402,6 +402,15 @@
             echo "HTML report: go tool cover -html=/tmp/gamejanitor-coverage.out"
           '';
 
+          # Run e2e tests against the homelab cluster.
+          # Usage: test-homelab (all tests) | test-homelab -run Migration (specific)
+          test-homelab = pkgs.writeShellScriptBin "test-homelab" ''
+            export GAMEJANITOR_API_URL="http://sleepy:8080"
+            export E2E_GAME_ID="minecraft-java"
+            echo "Running e2e tests against homelab (sleepy)..."
+            exec go test -tags e2e -timeout 10m -v ./e2e/ "$@"
+          '';
+
           loc = pkgs.writeShellScriptBin "loc" ''
             ${pkgs.tokei}/bin/tokei . \
               --exclude vendor --exclude node_modules --exclude 'worker/pb/*.go' \
@@ -456,6 +465,7 @@
             test-all
             test-race
             test-e2e
+            test-homelab
             test-smoke
             test-coverage
           ];

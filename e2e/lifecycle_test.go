@@ -17,12 +17,15 @@ import (
 
 func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	h := Start(t)
+	if h.IsRemote() && h.GameID() == "" {
+		t.Skip("set E2E_GAME_ID for remote cluster tests")
+	}
 
 	// Create
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
 		"name":    "E2E Lifecycle",
-		"game_id": "test-game",
-		"env":     map[string]string{"REQUIRED_VAR": "yes"},
+		"game_id": h.GameID(),
+		"env":     h.GameEnv(),
 	})
 	require.NoError(t, err)
 
@@ -42,7 +45,7 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for running — the real ReadyWatcher parses the container's log output
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 60*time.Second),
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute),
 		"gameserver should reach 'running' after ready pattern detected in real container logs")
 
 	// Verify installed flag set (entrypoint.sh emits [gamejanitor:installed])
@@ -61,25 +64,32 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 
 	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 30*time.Second))
 
-	// Delete
+	// Delete (async — returns 202)
 	resp, err = h.Delete("/api/gameservers/" + gs.ID)
 	require.NoError(t, err)
 	resp.Body.Close()
-	assert.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, 202, resp.StatusCode)
 
-	// Verify gone
-	resp, err = h.Get("/api/gameservers/" + gs.ID)
-	require.NoError(t, err)
-	assert.Equal(t, 404, resp.StatusCode)
-	resp.Body.Close()
+	// Verify gone (async — wait for cleanup)
+	require.Eventually(t, func() bool {
+		resp, err := h.Get("/api/gameservers/" + gs.ID)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == 404
+	}, 30*time.Second, 500*time.Millisecond, "gameserver should be deleted")
 }
 
 func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 	h := Start(t)
+	if h.IsRemote() && h.GameID() == "" {
+		t.Skip("set E2E_GAME_ID for remote cluster tests")
+	}
 
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
-		"name": "Skip Install", "game_id": "test-game",
-		"env": map[string]string{"REQUIRED_VAR": "yes"},
+		"name": "Skip Install", "game_id": h.GameID(),
+		"env": h.GameEnv(),
 	})
 	require.NoError(t, err)
 	var gs struct{ ID string }
@@ -87,7 +97,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// First start — installs
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 60*time.Second))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
 
 	// Stop
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
@@ -95,7 +105,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// Second start — should skip install (SKIP_INSTALL=1 passed by gamejanitor)
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 60*time.Second))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
 
 	// Cleanup
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
@@ -105,12 +115,15 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 	h := Start(t)
+	if h.IsRemote() && h.GameID() == "" {
+		t.Skip("set E2E_GAME_ID for remote cluster tests")
+	}
 
 	var gsIDs []string
 	for _, name := range []string{"Server A", "Server B"} {
 		resp, err := h.PostJSON("/api/gameservers", map[string]any{
-			"name": name, "game_id": "test-game",
-			"env": map[string]string{"REQUIRED_VAR": "yes"},
+			"name": name, "game_id": h.GameID(),
+			"env": h.GameEnv(),
 		})
 		require.NoError(t, err)
 		var gs struct{ ID string }
@@ -169,10 +182,13 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 
 func TestE2E_Files_WriteAndRead(t *testing.T) {
 	h := Start(t)
+	if h.IsRemote() && h.GameID() == "" {
+		t.Skip("set E2E_GAME_ID for remote cluster tests")
+	}
 
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
-		"name": "File Test", "game_id": "test-game",
-		"env": map[string]string{"REQUIRED_VAR": "yes"},
+		"name": "File Test", "game_id": h.GameID(),
+		"env": h.GameEnv(),
 	})
 	require.NoError(t, err)
 	var gs struct{ ID string }
@@ -180,7 +196,7 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 
 	// Start so the volume exists and has data
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 60*time.Second))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
 
 	// Write a file via API
 	req, _ := http.NewRequest("PUT",

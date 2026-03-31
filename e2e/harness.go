@@ -28,9 +28,33 @@ type Harness struct {
 	t      *testing.T
 }
 
-// Start builds and launches a real gamejanitor instance.
-// The instance runs with a local games directory that includes the test-game definition.
+// Start returns a harness connected to a gamejanitor instance.
+// If GAMEJANITOR_API_URL is set, connects to an existing remote cluster (homelab/CI).
+// Otherwise, builds and launches a local instance with test-game.
 func Start(t *testing.T) *Harness {
+	t.Helper()
+
+	if url := os.Getenv("GAMEJANITOR_API_URL"); url != "" {
+		return startRemote(t, url)
+	}
+	return startLocal(t)
+}
+
+// startRemote connects to an existing cluster — no process management.
+func startRemote(t *testing.T, baseURL string) *Harness {
+	t.Helper()
+	h := &Harness{
+		BaseURL: baseURL,
+		t:       t,
+	}
+	h.waitForReady(t)
+	h.waitForWorker(t)
+	t.Logf("connected to remote cluster at %s", baseURL)
+	return h
+}
+
+// startLocal builds and launches a local gamejanitor instance with test-game.
+func startLocal(t *testing.T) *Harness {
 	t.Helper()
 
 	dataDir := t.TempDir()
@@ -96,6 +120,57 @@ func Start(t *testing.T) *Harness {
 	return h
 }
 
+// IsRemote returns true if connected to an existing cluster (not locally managed).
+func (h *Harness) IsRemote() bool {
+	return h.cmd == nil
+}
+
+// WorkerCount returns the number of online workers.
+func (h *Harness) WorkerCount(t *testing.T) int {
+	t.Helper()
+	resp, err := h.Get("/api/workers")
+	if err != nil {
+		return 0
+	}
+	var workers []struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := DecodeData(resp, &workers); err != nil {
+		return 0
+	}
+	count := 0
+	for _, w := range workers {
+		if w.Status == "online" {
+			count++
+		}
+	}
+	return count
+}
+
+// Workers returns online worker IDs.
+func (h *Harness) Workers(t *testing.T) []string {
+	t.Helper()
+	resp, err := h.Get("/api/workers")
+	if err != nil {
+		return nil
+	}
+	var workers []struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := DecodeData(resp, &workers); err != nil {
+		return nil
+	}
+	var ids []string
+	for _, w := range workers {
+		if w.Status == "online" {
+			ids = append(ids, w.ID)
+		}
+	}
+	return ids
+}
+
 func (h *Harness) Stop() {
 	if h.cmd != nil && h.cmd.Process != nil {
 		h.cmd.Process.Signal(os.Interrupt)
@@ -119,6 +194,13 @@ func (h *Harness) Delete(path string) (*http.Response, error) {
 	return http.DefaultClient.Do(req)
 }
 
+func (h *Harness) Patch(path string, body any) (*http.Response, error) {
+	data, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PATCH", h.BaseURL+path, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	return http.DefaultClient.Do(req)
+}
+
 // DecodeData reads the API response envelope and unmarshals the data field.
 func DecodeData(resp *http.Response, v any) error {
 	defer resp.Body.Close()
@@ -137,6 +219,78 @@ func DecodeData(resp *http.Response, v any) error {
 		return json.Unmarshal(env.Data, v)
 	}
 	return nil
+}
+
+// GameID returns the game ID to use for tests. Remote clusters use minecraft-java
+// (a real game), local clusters use test-game (lightweight fake).
+func (h *Harness) GameID() string {
+	if h.IsRemote() {
+		return os.Getenv("E2E_GAME_ID")
+	}
+	return "test-game"
+}
+
+// GameEnv returns the env vars needed for the test game.
+func (h *Harness) GameEnv() map[string]string {
+	if h.IsRemote() {
+		// Minecraft needs EULA + version
+		return map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
+	}
+	return map[string]string{"REQUIRED_VAR": "yes"}
+}
+
+// GetGameserver fetches a gameserver by ID.
+func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
+	t.Helper()
+	resp, err := h.Get("/api/gameservers/" + gsID)
+	if err != nil {
+		return "", ""
+	}
+	var gs struct {
+		Status string  `json:"status"`
+		NodeID *string `json:"node_id"`
+	}
+	if err := DecodeData(resp, &gs); err != nil {
+		return "", ""
+	}
+	nid := ""
+	if gs.NodeID != nil {
+		nid = *gs.NodeID
+	}
+	return gs.Status, nid
+}
+
+// WaitForNodeChange polls until the gameserver's node_id changes to targetNodeID.
+func (h *Harness) WaitForNodeChange(gsID, targetNodeID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		_, nodeID := h.GetGameserver(h.t, gsID)
+		if nodeID == targetNodeID {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timed out waiting for gameserver %s to move to node %s", gsID, targetNodeID)
+}
+
+// ListFiles returns file names at a path in a gameserver volume.
+func (h *Harness) ListFiles(t *testing.T, gsID string, path string) []string {
+	t.Helper()
+	resp, err := h.Get("/api/gameservers/" + gsID + "/files?path=" + path)
+	if err != nil {
+		return nil
+	}
+	var files []struct {
+		Name string `json:"name"`
+	}
+	if err := DecodeData(resp, &files); err != nil {
+		return nil
+	}
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.Name
+	}
+	return names
 }
 
 // WaitForStatus polls the gameserver until it reaches the target status or times out.
