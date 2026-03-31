@@ -331,29 +331,54 @@ func (a *Agent) BackupVolume(req *pb.BackupVolumeRequest, stream pb.WorkerServic
 }
 
 func (a *Agent) RestoreVolume(stream pb.WorkerService_RestoreVolumeServer) error {
+	// Stream directly to the restore function via a pipe — no buffering.
+	// Large volumes (3+ GB) would OOM the worker if buffered in memory.
+	pr, pw := io.Pipe()
 	var volumeName string
-	var buf bytes.Buffer
+	var recvErr error
 
-	for {
-		msg, err := stream.Recv()
-		if err == io.EOF {
-			break
+	go func() {
+		defer pw.Close()
+		for {
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				recvErr = err
+				pw.CloseWithError(err)
+				return
+			}
+			if volumeName == "" {
+				volumeName = msg.VolumeName
+			}
+			if _, err := pw.Write(msg.Data); err != nil {
+				return
+			}
 		}
-		if err != nil {
-			return err
+	}()
+
+	// Wait for the first message to get the volume name
+	// The pipe won't have data until Recv returns, so read a small amount first
+	firstBuf := make([]byte, 1)
+	if _, err := pr.Read(firstBuf); err != nil {
+		if recvErr != nil {
+			return recvErr
 		}
-		if volumeName == "" {
-			volumeName = msg.VolumeName
-		}
-		buf.Write(msg.Data)
+		return fmt.Errorf("no data received")
 	}
-
 	if volumeName == "" {
-		return fmt.Errorf("no messages received")
+		return fmt.Errorf("no volume name received")
 	}
 
-	if err := a.worker.RestoreVolume(stream.Context(), volumeName, &buf); err != nil {
+	// Prepend the first byte back via a MultiReader
+	restoreReader := io.MultiReader(bytes.NewReader(firstBuf), pr)
+
+	if err := a.worker.RestoreVolume(stream.Context(), volumeName, restoreReader); err != nil {
 		return err
+	}
+	if recvErr != nil {
+		return recvErr
 	}
 	return stream.SendAndClose(&pb.RestoreVolumeResponse{})
 }
