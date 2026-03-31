@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { api, type Activity } from '$lib/api';
+  import { api, type Event } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
   import { CopyBlock, StatsChart } from '$lib/components';
@@ -47,7 +47,7 @@
   }
 
   // Activity feed — page-specific state
-  let events = $state<Activity[]>([]);
+  let events = $state<Event[]>([]);
   let unsub: (() => void) | null = null;
 
   // Events worth showing in the activity feed — keyed by type with label and dot color.
@@ -108,17 +108,14 @@
     unsub = onGameserverEvent(id, (data: any) => {
       if (!isRelevantEvent(data.type)) return;
 
-      const event: Activity = {
+      const event: Event = {
         id: crypto.randomUUID(),
         gameserver_id: id,
         worker_id: '',
         type: data.type || 'unknown',
-        status: 'completed',
         actor: data.actor,
         data: data,
-        error: '',
-        started_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       };
       events = [event, ...events.slice(0, 19)];
     });
@@ -216,7 +213,7 @@
               <span class="feed-dot {eventDotColor(event.type)}"></span>
               <div>
                 <div class="feed-text">{eventLabel(event.type, event.data)}</div>
-                <div class="feed-time">{timeAgo(event.started_at)} · {formatTime(event.started_at)}</div>
+                <div class="feed-time">{timeAgo(event.created_at)} · {formatTime(event.created_at)}</div>
               </div>
             </div>
           {:else}

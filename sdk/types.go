@@ -343,20 +343,17 @@ type WebhookDelivery struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
-// --- Activity ---
+// --- Events ---
 
-// Activity represents a tracked operation or event in the unified activity system.
-type Activity struct {
+// Event represents a persisted event in the events system.
+type Event struct {
 	ID           string          `json:"id"`
 	GameserverID *string         `json:"gameserver_id,omitempty"`
 	WorkerID     string          `json:"worker_id,omitempty"`
 	Type         string          `json:"type"`
-	Status       string          `json:"status"`
 	Actor        json.RawMessage `json:"actor"`
 	Data         json.RawMessage `json:"data"`
-	Error        string          `json:"error,omitempty"`
-	StartedAt    time.Time       `json:"started_at"`
-	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 // --- Mods ---

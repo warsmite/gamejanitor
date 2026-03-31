@@ -316,17 +316,14 @@ export interface FileEntry {
   permissions: string;
 }
 
-export interface Activity {
+export interface Event {
   id: string;
   gameserver_id: string | null;
   worker_id: string;
   type: string;
-  status: string;
   actor: any;
   data: any;
-  error: string;
-  started_at: string;
-  completed_at: string | null;
+  created_at: string;
 }
 
 // ── Mods ──
@@ -601,7 +598,7 @@ export const api = {
 
   events: {
     history: (params?: { type?: string; gameserver_id?: string; limit?: number; offset?: number }) =>
-      get<Activity[]>('/api/events/history', params),
+      get<Event[]>('/api/events/history', params),
   },
 };
 

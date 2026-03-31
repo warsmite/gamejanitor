@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type Token, type WebhookEndpoint, type WorkerView, type Activity } from '$lib/api';
+  import { api, type Token, type WebhookEndpoint, type WorkerView, type Event } from '$lib/api';
   import { toast, confirm, prompt, setToken, gameserverStore } from '$lib/stores';
   import { getRoute, navigate } from '$lib/router';
 
@@ -115,7 +115,7 @@
   let workers = $state<WorkerView[]>([]);
 
   // Events state
-  let events = $state<Activity[]>([]);
+  let events = $state<Event[]>([]);
   let eventFilter = $state('');
   let eventGsFilter = $state('');
   let eventsPage = $state(0);
@@ -771,7 +771,7 @@
                   {#if event.gameserver_id}
                     <span class="event-gs">{event.gameserver_id.slice(0, 8)}</span>
                   {/if}
-                  <span class="event-time">{shortDate(event.started_at)}</span>
+                  <span class="event-time">{shortDate(event.created_at)}</span>
                 </div>
               </div>
             {/each}

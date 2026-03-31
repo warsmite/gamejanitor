@@ -90,8 +90,8 @@ type EventHistoryOptions struct {
 	Offset       int
 }
 
-// History returns historical activities matching the given filters.
-func (s *EventService) History(ctx context.Context, opts *EventHistoryOptions) ([]Activity, error) {
+// History returns historical events matching the given filters.
+func (s *EventService) History(ctx context.Context, opts *EventHistoryOptions) ([]Event, error) {
 	v := url.Values{}
 	if opts != nil {
 		if opts.Type != "" {
@@ -112,9 +112,9 @@ func (s *EventService) History(ctx context.Context, opts *EventHistoryOptions) (
 		path += "?" + v.Encode()
 	}
 
-	var activities []Activity
-	if err := s.client.get(ctx, path, &activities); err != nil {
+	var events []Event
+	if err := s.client.get(ctx, path, &events); err != nil {
 		return nil, err
 	}
-	return activities, nil
+	return events, nil
 }

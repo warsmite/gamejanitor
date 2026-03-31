@@ -64,9 +64,9 @@ func runEventsHistory(cmd *cobra.Command) error {
 	}
 
 	w := newTabWriter()
-	fmt.Fprintln(w, "TIME\tTYPE\tSTATUS")
+	fmt.Fprintln(w, "TIME\tTYPE")
 	for _, e := range events {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", e.StartedAt.Format("2006-01-02T15:04:05Z"), e.Type, e.Status)
+		fmt.Fprintf(w, "%s\t%s\n", e.CreatedAt.Format("2006-01-02T15:04:05Z"), e.Type)
 	}
 	w.Flush()
 	return nil
