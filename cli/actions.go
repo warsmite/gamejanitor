@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -316,8 +317,13 @@ func runServiceLogs(cmd *cobra.Command) error {
 		return nil
 	}
 
+	pretty := isTTY() && os.Getenv("NO_COLOR") == ""
 	for _, line := range lines {
-		fmt.Println(line)
+		if pretty {
+			fmt.Println(formatLogLine(line))
+		} else {
+			fmt.Println(line)
+		}
 	}
 	return nil
 }

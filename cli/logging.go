@@ -2,9 +2,13 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
+	"strings"
+	"time"
 )
 
 func isTTY() bool {
@@ -71,6 +75,63 @@ func (h *colorLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (h *colorLogHandler) WithGroup(name string) slog.Handler {
 	return &colorLogHandler{level: h.level, w: h.w, attrs: h.attrs, group: name}
+}
+
+// formatLogLine parses a JSON log line (from the log file) and formats it
+// with the same color scheme as the live colorLogHandler output.
+func formatLogLine(line string) string {
+	var entry map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		return line
+	}
+
+	var ts string
+	if raw, ok := entry["time"]; ok {
+		var t time.Time
+		if err := json.Unmarshal(raw, &t); err == nil {
+			ts = t.Format("15:04:05")
+		}
+	}
+
+	var lvl string
+	if raw, ok := entry["level"]; ok {
+		var level string
+		json.Unmarshal(raw, &level)
+		switch strings.ToUpper(level) {
+		case "ERROR":
+			lvl = "\033[31mERR\033[0m"
+		case "WARN":
+			lvl = "\033[33mWRN\033[0m"
+		case "INFO":
+			lvl = "\033[36mINF\033[0m"
+		default:
+			lvl = "\033[90mDBG\033[0m"
+		}
+	}
+
+	var msg string
+	if raw, ok := entry["msg"]; ok {
+		json.Unmarshal(raw, &msg)
+	}
+
+	// Collect remaining keys as attrs, sorted for stable output
+	var attrs []string
+	for k, v := range entry {
+		if k == "time" || k == "level" || k == "msg" {
+			continue
+		}
+		var val any
+		json.Unmarshal(v, &val)
+		attrs = append(attrs, fmt.Sprintf("\033[90m%s=\033[0m%v", k, val))
+	}
+	sort.Strings(attrs)
+
+	attrStr := ""
+	if len(attrs) > 0 {
+		attrStr = " " + strings.Join(attrs, " ")
+	}
+
+	return fmt.Sprintf("\033[90m%s\033[0m %s %s%s", ts, lvl, msg, attrStr)
 }
 
 // multiHandler fans out log records to multiple handlers.
