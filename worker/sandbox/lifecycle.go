@@ -107,6 +107,17 @@ func systemctlPrefix(paths *systemPaths) []string {
 	return nil
 }
 
+// isSystemdScopeActive checks whether a systemd scope unit is currently active.
+func isSystemdScopeActive(unitName string, paths *systemPaths) bool {
+	if !paths.hasSystemd() {
+		return false
+	}
+	scope := unitName + ".scope"
+	prefix := systemctlPrefix(paths)
+	args := append(prefix, "is-active", "--quiet", scope)
+	return exec.Command(paths.Systemctl, args...).Run() == nil
+}
+
 // killCgroupProcesses sends a signal to all processes in a systemd scope's cgroup.
 func killCgroupProcesses(unitName string, sig syscall.Signal, paths *systemPaths, log *slog.Logger) {
 	if !paths.hasSystemd() {

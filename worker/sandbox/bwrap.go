@@ -25,7 +25,6 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		"--unshare-ipc",
 		"--unshare-uts",
 		"--unshare-cgroup",
-		"--die-with-parent",
 		"--new-session",
 		"--uid", strconv.Itoa(uid),
 		"--gid", strconv.Itoa(gid),

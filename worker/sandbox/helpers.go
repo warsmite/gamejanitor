@@ -38,7 +38,11 @@ func readBwrapChildPID(infoPath string) int {
 
 // cleanupOrphanState kills leftover namespace holders, resets failed systemd scopes,
 // and unmounts stale overlayfs mounts from a previous gamejanitor crash.
+// Holders belonging to active gj-*.scope units are preserved for recovery.
 func cleanupOrphanHolders(log *slog.Logger) {
+	// Collect active gj-* scope PIDs so we don't kill recoverable holders
+	activeScopePIDs := activeGJScopePIDs()
+
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return
@@ -59,6 +63,9 @@ func cleanupOrphanHolders(log *slog.Logger) {
 		// cmdline is null-separated
 		cmd := strings.ReplaceAll(string(cmdline), "\x00", " ")
 		if strings.Contains(cmd, "unshare") && strings.Contains(cmd, "sleep infinity") {
+			if activeScopePIDs[pid] {
+				continue
+			}
 			syscall.Kill(pid, syscall.SIGKILL)
 			killed++
 		}
@@ -85,6 +92,47 @@ func cleanupOrphanHolders(log *slog.Logger) {
 	if killed > 0 {
 		log.Warn("cleaned up orphaned sandbox state from previous run", "count", killed)
 	}
+}
+
+// activeGJScopePIDs returns a set of PIDs that belong to active gj-*.scope cgroups.
+// Used to avoid killing holder processes that are part of recoverable instances.
+func activeGJScopePIDs() map[int]bool {
+	pids := make(map[int]bool)
+
+	// Try both system and user scopes
+	for _, userFlag := range [][]string{nil, {"--user"}} {
+		args := append(userFlag, "list-units", "--type=scope", "--state=active", "--no-legend", "--plain")
+		out, err := exec.Command("systemctl", args...).Output()
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 || !strings.HasPrefix(fields[0], "gj-") {
+				continue
+			}
+			showArgs := append(userFlag, "show", "-p", "ControlGroup", fields[0])
+			cgOut, err := exec.Command("systemctl", showArgs...).Output()
+			if err != nil {
+				continue
+			}
+			cgPath := strings.TrimPrefix(strings.TrimSpace(string(cgOut)), "ControlGroup=")
+			if cgPath == "" {
+				continue
+			}
+			data, err := os.ReadFile("/sys/fs/cgroup" + cgPath + "/cgroup.procs")
+			if err != nil {
+				continue
+			}
+			for _, pidLine := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+				pid, err := strconv.Atoi(strings.TrimSpace(pidLine))
+				if err == nil && pid > 0 {
+					pids[pid] = true
+				}
+			}
+		}
+	}
+	return pids
 }
 
 // cleanupOverlayMounts unmounts any stale overlayfs mounts under dataDir/images.

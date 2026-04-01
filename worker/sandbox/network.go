@@ -17,10 +17,12 @@ import (
 
 // slirpInstance manages the network namespace holder and slirp4netns process.
 type slirpInstance struct {
-	holder  *exec.Cmd
-	slirp   *exec.Cmd
-	apiSock string
-	nsPID   int
+	holder    *exec.Cmd
+	slirp     *exec.Cmd
+	holderPID int
+	slirpPID  int
+	apiSock   string
+	nsPID     int
 }
 
 // setupNetworkNamespace creates a user+network namespace, starts slirp4netns,
@@ -28,10 +30,10 @@ type slirpInstance struct {
 func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDir string, paths *systemPaths, log *slog.Logger) (*slirpInstance, error) {
 	var holderArgs []string
 	if paths.IsRoot {
-		holderArgs = []string{"--net", "--fork", "--kill-child", "--",
+		holderArgs = []string{"--net", "--fork", "--",
 			paths.Sh, "-c", "echo ready; exec " + paths.Sleep + " infinity"}
 	} else {
-		holderArgs = []string{"--user", "--net", "--fork", "--kill-child", "--",
+		holderArgs = []string{"--user", "--net", "--fork", "--",
 			paths.Sh, "-c", "echo ready; exec " + paths.Sleep + " infinity"}
 	}
 
@@ -41,7 +43,7 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 		return nil, fmt.Errorf("creating holder pipe: %w", err)
 	}
 	holder.Stderr = os.Stderr
-	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	holder.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := holder.Start(); err != nil {
 		return nil, fmt.Errorf("starting namespace holder: %w", err)
@@ -76,7 +78,7 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 		"--configure", "--mtu=65520", "--disable-host-loopback",
 		"--api-socket", apiSock, fmt.Sprintf("%d", nsPID), "tap0")
 	slirpCmd.Stderr = os.Stderr
-	slirpCmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
+	slirpCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := slirpCmd.Start(); err != nil {
 		holder.Process.Kill()
@@ -101,13 +103,20 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 			}
 			if err := addPortForward(apiSock, p.HostPort, p.HostPort, proto); err != nil {
 				log.Error("failed to add port forward", "instance", instanceID, "port", p.HostPort, "proto", proto, "error", err)
-				stopSlirp(&slirpInstance{holder: holder, slirp: slirpCmd, apiSock: apiSock, nsPID: nsPID}, log)
+				stopSlirp(&slirpInstance{holder: holder, slirp: slirpCmd, holderPID: holder.Process.Pid, slirpPID: slirpCmd.Process.Pid, apiSock: apiSock, nsPID: nsPID}, log)
 				return nil, fmt.Errorf("adding port forward %d/%s: %w", p.HostPort, proto, err)
 			}
 		}
 	}
 
-	si := &slirpInstance{holder: holder, slirp: slirpCmd, apiSock: apiSock, nsPID: nsPID}
+	si := &slirpInstance{
+		holder:    holder,
+		slirp:     slirpCmd,
+		holderPID: holder.Process.Pid,
+		slirpPID:  slirpCmd.Process.Pid,
+		apiSock:   apiSock,
+		nsPID:     nsPID,
+	}
 	log.Info("network namespace ready", "instance", instanceID, "ns_pid", nsPID, "ports", len(ports))
 	return si, nil
 }
@@ -170,10 +179,14 @@ func stopSlirp(si *slirpInstance, log *slog.Logger) {
 	if si.slirp != nil && si.slirp.Process != nil {
 		si.slirp.Process.Kill()
 		si.slirp.Wait()
+	} else if si.slirpPID > 0 {
+		syscall.Kill(si.slirpPID, syscall.SIGKILL)
 	}
 	if si.holder != nil && si.holder.Process != nil {
 		si.holder.Process.Kill()
 		si.holder.Wait()
+	} else if si.holderPID > 0 {
+		syscall.Kill(si.holderPID, syscall.SIGKILL)
 	}
 	os.Remove(si.apiSock)
 }

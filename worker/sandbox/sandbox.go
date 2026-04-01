@@ -51,6 +51,37 @@ type managedInstance struct {
 	slirp     *slirpInstance
 }
 
+// instanceState is persisted alongside the manifest so running instances
+// can be re-adopted after a gamejanitor restart.
+type instanceState struct {
+	StartedAt   time.Time `json:"started_at"`
+	HolderPID   int       `json:"holder_pid,omitempty"`
+	SlirpPID    int       `json:"slirp_pid,omitempty"`
+	NsPID       int       `json:"ns_pid,omitempty"`
+	SlirpSocket string    `json:"slirp_socket,omitempty"`
+	UnitName    string    `json:"unit_name"`
+}
+
+func saveInstanceState(dir string, state instanceState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshaling instance state: %w", err)
+	}
+	return os.WriteFile(filepath.Join(dir, "state.json"), data, 0644)
+}
+
+func loadInstanceState(dir string) (*instanceState, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		return nil, err
+	}
+	var state instanceState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("parsing instance state: %w", err)
+	}
+	return &state, nil
+}
+
 // instanceManifest is persisted to disk so StartInstance can reconstruct the config.
 type instanceManifest struct {
 	Name          string               `json:"name"`
@@ -87,6 +118,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 		eventCh:   make(chan worker.InstanceEvent, 64),
 	}
 	w.resolve = w.volumeResolver()
+	w.recoverInstances()
 
 	log.Info("sandbox runtime ready",
 		"bwrap", paths.Bwrap,
@@ -237,6 +269,20 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	w.instances[id] = inst
 	w.mu.Unlock()
 
+	state := instanceState{
+		StartedAt: inst.startedAt,
+		UnitName:  inst.unitName,
+	}
+	if inst.slirp != nil {
+		state.HolderPID = inst.slirp.holderPID
+		state.SlirpPID = inst.slirp.slirpPID
+		state.NsPID = inst.slirp.nsPID
+		state.SlirpSocket = inst.slirp.apiSock
+	}
+	if err := saveInstanceState(dir, state); err != nil {
+		w.log.Warn("failed to persist instance state", "id", id, "error", err)
+	}
+
 	// Exit watcher
 	go func() {
 		cmd.Wait()
@@ -258,6 +304,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Second))
 		}
 		close(inst.done)
+		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
 
 		w.eventMu.Lock()
 		active := w.eventActive
@@ -347,20 +394,38 @@ func (w *SandboxWorker) InspectInstance(ctx context.Context, id string) (*worker
 	inst, ok := w.instances[id]
 	w.mu.Unlock()
 
-	if !ok {
+	if ok {
+		state := "running"
+		if inst.exited {
+			state = "exited"
+		}
+		return &worker.InstanceInfo{
+			ID:        inst.id,
+			State:     state,
+			StartedAt: inst.startedAt,
+			ExitCode:  inst.exitCode,
+		}, nil
+	}
+
+	// Not in memory — check persisted state for instances surviving a restart
+	dir := w.instanceDir(id)
+	state, err := loadInstanceState(dir)
+	if err != nil {
 		return nil, fmt.Errorf("instance %s not found", id)
 	}
 
-	state := "running"
-	if inst.exited {
-		state = "exited"
+	unitName := state.UnitName
+	if isSystemdScopeActive(unitName, w.paths) {
+		return &worker.InstanceInfo{
+			ID:        id,
+			State:     "running",
+			StartedAt: state.StartedAt,
+		}, nil
 	}
 
 	return &worker.InstanceInfo{
-		ID:        inst.id,
-		State:     state,
-		StartedAt: inst.startedAt,
-		ExitCode:  inst.exitCode,
+		ID:    id,
+		State: "exited",
 	}, nil
 }
 
@@ -831,12 +896,19 @@ func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 		}
 
 		w.mu.Lock()
-		inst, running := w.instances[id]
+		inst, inMemory := w.instances[id]
 		w.mu.Unlock()
 
 		state := "exited"
-		if running && !inst.exited {
+		if inMemory && !inst.exited {
 			state = "running"
+		} else if !inMemory {
+			// Check persisted state for instances not yet in memory
+			if persisted, err := loadInstanceState(filepath.Join(instancesDir, id)); err == nil {
+				if isSystemdScopeActive(persisted.UnitName, w.paths) {
+					state = "running"
+				}
+			}
 		}
 
 		gsID, ok := naming.GameserverIDFromInstanceName(manifest.Name)
@@ -853,6 +925,158 @@ func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 	}
 
 	return result, nil
+}
+
+// --- Recovery ---
+
+// recoverInstances scans for active gj-*.scope systemd units and re-adopts
+// instances that survived a gamejanitor restart.
+func (w *SandboxWorker) recoverInstances() {
+	if !w.paths.hasSystemd() {
+		return
+	}
+
+	prefix := systemctlPrefix(w.paths)
+	args := append(prefix, "list-units", "--type=scope", "--state=active", "--no-legend", "--plain")
+	out, err := exec.Command(w.paths.Systemctl, args...).Output()
+	if err != nil {
+		w.log.Debug("could not list active scopes for recovery", "error", err)
+		return
+	}
+
+	var recovered int
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		scope := fields[0]
+		if !strings.HasPrefix(scope, "gj-") || !strings.HasSuffix(scope, ".scope") {
+			continue
+		}
+		unitName := strings.TrimSuffix(scope, ".scope")
+		id := strings.TrimPrefix(unitName, "gj-")
+
+		dir := w.instanceDir(id)
+		manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
+		if err != nil {
+			w.log.Warn("active scope has no manifest, stopping", "unit", unitName)
+			stopSystemdUnit(unitName, w.paths, w.log)
+			continue
+		}
+		var manifest instanceManifest
+		if json.Unmarshal(manifestData, &manifest) != nil {
+			w.log.Warn("active scope has corrupt manifest, stopping", "unit", unitName)
+			stopSystemdUnit(unitName, w.paths, w.log)
+			continue
+		}
+
+		state, err := loadInstanceState(dir)
+		if err != nil {
+			w.log.Warn("active scope has no state file (pre-recovery version), stopping", "unit", unitName)
+			stopSystemdUnit(unitName, w.paths, w.log)
+			continue
+		}
+
+		// Verify the scope's cgroup still has live processes
+		pids := cgroupPIDs(unitName, w.paths)
+		if len(pids) == 0 {
+			w.log.Warn("active scope has no processes, skipping recovery", "unit", unitName)
+			os.Remove(filepath.Join(dir, "state.json"))
+			continue
+		}
+
+		// Rebuild slirp instance from persisted PIDs if network isolation was active
+		var slirpInst *slirpInstance
+		if state.HolderPID > 0 && state.SlirpPID > 0 {
+			holderAlive := isPIDAlive(state.HolderPID, "unshare", "sleep")
+			slirpAlive := isPIDAlive(state.SlirpPID, "slirp4netns")
+			if holderAlive && slirpAlive {
+				slirpInst = &slirpInstance{
+					holderPID: state.HolderPID,
+					slirpPID:  state.SlirpPID,
+					nsPID:     state.NsPID,
+					apiSock:   state.SlirpSocket,
+				}
+			} else {
+				w.log.Warn("network isolation processes dead, instance recovered without network isolation",
+					"id", id, "holder_alive", holderAlive, "slirp_alive", slirpAlive)
+			}
+		}
+
+		inst := &managedInstance{
+			id:        id,
+			name:      manifest.Name,
+			image:     manifest.Image,
+			startedAt: state.StartedAt,
+			done:      make(chan struct{}),
+			unitName:  unitName,
+			slirp:     slirpInst,
+		}
+
+		w.mu.Lock()
+		w.instances[id] = inst
+		w.mu.Unlock()
+
+		// Polling exit watcher — checks scope liveness every 2 seconds
+		go func(inst *managedInstance, dir string) {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				if !isSystemdScopeActive(inst.unitName, w.paths) {
+					inst.exited = true
+					inst.exitCode = -1
+					stopSlirp(inst.slirp, w.log)
+					os.Remove(filepath.Join(dir, "state.json"))
+
+					w.log.Info("recovered instance exited", "id", inst.id,
+						"uptime", time.Since(inst.startedAt).Round(time.Second))
+					close(inst.done)
+
+					w.eventMu.Lock()
+					active := w.eventActive
+					w.eventMu.Unlock()
+					if active {
+						select {
+						case w.eventCh <- worker.InstanceEvent{
+							InstanceID:   inst.id,
+							InstanceName: inst.name,
+							Action:       "die",
+						}:
+						default:
+						}
+					}
+					return
+				}
+			}
+		}(inst, dir)
+
+		recovered++
+		w.log.Info("recovered running instance", "id", id, "unit", unitName,
+			"started_at", state.StartedAt, "network_isolation", slirpInst != nil)
+	}
+
+	if recovered > 0 {
+		w.log.Info("instance recovery complete", "recovered", recovered)
+	}
+}
+
+// isPIDAlive checks that a PID exists and its cmdline contains one of the expected substrings.
+func isPIDAlive(pid int, expectedNames ...string) bool {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	if err != nil {
+		return false
+	}
+	cmdline := strings.ReplaceAll(string(data), "\x00", " ")
+	for _, name := range expectedNames {
+		if strings.Contains(cmdline, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- Worker interface: Game scripts & Steam ---
