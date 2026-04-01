@@ -274,8 +274,12 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
-	// Send SIGTERM to all processes in the systemd scope cgroup
+	// Send SIGTERM via cgroup + process group + systemd scope
 	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.paths, w.log)
+	if inst.pid > 0 {
+		syscall.Kill(-inst.pid, syscall.SIGTERM) // process group
+		syscall.Kill(inst.pid, syscall.SIGTERM)  // direct
+	}
 	stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 	select {
@@ -284,6 +288,9 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
 		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.paths, w.log)
+		if inst.pid > 0 {
+			syscall.Kill(-inst.pid, syscall.SIGKILL)
+		}
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 		return nil
