@@ -188,7 +188,7 @@
 
             echo "This will DELETE all gamejanitor data on: ''${TARGETS[*]}"
             echo "  - Database"
-            echo "  - Docker containers and volumes"
+            echo "  - Docker containers/volumes and sandbox instances"
             echo "  - Backups, game data, everything"
             read -p "Are you sure? (y/N) " -n 1 -r
             echo
@@ -202,6 +202,7 @@
                 sudo systemctl kill gamejanitor 2>/dev/null || true
                 sudo docker ps -a --filter name=gamejanitor- --format '{{.ID}}' | xargs -r sudo docker rm -f 2>/dev/null || true
                 sudo docker volume ls --filter name=gamejanitor- --format '{{.Name}}' | xargs -r sudo docker volume rm -f 2>/dev/null || true
+                sudo umount /var/lib/gamejanitor/images/*/. 2>/dev/null || true
                 sudo rm -rf /var/lib/gamejanitor/*
                 sudo rm -f /run/gamejanitor-dev
               "
