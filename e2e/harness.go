@@ -58,7 +58,7 @@ func startRemote(t *testing.T, baseURL string) *Harness {
 func startLocal(t *testing.T) *Harness {
 	t.Helper()
 
-	// Clean up any orphaned sandbox processes from previous tests
+	// Clean up orphaned sandbox processes from previous local test runs
 	cleanupInstances(t)
 
 	dataDir := t.TempDir()
@@ -121,6 +121,13 @@ func startLocal(t *testing.T) *Harness {
 
 	h.waitForReady(t)
 	h.waitForWorker(t)
+
+	// Parallelize tests on remote clusters — tests real concurrent usage
+	// and cuts homelab test time significantly.
+	if h.IsRemote() {
+		t.Parallel()
+	}
+
 	return h
 }
 
