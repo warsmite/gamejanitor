@@ -237,6 +237,55 @@ while true; do sleep 1; done
 	assert.Equal(t, "SIGTERM_RECEIVED\n", string(content))
 }
 
+func TestIntegration_ExecInRunningInstance(t *testing.T) {
+	skipIfNoBwrap(t)
+	skipIfNotRoot(t)
+
+	w := newTestWorker(t)
+	ctx := context.Background()
+
+	require.NoError(t, w.CreateVolume(ctx, "test-vol"))
+
+	// Create a rootfs with a /scripts/send-command script (mimics real game setup)
+	rootFS := setupHostRootFS(t, w.dataDir, `
+trap 'exit 0' TERM
+echo ready
+while true; do sleep 1; done
+`)
+	scriptsDir := filepath.Join(rootFS, "scripts")
+	os.MkdirAll(scriptsDir, 0755)
+	os.WriteFile(filepath.Join(scriptsDir, "send-command"), []byte("#!/bin/sh\necho \"command: $1\"\n"), 0755)
+
+	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
+		Name:       "exec-test",
+		Image:      "test:latest",
+		VolumeName: "test-vol",
+		Binds:      []string{scriptsDir + ":/scripts:ro"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, w.StartInstance(ctx, id))
+
+	// Wait for process to be ready
+	require.Eventually(t, func() bool {
+		data, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
+		return strings.Contains(string(data), "ready")
+	}, 5*time.Second, 100*time.Millisecond, "process should print ready")
+
+	// Exec send-command inside the running sandbox
+	exitCode, stdout, stderr, err := w.Exec(ctx, id, []string{"/scripts/send-command", "test-input"})
+	require.NoError(t, err, "Exec should not return an error; stderr: %s", stderr)
+	assert.Equal(t, 0, exitCode, "send-command should exit 0; stderr: %s", stderr)
+	assert.Contains(t, stdout, "command: test-input")
+
+	// Verify env vars from the sandbox are inherited (bwrap --setenv sets PATH)
+	exitCode, stdout, _, err = w.Exec(ctx, id, []string{"/bin/sh", "-c", "echo $PATH"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, exitCode)
+	assert.NotEmpty(t, strings.TrimSpace(stdout), "PATH should be inherited from sandbox env")
+
+	require.NoError(t, w.StopInstance(ctx, id, 5))
+}
+
 func TestIntegration_NetworkNamespaceSetup(t *testing.T) {
 	skipIfNoBwrap(t)
 

@@ -393,7 +393,18 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 	} else {
 		nsArgs = append(nsArgs, "--user", "--preserve-credentials")
 	}
+
+	// Inherit the sandbox's environment (PATH, RCON_PORT, etc.) so scripts
+	// can find binaries and config inside the sandbox. The nsenter target is
+	// the inner bwrap which doesn't have the bwrap-configured env vars — those
+	// are set on its children (the actual entrypoint). Find a child to read from.
+	envPID := findChildPID(targetPID)
+	if envPID == 0 {
+		envPID = targetPID
+	}
 	nsArgs = append(nsArgs, "--")
+	nsArgs = append(nsArgs, "/usr/bin/env", "-i")
+	nsArgs = append(nsArgs, sandboxEnv(envPID)...)
 	nsArgs = append(nsArgs, cmd...)
 
 	execCmd := exec.CommandContext(ctx, w.paths.Nsenter, nsArgs...)
@@ -414,39 +425,8 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 	return exitCode, string(stdoutBuf.Bytes()), string(stderrBuf.Bytes()), nil
 }
 
-// findSandboxInitPID finds the PID of the init process inside the bwrap sandbox.
-// This is the first child process in the cgroup (PID 1 inside the PID namespace).
-func findSandboxInitPID(unitName string, parentPID int, paths *systemPaths) int {
-	// Try cgroup first — most reliable
-	if paths.hasSystemd() {
-		args := []string{"show", "-p", "ControlGroup", unitName + ".scope"}
-		if !paths.IsRoot {
-			args = append([]string{"--user"}, args...)
-		}
-		out, err := exec.Command(paths.Systemctl, args...).Output()
-		if err == nil {
-			cgPath := strings.TrimPrefix(strings.TrimSpace(string(out)), "ControlGroup=")
-			if cgPath != "" {
-				procsPath := "/sys/fs/cgroup" + cgPath + "/cgroup.procs"
-				data, err := os.ReadFile(procsPath)
-				if err == nil {
-					// Return the lowest PID in the cgroup — that's the init process
-					lowestPID := 0
-					for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-						pid, err := strconv.Atoi(strings.TrimSpace(line))
-						if err == nil && pid > 0 && (lowestPID == 0 || pid < lowestPID) {
-							lowestPID = pid
-						}
-					}
-					if lowestPID > 0 {
-						return lowestPID
-					}
-				}
-			}
-		}
-	}
-
-	// Fallback: walk /proc to find a child of our parent PID
+// findChildPID returns the first child PID of the given process, or 0 if none found.
+func findChildPID(parentPID int) int {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return 0
@@ -470,6 +450,125 @@ func findSandboxInitPID(unitName string, parentPID int, paths *systemPaths) int 
 		}
 	}
 	return 0
+}
+
+// sandboxEnv reads the environment of a running process from /proc/<pid>/environ
+// and returns it as a slice of "KEY=VALUE" strings suitable for passing to `env`.
+func sandboxEnv(pid int) []string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	if err != nil {
+		return nil
+	}
+	var env []string
+	for _, entry := range strings.Split(string(data), "\x00") {
+		if entry != "" {
+			env = append(env, entry)
+		}
+	}
+	return env
+}
+
+// findSandboxInitPID finds the PID of the init process inside the bwrap sandbox.
+// bwrap forks: the outer process stays in the host namespaces while the inner
+// process (and its children) live inside the sandbox's mount/PID namespaces.
+// We need a PID that's actually inside the sandbox so nsenter can access the
+// bind-mounted /scripts directory. We detect this via /proc/<pid>/status NSpid:
+// processes inside a nested PID namespace have multiple NSpid entries.
+func findSandboxInitPID(unitName string, parentPID int, paths *systemPaths) int {
+	pids := cgroupPIDs(unitName, paths)
+	if len(pids) == 0 {
+		pids = childPIDs(parentPID)
+	}
+
+	// Find the lowest PID that's inside a nested PID namespace (NSpid has 2+ entries).
+	// This is the sandbox init process (PID 1 inside the namespace).
+	lowestNamespacedPID := 0
+	for _, pid := range pids {
+		if !isInNestedPIDNamespace(pid) {
+			continue
+		}
+		if lowestNamespacedPID == 0 || pid < lowestNamespacedPID {
+			lowestNamespacedPID = pid
+		}
+	}
+	return lowestNamespacedPID
+}
+
+// isInNestedPIDNamespace checks if a process lives inside a nested PID namespace
+// by reading its NSpid line from /proc/<pid>/status. Processes in a child PID
+// namespace have multiple NSpid values (e.g. "NSpid: 12345  1").
+func isInNestedPIDNamespace(pid int) bool {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "NSpid:") {
+			fields := strings.Fields(line)
+			// "NSpid: <host_pid> <ns_pid>" = 3+ fields means nested namespace
+			return len(fields) >= 3
+		}
+	}
+	return false
+}
+
+// cgroupPIDs returns all PIDs in the systemd scope for the given unit.
+func cgroupPIDs(unitName string, paths *systemPaths) []int {
+	if !paths.hasSystemd() {
+		return nil
+	}
+	args := []string{"show", "-p", "ControlGroup", unitName + ".scope"}
+	if !paths.IsRoot {
+		args = append([]string{"--user"}, args...)
+	}
+	out, err := exec.Command(paths.Systemctl, args...).Output()
+	if err != nil {
+		return nil
+	}
+	cgPath := strings.TrimPrefix(strings.TrimSpace(string(out)), "ControlGroup=")
+	if cgPath == "" {
+		return nil
+	}
+	data, err := os.ReadFile("/sys/fs/cgroup" + cgPath + "/cgroup.procs")
+	if err != nil {
+		return nil
+	}
+	var pids []int
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		pid, err := strconv.Atoi(strings.TrimSpace(line))
+		if err == nil && pid > 0 {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// childPIDs returns PIDs whose parent is the given PID (fallback when cgroup lookup fails).
+func childPIDs(parentPID int) []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	var pids []int
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 {
+			continue
+		}
+		stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+		if err != nil {
+			continue
+		}
+		// stat format: pid (comm) state ppid ...
+		fields := strings.Fields(string(stat))
+		if len(fields) > 3 {
+			ppid, _ := strconv.Atoi(fields[3])
+			if ppid == parentPID {
+				pids = append(pids, pid)
+			}
+		}
+	}
+	return pids
 }
 
 // --- Worker interface: Logs & Stats ---
