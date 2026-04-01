@@ -33,7 +33,7 @@ func TestConsole_SendCommand_NotRunning(t *testing.T) {
 	// Gameserver is stopped — command should fail
 	_, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no instance")
+	assert.Contains(t, err.Error(), "no running instance")
 }
 
 func TestConsole_SendCommand_HappyPath(t *testing.T) {
@@ -71,7 +71,7 @@ func TestConsole_StreamLogs_NotRunning(t *testing.T) {
 
 	_, err := svc.ConsoleSvc.StreamLogs(ctx, gs.ID, 100)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no instance")
+	assert.Contains(t, err.Error(), "no running instance")
 }
 
 func TestConsole_ListLogSessions_EmptyVolume(t *testing.T) {

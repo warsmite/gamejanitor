@@ -16,7 +16,7 @@ import (
 // MigrateGameserver moves a gameserver from its current node to a different node.
 // Requires both source and target workers to be online.
 func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) (err error) {
-	gs, err := s.store.GetGameserver(gameserverID)
+	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err
 	}

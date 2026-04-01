@@ -245,8 +245,8 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		return
 	}
 
-	// Run save-server if game is running and supports it
-	if controller.IsRunningStatus(gs.Status) && gs.InstanceID != nil && game != nil && game.HasCapability("save") {
+	// Run save-server if instance is running and game supports it
+	if gs.InstanceID != nil && game != nil && game.HasCapability("save") {
 		s.log.Info("running save-server before backup", "gameserver", gameserverID)
 		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.InstanceID, []string{"/scripts/save-server"})
 		if execErr != nil {
@@ -363,7 +363,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 	}
 
 	actor := controller.ActorFromContext(ctx)
-	wasRunning := controller.IsRunningStatus(gs.Status)
+	wasRunning := gs.InstanceID != nil
 
 	s.log.Info("restore initiated", "backup", backupID, "gameserver", gs.ID, "was_running", wasRunning)
 
@@ -417,7 +417,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 		}
 	}()
 
-	if gs.Status != controller.StatusStopped {
+	if gs.InstanceID != nil {
 		if err := s.gameserverSvc.Stop(ctx, gameserverID); err != nil {
 			s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("stopping gameserver: %v", err))
 			return

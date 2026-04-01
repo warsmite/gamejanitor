@@ -38,6 +38,18 @@ func operationFailedReason(prefix string, err error) string {
 	}
 }
 
+// getGameserverWithStatus reads a gameserver from the store and applies derived status.
+func (s *GameserverService) getGameserverWithStatus(id string) (*model.Gameserver, error) {
+	gs, err := s.store.GetGameserver(id)
+	if err != nil || gs == nil {
+		return gs, err
+	}
+	if s.statusProvider != nil {
+		gs.Status, gs.ErrorReason = s.statusProvider.DeriveStatus(gs)
+	}
+	return gs, nil
+}
+
 // setError publishes an error event. The StatusManager picks it up and updates
 // the in-memory runtime state. No DB write — status is derived on read.
 func (s *GameserverService) setError(id string, reason string) {
@@ -45,7 +57,7 @@ func (s *GameserverService) setError(id string, reason string) {
 }
 
 func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
-	gs, err := s.store.GetGameserver(id)
+	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
 	}
@@ -398,7 +410,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 }
 
 func (s *GameserverService) Restart(ctx context.Context, id string) (err error) {
-	gs, err := s.store.GetGameserver(id)
+	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
 	}
@@ -435,7 +447,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) (err error) 
 }
 
 func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (err error) {
-	gs, err := s.store.GetGameserver(id)
+	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
 	}
@@ -537,7 +549,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 }
 
 func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error) {
-	gs, err := s.store.GetGameserver(id)
+	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
 	}

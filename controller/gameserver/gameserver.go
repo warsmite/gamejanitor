@@ -724,7 +724,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
 	if !gs.Archived {
-		if gs.Status != controller.StatusStopped {
+		if gs.InstanceID != nil {
 			if err := s.Stop(ctx, id); err != nil {
 				return fmt.Errorf("stopping gameserver before delete: %w", err)
 			}

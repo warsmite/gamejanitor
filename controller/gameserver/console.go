@@ -47,10 +47,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return nil, controller.ErrBadRequestf("gameserver %s has no instance", gameserverID)
-	}
-	if !controller.IsRunningStatus(gs.Status) {
-		return nil, controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+		return nil, controller.ErrBadRequestf("gameserver %s has no running instance", gameserverID)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
@@ -81,10 +78,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", controller.ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.InstanceID == nil {
-		return "", controller.ErrBadRequestf("gameserver %s has no instance", gameserverID)
-	}
-	if !controller.IsRunningStatus(gs.Status) {
-		return "", controller.ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+		return "", controller.ErrBadRequestf("gameserver %s has no running instance", gameserverID)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)

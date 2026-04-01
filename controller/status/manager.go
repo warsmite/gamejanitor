@@ -345,10 +345,10 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 			continue
 		}
 		knownIDs[gs.ID] = true
-		if !controller.NeedsRecoveryOnReconnect(gs.Status) {
+		if gs.InstanceID == nil {
 			continue
 		}
-		m.log.Info("recovering gameserver on reconnected worker", "gameserver", gs.ID, "worker", nodeID, "was_status", gs.Status)
+		m.log.Info("recovering gameserver on reconnected worker", "gameserver", gs.ID, "worker", nodeID)
 		m.recoverGameserver(ctx, &gs, w)
 	}
 
