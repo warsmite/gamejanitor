@@ -20,6 +20,9 @@ import (
 
 func newTestLocalWorker(t *testing.T) *wdocker.LocalWorker {
 	t.Helper()
+	if os.Getuid() != 0 {
+		t.Skip("Docker worker tests require root (volume chown needs access to /var/lib/docker)")
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	dockerClient, err := wdocker.New(log, "")
 	if err != nil {
