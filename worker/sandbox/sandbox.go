@@ -303,8 +303,8 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		} else {
 			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Second))
 		}
-		close(inst.done)
 		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
+		close(inst.done)
 
 		w.eventMu.Lock()
 		active := w.eventActive

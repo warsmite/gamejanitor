@@ -72,8 +72,9 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 			"1", fmt.Sprintf("%d", gidStart), fmt.Sprintf("%d", gidCount)).Run()
 	}
 
-	// Start slirp4netns
-	apiSock := filepath.Join(dataDir, "instances", instanceID, "slirp.sock")
+	// Start slirp4netns — socket goes in /tmp to stay under the 108-char
+	// Unix socket path limit (dataDir-based paths can exceed it).
+	apiSock := filepath.Join(os.TempDir(), fmt.Sprintf("gj-%s.sock", instanceID))
 	slirpCmd := exec.Command(paths.Slirp4netns,
 		"--configure", "--mtu=65520", "--disable-host-loopback",
 		"--api-socket", apiSock, fmt.Sprintf("%d", nsPID), "tap0")
