@@ -121,9 +121,8 @@
 
                         echo "Starting controller ($CONTROLLER)..."
                         ssh "$CONTROLLER" "
-                          sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                          sudo systemctl kill gamejanitor-dev 2>/dev/null || true
                           sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
-                          sudo systemctl stop gamejanitor 2>/dev/null || true
                           sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
                             --property=SupplementaryGroups=docker \
                             /run/gamejanitor-dev serve \
@@ -160,9 +159,8 @@
                           [ -z "$TOKEN" ] && continue
                           echo "Starting worker $w..."
                           ssh "$w" "
-                            sudo systemctl stop gamejanitor-dev 2>/dev/null || true
+                            sudo systemctl kill gamejanitor-dev 2>/dev/null || true
                             sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
-                            sudo systemctl stop gamejanitor 2>/dev/null || true
                             sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
                               --property=SupplementaryGroups=docker \
                               /run/gamejanitor-dev serve \
@@ -185,7 +183,7 @@
             TARGETS=("''${@:-''${NODES[@]}}")
             for node in "''${TARGETS[@]}"; do
               echo "Restoring $node to NixOS service..."
-              ssh "$node" "sudo systemctl stop gamejanitor-dev 2>/dev/null; sudo rm -f /run/gamejanitor-dev; sudo systemctl start gamejanitor" || true
+              ssh "$node" "sudo systemctl kill gamejanitor-dev 2>/dev/null; sudo rm -f /run/gamejanitor-dev; sudo systemctl start gamejanitor" || true
               echo "  $node: restored"
             done
           '';
@@ -210,7 +208,6 @@
               ssh "$node" "
                 sudo systemctl kill gamejanitor-dev 2>/dev/null || true
                 sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
-                sudo systemctl kill gamejanitor 2>/dev/null || true
                 sudo docker ps -a --filter name=gamejanitor- --format '{{.ID}}' | xargs -r sudo docker rm -f 2>/dev/null || true
                 sudo docker volume ls --filter name=gamejanitor- --format '{{.Name}}' | xargs -r sudo docker volume rm -f 2>/dev/null || true
                 sudo umount /var/lib/gamejanitor/images/*/. 2>/dev/null || true
