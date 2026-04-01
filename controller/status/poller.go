@@ -175,11 +175,6 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("gameserver gone, stopping stats poll", "gameserver", gameserverID)
 		return false
 	}
-	if !controller.IsPollableStatus(gs.Status) {
-		s.log.Debug("gameserver not in pollable state, stopping stats poll", "gameserver", gameserverID, "status", gs.Status)
-		return false
-	}
-
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
 		s.log.Debug("worker unavailable, stopping stats poll", "gameserver", gameserverID)

@@ -133,11 +133,6 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.log.Debug("gameserver gone, stopping poll", "gameserver", gameserverID)
 			return
 		}
-		if !controller.IsPollableStatus(gs.Status) {
-			s.log.Debug("gameserver not in pollable state, stopping", "gameserver", gameserverID, "status", gs.Status)
-			return
-		}
-
 		info, err := gjq.Query(ctx, "localhost", port, gjq.QueryOptions{
 			Game:    gameSlug,
 			Players: true,
