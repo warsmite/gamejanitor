@@ -188,9 +188,11 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 
 	switch info.State {
 	case "running":
-		m.log.Info("instance running, re-attaching ready watcher", "gameserver", gs.ID)
+		m.log.Info("instance running, re-attaching ready watcher and polling", "gameserver", gs.ID)
 		m.SetRunning(gs.ID)
 		m.readyWatcher.Watch(gs.ID, w, *gs.InstanceID)
+		m.querySvc.StartPolling(gs.ID)
+		m.statsPoller.StartPolling(gs.ID)
 	case "exited", "dead", "created":
 		m.log.Info("instance is not running, clearing", "gameserver", gs.ID, "state", info.State)
 		gs.InstanceID = nil
