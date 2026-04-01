@@ -18,13 +18,15 @@ type DispatcherStore interface {
 	AllocatedMemoryByNode(nodeID string) (int, error)
 	AllocatedCPUByNode(nodeID string) (float64, error)
 	AllocatedStorageByNode(nodeID string) (int, error)
+	GameserverCountByNode(nodeID string) (int, error)
 }
 
 // PlacementCandidate is a worker ranked for gameserver placement.
 type PlacementCandidate struct {
-	Worker worker.Worker
-	NodeID string
-	Score  float64
+	Worker          worker.Worker
+	NodeID          string
+	Score           float64
+	GameserverCount int // tiebreaker: fewer gameservers = preferred
 }
 
 // Dispatcher routes operations to the correct worker.Worker for a given gameserver.
@@ -142,15 +144,24 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 			score = -float64(allocMem)
 		}
 
+		gsCount, err := d.store.GameserverCountByNode(info.ID)
+		if err != nil {
+			d.log.Warn("failed to query gameserver count for worker", "worker", info.ID, "error", err)
+		}
+
 		w, ok := d.registry.Get(info.ID)
 		if !ok {
 			continue
 		}
-		candidates = append(candidates, PlacementCandidate{Worker: w, NodeID: info.ID, Score: score})
+		candidates = append(candidates, PlacementCandidate{Worker: w, NodeID: info.ID, Score: score, GameserverCount: gsCount})
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].Score > candidates[j].Score
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score > candidates[j].Score
+		}
+		// Tiebreaker: spread across nodes — fewer gameservers wins
+		return candidates[i].GameserverCount < candidates[j].GameserverCount
 	})
 
 	return candidates

@@ -198,6 +198,16 @@ func (s *GameserverStore) AllocatedStorageByNode(nodeID string) (int, error) {
 	return total, nil
 }
 
+// GameserverCountByNode returns the number of non-archived gameservers on a node.
+func (s *GameserverStore) GameserverCountByNode(nodeID string) (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM gameservers WHERE node_id = ? AND archived = 0", nodeID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("querying gameserver count for node %s: %w", nodeID, err)
+	}
+	return count, nil
+}
+
 // Excluding variants — used by auto-migration to check capacity without counting the gameserver being updated.
 
 func (s *GameserverStore) AllocatedMemoryByNodeExcluding(nodeID, excludeID string) (int, error) {
