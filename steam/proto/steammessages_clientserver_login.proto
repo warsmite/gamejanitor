@@ -7,15 +7,6 @@ message CMsgClientHeartBeat {
 	optional bool send_reply = 1;
 }
 
-message CMsgClientServerTimestampRequest {
-	optional uint64 client_request_timestamp = 1;
-}
-
-message CMsgClientServerTimestampResponse {
-	optional uint64 client_request_timestamp = 1;
-	optional uint64 server_timestamp_ms = 2;
-}
-
 message CMsgClientSecret {
 	optional uint32 version = 1;
 	optional uint32 appid = 2;
@@ -117,50 +108,4 @@ message CMsgClientLogonResponse {
 	optional string agreement_session_url = 29;
 	optional uint64 token_id = 30;
 	optional uint64 family_group_id = 31;
-}
-
-message CMsgClientRequestWebAPIAuthenticateUserNonce {
-	optional int32 token_type = 1 [default = -1];
-}
-
-message CMsgClientRequestWebAPIAuthenticateUserNonceResponse {
-	optional int32 eresult = 1 [default = 2];
-	optional string webapi_authenticate_user_nonce = 11;
-	optional int32 token_type = 3 [default = -1];
-}
-
-message CMsgClientLogOff {
-}
-
-message CMsgClientLoggedOff {
-	optional int32 eresult = 1 [default = 2];
-}
-
-message CMsgClientNewLoginKey {
-	optional uint32 unique_id = 1;
-	optional string login_key = 2;
-}
-
-message CMsgClientNewLoginKeyAccepted {
-	optional uint32 unique_id = 1;
-}
-
-message CMsgClientAccountInfo {
-	optional string persona_name = 1;
-	optional string ip_country = 2;
-	optional int32 count_authed_computers = 5;
-	optional uint32 account_flags = 7;
-	optional string steamguard_machine_name_user_chosen = 15;
-	optional bool is_phone_verified = 16;
-	optional uint32 two_factor_state = 17;
-	optional bool is_phone_identifying = 18;
-	optional bool is_phone_needing_reverify = 19;
-}
-
-message CMsgClientChallengeRequest {
-	optional fixed64 steamid = 1;
-}
-
-message CMsgClientChallengeResponse {
-	optional fixed64 challenge = 1;
 }
