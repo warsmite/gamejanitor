@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -95,6 +96,58 @@ func TestIsPIDAlive_NonexistentPID(t *testing.T) {
 func TestIsPIDAlive_WrongName(t *testing.T) {
 	// Our PID is alive but shouldn't match "slirp4netns"
 	assert.False(t, isPIDAlive(os.Getpid(), "slirp4netns"))
+}
+
+func TestRotatingWriter_RotatesAtLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "output.log")
+
+	w, err := newRotatingWriter(path)
+	require.NoError(t, err)
+
+	// Write exactly logMaxBytes + 1 byte to trigger rotation
+	chunk := make([]byte, 1024)
+	for i := range chunk {
+		chunk[i] = 'x'
+	}
+	written := 0
+	for written < logMaxBytes {
+		n, err := w.Write(chunk)
+		require.NoError(t, err)
+		written += n
+	}
+
+	// This write should trigger rotation
+	_, err = w.Write([]byte("after-rotation\n"))
+	require.NoError(t, err)
+	w.Close()
+
+	// output.log should contain only the post-rotation data
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "after-rotation\n", string(content))
+
+	// output.log.0 should exist (the pre-rotation data)
+	_, err = os.Stat(path + ".0")
+	assert.NoError(t, err, "rotated backup should exist")
+}
+
+func TestRotatingWriter_NoRotationUnderLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "output.log")
+
+	w, err := newRotatingWriter(path)
+	require.NoError(t, err)
+
+	w.Write([]byte("small log\n"))
+	w.Close()
+
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "small log\n", string(content))
+
+	_, err = os.Stat(path + ".0")
+	assert.True(t, os.IsNotExist(err), "no backup should exist for small logs")
 }
 
 func TestCreateInstance_RejectsEmptyFields(t *testing.T) {

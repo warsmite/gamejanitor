@@ -259,6 +259,59 @@ func (f *preambleFilterWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+const (
+	logMaxBytes   = 50 * 1024 * 1024 // 50MB per log file
+	logMaxBackups = 1                 // keep 1 rotated file (output.log.0)
+)
+
+// rotatingWriter wraps a log file with size-based rotation. When the file
+// exceeds logMaxBytes, it's renamed to output.log.0 and a new file is created.
+type rotatingWriter struct {
+	mu      sync.Mutex
+	f       *os.File
+	path    string
+	written int64
+}
+
+func newRotatingWriter(path string) (*rotatingWriter, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return &rotatingWriter{f: f, path: path}, nil
+}
+
+func (w *rotatingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.written+int64(len(p)) > logMaxBytes {
+		w.rotate()
+	}
+
+	n, err := w.f.Write(p)
+	w.written += int64(n)
+	return n, err
+}
+
+func (w *rotatingWriter) rotate() {
+	w.f.Close()
+	os.Remove(w.path + ".0")
+	os.Rename(w.path, w.path+".0")
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return
+	}
+	w.f = f
+	w.written = 0
+}
+
+func (w *rotatingWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.f.Close()
+}
+
 // followReader wraps a file for tailing with follow support.
 type followReader struct {
 	f          *os.File

@@ -46,7 +46,7 @@ type managedInstance struct {
 	startedAt time.Time
 	exitCode  atomic.Int32
 	exited    atomic.Bool
-	logFile   *os.File
+	logWriter *rotatingWriter
 	done      chan struct{}
 	unitName  string // systemd unit name
 	slirp     *slirpInstance
@@ -231,20 +231,20 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	// Wrap in systemd-run for lifecycle + cgroups.
 	cmd := buildSystemdCommandWithNetns(id, manifest, bwrapArgs, w.paths, slirpInst)
 
-	// Log file
+	// Log file with size-based rotation (50MB cap, 1 backup)
 	logPath := filepath.Join(dir, "output.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	logWriter, err := newRotatingWriter(logPath)
 	if err != nil {
 		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
+		logWriter.Close()
 		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("starting instance: %w", err)
 	}
@@ -260,7 +260,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		image:     manifest.Image,
 		pid:       pid,
 		startedAt: time.Now(),
-		logFile:   logFile,
+		logWriter: logWriter,
 		done:      make(chan struct{}),
 		unitName:  "gj-" + id,
 		slirp:     slirpInst,
@@ -289,7 +289,9 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		cmd.Wait()
 		inst.exitCode.Store(int32(cmd.ProcessState.ExitCode()))
 		inst.exited.Store(true)
-		logFile.Close()
+		if inst.logWriter != nil {
+			inst.logWriter.Close()
+		}
 		stopSlirp(inst.slirp, w.log)
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
