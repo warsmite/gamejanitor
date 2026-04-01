@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -167,6 +168,45 @@ func TestInstanceManifest_PortsRoundtrip(t *testing.T) {
 	}
 	assert.Len(t, manifest.Ports, 2)
 	assert.Equal(t, 27000, manifest.Ports[0].HostPort)
+}
+
+func TestBuildBwrapArgs_NamespaceIsolation(t *testing.T) {
+	manifest := instanceManifest{}
+	imgCfg := &imageConfig{}
+
+	args := buildBwrapArgs("/tmp/rootfs", manifest, imgCfg, "/tmp/gj")
+
+	// Should isolate all namespaces
+	assert.Contains(t, args, "--unshare-pid")
+	assert.Contains(t, args, "--unshare-ipc")
+	assert.Contains(t, args, "--unshare-uts")
+	assert.Contains(t, args, "--unshare-cgroup")
+	assert.Contains(t, args, "--die-with-parent")
+	assert.Contains(t, args, "--new-session")
+}
+
+func TestIsInsideDir(t *testing.T) {
+	assert.True(t, isInsideDir("/tmp/extract/etc/passwd", "/tmp/extract"))
+	assert.True(t, isInsideDir("/tmp/extract/a/b/c", "/tmp/extract"))
+	assert.False(t, isInsideDir("/tmp/evil", "/tmp/extract"))
+	assert.False(t, isInsideDir("/tmp/extract/../evil", "/tmp/extract"))
+	assert.False(t, isInsideDir("/etc/passwd", "/tmp/extract"))
+	// Edge case: prefix match but not a subdirectory
+	assert.False(t, isInsideDir("/tmp/extract-evil/file", "/tmp/extract"))
+}
+
+func TestCreateInstance_ValidatesRequiredFields(t *testing.T) {
+	w := &SandboxWorker{
+		instances: make(map[string]*managedInstance),
+		dataDir:   t.TempDir(),
+	}
+	ctx := context.Background()
+
+	_, err := w.CreateInstance(ctx, worker.InstanceOptions{})
+	assert.ErrorContains(t, err, "instance name is required")
+
+	_, err = w.CreateInstance(ctx, worker.InstanceOptions{Name: "test"})
+	assert.ErrorContains(t, err, "instance image is required")
 }
 
 func indexOf(s []string, target string) int {

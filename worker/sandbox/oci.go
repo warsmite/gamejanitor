@@ -315,7 +315,7 @@ func extractTarLayer(r io.Reader, extractDir string) error {
 		}
 
 		targetPath := filepath.Join(extractDir, name)
-		if !filepath.HasPrefix(targetPath, extractDir) {
+		if !isInsideDir(targetPath, extractDir) {
 			continue
 		}
 

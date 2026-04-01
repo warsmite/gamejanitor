@@ -99,7 +99,11 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 			if proto == "" {
 				proto = "tcp"
 			}
-			addPortForward(apiSock, p.HostPort, p.HostPort, proto)
+			if err := addPortForward(apiSock, p.HostPort, p.HostPort, proto); err != nil {
+				log.Error("failed to add port forward", "instance", instanceID, "port", p.HostPort, "proto", proto, "error", err)
+				stopSlirp(&slirpInstance{holder: holder, slirp: slirpCmd, apiSock: apiSock, nsPID: nsPID}, log)
+				return nil, fmt.Errorf("adding port forward %d/%s: %w", p.HostPort, proto, err)
+			}
 		}
 	}
 
@@ -132,18 +136,28 @@ func addPortForward(apiSock string, hostPort, guestPort int, proto string) error
 			"guest_addr": "10.0.2.100", "guest_port": guestPort,
 		},
 	}
-	data, _ := json.Marshal(req)
+	data, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshaling slirp request: %w", err)
+	}
 	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	conn.Write(data)
+	if _, err := conn.Write(data); err != nil {
+		return fmt.Errorf("writing to slirp API: %w", err)
+	}
 
 	buf := make([]byte, 4096)
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, _ := conn.Read(buf)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("reading slirp API response: %w", err)
+	}
 	if n > 0 {
 		var resp map[string]any
-		json.Unmarshal(buf[:n], &resp)
+		if err := json.Unmarshal(buf[:n], &resp); err != nil {
+			return fmt.Errorf("parsing slirp API response: %w", err)
+		}
 		if errMsg, ok := resp["error"]; ok {
-			return fmt.Errorf("slirp: %v", errMsg)
+			return fmt.Errorf("slirp port forward: %v", errMsg)
 		}
 	}
 	return nil

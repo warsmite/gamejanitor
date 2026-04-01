@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -118,7 +119,7 @@ func copyIO(dst *os.File, src *os.File) (int64, error) {
 			}
 		}
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err == io.EOF {
 				return total, nil
 			}
 			return total, err

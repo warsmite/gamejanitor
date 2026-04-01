@@ -16,6 +16,11 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		"--tmpfs", "/tmp",
 		"--tmpfs", "/home",
 		"--unshare-pid",
+		"--unshare-ipc",
+		"--unshare-uts",
+		"--unshare-cgroup",
+		"--die-with-parent",
+		"--new-session",
 	}
 
 	// Bind DNS config

@@ -65,6 +65,7 @@ type instanceManifest struct {
 
 func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxWorker {
 	cleanupOrphanHolders(log)
+	cleanupOverlayMounts(dataDir, log)
 
 	paths, err := resolvePaths(dataDir, log)
 	if err != nil {
@@ -114,6 +115,13 @@ func (w *SandboxWorker) PullImage(ctx context.Context, image string) error {
 }
 
 func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
+	if opts.Name == "" {
+		return "", fmt.Errorf("instance name is required")
+	}
+	if opts.Image == "" {
+		return "", fmt.Errorf("instance image is required")
+	}
+
 	id := opts.Name
 
 	dir := w.instanceDir(id)
@@ -231,6 +239,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		inst.exited = true
 		logFile.Close()
 		stopSlirp(inst.slirp, w.log)
+		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
 		if inst.exitCode != 0 && uptime < 3*time.Second {
@@ -483,7 +492,7 @@ func (w *SandboxWorker) InstanceLogs(ctx context.Context, instanceID string, tai
 		for _, l := range lines {
 			joined += l + "\n"
 		}
-		return io.NopCloser(io.Reader(ioStringReader(joined))), nil
+		return io.NopCloser(strings.NewReader(joined)), nil
 	}
 
 	// For follow mode, start from the beginning so we catch startup logs.

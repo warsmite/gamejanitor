@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/warsmite/gamejanitor/worker"
@@ -97,7 +98,10 @@ func readProcMemory(pid int) int {
 
 // readProcCPU returns a rough CPU% from /proc/<pid>/stat.
 // This is approximate — proper measurement needs two samples over time.
-var lastCPUCheck = make(map[int]cpuSample)
+var (
+	cpuMu        sync.Mutex
+	lastCPUCheck = make(map[int]cpuSample)
+)
 
 type cpuSample struct {
 	utime   uint64
@@ -128,8 +132,10 @@ func readProcCPU(pid int) float64 {
 
 	current := cpuSample{utime: utime, stime: stime, uptime: uptime, checked: time.Now()}
 
+	cpuMu.Lock()
 	prev, ok := lastCPUCheck[pid]
 	lastCPUCheck[pid] = current
+	cpuMu.Unlock()
 
 	if !ok || time.Since(prev.checked) < time.Second {
 		// First sample or too close together — return 0

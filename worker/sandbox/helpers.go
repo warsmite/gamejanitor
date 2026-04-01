@@ -10,12 +10,12 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
 )
 
 // readBwrapChildPID reads the child PID from bwrap's --info-fd JSON output.
@@ -36,8 +36,8 @@ func readBwrapChildPID(infoPath string) int {
 	return 0
 }
 
-// cleanupOrphanHolders kills any leftover namespace holder processes from a previous
-// gamejanitor crash. Scans /proc for "unshare" processes with "sleep infinity".
+// cleanupOrphanState kills leftover namespace holders, resets failed systemd scopes,
+// and unmounts stale overlayfs mounts from a previous gamejanitor crash.
 func cleanupOrphanHolders(log *slog.Logger) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -87,6 +87,32 @@ func cleanupOrphanHolders(log *slog.Logger) {
 	}
 }
 
+// cleanupOverlayMounts unmounts any stale overlayfs mounts under dataDir/images.
+// These can linger if gamejanitor crashes without a clean shutdown.
+func cleanupOverlayMounts(dataDir string, log *slog.Logger) {
+	mountsData, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return
+	}
+	imagesDir := filepath.Join(dataDir, "images")
+	unmounted := 0
+	for _, line := range strings.Split(string(mountsData), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 || fields[2] != "overlay" {
+			continue
+		}
+		mountpoint := fields[1]
+		if strings.HasPrefix(mountpoint, imagesDir) {
+			if err := syscall.Unmount(mountpoint, 0); err == nil {
+				unmounted++
+			}
+		}
+	}
+	if unmounted > 0 {
+		log.Warn("unmounted stale overlayfs mounts", "count", unmounted)
+	}
+}
+
 // truncate returns the last n bytes of a string.
 func truncate(s string, n int) string {
 	if len(s) <= n {
@@ -113,12 +139,6 @@ func (b *safeBuffer) Bytes() []byte {
 	return b.buf.Bytes()
 }
 
-// ioStringReader wraps a string as an io.Reader.
-type ioStringReader string
-
-func (s ioStringReader) Read(p []byte) (int, error) {
-	return strings.NewReader(string(s)).Read(p)
-}
 
 // tailFile reads the last n lines from a file, filtering out sandbox preamble.
 func tailFile(f *os.File, n int) ([]string, error) {
@@ -235,3 +255,13 @@ func (r *followReader) Close() error {
 	return r.f.Close()
 }
 
+// isInsideDir returns true if path is inside dir after cleaning both paths.
+// Unlike the deprecated filepath.HasPrefix, this properly handles edge cases
+// like /tmp/evil-prefix matching /tmp/evil.
+func isInsideDir(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..") && rel != ".."
+}
