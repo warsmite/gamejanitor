@@ -455,7 +455,7 @@ func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
 // removeWithUserNS removes a path by entering a user namespace with full UID mapping.
 func removeWithUserNS(path string, log *slog.Logger) error {
 	// Start a holder process in a new user namespace
-	holder := exec.Command("unshare", "--user", "--fork", "--kill-child", "--", "sleep", "10")
+	holder := exec.Command(findBinary("unshare"), "--user", "--fork", "--kill-child", "--", "sleep", "10")
 	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	if err := holder.Start(); err != nil {
 		return fmt.Errorf("starting cleanup namespace: %w", err)
@@ -470,15 +470,15 @@ func removeWithUserNS(path string, log *slog.Logger) error {
 	gid := os.Getgid()
 
 	// Map UIDs/GIDs to match what the sandbox used
-	exec.Command("newuidmap", fmt.Sprintf("%d", pid),
+	exec.Command(findBinary("newuidmap"), fmt.Sprintf("%d", pid),
 		"0", fmt.Sprintf("%d", uid), "1",
 		"1", "165536", "65536").Run()
-	exec.Command("newgidmap", fmt.Sprintf("%d", pid),
+	exec.Command(findBinary("newgidmap"), fmt.Sprintf("%d", pid),
 		"0", fmt.Sprintf("%d", gid), "1",
 		"1", "165536", "65536").Run()
 
 	// Enter the namespace and rm -rf
-	cmd := exec.Command("nsenter", fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", "rm", "-rf", path)
+	cmd := exec.Command(findBinary("nsenter"), fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", "rm", "-rf", path)
 	return cmd.Run()
 }
 

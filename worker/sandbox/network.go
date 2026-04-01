@@ -31,7 +31,12 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	}
 
 	// Step 1: Create a process that holds the user+network namespace open
-	holder := exec.Command("unshare", "--user", "--net", "--fork", "--kill-child", "--", "sh", "-c", "echo ready; exec sleep infinity")
+	unsharePath := findBinary("unshare")
+	if unsharePath == "" {
+		return nil, fmt.Errorf("unshare binary not found in PATH")
+	}
+
+	holder := exec.Command(unsharePath, "--user", "--net", "--fork", "--kill-child", "--", "sh", "-c", "echo ready; exec sleep infinity")
 	holderOut, err := holder.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("creating holder pipe: %w", err)
@@ -54,18 +59,24 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	nsPID := holder.Process.Pid
 
 	// Map a full UID/GID range so chown inside the namespace works.
-	// Maps current user to root (0), plus a subordinate range for UIDs 1-65536.
 	uid := os.Getuid()
 	gid := os.Getgid()
-	if err := exec.Command("newuidmap", fmt.Sprintf("%d", nsPID),
-		"0", fmt.Sprintf("%d", uid), "1",
-		"1", "165536", "65536").Run(); err != nil {
-		log.Warn("newuidmap failed, chown inside sandbox may not work", "error", err)
-	}
-	if err := exec.Command("newgidmap", fmt.Sprintf("%d", nsPID),
-		"0", fmt.Sprintf("%d", gid), "1",
-		"1", "165536", "65536").Run(); err != nil {
-		log.Warn("newgidmap failed, chown inside sandbox may not work", "error", err)
+
+	newuidmapPath := findBinary("newuidmap")
+	newgidmapPath := findBinary("newgidmap")
+	if newuidmapPath != "" && newgidmapPath != "" {
+		if err := exec.Command(newuidmapPath, fmt.Sprintf("%d", nsPID),
+			"0", fmt.Sprintf("%d", uid), "1",
+			"1", "165536", "65536").Run(); err != nil {
+			log.Warn("newuidmap failed, chown inside sandbox may not work", "error", err)
+		}
+		if err := exec.Command(newgidmapPath, fmt.Sprintf("%d", nsPID),
+			"0", fmt.Sprintf("%d", gid), "1",
+			"1", "165536", "65536").Run(); err != nil {
+			log.Warn("newgidmap failed, chown inside sandbox may not work", "error", err)
+		}
+	} else {
+		log.Warn("newuidmap/newgidmap not found, chown inside sandbox may not work")
 	}
 
 	log.Debug("network namespace created", "holder_pid", nsPID)
@@ -127,7 +138,7 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 // the network namespace. Used to wrap bwrap so it inherits the netns.
 func nsenterPrefix(nsPID int) []string {
 	return []string{
-		"nsenter",
+		findBinary("nsenter"),
 		fmt.Sprintf("--user=/proc/%d/ns/user", nsPID),
 		fmt.Sprintf("--net=/proc/%d/ns/net", nsPID),
 		"--",
@@ -175,6 +186,21 @@ func addPortForward(apiSock string, hostPort, guestPort int, proto string) error
 	}
 
 	return nil
+}
+
+// findBinary searches PATH and common system locations for a binary.
+func findBinary(name string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	// Common locations not always in systemd's PATH
+	for _, dir := range []string{"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/run/current-system/sw/bin"} {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
 }
 
 // stopSlirp kills the slirp4netns process and namespace holder.
