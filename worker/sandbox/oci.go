@@ -21,17 +21,18 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
-// imageConfig holds the parsed entrypoint/cmd/env from an OCI image.
+// imageConfig holds the parsed entrypoint/cmd/env/user from an OCI image.
 type imageConfig struct {
 	Entrypoint []string
 	Cmd        []string
 	Env        []string
 	WorkingDir string
+	User       string // "uid:gid", "uid", or "username" from Dockerfile USER directive
 }
 
 // pullAndExtractOCIImage pulls an instance image and extracts its filesystem to destDir.
 // Skips extraction if the image has already been extracted (digest marker file present).
-// Returns the parsed image config (entrypoint, cmd, env, working dir).
+// The extracted rootfs is mounted read-only into instances so concurrent access is safe.
 func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir string, log *slog.Logger) (*imageConfig, error) {
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
@@ -324,6 +325,8 @@ func extractTarLayer(r io.Reader, extractDir string) error {
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
 				return fmt.Errorf("creating directory %s: %w", header.Name, err)
 			}
+			os.Chmod(targetPath, os.FileMode(header.Mode))
+			os.Lchown(targetPath, header.Uid, header.Gid)
 		case tar.TypeReg:
 			os.Remove(targetPath)
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
@@ -338,11 +341,13 @@ func extractTarLayer(r io.Reader, extractDir string) error {
 				return fmt.Errorf("writing file %s: %w", header.Name, err)
 			}
 			f.Close()
+			os.Lchown(targetPath, header.Uid, header.Gid)
 		case tar.TypeSymlink:
 			os.Remove(targetPath)
 			if err := os.Symlink(header.Linkname, targetPath); err != nil {
 				return fmt.Errorf("creating symlink %s -> %s: %w", header.Name, header.Linkname, err)
 			}
+			os.Lchown(targetPath, header.Uid, header.Gid)
 		case tar.TypeLink:
 			linkTarget := filepath.Join(extractDir, filepath.Clean(header.Linkname))
 			os.Remove(targetPath)
@@ -355,6 +360,7 @@ func extractTarLayer(r io.Reader, extractDir string) error {
 					return fmt.Errorf("creating hard link %s -> %s: %w (copy fallback also failed: %v)", header.Name, header.Linkname, err, copyErr)
 				}
 			}
+			os.Lchown(targetPath, header.Uid, header.Gid)
 		}
 	}
 	return nil
@@ -371,6 +377,7 @@ func extractImageConfig(img v1.Image) (*imageConfig, error) {
 		Cmd:        cfgFile.Config.Cmd,
 		Env:        cfgFile.Config.Env,
 		WorkingDir: cfgFile.Config.WorkingDir,
+		User:       cfgFile.Config.User,
 	}, nil
 }
 

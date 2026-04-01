@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,8 +28,8 @@ func TestBuildBwrapArgs_BasicStructure(t *testing.T) {
 	assert.Contains(t, args, "--proc")
 	assert.Contains(t, args, "--tmpfs")
 
-	// Should bind rootfs to /
-	idx := indexOf(args, "--bind")
+	// Should read-only bind rootfs to /
+	idx := indexOf(args, "--ro-bind")
 	assert.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, "/tmp/rootfs", args[idx+1])
 	assert.Equal(t, "/", args[idx+2])
@@ -207,6 +208,45 @@ func TestCreateInstance_ValidatesRequiredFields(t *testing.T) {
 
 	_, err = w.CreateInstance(ctx, worker.InstanceOptions{Name: "test"})
 	assert.ErrorContains(t, err, "instance image is required")
+}
+
+func TestParseImageUser_Numeric(t *testing.T) {
+	uid, gid := parseImageUser("1001", "/nonexistent")
+	assert.Equal(t, 1001, uid)
+	assert.Equal(t, 1001, gid)
+}
+
+func TestParseImageUser_NumericWithGroup(t *testing.T) {
+	uid, gid := parseImageUser("1001:1002", "/nonexistent")
+	assert.Equal(t, 1001, uid)
+	assert.Equal(t, 1002, gid)
+}
+
+func TestParseImageUser_Empty(t *testing.T) {
+	uid, gid := parseImageUser("", "/nonexistent")
+	assert.Equal(t, 0, uid)
+	assert.Equal(t, 0, gid)
+}
+
+func TestParseImageUser_Username(t *testing.T) {
+	// Create a fake passwd file
+	dir := t.TempDir()
+	os.MkdirAll(dir+"/etc", 0755)
+	os.WriteFile(dir+"/etc/passwd", []byte("gameserver:x:1001:1001::/home/gameserver:/bin/bash\n"), 0644)
+
+	uid, gid := parseImageUser("gameserver", dir)
+	assert.Equal(t, 1001, uid)
+	assert.Equal(t, 1001, gid)
+}
+
+func TestBuildBwrapArgs_SetsUIDGID(t *testing.T) {
+	manifest := instanceManifest{}
+	imgCfg := &imageConfig{User: "1001:1001"}
+
+	args := buildBwrapArgs("/tmp/rootfs", manifest, imgCfg, "/tmp/gj")
+	assert.Contains(t, args, "--uid")
+	assert.Contains(t, args, "1001")
+	assert.Contains(t, args, "--gid")
 }
 
 func indexOf(s []string, target string) int {
