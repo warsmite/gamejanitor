@@ -22,13 +22,11 @@ func readCgroupStats(unitName string, pid int) (*worker.InstanceStats, error) {
 	if cgroupPath != "" {
 		stats.MemoryUsageMB = int(readCgroupInt(filepath.Join(cgroupPath, "memory.current")) / (1024 * 1024))
 		memMax := readCgroupInt(filepath.Join(cgroupPath, "memory.max"))
-		if memMax > 0 && memMax < 1<<50 { // "max" reads as a very large number
+		if memMax > 0 && memMax < 1<<50 {
 			stats.MemoryLimitMB = int(memMax / (1024 * 1024))
 		}
 
-		// CPU: read cpu.stat for usage_usec, compute % over interval
-		// For now, read instantaneous from /proc since cpu.stat needs two samples
-		stats.CPUPercent = readProcCPU(pid)
+		stats.CPUPercent = readCgroupCPU(cgroupPath)
 	} else if pid > 0 {
 		// Fallback to /proc
 		stats.MemoryUsageMB = readProcMemory(pid)
@@ -76,6 +74,55 @@ func readCgroupInt(path string) int64 {
 	}
 	v, _ := strconv.ParseInt(s, 10, 64)
 	return v
+}
+
+// readCgroupCPU reads CPU usage from cgroup v2 cpu.stat and computes percentage
+// using delta between two samples. Covers all processes in the cgroup scope.
+var (
+	cgroupCPUMu   sync.Mutex
+	lastCgroupCPU = make(map[string]cgroupCPUSample)
+)
+
+type cgroupCPUSample struct {
+	usageUsec int64
+	checked   time.Time
+}
+
+func readCgroupCPU(cgroupPath string) float64 {
+	data, err := os.ReadFile(filepath.Join(cgroupPath, "cpu.stat"))
+	if err != nil {
+		return 0
+	}
+
+	var usageUsec int64
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "usage_usec ") {
+			usageUsec, _ = strconv.ParseInt(strings.TrimPrefix(line, "usage_usec "), 10, 64)
+			break
+		}
+	}
+
+	now := time.Now()
+	current := cgroupCPUSample{usageUsec: usageUsec, checked: now}
+
+	cgroupCPUMu.Lock()
+	prev, ok := lastCgroupCPU[cgroupPath]
+	lastCgroupCPU[cgroupPath] = current
+	cgroupCPUMu.Unlock()
+
+	if !ok || time.Since(prev.checked) < time.Second {
+		return 0
+	}
+
+	usageDelta := float64(current.usageUsec - prev.usageUsec)
+	timeDelta := now.Sub(prev.checked).Microseconds()
+
+	if timeDelta <= 0 {
+		return 0
+	}
+
+	// usageDelta / timeDelta = fraction of one CPU core. Multiply by 100 for percent.
+	return (usageDelta / float64(timeDelta)) * 100
 }
 
 // readProcMemory reads RSS from /proc/<pid>/status.
