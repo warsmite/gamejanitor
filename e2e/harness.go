@@ -14,149 +14,213 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
-// Harness manages a real gamejanitor instance for end-to-end testing.
+// Harness connects to a gamejanitor instance for end-to-end testing.
+// Locally: starts one shared gamejanitor process per test suite.
+// Remote (GAMEJANITOR_API_URL set): connects to an existing cluster.
 type Harness struct {
-	BaseURL  string
-	DataDir  string
-	Port     int
-	GRPCPort int
-
-	cmd    *exec.Cmd
-	t      *testing.T
+	BaseURL string
+	t       *testing.T
 }
 
-// Start returns a harness connected to a gamejanitor instance.
-// If GAMEJANITOR_API_URL is set, connects to an existing remote cluster (homelab/CI).
-// Otherwise, builds and launches a local instance with test-game.
+// --- Shared local instance (one per test suite) ---
+
+var (
+	localOnce sync.Once
+	localURL  string
+	localCmd  *exec.Cmd
+	localDir  string
+)
+
+// Start returns a harness. All tests in a suite share one gamejanitor instance.
 func Start(t *testing.T) *Harness {
 	t.Helper()
+	t.Parallel()
 
-	if url := os.Getenv("GAMEJANITOR_API_URL"); url != "" {
-		return startRemote(t, url)
+	url := os.Getenv("GAMEJANITOR_API_URL")
+	if url == "" {
+		localOnce.Do(func() { startLocalInstance(t) })
+		url = localURL
 	}
-	return startLocal(t)
-}
 
-// startRemote connects to an existing cluster — no process management.
-func startRemote(t *testing.T, baseURL string) *Harness {
-	t.Helper()
-	h := &Harness{
-		BaseURL: baseURL,
-		t:       t,
-	}
+	h := &Harness{BaseURL: url, t: t}
 	h.waitForReady(t)
 	h.waitForWorker(t)
-	t.Logf("connected to remote cluster at %s", baseURL)
 	return h
 }
 
-// startLocal builds and launches a local gamejanitor instance with test-game.
-func startLocal(t *testing.T) *Harness {
+func startLocalInstance(t *testing.T) {
 	t.Helper()
+	cleanupSandboxState()
 
-	// Clean up orphaned sandbox processes from previous local test runs
-	cleanupInstances(t)
+	dir, err := os.MkdirTemp("", "gamejanitor-e2e-*")
+	if err != nil {
+		t.Fatalf("creating temp dir: %v", err)
+	}
+	localDir = dir
 
-	dataDir := t.TempDir()
+	copyTestGame(t, dir)
+
 	port := freePort(t)
 	grpcPort := freePort(t)
 	workerGRPCPort := freePort(t)
 
-	// Copy the test game definition into the data dir so gamejanitor loads it as a local override
-	copyTestGame(t, dataDir)
-
-	h := &Harness{
-		BaseURL:  fmt.Sprintf("http://127.0.0.1:%d", port),
-		DataDir:  dataDir,
-		Port:     port,
-		GRPCPort: grpcPort,
-		t:        t,
-	}
-
-	// Build the binary if needed
 	binary := buildBinary(t)
-
-	// Use explicit runtime if set via E2E_RUNTIME env, otherwise auto-detect
-	runtime := os.Getenv("E2E_RUNTIME")
 	args := []string{"serve",
 		"--bind", "127.0.0.1",
 		"--port", fmt.Sprintf("%d", port),
 		"--grpc-port", fmt.Sprintf("%d", grpcPort),
 		"--worker-grpc-port", fmt.Sprintf("%d", workerGRPCPort),
 		"--sftp-port", "0",
-		"--data-dir", dataDir,
-		"--controller",
-		"--worker",
+		"--data-dir", dir,
+		"--controller", "--worker",
 	}
-	if runtime != "" {
-		args = append(args, "--runtime", runtime)
+	if rt := os.Getenv("E2E_RUNTIME"); rt != "" {
+		args = append(args, "--runtime", rt)
 	}
 
-	h.cmd = exec.Command(binary, args...)
-	h.cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-
-	// Capture output for debugging
+	localCmd = exec.Command(binary, args...)
+	localCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if os.Getenv("E2E_DEBUG") != "" {
-		h.cmd.Stdout = os.Stdout
-		h.cmd.Stderr = os.Stderr
+		localCmd.Stdout = os.Stdout
+		localCmd.Stderr = os.Stderr
 	} else {
-		h.cmd.Stdout = io.Discard
-		h.cmd.Stderr = io.Discard
+		localCmd.Stdout = io.Discard
+		localCmd.Stderr = io.Discard
 	}
 
-	t.Logf("starting gamejanitor: port=%d grpc=%d data=%s", port, grpcPort, dataDir)
-	if err := h.cmd.Start(); err != nil {
+	t.Logf("starting gamejanitor: port=%d grpc=%d data=%s", port, grpcPort, dir)
+	if err := localCmd.Start(); err != nil {
 		t.Fatalf("failed to start gamejanitor: %v", err)
 	}
 
+	localURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+
 	t.Cleanup(func() {
-		h.Stop()
-		// Clean up any instances/volumes created during the test
-		cleanupInstances(t)
-	})
-
-	h.waitForReady(t)
-	h.waitForWorker(t)
-
-	// Parallelize tests on remote clusters — tests real concurrent usage
-	// and cuts homelab test time significantly.
-	if h.IsRemote() {
-		t.Parallel()
-	}
-
-	return h
-}
-
-// IsRemote returns true if connected to an existing cluster (not locally managed).
-func (h *Harness) IsRemote() bool {
-	return h.cmd == nil
-}
-
-// WorkerCount returns the number of online workers.
-func (h *Harness) WorkerCount(t *testing.T) int {
-	t.Helper()
-	resp, err := h.Get("/api/workers")
-	if err != nil {
-		return 0
-	}
-	var workers []struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-	}
-	if err := DecodeData(resp, &workers); err != nil {
-		return 0
-	}
-	count := 0
-	for _, w := range workers {
-		if w.Status == "online" {
-			count++
+		if localCmd != nil && localCmd.Process != nil {
+			localCmd.Process.Signal(os.Interrupt)
+			localCmd.Wait()
 		}
+		cleanupSandboxState()
+		os.RemoveAll(localDir)
+	})
+}
+
+// --- Game config ---
+
+// GameID returns the game to test. Defaults to test-game.
+func (h *Harness) GameID() string {
+	if id := os.Getenv("E2E_GAME_ID"); id != "" {
+		return id
 	}
-	return count
+	return "test-game"
+}
+
+// GameEnv returns env vars for the game.
+func (h *Harness) GameEnv() map[string]string {
+	switch h.GameID() {
+	case "minecraft-java":
+		return map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
+	default:
+		return map[string]string{"REQUIRED_VAR": "yes"}
+	}
+}
+
+// --- API helpers ---
+
+func (h *Harness) Get(path string) (*http.Response, error) {
+	return http.Get(h.BaseURL + path)
+}
+
+func (h *Harness) PostJSON(path string, body any) (*http.Response, error) {
+	data, _ := json.Marshal(body)
+	return http.Post(h.BaseURL+path, "application/json", bytes.NewReader(data))
+}
+
+func (h *Harness) Delete(path string) (*http.Response, error) {
+	req, _ := http.NewRequest("DELETE", h.BaseURL+path, nil)
+	return http.DefaultClient.Do(req)
+}
+
+func (h *Harness) Patch(path string, body any) (*http.Response, error) {
+	data, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PATCH", h.BaseURL+path, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	return http.DefaultClient.Do(req)
+}
+
+func DecodeData(resp *http.Response, v any) error {
+	defer resp.Body.Close()
+	var env struct {
+		Status string          `json:"status"`
+		Data   json.RawMessage `json:"data"`
+		Error  string          `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return fmt.Errorf("decoding response: %w", err)
+	}
+	if env.Status != "ok" {
+		return fmt.Errorf("API error: %s", env.Error)
+	}
+	if v != nil {
+		return json.Unmarshal(env.Data, v)
+	}
+	return nil
+}
+
+// --- Status helpers ---
+
+func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := h.Get("/api/gameservers/" + gsID)
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		var gs struct{ Status string `json:"status"` }
+		if err := DecodeData(resp, &gs); err == nil && gs.Status == targetStatus {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q", gsID, targetStatus)
+}
+
+func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
+	t.Helper()
+	resp, err := h.Get("/api/gameservers/" + gsID)
+	if err != nil {
+		return "", ""
+	}
+	var gs struct {
+		Status string  `json:"status"`
+		NodeID *string `json:"node_id"`
+	}
+	if err := DecodeData(resp, &gs); err != nil {
+		return "", ""
+	}
+	nid := ""
+	if gs.NodeID != nil {
+		nid = *gs.NodeID
+	}
+	return gs.Status, nid
+}
+
+func (h *Harness) WaitForNodeChange(gsID, targetNodeID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		_, nodeID := h.GetGameserver(h.t, gsID)
+		if nodeID == targetNodeID {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timed out waiting for gameserver %s to move to node %s", gsID, targetNodeID)
 }
 
 // Workers returns online worker IDs.
@@ -182,118 +246,13 @@ func (h *Harness) Workers(t *testing.T) []string {
 	return ids
 }
 
-func (h *Harness) Stop() {
-	if h.cmd != nil && h.cmd.Process != nil {
-		h.cmd.Process.Signal(os.Interrupt)
-		h.cmd.Wait()
-	}
-}
-
-// API helpers
-
-func (h *Harness) Get(path string) (*http.Response, error) {
-	return http.Get(h.BaseURL + path)
-}
-
-func (h *Harness) PostJSON(path string, body any) (*http.Response, error) {
-	data, _ := json.Marshal(body)
-	return http.Post(h.BaseURL+path, "application/json", bytes.NewReader(data))
-}
-
-func (h *Harness) Delete(path string) (*http.Response, error) {
-	req, _ := http.NewRequest("DELETE", h.BaseURL+path, nil)
-	return http.DefaultClient.Do(req)
-}
-
-func (h *Harness) Patch(path string, body any) (*http.Response, error) {
-	data, _ := json.Marshal(body)
-	req, _ := http.NewRequest("PATCH", h.BaseURL+path, bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	return http.DefaultClient.Do(req)
-}
-
-// DecodeData reads the API response envelope and unmarshals the data field.
-func DecodeData(resp *http.Response, v any) error {
-	defer resp.Body.Close()
-	var env struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-	if env.Status != "ok" {
-		return fmt.Errorf("API error: %s", env.Error)
-	}
-	if v != nil {
-		return json.Unmarshal(env.Data, v)
-	}
-	return nil
-}
-
-// GameID returns the game ID to use for tests. Remote clusters use minecraft-java
-// (a real game), local clusters use test-game (lightweight fake).
-func (h *Harness) GameID() string {
-	if h.IsRemote() {
-		return os.Getenv("E2E_GAME_ID")
-	}
-	return "test-game"
-}
-
-// GameEnv returns the env vars needed for the test game.
-func (h *Harness) GameEnv() map[string]string {
-	if h.IsRemote() {
-		// Minecraft needs EULA + version
-		return map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
-	}
-	return map[string]string{"REQUIRED_VAR": "yes"}
-}
-
-// GetGameserver fetches a gameserver by ID.
-func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
-	t.Helper()
-	resp, err := h.Get("/api/gameservers/" + gsID)
-	if err != nil {
-		return "", ""
-	}
-	var gs struct {
-		Status string  `json:"status"`
-		NodeID *string `json:"node_id"`
-	}
-	if err := DecodeData(resp, &gs); err != nil {
-		return "", ""
-	}
-	nid := ""
-	if gs.NodeID != nil {
-		nid = *gs.NodeID
-	}
-	return gs.Status, nid
-}
-
-// WaitForNodeChange polls until the gameserver's node_id changes to targetNodeID.
-func (h *Harness) WaitForNodeChange(gsID, targetNodeID string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		_, nodeID := h.GetGameserver(h.t, gsID)
-		if nodeID == targetNodeID {
-			return nil
-		}
-		time.Sleep(time.Second)
-	}
-	return fmt.Errorf("timed out waiting for gameserver %s to move to node %s", gsID, targetNodeID)
-}
-
-// ListFiles returns file names at a path in a gameserver volume.
 func (h *Harness) ListFiles(t *testing.T, gsID string, path string) []string {
 	t.Helper()
 	resp, err := h.Get("/api/gameservers/" + gsID + "/files?path=" + path)
 	if err != nil {
 		return nil
 	}
-	var files []struct {
-		Name string `json:"name"`
-	}
+	var files []struct{ Name string `json:"name"` }
 	if err := DecodeData(resp, &files); err != nil {
 		return nil
 	}
@@ -304,27 +263,7 @@ func (h *Harness) ListFiles(t *testing.T, gsID string, path string) []string {
 	return names
 }
 
-// WaitForStatus polls the gameserver until it reaches the target status or times out.
-func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		resp, err := h.Get("/api/gameservers/" + gsID)
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		var gs struct {
-			Status string `json:"status"`
-		}
-		if err := DecodeData(resp, &gs); err == nil && gs.Status == targetStatus {
-			return nil
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q", gsID, targetStatus)
-}
-
-// Internal
+// --- Internal ---
 
 func (h *Harness) waitForReady(t *testing.T) {
 	t.Helper()
@@ -334,13 +273,12 @@ func (h *Harness) waitForReady(t *testing.T) {
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == 200 {
-				t.Logf("gamejanitor ready at %s", h.BaseURL)
 				return
 			}
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	t.Fatalf("gamejanitor did not become ready within 30s at %s", h.BaseURL)
+	t.Fatalf("gamejanitor not ready within 30s at %s", h.BaseURL)
 }
 
 func (h *Harness) waitForWorker(t *testing.T) {
@@ -354,7 +292,6 @@ func (h *Harness) waitForWorker(t *testing.T) {
 		}
 		var workers []json.RawMessage
 		if err := DecodeData(resp, &workers); err == nil && len(workers) > 0 {
-			t.Logf("worker available (%d online)", len(workers))
 			return
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -373,7 +310,6 @@ func freePort(t *testing.T) int {
 	return port
 }
 
-// buildBinary compiles the gamejanitor binary once per test run.
 var cachedBinary string
 
 func buildBinary(t *testing.T) string {
@@ -381,19 +317,17 @@ func buildBinary(t *testing.T) string {
 	if cachedBinary != "" {
 		return cachedBinary
 	}
-
-	projectRoot := projectDir()
+	root := projectDir()
 	binary := filepath.Join(os.TempDir(), "gamejanitor-e2e")
 	cmd := exec.Command("go", "build", "-o", binary, ".")
-	cmd.Dir = projectRoot
+	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("building gamejanitor binary: %v\n%s", err, out)
+		t.Fatalf("building binary: %v\n%s", err, out)
 	}
 	cachedBinary = binary
-	t.Logf("built binary: %s", binary)
-	return cachedBinary
+	return binary
 }
 
 func projectDir() string {
@@ -401,60 +335,44 @@ func projectDir() string {
 	return filepath.Dir(filepath.Dir(filename))
 }
 
-func testGameDir() string {
-	return filepath.Join(projectDir(), "testdata", "games", "test-game")
-}
-
 func copyTestGame(t *testing.T, dataDir string) {
 	t.Helper()
-	src := testGameDir()
+	src := filepath.Join(projectDir(), "testdata", "games", "test-game")
 	dst := filepath.Join(dataDir, "games", "test-game")
-
-	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(src, path)
 		target := filepath.Join(dst, rel)
-
 		if info.IsDir() {
 			return os.MkdirAll(target, 0755)
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+		data, _ := os.ReadFile(path)
 		return os.WriteFile(target, data, info.Mode())
 	})
-	if err != nil {
-		t.Fatalf("copying test game to data dir: %v", err)
-	}
 }
 
-func cleanupInstances(t *testing.T) {
-	t.Helper()
-
-	// Kill sandbox processes (namespace holders, slirp4netns)
+// cleanupSandboxState kills orphaned sandbox processes and resets failed systemd scopes.
+func cleanupSandboxState() {
 	exec.Command("sh", "-c", "pkill -f 'unshare.*sleep infinity' 2>/dev/null").Run()
-	exec.Command("sh", "-c", "pkill -f 'slirp4netns' 2>/dev/null").Run()
+	exec.Command("sh", "-c", "pkill -f slirp4netns 2>/dev/null").Run()
 
-	// Kill any systemd scopes from sandbox runtime
-	if out, _ := exec.Command("sh", "-c", "systemctl --user list-units --type=scope --no-legend | grep gj- | awk '{print $1}'").Output(); len(out) > 0 {
-		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if unit != "" {
-				exec.Command("systemctl", "--user", "stop", unit).Run()
+	// Reset failed scopes
+	for _, prefix := range [][]string{{"--user"}, {}} {
+		out, _ := exec.Command("systemctl", append(prefix, "list-units", "--type=scope", "--state=failed", "--no-legend", "--plain")...).Output()
+		for _, line := range strings.Split(string(out), "\n") {
+			unit := strings.Fields(line)
+			if len(unit) > 0 && strings.HasPrefix(unit[0], "gj-") {
+				exec.Command("systemctl", append(prefix, "reset-failed", unit[0])...).Run()
 			}
 		}
 	}
 
-	// Docker cleanup (for docker runtime)
+	// Docker cleanup
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
 		exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter name=gamejanitor-)").Run()
 	}
-	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
-		exec.Command("sh", "-c", "docker volume rm -f $(docker volume ls -q --filter name=gamejanitor-)").Run()
-	}
 
-	// Brief pause to let ports release
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 }

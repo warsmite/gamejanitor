@@ -17,9 +17,6 @@ import (
 
 func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	h := Start(t)
-	if h.IsRemote() && h.GameID() == "" {
-		t.Skip("set E2E_GAME_ID for remote cluster tests")
-	}
 
 	// Create
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
@@ -83,9 +80,6 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 
 func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 	h := Start(t)
-	if h.IsRemote() && h.GameID() == "" {
-		t.Skip("set E2E_GAME_ID for remote cluster tests")
-	}
 
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
 		"name": "Skip Install", "game_id": h.GameID(),
@@ -115,9 +109,6 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 	h := Start(t)
-	if h.IsRemote() && h.GameID() == "" {
-		t.Skip("set E2E_GAME_ID for remote cluster tests")
-	}
 
 	var gsIDs []string
 	for _, name := range []string{"Server A", "Server B"} {
@@ -182,9 +173,6 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 
 func TestE2E_Files_WriteAndRead(t *testing.T) {
 	h := Start(t)
-	if h.IsRemote() && h.GameID() == "" {
-		t.Skip("set E2E_GAME_ID for remote cluster tests")
-	}
 
 	resp, err := h.PostJSON("/api/gameservers", map[string]any{
 		"name": "File Test", "game_id": h.GameID(),

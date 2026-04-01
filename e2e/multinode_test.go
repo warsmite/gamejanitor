@@ -54,7 +54,7 @@ func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
 	t.Cleanup(func() {
 		controllerCmd.Process.Signal(os.Interrupt)
 		controllerCmd.Wait()
-		cleanupInstances(t)
+		cleanupSandboxState()
 	})
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", httpPort)

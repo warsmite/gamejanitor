@@ -413,7 +413,7 @@
 
           test-e2e = pkgs.writeShellScriptBin "test-e2e" ''
             echo "Building gamejanitor..."
-            go build -o /tmp/gamejanitor-e2e .
+            go build -o /tmp/gamejanitor-e2e . || exit 1
             echo "Running e2e tests..."
             exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
           '';
@@ -438,12 +438,12 @@
             echo "HTML report: go tool cover -html=/tmp/gamejanitor-coverage.out"
           '';
 
-          # Run e2e tests against the homelab cluster.
-          # Usage: test-homelab (all tests) | test-homelab -run Migration (specific)
+          # Run e2e against homelab. Same tests, pointed at the cluster.
+          # Usage: test-homelab | E2E_GAME_ID=test-game test-homelab
           test-homelab = pkgs.writeShellScriptBin "test-homelab" ''
             export GAMEJANITOR_API_URL="http://sleepy:8080"
-            export E2E_GAME_ID="minecraft-java"
-            echo "Running e2e tests against homelab (sleepy)..."
+            export E2E_GAME_ID="''${E2E_GAME_ID:-minecraft-java}"
+            echo "Running e2e against homelab (game=$E2E_GAME_ID)..."
             exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@"
           '';
 
