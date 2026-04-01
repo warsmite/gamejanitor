@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -73,6 +72,11 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 		log.Error("sandbox runtime initialization failed", "error", err)
 		paths = &systemPaths{IsRoot: os.Getuid() == 0}
 	}
+
+	// Sandbox uses --unshare-user which maps the caller's UID to the game
+	// user inside the namespace. Files must stay owned by the caller on the
+	// host — chowning to UID 1001 would make them inaccessible inside.
+	worker.DisableChown = true
 
 	w := &SandboxWorker{
 		log:       log,
@@ -534,11 +538,9 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("creating volume: %w", err)
 	}
-	// bwrap runs the game process as UID 1001 (gameserver) via --uid/--gid.
-	// The volume must be owned by that UID so the entrypoint can write to /data.
-	if err := os.Chown(path, model.GameserverUID, model.GameserverGID); err != nil {
-		w.log.Warn("failed to chown volume (game process may not be able to write to /data)", "path", path, "error", err)
-	}
+	// No chown. bwrap --unshare-user maps the caller's UID to appear as the
+	// image's UID inside the namespace. Root-owned files on the host are
+	// accessible as the game user inside the sandbox.
 	return nil
 }
 
@@ -654,11 +656,7 @@ func (w *SandboxWorker) CopyToInstance(ctx context.Context, instanceID string, p
 	}
 	fullPath := filepath.Join(mountpoint, path)
 	os.MkdirAll(filepath.Dir(fullPath), 0755)
-	if err := os.WriteFile(fullPath, content, 0644); err != nil {
-		return err
-	}
-	os.Chown(fullPath, model.GameserverUID, model.GameserverGID)
-	return nil
+	return os.WriteFile(fullPath, content, 0644)
 }
 
 func (w *SandboxWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {

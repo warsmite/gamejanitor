@@ -482,10 +482,20 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 	return data, nil
 }
 
+// DisableChown skips file ownership changes for runtimes with user namespace
+// remapping (sandbox). In sandbox mode, bwrap --unshare-user maps the caller's
+// UID to the game user inside the namespace — files must stay owned by the
+// caller on the host. Chowning to UID 1001 on the host would make files
+// appear as "nobody" inside the namespace.
+var DisableChown bool
+
 // chownBestEffort chowns a path to the gameserver UID/GID.
-// Returns nil on permission errors — sandbox runtime doesn't need chown since
-// the game process runs as the same user as gamejanitor.
+// No-op when DisableChown is set (sandbox runtime with user namespace).
+// Returns nil on permission errors.
 func chownBestEffort(path string) error {
+	if DisableChown {
+		return nil
+	}
 	if err := os.Chown(path, model.GameserverUID, model.GameserverGID); err != nil {
 		if os.IsPermission(err) {
 			return nil
@@ -497,7 +507,11 @@ func chownBestEffort(path string) error {
 
 // chownToGameserver chowns the given directory and all parent directories up to
 // the volume mountpoint. Best-effort — silently skips if not permitted.
+// No-op when DisableChown is set.
 func chownToGameserver(dir string, volumeRoot string) error {
+	if DisableChown {
+		return nil
+	}
 	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
 		info, err := os.Stat(p)
 		if err != nil {
@@ -505,7 +519,7 @@ func chownToGameserver(dir string, volumeRoot string) error {
 		}
 		if info.IsDir() {
 			if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
-				// Skip chown failures — sandbox runtime doesn't need it
+				// Skip chown failures
 				if os.IsPermission(err) {
 					return nil
 				}
