@@ -50,7 +50,7 @@ func TestE2E_Migration_RunningServer_MigratesAndAutoStarts(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute),
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute),
 		"gameserver should reach running")
 	t.Logf("running on %s", sourceNode)
 
@@ -83,7 +83,7 @@ func TestE2E_Migration_RunningServer_MigratesAndAutoStarts(t *testing.T) {
 	t.Logf("migrated to %s", targetNode)
 
 	// Then wait for auto-start on target
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute),
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute),
 		"gameserver should auto-start on target after migration")
 
 	_, newNode := h.GetGameserver(t, gs.ID)
@@ -134,7 +134,7 @@ func TestE2E_Migration_StoppedServer_StaysStopped(t *testing.T) {
 	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
 	require.NoError(t, err)

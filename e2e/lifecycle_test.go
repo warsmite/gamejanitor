@@ -42,7 +42,7 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for running — the real ReadyWatcher parses the instance.s log output
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute),
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute),
 		"gameserver should reach 'running' after ready pattern detected in real instance logs")
 
 	// Verify installed flag set (entrypoint.sh emits [gamejanitor:installed])
@@ -91,7 +91,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// First start — installs
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Stop
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
@@ -99,7 +99,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// Second start — should skip install (SKIP_INSTALL=1 passed by gamejanitor)
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Cleanup
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
@@ -126,7 +126,7 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 	// non-blocking event bus (documented in TESTING_BUGS.md)
 	for _, id := range gsIDs {
 		h.PostJSON("/api/gameservers/"+id+"/start", nil)
-		require.NoError(t, h.WaitForStatus(id, "running", 60*time.Second))
+		require.NoError(t, h.WaitForStatus(id, "running", 2*time.Minute))
 	}
 
 	// Get port assignments and verify they're different
@@ -184,7 +184,7 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 
 	// Start so the volume exists and has data
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "running", 3*time.Minute))
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Write a file via API
 	req, _ := http.NewRequest("PUT",
