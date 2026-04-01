@@ -14,7 +14,6 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		"--dev", "/dev",
 		"--proc", "/proc",
 		"--tmpfs", "/tmp",
-		"--tmpfs", "/home",
 		"--unshare-pid",
 		"--unshare-ipc",
 		"--unshare-uts",
@@ -79,8 +78,6 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 	for _, e := range manifest.Env {
 		args = append(args, "--setenv", envKey(e), envVal(e))
 	}
-
-	args = append(args, "--setenv", "HOME", "/tmp")
 
 	return args
 }

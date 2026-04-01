@@ -294,12 +294,10 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		syscall.Kill(-inst.pid, syscall.SIGTERM)
 		syscall.Kill(inst.pid, syscall.SIGTERM)
 	}
-	// Stop slirp immediately so ports are freed
-	stopSlirp(inst.slirp, w.log)
-	inst.slirp = nil
 
 	select {
 	case <-inst.done:
+		// Process exited gracefully — slirp cleaned up by exit watcher
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
