@@ -120,8 +120,16 @@ func runSmokeTest(t *testing.T, gameID string) {
 	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 30*time.Second))
 	t.Logf("gameserver %s stopped cleanly", gameID)
 
-	// Cleanup
+	// Cleanup — delete and wait for it to complete before test exits
 	h.Delete("/api/gameservers/" + gs.ID)
+	require.Eventually(t, func() bool {
+		resp, err := h.Get("/api/gameservers/" + gs.ID)
+		if err != nil {
+			return true
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == 404
+	}, 30*time.Second, 500*time.Millisecond, "gameserver should be deleted")
 }
 
 // buildEnvFromDefaults constructs env vars from the game definition.

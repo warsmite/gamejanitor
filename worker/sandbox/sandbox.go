@@ -272,10 +272,8 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
-	// Send SIGTERM to the process group and systemd unit
-	if inst.pid > 0 {
-		syscall.Kill(-inst.pid, syscall.SIGTERM)
-	}
+	// Send SIGTERM to all processes in the systemd scope cgroup
+	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.log)
 	stopSystemdUnit(inst.unitName, w.log)
 
 	select {
@@ -283,9 +281,7 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		if inst.pid > 0 {
-			syscall.Kill(-inst.pid, syscall.SIGKILL)
-		}
+		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.log)
 		killSystemdUnit(inst.unitName, w.log)
 		<-inst.done
 		return nil
@@ -445,15 +441,45 @@ func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
 	path := filepath.Join(w.dataDir, "volumes", name)
 	err := os.RemoveAll(path)
 	if err != nil {
-		// Files created inside a user namespace may be owned by mapped UIDs
-		// that the current user can't delete. Use unshare to enter a matching
-		// user namespace where we have permission.
-		cmd := exec.Command("unshare", "--user", "--map-root-user", "--", "rm", "-rf", path)
-		if rmErr := cmd.Run(); rmErr != nil {
-			return fmt.Errorf("removing volume %s: %w (fallback also failed: %v)", name, err, rmErr)
+		// Files created inside a user namespace are owned by subordinate UIDs
+		// that the current user can't delete. Create a temporary user namespace
+		// with the same UID mapping and delete from inside it.
+		rmErr := removeWithUserNS(path, w.log)
+		if rmErr != nil {
+			return fmt.Errorf("removing volume %s: %w (ns fallback: %v)", name, err, rmErr)
 		}
 	}
 	return nil
+}
+
+// removeWithUserNS removes a path by entering a user namespace with full UID mapping.
+func removeWithUserNS(path string, log *slog.Logger) error {
+	// Start a holder process in a new user namespace
+	holder := exec.Command("unshare", "--user", "--fork", "--kill-child", "--", "sleep", "10")
+	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	if err := holder.Start(); err != nil {
+		return fmt.Errorf("starting cleanup namespace: %w", err)
+	}
+	defer func() {
+		holder.Process.Kill()
+		holder.Wait()
+	}()
+
+	pid := holder.Process.Pid
+	uid := os.Getuid()
+	gid := os.Getgid()
+
+	// Map UIDs/GIDs to match what the sandbox used
+	exec.Command("newuidmap", fmt.Sprintf("%d", pid),
+		"0", fmt.Sprintf("%d", uid), "1",
+		"1", "165536", "65536").Run()
+	exec.Command("newgidmap", fmt.Sprintf("%d", pid),
+		"0", fmt.Sprintf("%d", gid), "1",
+		"1", "165536", "65536").Run()
+
+	// Enter the namespace and rm -rf
+	cmd := exec.Command("nsenter", fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", "rm", "-rf", path)
+	return cmd.Run()
 }
 
 func (w *SandboxWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {

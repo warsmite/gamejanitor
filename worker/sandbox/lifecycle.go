@@ -3,7 +3,12 @@ package sandbox
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 )
 
 // hasSystemdRun checks if systemd-run is available on the host.
@@ -100,6 +105,41 @@ func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArg
 	sdArgs = append(sdArgs, innerArgs...)
 
 	return exec.Command("systemd-run", sdArgs...)
+}
+
+// killCgroupProcesses sends a signal to all processes in a systemd scope's cgroup.
+// This reaches through namespace boundaries since cgroup PIDs are host-visible.
+func killCgroupProcesses(unitName string, sig syscall.Signal, log *slog.Logger) {
+	// Find the cgroup path for this scope
+	pattern := fmt.Sprintf("/sys/fs/cgroup/user.slice/user-%d.slice/user@%d.service/%s.scope/cgroup.procs",
+		os.Getuid(), os.Getuid(), unitName)
+
+	data, err := os.ReadFile(pattern)
+	if err != nil {
+		// Try to find it via systemctl
+		out, err := exec.Command("systemctl", "--user", "show", "-p", "ControlGroup", unitName+".scope").Output()
+		if err != nil {
+			log.Debug("could not find cgroup for unit", "unit", unitName, "error", err)
+			return
+		}
+		cgPath := strings.TrimPrefix(strings.TrimSpace(string(out)), "ControlGroup=")
+		if cgPath == "" {
+			return
+		}
+		procsPath := filepath.Join("/sys/fs/cgroup", cgPath, "cgroup.procs")
+		data, err = os.ReadFile(procsPath)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		pid, err := strconv.Atoi(strings.TrimSpace(line))
+		if err != nil || pid <= 0 {
+			continue
+		}
+		syscall.Kill(pid, sig)
+	}
 }
 
 // buildExecCommand builds a bwrap command for exec (no systemd wrapping needed).
