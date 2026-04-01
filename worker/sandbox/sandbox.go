@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -535,7 +536,7 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 	}
 	// bwrap runs the game process as UID 1001 (gameserver) via --uid/--gid.
 	// The volume must be owned by that UID so the entrypoint can write to /data.
-	if err := os.Chown(path, 1001, 1001); err != nil {
+	if err := os.Chown(path, model.GameserverUID, model.GameserverGID); err != nil {
 		w.log.Warn("failed to chown volume (game process may not be able to write to /data)", "path", path, "error", err)
 	}
 	return nil
@@ -653,7 +654,11 @@ func (w *SandboxWorker) CopyToInstance(ctx context.Context, instanceID string, p
 	}
 	fullPath := filepath.Join(mountpoint, path)
 	os.MkdirAll(filepath.Dir(fullPath), 0755)
-	return os.WriteFile(fullPath, content, 0644)
+	if err := os.WriteFile(fullPath, content, 0644); err != nil {
+		return err
+	}
+	os.Chown(fullPath, model.GameserverUID, model.GameserverGID)
+	return nil
 }
 
 func (w *SandboxWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
