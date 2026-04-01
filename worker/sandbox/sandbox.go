@@ -489,7 +489,22 @@ func (w *SandboxWorker) InstanceStats(ctx context.Context, instanceID string) (*
 		return &worker.InstanceStats{}, nil
 	}
 
-	return readCgroupStats(inst.unitName, inst.pid)
+	stats, err := readCgroupStats(inst.unitName, inst.pid)
+	if err != nil {
+		return stats, err
+	}
+
+	// If cgroup didn't provide a memory limit, read from the manifest
+	if stats.MemoryLimitMB == 0 {
+		dir := w.instanceDir(instanceID)
+		manifestData, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
+		var manifest instanceManifest
+		if json.Unmarshal(manifestData, &manifest) == nil && manifest.MemoryLimitMB > 0 {
+			stats.MemoryLimitMB = manifest.MemoryLimitMB
+		}
+	}
+
+	return stats, nil
 }
 
 // --- Worker interface: Volumes ---

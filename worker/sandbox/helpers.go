@@ -100,18 +100,75 @@ func (s ioStringReader) Read(p []byte) (int, error) {
 	return strings.NewReader(string(s)).Read(p)
 }
 
-// tailFile reads the last n lines from a file.
+// tailFile reads the last n lines from a file, filtering out sandbox preamble.
 func tailFile(f *os.File, n int) ([]string, error) {
 	f.Seek(0, io.SeekStart)
 	scanner := bufio.NewScanner(f)
 	var lines []string
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		line := scanner.Text()
+		if isSystemdPreamble(line) {
+			continue
+		}
+		lines = append(lines, line)
 	}
 	if len(lines) > n && n > 0 {
 		lines = lines[len(lines)-n:]
 	}
 	return lines, scanner.Err()
+}
+
+// isSystemdPreamble returns true for systemd-run output lines that
+// shouldn't be shown as game server logs.
+func isSystemdPreamble(line string) bool {
+	return strings.HasPrefix(line, "Running as unit: ")
+}
+
+// preambleFilterWriter wraps an io.Writer and filters out systemd-run preamble.
+// Only filters complete lines at the start of output; passes through everything
+// once a non-preamble line is seen.
+type preambleFilterWriter struct {
+	w           io.Writer
+	buf         []byte
+	passthrough bool
+}
+
+func newPreambleFilterWriter(w io.Writer) *preambleFilterWriter {
+	return &preambleFilterWriter{w: w}
+}
+
+func (f *preambleFilterWriter) Write(p []byte) (int, error) {
+	if f.passthrough {
+		return f.w.Write(p)
+	}
+
+	f.buf = append(f.buf, p...)
+	for {
+		idx := bytes.IndexByte(f.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := string(f.buf[:idx])
+		f.buf = f.buf[idx+1:]
+
+		if isSystemdPreamble(line) {
+			continue
+		}
+
+		// First non-preamble line — flush it and switch to passthrough
+		f.passthrough = true
+		n, err := f.w.Write([]byte(line + "\n"))
+		if err != nil {
+			return n, err
+		}
+		// Write any remaining buffered data
+		if len(f.buf) > 0 {
+			f.w.Write(f.buf)
+			f.buf = nil
+		}
+		break
+	}
+	return len(p), nil
 }
 
 // followReader wraps a file for tailing with follow support.
