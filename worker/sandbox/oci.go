@@ -60,6 +60,10 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 
 	if _, err := os.Stat(markerFile); err == nil {
 		log.Info("image already extracted, skipping", "image", imageName, "digest", digest.Hex[:12])
+		// Ensure index is up to date (may be missing from older versions)
+		updateImageIndex(destDir, imageName, digest.Algorithm+"/"+digest.Hex)
+		cfgData, _ := json.Marshal(cfg)
+		os.WriteFile(filepath.Join(extractDir, ".config.json"), cfgData, 0644)
 		return cfg, nil
 	}
 
