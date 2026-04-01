@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -340,44 +342,103 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 		return 1, "", "", fmt.Errorf("instance %s not found or not running", instanceID)
 	}
 
-	// Re-read manifest to rebuild bwrap for exec
-	dir := w.instanceDir(instanceID)
-	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if err != nil {
-		return 1, "", "", err
-	}
-	var manifest instanceManifest
-	json.Unmarshal(manifestData, &manifest)
-
-	rootFS, imgCfg, err := imageRootFS(w.imagesDir(), manifest.Image)
-	if err != nil {
-		return 1, "", "", err
+	// Find the init PID inside the sandbox (bwrap's child) by reading the cgroup
+	targetPID := findSandboxInitPID(inst.unitName, inst.pid, w.paths)
+	if targetPID <= 0 {
+		return 1, "", "", fmt.Errorf("could not find sandbox process for instance %s", instanceID)
 	}
 
-	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.dataDir)
-	bwrapArgs = append(bwrapArgs, "--")
-	bwrapArgs = append(bwrapArgs, cmd...)
+	// Enter the running instance's namespaces and execute the command
+	nsArgs := []string{
+		fmt.Sprintf("--target=%d", targetPID),
+		"--mount", "--pid",
+	}
+	// Enter net namespace if we have network isolation
+	if inst.slirp != nil {
+		nsArgs = append(nsArgs, "--net")
+	}
+	if w.paths.IsRoot {
+		// Root can enter all namespaces directly
+	} else {
+		nsArgs = append(nsArgs, "--user", "--preserve-credentials")
+	}
+	nsArgs = append(nsArgs, "--")
+	nsArgs = append(nsArgs, cmd...)
 
-	execCmd := buildExecCommand(bwrapArgs, w.paths.Bwrap)
-	var stdout, stderr []byte
+	execCmd := exec.CommandContext(ctx, w.paths.Nsenter, nsArgs...)
 	var stdoutBuf, stderrBuf safeBuffer
 	execCmd.Stdout = &stdoutBuf
 	execCmd.Stderr = &stderrBuf
 
-	err = execCmd.Run()
-	stdout = stdoutBuf.Bytes()
-	stderr = stderrBuf.Bytes()
-
+	err := execCmd.Run()
 	exitCode := 0
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
-			return 1, "", "", err
+			return 1, "", "", fmt.Errorf("exec in instance %s: %w", instanceID, err)
 		}
 	}
 
-	return exitCode, string(stdout), string(stderr), nil
+	return exitCode, string(stdoutBuf.Bytes()), string(stderrBuf.Bytes()), nil
+}
+
+// findSandboxInitPID finds the PID of the init process inside the bwrap sandbox.
+// This is the first child process in the cgroup (PID 1 inside the PID namespace).
+func findSandboxInitPID(unitName string, parentPID int, paths *systemPaths) int {
+	// Try cgroup first — most reliable
+	if paths.hasSystemd() {
+		args := []string{"show", "-p", "ControlGroup", unitName + ".scope"}
+		if !paths.IsRoot {
+			args = append([]string{"--user"}, args...)
+		}
+		out, err := exec.Command(paths.Systemctl, args...).Output()
+		if err == nil {
+			cgPath := strings.TrimPrefix(strings.TrimSpace(string(out)), "ControlGroup=")
+			if cgPath != "" {
+				procsPath := "/sys/fs/cgroup" + cgPath + "/cgroup.procs"
+				data, err := os.ReadFile(procsPath)
+				if err == nil {
+					// Return the lowest PID in the cgroup — that's the init process
+					lowestPID := 0
+					for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+						pid, err := strconv.Atoi(strings.TrimSpace(line))
+						if err == nil && pid > 0 && (lowestPID == 0 || pid < lowestPID) {
+							lowestPID = pid
+						}
+					}
+					if lowestPID > 0 {
+						return lowestPID
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: walk /proc to find a child of our parent PID
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 {
+			continue
+		}
+		stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+		if err != nil {
+			continue
+		}
+		// stat format: pid (comm) state ppid ...
+		fields := strings.Fields(string(stat))
+		if len(fields) > 3 {
+			ppid, _ := strconv.Atoi(fields[3])
+			if ppid == parentPID {
+				return pid
+			}
+		}
+	}
+	return 0
 }
 
 // --- Worker interface: Logs & Stats ---
@@ -468,10 +529,14 @@ func removeWithUserNS(path string, paths *systemPaths, log *slog.Logger) error {
 	if paths.hasUIDMapping() {
 		uid := os.Getuid()
 		gid := os.Getgid()
+		uidStart, uidCount := SubUIDRange()
+		gidStart, gidCount := SubGIDRange()
 		exec.Command(paths.NewUIDMap, fmt.Sprintf("%d", pid),
-			"0", fmt.Sprintf("%d", uid), "1", "1", "165536", "65536").Run()
+			"0", fmt.Sprintf("%d", uid), "1",
+			"1", fmt.Sprintf("%d", uidStart), fmt.Sprintf("%d", uidCount)).Run()
 		exec.Command(paths.NewGIDMap, fmt.Sprintf("%d", pid),
-			"0", fmt.Sprintf("%d", gid), "1", "1", "165536", "65536").Run()
+			"0", fmt.Sprintf("%d", gid), "1",
+			"1", fmt.Sprintf("%d", gidStart), fmt.Sprintf("%d", gidCount)).Run()
 	}
 
 	return exec.Command(paths.Nsenter, fmt.Sprintf("--user=/proc/%d/ns/user", pid),

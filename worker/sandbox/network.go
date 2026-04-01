@@ -60,10 +60,14 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	if !paths.IsRoot && paths.hasUIDMapping() {
 		uid := os.Getuid()
 		gid := os.Getgid()
+		uidStart, uidCount := SubUIDRange()
+		gidStart, gidCount := SubGIDRange()
 		exec.Command(paths.NewUIDMap, fmt.Sprintf("%d", nsPID),
-			"0", fmt.Sprintf("%d", uid), "1", "1", "165536", "65536").Run()
+			"0", fmt.Sprintf("%d", uid), "1",
+			"1", fmt.Sprintf("%d", uidStart), fmt.Sprintf("%d", uidCount)).Run()
 		exec.Command(paths.NewGIDMap, fmt.Sprintf("%d", nsPID),
-			"0", fmt.Sprintf("%d", gid), "1", "1", "165536", "65536").Run()
+			"0", fmt.Sprintf("%d", gid), "1",
+			"1", fmt.Sprintf("%d", gidStart), fmt.Sprintf("%d", gidCount)).Run()
 	}
 
 	// Start slirp4netns

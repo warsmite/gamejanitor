@@ -137,6 +137,27 @@ func TestLookupBinary_ReturnsEmptyForMissing(t *testing.T) {
 	assert.Empty(t, path)
 }
 
+func TestSubUIDRange_ReadsFromSystem(t *testing.T) {
+	start, count := SubUIDRange()
+	// Should return valid range (either from /etc/subuid or fallback)
+	assert.Greater(t, start, 0)
+	assert.Greater(t, count, 0)
+}
+
+func TestSubUIDRange_Fallback(t *testing.T) {
+	// Non-existent file should return defaults
+	start, count := readSubRange("/nonexistent/path")
+	assert.Equal(t, 165536, start)
+	assert.Equal(t, 65536, count)
+}
+
+func TestFindSandboxInitPID_NoMatchForInvalidParent(t *testing.T) {
+	paths := &systemPaths{Systemctl: ""}
+	// PID 99999999 doesn't exist, no children should be found
+	pid := findSandboxInitPID("nonexistent", 99999999, paths)
+	assert.Equal(t, 0, pid)
+}
+
 func TestInstanceManifest_PortsRoundtrip(t *testing.T) {
 	manifest := instanceManifest{
 		Ports: []worker.PortBinding{

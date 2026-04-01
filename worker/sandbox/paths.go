@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // systemPaths holds resolved paths to system binaries used by the sandbox.
@@ -82,6 +84,40 @@ func (p *systemPaths) hasNetworkIsolation() bool {
 // hasUIDMapping returns true if newuidmap/newgidmap are available (non-root only).
 func (p *systemPaths) hasUIDMapping() bool {
 	return p.NewUIDMap != "" && p.NewGIDMap != ""
+}
+
+// SubUIDRange reads the subordinate UID range for the current user from /etc/subuid.
+// Returns start, count. Falls back to 165536, 65536 if unreadable.
+func SubUIDRange() (int, int) {
+	return readSubRange("/etc/subuid")
+}
+
+// SubGIDRange reads the subordinate GID range for the current user from /etc/subgid.
+func SubGIDRange() (int, int) {
+	return readSubRange("/etc/subgid")
+}
+
+func readSubRange(path string) (int, int) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 165536, 65536
+	}
+	username := os.Getenv("USER")
+	uid := fmt.Sprintf("%d", os.Getuid())
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.SplitN(line, ":", 3)
+		if len(fields) != 3 {
+			continue
+		}
+		if fields[0] == username || fields[0] == uid {
+			start, _ := strconv.Atoi(fields[1])
+			count, _ := strconv.Atoi(fields[2])
+			if start > 0 && count > 0 {
+				return start, count
+			}
+		}
+	}
+	return 165536, 65536
 }
 
 // lookupBinary searches PATH and common system locations for a binary.
