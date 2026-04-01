@@ -560,6 +560,11 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		}
 	}
 
+	// Lock port allocation to prevent races with concurrent CreateGameserver,
+	// MigrateGameserver, or Unarchive calls that also allocate ports.
+	s.placementMu.Lock()
+	defer s.placementMu.Unlock()
+
 	// Merge: only overwrite fields that were actually provided
 	if gs.Name != "" {
 		existing.Name = gs.Name

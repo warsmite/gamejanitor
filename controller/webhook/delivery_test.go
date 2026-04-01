@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,13 +68,16 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 	expectedSig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
 	// Start a test HTTP server that captures the signature header
+	var mu sync.Mutex
 	var receivedSig string
 	var receivedBody []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedSig = r.Header.Get("X-Webhook-Signature")
 		buf := make([]byte, r.ContentLength)
 		r.Body.Read(buf)
+		mu.Lock()
+		receivedSig = r.Header.Get("X-Webhook-Signature")
 		receivedBody = buf
+		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -108,12 +112,18 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 	ww.Start(ctx)
 
 	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return receivedSig != ""
 	}, 15*time.Second, 100*time.Millisecond, "webhook delivery should be processed")
 	ww.Stop()
 
-	assert.Equal(t, expectedSig, receivedSig, "HMAC signature should match")
-	assert.Equal(t, body, receivedBody)
+	mu.Lock()
+	sig := receivedSig
+	gotBody := receivedBody
+	mu.Unlock()
+	assert.Equal(t, expectedSig, sig, "HMAC signature should match")
+	assert.Equal(t, body, gotBody)
 }
 
 func TestWebhookDelivery_RetryBackoff(t *testing.T) {
