@@ -11,6 +11,15 @@ import (
 	"syscall"
 )
 
+// systemdRunArgs returns the base args for systemd-run.
+// Uses --user scope when running as a regular user, system scope when root.
+func systemdRunArgs(unitName string) []string {
+	if os.Getuid() == 0 {
+		return []string{"--scope", "--unit=" + unitName}
+	}
+	return []string{"--user", "--scope", "--unit=" + unitName}
+}
+
 // hasSystemdRun checks if systemd-run is available on the host.
 func hasSystemdRun() bool {
 	_, err := exec.LookPath("systemd-run")
@@ -30,10 +39,7 @@ func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []strin
 	}
 
 	unitName := "gj-" + id
-	sdArgs := []string{
-		"--user", "--scope",
-		"--unit=" + unitName,
-	}
+	sdArgs := systemdRunArgs(unitName)
 
 	// Resource limits via cgroups v2
 	if manifest.MemoryLimitMB > 0 {
@@ -80,10 +86,7 @@ func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArg
 	}
 
 	unitName := "gj-" + id
-	sdArgs := []string{
-		"--user", "--scope",
-		"--unit=" + unitName,
-	}
+	sdArgs := systemdRunArgs(unitName)
 
 	if manifest.MemoryLimitMB > 0 {
 		sdArgs = append(sdArgs, fmt.Sprintf("--property=MemoryMax=%dM", manifest.MemoryLimitMB))
@@ -150,9 +153,16 @@ func buildExecCommand(bwrapArgs []string, bwrapPath string) *exec.Cmd {
 	return exec.Command(bwrapPath, bwrapArgs...)
 }
 
+func systemctlArgs(args ...string) []string {
+	if os.Getuid() != 0 {
+		return append([]string{"--user"}, args...)
+	}
+	return args
+}
+
 // stopSystemdUnit stops a systemd transient unit gracefully.
 func stopSystemdUnit(unitName string, log *slog.Logger) {
-	cmd := exec.Command("systemctl", "--user", "stop", unitName+".scope")
+	cmd := exec.Command(findBinary("systemctl"), systemctlArgs("stop", unitName+".scope")...)
 	if err := cmd.Run(); err != nil {
 		log.Debug("systemctl stop failed (may already be stopped)", "unit", unitName, "error", err)
 	}
@@ -160,7 +170,7 @@ func stopSystemdUnit(unitName string, log *slog.Logger) {
 
 // killSystemdUnit force-kills a systemd transient unit.
 func killSystemdUnit(unitName string, log *slog.Logger) {
-	cmd := exec.Command("systemctl", "--user", "kill", "--signal=KILL", unitName+".scope")
+	cmd := exec.Command(findBinary("systemctl"), systemctlArgs("kill", "--signal=KILL", unitName+".scope")...)
 	if err := cmd.Run(); err != nil {
 		log.Debug("systemctl kill failed", "unit", unitName, "error", err)
 	}

@@ -36,7 +36,16 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 		return nil, fmt.Errorf("unshare binary not found in PATH")
 	}
 
-	holder := exec.Command(unsharePath, "--user", "--net", "--fork", "--kill-child", "--", "sh", "-c", "echo ready; exec sleep infinity")
+	shPath := findBinary("sh")
+	if shPath == "" {
+		shPath = "sh"
+	}
+	sleepPath := findBinary("sleep")
+	if sleepPath == "" {
+		sleepPath = "sleep"
+	}
+
+	holder := exec.Command(unsharePath, "--user", "--net", "--fork", "--kill-child", "--", shPath, "-c", "echo ready; exec "+sleepPath+" infinity")
 	holderOut, err := holder.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("creating holder pipe: %w", err)

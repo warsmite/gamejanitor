@@ -455,7 +455,7 @@ func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
 // removeWithUserNS removes a path by entering a user namespace with full UID mapping.
 func removeWithUserNS(path string, log *slog.Logger) error {
 	// Start a holder process in a new user namespace
-	holder := exec.Command(findBinary("unshare"), "--user", "--fork", "--kill-child", "--", "sleep", "10")
+	holder := exec.Command(findBinary("unshare"), "--user", "--fork", "--kill-child", "--", findBinary("sleep"), "10")
 	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	if err := holder.Start(); err != nil {
 		return fmt.Errorf("starting cleanup namespace: %w", err)
@@ -478,7 +478,7 @@ func removeWithUserNS(path string, log *slog.Logger) error {
 		"1", "165536", "65536").Run()
 
 	// Enter the namespace and rm -rf
-	cmd := exec.Command(findBinary("nsenter"), fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", "rm", "-rf", path)
+	cmd := exec.Command(findBinary("nsenter"), fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", findBinary("rm"), "-rf", path)
 	return cmd.Run()
 }
 
