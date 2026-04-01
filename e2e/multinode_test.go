@@ -21,6 +21,9 @@ import (
 // separate worker-only node, then exercises the full multi-node path:
 // registration, placement, gameserver lifecycle, worker disconnect, and recovery.
 func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
+	if os.Getenv("GAMEJANITOR_API_URL") != "" {
+		t.Skip("multinode test runs its own infrastructure, skipping in remote mode")
+	}
 	binary := buildBinary(t)
 	runtime := os.Getenv("E2E_RUNTIME")
 
