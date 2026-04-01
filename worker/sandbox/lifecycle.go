@@ -68,20 +68,23 @@ func buildExecCommand(bwrapArgs []string, bwrapPath string) *exec.Cmd {
 	return exec.Command(bwrapPath, bwrapArgs...)
 }
 
-// stopSystemdUnit stops a systemd transient unit gracefully.
+// stopSystemdUnit stops a systemd transient unit and cleans up its state.
 func stopSystemdUnit(unitName string, paths *systemPaths, log *slog.Logger) {
 	if !paths.hasSystemd() {
 		return
 	}
-	args := []string{"stop", unitName + ".scope"}
-	if !paths.IsRoot {
-		args = append([]string{"--user"}, args...)
-	}
-	cmd := exec.Command(paths.Systemctl, args...)
+	scope := unitName + ".scope"
+	prefix := systemctlPrefix(paths)
+
+	// Stop the scope
+	cmd := exec.Command(paths.Systemctl, append(prefix, "stop", scope)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Warn("systemctl stop failed", "unit", unitName, "args", args, "error", err, "output", string(out))
+		log.Debug("systemctl stop failed (may already be stopped)", "unit", unitName, "error", err, "output", string(out))
 	}
+
+	// Reset the failed state so it doesn't accumulate
+	exec.Command(paths.Systemctl, append(prefix, "reset-failed", scope)...).Run()
 }
 
 // killSystemdUnit force-kills a systemd transient unit.
@@ -89,13 +92,19 @@ func killSystemdUnit(unitName string, paths *systemPaths, log *slog.Logger) {
 	if !paths.hasSystemd() {
 		return
 	}
-	args := []string{"kill", "--signal=KILL", unitName + ".scope"}
+	scope := unitName + ".scope"
+	prefix := systemctlPrefix(paths)
+
+	exec.Command(paths.Systemctl, append(prefix, "kill", "--signal=KILL", scope)...).Run()
+	exec.Command(paths.Systemctl, append(prefix, "reset-failed", scope)...).Run()
+}
+
+// systemctlPrefix returns --user for non-root, empty for root.
+func systemctlPrefix(paths *systemPaths) []string {
 	if !paths.IsRoot {
-		args = append([]string{"--user"}, args...)
+		return []string{"--user"}
 	}
-	if err := exec.Command(paths.Systemctl, args...).Run(); err != nil {
-		log.Debug("systemctl kill failed", "unit", unitName, "error", err)
-	}
+	return nil
 }
 
 // killCgroupProcesses sends a signal to all processes in a systemd scope's cgroup.
@@ -105,10 +114,8 @@ func killCgroupProcesses(unitName string, sig syscall.Signal, paths *systemPaths
 	}
 
 	// Read cgroup path from systemctl
-	args := []string{"show", "-p", "ControlGroup", unitName + ".scope"}
-	if !paths.IsRoot {
-		args = append([]string{"--user"}, args...)
-	}
+	prefix := systemctlPrefix(paths)
+	args := append(prefix, "show", "-p", "ControlGroup", unitName+".scope")
 	out, err := exec.Command(paths.Systemctl, args...).Output()
 	if err != nil {
 		log.Debug("could not find cgroup for unit", "unit", unitName, "error", err)

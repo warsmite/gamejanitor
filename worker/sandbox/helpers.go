@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,8 +63,27 @@ func cleanupOrphanHolders(log *slog.Logger) {
 			killed++
 		}
 	}
+	// Also reset any failed systemd scopes from previous runs
+	if out, err := exec.Command("sh", "-c", "systemctl list-units --type=scope --state=failed --no-legend --plain 2>/dev/null | grep gj- | awk '{print $1}'").Output(); err == nil {
+		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if unit != "" {
+				exec.Command("systemctl", "reset-failed", unit).Run()
+				killed++
+			}
+		}
+	}
+	// Same for user scopes
+	if out, err := exec.Command("sh", "-c", "systemctl --user list-units --type=scope --state=failed --no-legend --plain 2>/dev/null | grep gj- | awk '{print $1}'").Output(); err == nil {
+		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if unit != "" {
+				exec.Command("systemctl", "--user", "reset-failed", unit).Run()
+				killed++
+			}
+		}
+	}
+
 	if killed > 0 {
-		log.Warn("killed orphaned namespace holders from previous run", "count", killed)
+		log.Warn("cleaned up orphaned sandbox state from previous run", "count", killed)
 	}
 }
 
