@@ -134,24 +134,21 @@
                         echo "  $CONTROLLER: started"
 
                         # Wait for controller DB to be ready
-                        sleep 2
+                        sleep 1
 
-                        # Create/rotate worker tokens on controller DB
-                        # Create tokens first (sequential, needs DB access)
+                        # Create all worker tokens in a single SSH call
+                        echo "Creating worker tokens..."
+                        TOKENDATA=$(ssh "$CONTROLLER" "
+                          for w in ''${WORKERS[*]}; do
+                            T=\$(sudo /run/gamejanitor-dev tokens offline create --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null || true)
+                            [ -z \"\$T\" ] && T=\$(sudo /run/gamejanitor-dev tokens offline rotate --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null)
+                            echo \"\$w=\$T\"
+                          done
+                        ")
                         declare -A TOKENS
-                        for w in "''${WORKERS[@]}"; do
-                          echo "Creating worker token for $w..."
-                          TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline create --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null || true")
-                          if [ -z "$TOKEN" ]; then
-                            TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline rotate --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null")
-                          fi
-                          if [ -z "$TOKEN" ]; then
-                            echo "  WARNING: failed to get token for $w, skipping"
-                            continue
-                          fi
-                          TOKENS[$w]="$TOKEN"
-                          echo "  token created for $w"
-                        done
+                        while IFS='=' read -r name token; do
+                          [ -n "$name" ] && [ -n "$token" ] && TOKENS[$name]="$token" && echo "  token: $name"
+                        done <<< "$TOKENDATA"
 
                         # Start workers in parallel
                         for w in "''${WORKERS[@]}"; do

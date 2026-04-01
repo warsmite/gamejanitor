@@ -274,14 +274,18 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
-	// Send SIGTERM via all available mechanisms
+	// Send SIGTERM via systemctl kill — most reliable, reaches all processes in the scope
+	if w.paths.hasSystemd() {
+		prefix := systemctlPrefix(w.paths)
+		exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=TERM", inst.unitName+".scope")...).Run()
+	}
+	// Also send via process group and cgroup as fallback
 	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.paths, w.log)
 	if inst.pid > 0 {
-		syscall.Kill(-inst.pid, syscall.SIGTERM) // process group
-		syscall.Kill(inst.pid, syscall.SIGTERM)  // systemd-run process
+		syscall.Kill(-inst.pid, syscall.SIGTERM)
+		syscall.Kill(inst.pid, syscall.SIGTERM)
 	}
-	stopSystemdUnit(inst.unitName, w.paths, w.log)
-	// Also stop slirp immediately so ports are freed
+	// Stop slirp immediately so ports are freed
 	stopSlirp(inst.slirp, w.log)
 	inst.slirp = nil
 
@@ -290,6 +294,11 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
+		// Force kill everything in the scope
+		if w.paths.hasSystemd() {
+			prefix := systemctlPrefix(w.paths)
+			exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=KILL", inst.unitName+".scope")...).Run()
+		}
 		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.paths, w.log)
 		if inst.pid > 0 {
 			syscall.Kill(-inst.pid, syscall.SIGKILL)

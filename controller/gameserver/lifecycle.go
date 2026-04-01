@@ -365,7 +365,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 			// Run stop-server script if it exists — announces shutdown, saves world
 			_, _, _, execErr := w.Exec(ctx, *gs.InstanceID, []string{"/scripts/stop-server"})
 			if execErr != nil {
-				s.log.Debug("stop-server script not available or failed, proceeding with instance stop", "gameserver", id, "error", execErr)
+				s.log.Info("stop-server script not available or failed, proceeding with instance stop", "gameserver", id, "error", execErr)
 			}
 			if err := w.StopInstance(ctx, *gs.InstanceID, 10); err != nil {
 				s.log.Warn("failed to stop instance gracefully", "gameserver", id, "error", err)
