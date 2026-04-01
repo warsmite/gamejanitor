@@ -274,13 +274,16 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
-	// Send SIGTERM via cgroup + process group + systemd scope
+	// Send SIGTERM via all available mechanisms
 	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.paths, w.log)
 	if inst.pid > 0 {
 		syscall.Kill(-inst.pid, syscall.SIGTERM) // process group
-		syscall.Kill(inst.pid, syscall.SIGTERM)  // direct
+		syscall.Kill(inst.pid, syscall.SIGTERM)  // systemd-run process
 	}
 	stopSystemdUnit(inst.unitName, w.paths, w.log)
+	// Also stop slirp immediately so ports are freed
+	stopSlirp(inst.slirp, w.log)
+	inst.slirp = nil
 
 	select {
 	case <-inst.done:

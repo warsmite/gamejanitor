@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,6 +57,9 @@ func startRemote(t *testing.T, baseURL string) *Harness {
 // startLocal builds and launches a local gamejanitor instance with test-game.
 func startLocal(t *testing.T) *Harness {
 	t.Helper()
+
+	// Clean up any orphaned sandbox processes from previous tests
+	cleanupInstances(t)
 
 	dataDir := t.TempDir()
 	port := freePort(t)
@@ -422,12 +426,28 @@ func copyTestGame(t *testing.T, dataDir string) {
 
 func cleanupInstances(t *testing.T) {
 	t.Helper()
-	// Best effort cleanup of any gamejanitor- prefixed instances and volumes
-	exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output()
+
+	// Kill sandbox processes (namespace holders, slirp4netns)
+	exec.Command("sh", "-c", "pkill -f 'unshare.*sleep infinity' 2>/dev/null").Run()
+	exec.Command("sh", "-c", "pkill -f 'slirp4netns' 2>/dev/null").Run()
+
+	// Kill any systemd scopes from sandbox runtime
+	if out, _ := exec.Command("sh", "-c", "systemctl --user list-units --type=scope --no-legend | grep gj- | awk '{print $1}'").Output(); len(out) > 0 {
+		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if unit != "" {
+				exec.Command("systemctl", "--user", "stop", unit).Run()
+			}
+		}
+	}
+
+	// Docker cleanup (for docker runtime)
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
 		exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter name=gamejanitor-)").Run()
 	}
 	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
 		exec.Command("sh", "-c", "docker volume rm -f $(docker volume ls -q --filter name=gamejanitor-)").Run()
 	}
+
+	// Brief pause to let ports release
+	time.Sleep(500 * time.Millisecond)
 }
