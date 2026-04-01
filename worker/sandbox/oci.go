@@ -147,6 +147,12 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 		}
 	}
 
+	// Ensure standard mount points exist so bwrap bind mounts work on the ro rootfs.
+	// These may not exist in the image (e.g. /defaults is created at runtime).
+	for _, dir := range []string{"data", "scripts", "defaults"} {
+		os.MkdirAll(filepath.Join(extractDir, dir), 0755)
+	}
+
 	if err := os.WriteFile(markerFile, []byte(imageName), 0644); err != nil {
 		return nil, fmt.Errorf("writing extraction marker: %w", err)
 	}
