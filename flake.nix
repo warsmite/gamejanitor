@@ -444,7 +444,7 @@
             export GAMEJANITOR_API_URL="http://sleepy:8080"
             export E2E_GAME_ID="minecraft-java"
             echo "Running e2e tests against homelab (sleepy)..."
-            exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-10m}" -v ./e2e/ "$@"
+            exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-2}" -v ./e2e/ "$@"
           '';
 
           loc = pkgs.writeShellScriptBin "loc" ''
