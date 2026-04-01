@@ -79,9 +79,10 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 	// status manager via TransitionStatus (CAS). The subscriber only handles
 	// side effects: polling start/stop and operation clearing.
 	switch e := event.(type) {
+	case controller.InstanceStartedEvent:
+		s.startPolling(e.GameserverID)
 	case controller.GameserverReadyEvent:
 		s.clearOperation(e.GameserverID)
-		s.startPolling(e.GameserverID)
 	case controller.InstanceStoppedEvent:
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
