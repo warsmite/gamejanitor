@@ -190,6 +190,32 @@ func TestGameserver_AllocationExcluding(t *testing.T) {
 	assert.Equal(t, 4096, mem, "should exclude gs-1's 2048")
 }
 
+func TestGameserver_TransitionStatus(t *testing.T) {
+	t.Parallel()
+	db := store.New(testutil.NewTestDB(t))
+	nodeA := "node-a"
+	gs := newGameserver("gs-1", "CAS Test", "test-game", &nodeA)
+	require.NoError(t, db.CreateGameserver(gs))
+
+	// Transition from stopped to installing should succeed
+	ok, err := db.TransitionStatus("gs-1", []string{"stopped", "error"}, "installing", "")
+	require.NoError(t, err)
+	assert.True(t, ok, "should transition from stopped to installing")
+
+	fetched, _ := db.GetGameserver("gs-1")
+	assert.Equal(t, "installing", fetched.Status)
+
+	// Transition from stopped should fail (status is now installing)
+	ok, err = db.TransitionStatus("gs-1", []string{"stopped"}, "starting", "")
+	require.NoError(t, err)
+	assert.False(t, ok, "should not transition from stopped when status is installing")
+
+	// Transition from installing to starting should succeed
+	ok, err = db.TransitionStatus("gs-1", []string{"installing"}, "starting", "")
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
 func TestGameserver_JSONColumns(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))

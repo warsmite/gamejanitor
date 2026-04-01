@@ -33,6 +33,7 @@ type Store interface {
 	CreateGameserver(gs *model.Gameserver) error
 	UpdateGameserver(gs *model.Gameserver) error
 	DeleteGameserver(id string) error
+	TransitionStatus(id string, fromStatuses []string, toStatus string, errorReason string) (bool, error)
 	PopulateNode(gs *model.Gameserver)
 	PopulateNodes(gameservers []model.Gameserver)
 	GetWorkerNode(id string) (*model.WorkerNode, error)

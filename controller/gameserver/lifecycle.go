@@ -38,6 +38,15 @@ func operationFailedReason(prefix string, err error) string {
 	}
 }
 
+// setError writes error status directly to DB and publishes the event for subscribers.
+func (s *GameserverService) setError(id string, reason string) {
+	s.store.TransitionStatus(id,
+		[]string{controller.StatusInstalling, controller.StatusStarting, controller.StatusStarted,
+			controller.StatusRunning, controller.StatusStopping, controller.StatusStopped},
+		controller.StatusError, reason)
+	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: reason, Timestamp: time.Now()})
+}
+
 func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
@@ -135,11 +144,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 			accountName = s.settingsSvc.GetString(settings.SettingSteamAccountName)
 			refreshToken = s.settingsSvc.GetString(settings.SettingSteamRefreshToken)
 			if refreshToken == "" {
-				s.broadcaster.Publish(controller.GameserverErrorEvent{
-					GameserverID: id,
-					Reason:       "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.",
-					Timestamp:    time.Now(),
-				})
+				s.setError(id, "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.")
 				return fmt.Errorf("game %s requires Steam auth but no credentials configured", game.ID)
 			}
 		}
@@ -163,11 +168,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 			}
 		})
 		if depotErr != nil {
-			s.broadcaster.Publish(controller.GameserverErrorEvent{
-				GameserverID: id,
-				Reason:       "Failed to download game files from Steam.",
-				Timestamp:    time.Now(),
-			})
+			s.setError(id, "Failed to download game files from Steam.")
 			return fmt.Errorf("depot download for gameserver %s: %w", id, depotErr)
 		}
 
@@ -190,12 +191,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Pull image
+	s.store.TransitionStatus(id,
+		[]string{controller.StatusStopped, controller.StatusError},
+		controller.StatusInstalling, "")
+	gs.Status = controller.StatusInstalling
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhasePullingImage)
 	}
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
+		s.setError(id, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
 	s.broadcaster.Publish(controller.ImagePulledEvent{GameserverID: id, Timestamp: time.Now()})
@@ -203,7 +208,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to configure environment variables.", Timestamp: time.Now()})
+		s.setError(id, "Failed to configure environment variables.")
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
@@ -214,14 +219,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Invalid port configuration.", Timestamp: time.Now()})
+		s.setError(id, "Invalid port configuration.")
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
 	// Prepare game scripts on the target worker (extracts locally for bind-mounting)
 	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to extract game scripts.", Timestamp: time.Now()})
+		s.setError(id, "Failed to extract game scripts.")
 		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
@@ -231,7 +236,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	if depotDir != "" && !gs.Installed {
 		s.log.Info("copying depot to volume", "gameserver", id, "depot", depotDir)
 		if err := w.CopyDepotToVolume(ctx, depotDir, gs.VolumeName); err != nil {
-			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to copy game files to volume.", Timestamp: time.Now()})
+			s.setError(id, "Failed to copy game files to volume.")
 			return fmt.Errorf("copying depot to volume for gameserver %s: %w", id, err)
 		}
 	}
@@ -273,6 +278,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Create instance — the install script runs when the instance starts
+	s.store.TransitionStatus(id,
+		[]string{controller.StatusInstalling},
+		controller.StatusStarting, "")
+	gs.Status = controller.StatusStarting
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhaseInstalling)
 	}
@@ -288,7 +297,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		Binds:         binds,
 	})
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to create instance", err), Timestamp: time.Now()})
+		s.setError(id, userFriendlyError("Failed to create instance", err))
 		return fmt.Errorf("creating instance for gameserver %s: %w", id, err)
 	}
 
@@ -303,10 +312,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 
 	// Start instance
 	if err := w.StartInstance(ctx, instanceID); err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to start instance", err), Timestamp: time.Now()})
+		s.setError(id, userFriendlyError("Failed to start instance", err))
 		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
 	}
 
+	s.store.TransitionStatus(id,
+		[]string{controller.StatusStarting},
+		controller.StatusStarted, "")
+	gs.Status = controller.StatusStarted
 	s.broadcaster.Publish(controller.InstanceStartedEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if s.operations != nil {
@@ -339,6 +352,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return nil
 	}
 
+	// Write stopping status to DB before sending SIGTERM. The sandbox exit
+	// watcher fires the "die" event almost immediately — if the status is still
+	// "running" when the die handler reads it, it treats it as unexpected death.
+	s.store.TransitionStatus(id,
+		[]string{controller.StatusRunning, controller.StatusStarted, controller.StatusStarting, controller.StatusInstalling, controller.StatusError},
+		controller.StatusStopping, "")
 	s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	workerID := ""
@@ -376,7 +395,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		}
 	}
 
-	// Clear instance ID (direct DB write)
+	// Clear instance ID and set stopped (direct DB write)
 	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
@@ -385,6 +404,8 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.InstanceID = nil
+	gs.Status = controller.StatusStopped
+	gs.ErrorReason = ""
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
 	}
@@ -463,7 +484,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	defer func() {
 		if err != nil {
 			s.failActivity(id, err)
-			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
+			s.setError(id, operationFailedReason("Game update failed", err))
 		} else {
 			s.completeActivity(id)
 		}
@@ -561,7 +582,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	defer func() {
 		if err != nil {
 			s.failActivity(id, err)
-			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
+			s.setError(id, operationFailedReason("Reinstall failed", err))
 		} else {
 			s.completeActivity(id)
 		}

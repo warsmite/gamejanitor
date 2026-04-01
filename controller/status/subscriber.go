@@ -75,29 +75,20 @@ func (s *StatusSubscriber) Stop() {
 }
 
 func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
+	// Status writes are now done synchronously by the lifecycle service and
+	// status manager via TransitionStatus (CAS). The subscriber only handles
+	// side effects: polling start/stop and operation clearing.
 	switch e := event.(type) {
-	case controller.ImagePullingEvent:
-		s.setStatus(e.GameserverID, controller.StatusInstalling, "")
-	case controller.InstanceCreatingEvent:
-		s.setStatus(e.GameserverID, controller.StatusStarting, "")
-	case controller.InstanceStartedEvent:
-		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case controller.GameserverReadyEvent:
-		s.setStatus(e.GameserverID, controller.StatusRunning, "")
 		s.clearOperation(e.GameserverID)
 		s.startPolling(e.GameserverID)
-	case controller.InstanceStoppingEvent:
-		s.setStatus(e.GameserverID, controller.StatusStopping, "")
 	case controller.InstanceStoppedEvent:
-		s.setStatus(e.GameserverID, controller.StatusStopped, "")
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.InstanceExitedEvent:
-		s.setStatus(e.GameserverID, controller.StatusError, "Instance exited unexpectedly")
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	case controller.GameserverErrorEvent:
-		s.setStatus(e.GameserverID, controller.StatusError, e.Reason)
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
 	}
@@ -109,30 +100,6 @@ func (s *StatusSubscriber) clearOperation(gameserverID string) {
 	}
 }
 
-func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, errorReason string) {
-	gs, err := s.store.GetGameserver(gameserverID)
-	if err != nil || gs == nil {
-		s.log.Error("status subscriber: failed to get gameserver", "gameserver", gameserverID, "error", err)
-		return
-	}
-
-	oldStatus := gs.Status
-	if oldStatus == newStatus {
-		return
-	}
-
-	if newStatus != controller.StatusError {
-		errorReason = ""
-	}
-
-	// Record status as a status_changed activity instead of writing to the gameserver table
-	if err := setGameserverStatus(s.store, gameserverID, newStatus, errorReason); err != nil {
-		s.log.Error("status subscriber: failed to record status_changed activity", "gameserver", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
-		return
-	}
-
-	s.log.Info("gameserver status changed", "gameserver", gameserverID, "from", oldStatus, "to", newStatus)
-}
 
 func (s *StatusSubscriber) startPolling(gameserverID string) {
 	if s.querySvc != nil {
@@ -150,16 +117,5 @@ func (s *StatusSubscriber) stopPolling(gameserverID string) {
 	if s.statsPoller != nil {
 		s.statsPoller.StopPolling(gameserverID)
 	}
-}
-
-// setGameserverStatus updates the status and error_reason columns directly on the gameserver row.
-func setGameserverStatus(store Store, gameserverID, newStatus, errorReason string) error {
-	gs, err := store.GetGameserver(gameserverID)
-	if err != nil || gs == nil {
-		return err
-	}
-	gs.Status = newStatus
-	gs.ErrorReason = errorReason
-	return store.UpdateGameserver(gs)
 }
 

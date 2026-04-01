@@ -169,5 +169,8 @@ func (w *ReadyWatcher) markInstalled(gameserverID string) {
 }
 
 func (w *ReadyWatcher) promote(gameserverID string) {
+	w.store.TransitionStatus(gameserverID,
+		[]string{controller.StatusStarted, controller.StatusStarting},
+		controller.StatusRunning, "")
 	w.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 }

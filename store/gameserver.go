@@ -129,6 +129,39 @@ func (s *GameserverStore) UpdateGameserver(gs *model.Gameserver) error {
 	return nil
 }
 
+// TransitionStatus atomically updates a gameserver's status using compare-and-swap.
+// Only succeeds if the current status is one of fromStatuses. Returns true if the
+// transition was applied, false if the status had already moved (no error — the
+// race was lost to a valid concurrent transition).
+func (s *GameserverStore) TransitionStatus(id string, fromStatuses []string, toStatus string, errorReason string) (bool, error) {
+	if len(fromStatuses) == 0 {
+		return false, fmt.Errorf("TransitionStatus: fromStatuses must not be empty")
+	}
+
+	placeholders := make([]string, len(fromStatuses))
+	args := []any{toStatus, errorReason, time.Now(), id}
+	for i, from := range fromStatuses {
+		placeholders[i] = "?"
+		args = append(args, from)
+	}
+
+	query := fmt.Sprintf(
+		"UPDATE gameservers SET status = ?, error_reason = ?, updated_at = ? WHERE id = ? AND status IN (%s)",
+		strings.Join(placeholders, ","),
+	)
+
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("transitioning gameserver %s status to %s: %w", id, toStatus, err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("checking rows affected for status transition: %w", err)
+	}
+	return rows > 0, nil
+}
+
 func (s *GameserverStore) DeleteGameserver(id string) error {
 	result, err := s.db.Exec("DELETE FROM gameservers WHERE id = ?", id)
 	if err != nil {

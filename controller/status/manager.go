@@ -200,8 +200,10 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 	if newStatus != controller.StatusError {
 		errorReason = ""
 	}
-	if err := setGameserverStatus(m.store, id, newStatus, errorReason); err != nil {
-		m.log.Error("recovery: failed to record status_changed activity", "gameserver", id, "from", oldStatus, "to", newStatus, "error", err)
+	gs.Status = newStatus
+	gs.ErrorReason = errorReason
+	if err := m.store.UpdateGameserver(gs); err != nil {
+		m.log.Error("recovery: failed to set status", "gameserver", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
 	m.log.Info("recovery: status set", "gameserver", id, "from", oldStatus, "to", newStatus)
@@ -212,12 +214,10 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 func (m *StatusManager) clearInstanceAndSetStatus(gs *model.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.InstanceID = nil
+	gs.Status = newStatus
+	gs.ErrorReason = ""
 	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to clear instance", "gameserver", gs.ID, "error", err)
-		return
-	}
-	if err := setGameserverStatus(m.store, gs.ID, newStatus, ""); err != nil {
-		m.log.Error("recovery: failed to record status_changed activity", "gameserver", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
+		m.log.Error("recovery: failed to clear instance and set status", "gameserver", gs.ID, "error", err)
 		return
 	}
 	m.log.Info("recovery: status set", "gameserver", gs.ID, "from", oldStatus, "to", newStatus)
@@ -266,7 +266,7 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		m.log.Debug("instance event: instance started", "gameserver", gsID)
 
 	case "die", "stop":
-		// Ignore stale events from old instances (e.g. previous instance.s "die"
+		// Ignore stale events from old instances (e.g. previous instance's "die"
 		// arriving after a new start has begun)
 		if gs.InstanceID != nil && *gs.InstanceID != event.InstanceID {
 			m.log.Debug("instance event: ignoring stale event from old instance", "gameserver", gsID, "event_instance", event.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
@@ -281,12 +281,19 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
-		if gs.Status == controller.StatusStopping {
-			m.log.Debug("instance event: expected instance stop", "gameserver", gsID, "status", gs.Status)
-		} else if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted || gs.Status == controller.StatusInstalling || gs.Status == controller.StatusStarting {
-			m.log.Warn("instance event: unexpected instance death", "gameserver", gsID, "status", gs.Status, "action", event.Action)
+
+		// CAS: try to transition from an active status to error.
+		// If the lifecycle already moved to stopping/stopped, this is a no-op.
+		transitioned, _ := m.store.TransitionStatus(gsID,
+			[]string{controller.StatusRunning, controller.StatusStarted, controller.StatusInstalling, controller.StatusStarting},
+			controller.StatusError, "Instance exited unexpectedly")
+
+		if transitioned {
+			m.log.Warn("instance event: unexpected instance death", "gameserver", gsID, "action", event.Action)
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
+		} else {
+			m.log.Debug("instance event: expected instance stop (status already transitioned)", "gameserver", gsID)
 		}
 
 	case "kill":
