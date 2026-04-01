@@ -77,8 +77,10 @@ func stopSystemdUnit(unitName string, paths *systemPaths, log *slog.Logger) {
 	if !paths.IsRoot {
 		args = append([]string{"--user"}, args...)
 	}
-	if err := exec.Command(paths.Systemctl, args...).Run(); err != nil {
-		log.Debug("systemctl stop failed", "unit", unitName, "error", err)
+	cmd := exec.Command(paths.Systemctl, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Warn("systemctl stop failed", "unit", unitName, "args", args, "error", err, "output", string(out))
 	}
 }
 
