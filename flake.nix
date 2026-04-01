@@ -415,14 +415,14 @@
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
             echo "Running e2e tests..."
-            exec go test -tags e2e -timeout 5m -v ./e2e/ "$@"
+            exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
           '';
 
           test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
             echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-terraria})..."
-            exec go test -tags smoke -timeout 15m -v ./e2e/ "$@"
+            exec go test -tags smoke -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
           '';
 
           test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
@@ -444,7 +444,7 @@
             export GAMEJANITOR_API_URL="http://sleepy:8080"
             export E2E_GAME_ID="minecraft-java"
             echo "Running e2e tests against homelab (sleepy)..."
-            exec go test -tags e2e -timeout 20m -v ./e2e/ "$@"
+            exec go test -tags e2e -timeout "''${TEST_TIMEOUT:-10m}" -v ./e2e/ "$@"
           '';
 
           loc = pkgs.writeShellScriptBin "loc" ''
