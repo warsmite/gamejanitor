@@ -174,7 +174,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	if w.paths.hasNetworkIsolation() {
 		si, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.paths, w.log)
 		if err != nil {
-			w.log.Warn("network isolation unavailable", "id", id, "error", err)
+			w.log.Warn("network isolation failed for this instance — it will run on host network", "id", id, "error", err)
 		} else {
 			slirpInst = si
 		}
@@ -230,7 +230,17 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 		logFile.Close()
 		stopSlirp(inst.slirp, w.log)
 
-		w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode)
+		uptime := time.Since(inst.startedAt)
+		if inst.exitCode != 0 && uptime < 3*time.Second {
+			// Immediate exit with error — likely a sandbox/config problem, not a game crash.
+			// Read the output log for the actual error.
+			logData, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
+			w.log.Error("instance failed to start (exited immediately)",
+				"id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Millisecond),
+				"output", truncate(string(logData), 500))
+		} else {
+			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Second))
+		}
 		close(inst.done)
 
 		w.eventMu.Lock()

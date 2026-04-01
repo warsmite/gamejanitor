@@ -42,7 +42,7 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 
 	p.Slirp4netns, err = ensureSlirp4netns(dataDir, log)
 	if err != nil {
-		log.Warn("slirp4netns not available, network isolation disabled", "error", err)
+		log.Warn("slirp4netns not available — game servers will share host network (no network isolation)", "error", err)
 	}
 
 	// System utilities
@@ -55,12 +55,15 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 	p.NewUIDMap = lookupBinary("newuidmap")
 	p.NewGIDMap = lookupBinary("newgidmap")
 
-	// Validate critical paths
+	// Validate and report impact
 	if p.Unshare == "" {
-		log.Warn("unshare not found, network isolation disabled")
+		log.Warn("unshare not found — network isolation disabled, game servers will share host network")
 	}
 	if p.Systemctl == "" {
-		log.Warn("systemctl not found, resource limits and process survival unavailable")
+		log.Warn("systemctl not found — no resource limits (memory/CPU), no SocketBindAllow, processes will not survive gamejanitor restarts")
+	}
+	if !p.IsRoot && !p.hasUIDMapping() {
+		log.Warn("newuidmap/newgidmap not found — game install scripts that chown to UID 1001 may fail. Install 'uidmap' package or 'shadow' on your distribution.")
 	}
 
 	return p, nil

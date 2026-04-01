@@ -138,7 +138,7 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 	// Try overlayfs mount for zero-copy layer merging
 	if err := tryOverlayMount(layerDirs, extractDir); err != nil {
 		// Fallback: merge layers sequentially into flat directory
-		log.Info("overlayfs unavailable, extracting flat", "reason", err)
+		log.Warn("overlayfs unavailable — using flat extraction (slower first start, more disk usage). Requires kernel 5.11+ for optimal performance.", "reason", err)
 		for i, layerDir := range layerDirs {
 			if err := mergeLayerDir(layerDir, extractDir); err != nil {
 				return nil, fmt.Errorf("merging layer %d: %w", i, err)
