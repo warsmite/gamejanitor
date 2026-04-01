@@ -38,7 +38,7 @@ func (s *GameserverStatsStore) InsertBatch(samples []model.StatsSample) error {
 
 	for _, s := range samples {
 		if _, err := stmt.Exec(
-			s.GameserverID, s.Timestamp.UTC(),
+			s.GameserverID, s.Timestamp.UTC().Format(time.RFC3339),
 			s.CPUPercent, s.MemoryUsageMB, s.MemoryLimitMB,
 			s.NetRxBytes, s.NetTxBytes, s.VolumeSizeBytes, s.PlayersOnline,
 		); err != nil {
@@ -53,19 +53,19 @@ func (s *GameserverStatsStore) InsertBatch(samples []model.StatsSample) error {
 // for the requested period.
 func (s *GameserverStatsStore) QueryHistory(gameserverID string, period model.StatsPeriod) ([]model.StatsSample, error) {
 	var resolution string
-	var since time.Time
+	var since string
 	now := time.Now().UTC()
 
 	switch period {
 	case model.StatsPeriod1h:
 		resolution = "raw"
-		since = now.Add(-1 * time.Hour)
+		since = now.Add(-1 * time.Hour).Format(time.RFC3339)
 	case model.StatsPeriod24h:
 		resolution = "1m"
-		since = now.Add(-24 * time.Hour)
+		since = now.Add(-24 * time.Hour).Format(time.RFC3339)
 	case model.StatsPeriod7d:
 		resolution = "5m"
-		since = now.Add(-7 * 24 * time.Hour)
+		since = now.Add(-7 * 24 * time.Hour).Format(time.RFC3339)
 	default:
 		return nil, fmt.Errorf("invalid stats period: %s", period)
 	}
@@ -100,7 +100,7 @@ func (s *GameserverStatsStore) QueryHistory(gameserverID string, period model.St
 // Rows older than `olderThan` in `fromRes` are grouped into `bucketSec`-second
 // buckets, inserted as `toRes`, and the source rows are deleted.
 func (s *GameserverStatsStore) Downsample(fromRes, toRes string, olderThan time.Duration, bucketSec int) (int, error) {
-	cutoff := time.Now().UTC().Add(-olderThan)
+	cutoff := time.Now().UTC().Add(-olderThan).Format(time.RFC3339)
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -124,7 +124,7 @@ func (s *GameserverStatsStore) Downsample(fromRes, toRes string, olderThan time.
 			MAX(volume_size_bytes),
 			MAX(players_online)
 		FROM gameserver_stats
-		WHERE resolution = ? AND timestamp < ?
+		WHERE resolution = ? AND timestamp < ? AND strftime('%s', timestamp) IS NOT NULL
 		GROUP BY gameserver_id, CAST(strftime('%s', timestamp) AS INTEGER) / ?`,
 		toRes, bucketSec, bucketSec, fromRes, cutoff, bucketSec,
 	)
@@ -151,7 +151,7 @@ func (s *GameserverStatsStore) Downsample(fromRes, toRes string, olderThan time.
 
 // Prune deletes stats rows older than the given duration at a specific resolution.
 func (s *GameserverStatsStore) Prune(resolution string, olderThan time.Duration) (int, error) {
-	cutoff := time.Now().UTC().Add(-olderThan)
+	cutoff := time.Now().UTC().Add(-olderThan).Format(time.RFC3339)
 	result, err := s.db.Exec(
 		`DELETE FROM gameserver_stats WHERE resolution = ? AND timestamp < ?`,
 		resolution, cutoff,
