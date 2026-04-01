@@ -533,8 +533,11 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("creating volume: %w", err)
 	}
-	// No chown needed — sandbox runs the game process as the same user as gamejanitor.
-	// Docker runtime chowns to UID 1001 because the container runs as a different user.
+	// bwrap runs the game process as UID 1001 (gameserver) via --uid/--gid.
+	// The volume must be owned by that UID so the entrypoint can write to /data.
+	if err := os.Chown(path, 1001, 1001); err != nil {
+		w.log.Warn("failed to chown volume (game process may not be able to write to /data)", "path", path, "error", err)
+	}
 	return nil
 }
 
