@@ -92,12 +92,14 @@
                         CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
                         echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
 
-                        # Ship binary to all targets
+                        # Ship binary to all targets in parallel
                         for node in "''${TARGETS[@]}"; do
                           echo "Shipping binary to $node..."
-                          scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy"
-                          ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev"
+                          ( scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy" && \
+                            ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev" && \
+                            echo "  $node: deployed" ) &
                         done
+                        wait
 
                         # Start controller first (sleepy), create worker tokens
                         CONTROLLER="sleepy"
@@ -136,6 +138,8 @@
                         sleep 2
 
                         # Create/rotate worker tokens on controller DB
+                        # Create tokens first (sequential, needs DB access)
+                        declare -A TOKENS
                         for w in "''${WORKERS[@]}"; do
                           echo "Creating worker token for $w..."
                           TOKEN=$(ssh "$CONTROLLER" "sudo /run/gamejanitor-dev tokens offline create --name '$w' --type worker -d /var/lib/gamejanitor 2>/dev/null || true")
@@ -146,8 +150,14 @@
                             echo "  WARNING: failed to get token for $w, skipping"
                             continue
                           fi
+                          TOKENS[$w]="$TOKEN"
                           echo "  token created for $w"
+                        done
 
+                        # Start workers in parallel
+                        for w in "''${WORKERS[@]}"; do
+                          TOKEN="''${TOKENS[$w]}"
+                          [ -z "$TOKEN" ] && continue
                           echo "Starting worker $w..."
                           ssh "$w" "
                             sudo systemctl stop gamejanitor-dev 2>/dev/null || true
@@ -161,9 +171,10 @@
                                 --controller-address $CONTROLLER:9090 \
                                 --worker-token '$TOKEN' \
                                 -d /var/lib/gamejanitor
-                          "
-                          echo "  $w: started"
+                          " &
                         done
+                        wait
+                        echo "All workers started"
 
                         echo "Deployed to: ''${TARGETS[*]}"
                         echo "Run 'deploy-restore' to switch back to NixOS-managed binary"
