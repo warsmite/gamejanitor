@@ -83,6 +83,7 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 		s.startPolling(e.GameserverID)
 	case controller.GameserverReadyEvent:
 		s.clearOperation(e.GameserverID)
+		s.startPolling(e.GameserverID)
 	case controller.InstanceStoppedEvent:
 		s.clearOperation(e.GameserverID)
 		s.stopPolling(e.GameserverID)
