@@ -406,10 +406,9 @@ func (w *SandboxWorker) InstanceLogs(ctx context.Context, instanceID string, tai
 		return io.NopCloser(io.Reader(ioStringReader(joined))), nil
 	}
 
-	// Seek to end for follow mode
-	if tail == 0 {
-		f.Seek(0, io.SeekEnd)
-	}
+	// For follow mode, start from the beginning so we catch startup logs.
+	// Docker streams from the start too — the ReadyWatcher needs to see
+	// the full output to detect the ready pattern.
 	return newFollowReader(ctx, f, instanceID, w), nil
 }
 
