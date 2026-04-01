@@ -125,6 +125,30 @@ func readCgroupCPU(cgroupPath string) float64 {
 	return (usageDelta / float64(timeDelta)) * 100
 }
 
+// readNetDevBytes reads rx/tx bytes for an interface from /proc/<pid>/net/dev.
+// Uses the namespace holder's PID to read stats from inside the network namespace.
+func readNetDevBytes(nsPID int, iface string) (rxBytes, txBytes int64) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/net/dev", nsPID))
+	if err != nil {
+		return 0, 0
+	}
+	prefix := iface + ":"
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		fields := strings.Fields(line[len(prefix):])
+		if len(fields) < 9 {
+			return 0, 0
+		}
+		rx, _ := strconv.ParseInt(fields[0], 10, 64)
+		tx, _ := strconv.ParseInt(fields[8], 10, 64)
+		return rx, tx
+	}
+	return 0, 0
+}
+
 // readProcMemory reads RSS from /proc/<pid>/status.
 func readProcMemory(pid int) int {
 	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))

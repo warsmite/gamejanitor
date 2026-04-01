@@ -518,6 +518,13 @@ func (w *SandboxWorker) InstanceStats(ctx context.Context, instanceID string) (*
 		return stats, err
 	}
 
+	// Network I/O from the namespace's tap0 interface
+	if inst.slirp != nil && inst.slirp.nsPID > 0 {
+		rx, tx := readNetDevBytes(inst.slirp.nsPID, "tap0")
+		stats.NetRxBytes = rx
+		stats.NetTxBytes = tx
+	}
+
 	// If cgroup didn't provide a memory limit, read from the manifest
 	if stats.MemoryLimitMB == 0 {
 		dir := w.instanceDir(instanceID)
