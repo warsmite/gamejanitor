@@ -20,6 +20,7 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		"--tmpfs", "/home",
 		"--tmpfs", "/run",
 		"--tmpfs", "/var/tmp",
+		"--unshare-user",
 		"--unshare-pid",
 		"--unshare-ipc",
 		"--unshare-uts",
