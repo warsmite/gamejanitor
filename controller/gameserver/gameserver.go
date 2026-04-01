@@ -52,6 +52,13 @@ type ReadyWatcher interface {
 	Stop(gameserverID string)
 }
 
+// StatusProvider derives the current status for a gameserver from runtime state.
+type StatusProvider interface {
+	DeriveStatus(gs *model.Gameserver) (status string, errorReason string)
+	SetRunning(gameserverID string)
+	SetStopped(gameserverID string)
+}
+
 // BackupStore abstracts backup file storage (local disk or S3).
 type BackupStore interface {
 	Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error
@@ -74,6 +81,7 @@ type GameserverService struct {
 	log             *slog.Logger
 	broadcaster     *controller.EventBus
 	readyWatcher    ReadyWatcher
+	statusProvider  StatusProvider
 	modReconciler   ModReconciler
 	settingsSvc     *settings.SettingsService
 	gameStore       *games.GameStore
@@ -200,6 +208,10 @@ func (s *GameserverService) SetReadyWatcher(rw ReadyWatcher) {
 	s.readyWatcher = rw
 }
 
+func (s *GameserverService) SetStatusProvider(sp StatusProvider) {
+	s.statusProvider = sp
+}
+
 func (s *GameserverService) SetBackupStore(store BackupStore) {
 	s.backupStore = store
 }
@@ -227,6 +239,9 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 		if s.operations != nil {
 			gameservers[i].Operation = s.operations.GetOperation(gameservers[i].ID)
 		}
+		if s.statusProvider != nil {
+			gameservers[i].Status, gameservers[i].ErrorReason = s.statusProvider.DeriveStatus(&gameservers[i])
+		}
 	}
 	return gameservers, nil
 }
@@ -240,6 +255,9 @@ func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) 
 	gs.ComputeRestartRequired()
 	if s.operations != nil {
 		gs.Operation = s.operations.GetOperation(id)
+	}
+	if s.statusProvider != nil {
+		gs.Status, gs.ErrorReason = s.statusProvider.DeriveStatus(gs)
 	}
 	return gs, nil
 }

@@ -109,6 +109,8 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	t.Helper()
 	svc := NewTestServices(t)
 
+	svc.GameserverSvc.SetStatusProvider(svc.StatusMgr)
+
 	ctx := TestContext()
 	svc.StatusSub.Start(ctx)
 

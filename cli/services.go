@@ -120,6 +120,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
 	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	gameserverSvc.SetStatusProvider(statusMgr)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)

@@ -169,8 +169,7 @@ func (w *ReadyWatcher) markInstalled(gameserverID string) {
 }
 
 func (w *ReadyWatcher) promote(gameserverID string) {
-	w.store.TransitionStatus(gameserverID,
-		[]string{controller.StatusStarted, controller.StatusStarting},
-		controller.StatusRunning, "")
+	// Publish the ready event — StatusManager picks it up and sets ready=true
+	// in the runtime state map. No DB write needed.
 	w.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 }

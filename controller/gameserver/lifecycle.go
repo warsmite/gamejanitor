@@ -38,12 +38,9 @@ func operationFailedReason(prefix string, err error) string {
 	}
 }
 
-// setError writes error status directly to DB and publishes the event for subscribers.
+// setError publishes an error event. The StatusManager picks it up and updates
+// the in-memory runtime state. No DB write — status is derived on read.
 func (s *GameserverService) setError(id string, reason string) {
-	s.store.TransitionStatus(id,
-		[]string{controller.StatusInstalling, controller.StatusStarting, controller.StatusStarted,
-			controller.StatusRunning, controller.StatusStopping, controller.StatusStopped},
-		controller.StatusError, reason)
 	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: reason, Timestamp: time.Now()})
 }
 
@@ -191,10 +188,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Pull image
-	s.store.TransitionStatus(id,
-		[]string{controller.StatusStopped, controller.StatusError},
-		controller.StatusInstalling, "")
-	gs.Status = controller.StatusInstalling
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhasePullingImage)
 	}
@@ -278,10 +271,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	// Create instance — the install script runs when the instance starts
-	s.store.TransitionStatus(id,
-		[]string{controller.StatusInstalling},
-		controller.StatusStarting, "")
-	gs.Status = controller.StatusStarting
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhaseInstalling)
 	}
@@ -316,10 +305,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
 	}
 
-	s.store.TransitionStatus(id,
-		[]string{controller.StatusStarting},
-		controller.StatusStarted, "")
-	gs.Status = controller.StatusStarted
+	// Mark instance as running in the runtime state map
+	if s.statusProvider != nil {
+		s.statusProvider.SetRunning(id)
+	}
 	s.broadcaster.Publish(controller.InstanceStartedEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if s.operations != nil {
@@ -347,17 +336,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		s.readyWatcher.Stop(id)
 	}
 
-	if gs.Status == controller.StatusStopped {
-		s.log.Info("gameserver already stopped, skipping", "gameserver", id)
-		return nil
+	// Clear runtime state BEFORE sending SIGTERM. The sandbox exit watcher fires
+	// the "die" event almost immediately — if the runtime state still says "running",
+	// the status manager treats it as an unexpected death.
+	if s.statusProvider != nil {
+		s.statusProvider.SetStopped(id)
 	}
-
-	// Write stopping status to DB before sending SIGTERM. The sandbox exit
-	// watcher fires the "die" event almost immediately — if the status is still
-	// "running" when the die handler reads it, it treats it as unexpected death.
-	s.store.TransitionStatus(id,
-		[]string{controller.StatusRunning, controller.StatusStarted, controller.StatusStarting, controller.StatusInstalling, controller.StatusError},
-		controller.StatusStopping, "")
 	s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	workerID := ""
@@ -395,7 +379,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		}
 	}
 
-	// Clear instance ID and set stopped (direct DB write)
+	// Clear instance ID
 	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
@@ -404,8 +388,6 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.InstanceID = nil
-	gs.Status = controller.StatusStopped
-	gs.ErrorReason = ""
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
 	}

@@ -14,6 +14,15 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
+// InstanceState tracks the runtime state of a gameserver's instance.
+type InstanceState struct {
+	Running     bool
+	Exited      bool
+	ExitCode    int
+	ErrorReason string
+	Ready       bool
+}
+
 type StatusManager struct {
 	store       Store
 	log         *slog.Logger
@@ -27,6 +36,10 @@ type StatusManager struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	// Runtime state: the source of truth for instance lifecycle
+	runtimeMu     sync.RWMutex
+	runtimeStates map[string]*InstanceState // gameserverID → state
 
 	// Per-worker event watchers for multi-node
 	workerCancels map[string]context.CancelFunc
@@ -48,6 +61,7 @@ func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *Q
 		registry:      registry,
 		restartFunc:   restartFunc,
 		log:           log,
+		runtimeStates: make(map[string]*InstanceState),
 		workerCancels: make(map[string]context.CancelFunc),
 		crashCounts:   make(map[string]int),
 	}
@@ -62,7 +76,7 @@ func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *Q
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 
-	// Reset crash counter when a gameserver successfully reaches "running"
+	// Listen for lifecycle events to update runtime state
 	events, unsub := m.broadcaster.Subscribe()
 	m.wg.Add(1)
 	go func() {
@@ -76,13 +90,15 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				readyEv, isReady := ev.(controller.GameserverReadyEvent)
-				if !isReady {
-					continue
+				switch e := ev.(type) {
+				case controller.GameserverReadyEvent:
+					m.setReady(e.GameserverID)
+					m.crashMu.Lock()
+					delete(m.crashCounts, e.GameserverID)
+					m.crashMu.Unlock()
+				case controller.GameserverErrorEvent:
+					m.setError(e.GameserverID, e.Reason)
 				}
-				m.crashMu.Lock()
-				delete(m.crashCounts, readyEv.GameserverID)
-				m.crashMu.Unlock()
 			}
 		}
 	}()
@@ -121,16 +137,11 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	var withInstance, instanceMissing int
 
 	for _, gs := range gameservers {
-		if !controller.NeedsRecovery(gs.Status) {
-			continue
-		}
-
 		w := m.workerForGameserver(&gs)
 		if w == nil {
-			// Worker is offline — mark gameserver unreachable instead of leaving stale status
+			// Worker is offline — DeriveStatus will return "unreachable"
 			if gs.NodeID != nil {
-				m.log.Warn("marking gameserver unreachable, worker offline", "gameserver", gs.ID, "node_id", *gs.NodeID)
-				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker offline at startup.")
+				m.log.Warn("worker offline at startup, gameserver will show unreachable", "gameserver", gs.ID, "node_id", *gs.NodeID)
 			}
 			continue
 		}
@@ -157,70 +168,39 @@ func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker 
 	return m.dispatcher.WorkerFor(gs.ID)
 }
 
-// recoverGameserver reconciles a single gameserver's DB status with instance reality.
-// Returns true if the gameserver had a instance ID but the instance was not found.
+// recoverGameserver reconciles runtime state with instance reality on a worker.
+// Returns true if the gameserver had an instance ID but the instance was not found.
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.InstanceID == nil {
-		m.log.Info("gameserver has no instance, setting stopped", "gameserver", gs.ID, "was_status", gs.Status)
-		m.setRecoveryStatus(gs.ID, controller.StatusStopped, "")
+		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.ID)
+		m.SetStopped(gs.ID)
 		return false
 	}
 
 	info, err := w.InspectInstance(ctx, *gs.InstanceID)
 	if err != nil {
-		m.log.Warn("instance not found, setting stopped", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
-		m.clearInstanceAndSetStatus(gs, controller.StatusStopped)
+		m.log.Warn("instance not found, clearing", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
+		gs.InstanceID = nil
+		m.store.UpdateGameserver(gs)
+		m.SetStopped(gs.ID)
 		return true
 	}
 
 	switch info.State {
 	case "running":
 		m.log.Info("instance running, re-attaching ready watcher", "gameserver", gs.ID)
-		m.setRecoveryStatus(gs.ID, controller.StatusStarted, "")
+		m.SetRunning(gs.ID)
 		m.readyWatcher.Watch(gs.ID, w, *gs.InstanceID)
 	case "exited", "dead", "created":
-		m.log.Info("instance is not running, setting stopped", "gameserver", gs.ID, "state", info.State)
-		m.clearInstanceAndSetStatus(gs, controller.StatusStopped)
+		m.log.Info("instance is not running, clearing", "gameserver", gs.ID, "state", info.State)
+		gs.InstanceID = nil
+		m.store.UpdateGameserver(gs)
+		m.SetStopped(gs.ID)
 	default:
-		m.log.Warn("instance in unexpected state, setting error", "gameserver", gs.ID, "state", info.State)
-		m.setRecoveryStatus(gs.ID, controller.StatusError, "Instance found in unexpected state.")
+		m.log.Warn("instance in unexpected state", "gameserver", gs.ID, "state", info.State)
+		m.setExited(gs.ID, -1, "Instance found in unexpected state.")
 	}
 	return false
-}
-
-// setRecoveryStatus records a status_changed activity without publishing events.
-// Used during startup recovery to reconcile DB with Docker reality.
-func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
-	gs, err := m.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		m.log.Error("recovery: failed to get gameserver", "gameserver", id, "error", err)
-		return
-	}
-	oldStatus := gs.Status
-	if newStatus != controller.StatusError {
-		errorReason = ""
-	}
-	gs.Status = newStatus
-	gs.ErrorReason = errorReason
-	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to set status", "gameserver", id, "from", oldStatus, "to", newStatus, "error", err)
-		return
-	}
-	m.log.Info("recovery: status set", "gameserver", id, "from", oldStatus, "to", newStatus)
-}
-
-// clearInstanceAndSetStatus clears the instance_id and records a status_changed activity.
-// Used during startup recovery — no events published.
-func (m *StatusManager) clearInstanceAndSetStatus(gs *model.Gameserver, newStatus string) {
-	oldStatus := gs.Status
-	gs.InstanceID = nil
-	gs.Status = newStatus
-	gs.ErrorReason = ""
-	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to clear instance and set status", "gameserver", gs.ID, "error", err)
-		return
-	}
-	m.log.Info("recovery: status set", "gameserver", gs.ID, "from", oldStatus, "to", newStatus)
 }
 
 // watchWorkerEvents starts a goroutine that watches instance events from a worker.
@@ -266,15 +246,13 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		m.log.Debug("instance event: instance started", "gameserver", gsID)
 
 	case "die", "stop":
-		// Ignore stale events from old instances (e.g. previous instance's "die"
-		// arriving after a new start has begun)
+		// Ignore stale events from old instances
 		if gs.InstanceID != nil && *gs.InstanceID != event.InstanceID {
 			m.log.Debug("instance event: ignoring stale event from old instance", "gameserver", gsID, "event_instance", event.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
 			return
 		}
-		// If InstanceID was cleared (restart in progress), this is a stale event
-		if gs.InstanceID == nil && gs.Status != controller.StatusStopping {
-			m.log.Debug("instance event: ignoring event with no current instance", "gameserver", gsID, "status", gs.Status, "action", event.Action)
+		if gs.InstanceID == nil {
+			m.log.Debug("instance event: ignoring event with no current instance", "gameserver", gsID, "action", event.Action)
 			return
 		}
 
@@ -282,18 +260,17 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
 
-		// CAS: try to transition from an active status to error.
-		// If the lifecycle already moved to stopping/stopped, this is a no-op.
-		transitioned, _ := m.store.TransitionStatus(gsID,
-			[]string{controller.StatusRunning, controller.StatusStarted, controller.StatusInstalling, controller.StatusStarting},
-			controller.StatusError, "Instance exited unexpectedly")
-
-		if transitioned {
+		// Check if this was an expected stop (lifecycle already cleared the state)
+		// or an unexpected death (instance crashed while running)
+		rs := m.GetRuntimeState(gsID)
+		if rs != nil && rs.Running {
+			// Instance was still marked as running — this is unexpected
 			m.log.Warn("instance event: unexpected instance death", "gameserver", gsID, "action", event.Action)
+			m.setExited(gsID, -1, "Instance exited unexpectedly")
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		} else {
-			m.log.Debug("instance event: expected instance stop (status already transitioned)", "gameserver", gsID)
+			m.log.Debug("instance event: expected instance stop", "gameserver", gsID)
 		}
 
 	case "kill":
@@ -332,18 +309,8 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 // onWorkerOffline is called when a worker transitions to offline (heartbeat timeout or explicit).
 // Marks affected gameservers as unreachable so the UI doesn't show stale "running" status.
 func (m *StatusManager) onWorkerOffline(nodeID string) {
-	gameservers, err := m.store.ListGameservers(model.GameserverFilter{NodeID: &nodeID})
-	if err != nil {
-		m.log.Error("failed to query gameservers for disconnected worker", "worker", nodeID, "error", err)
-	} else {
-		for _, gs := range gameservers {
-			if controller.NeedsRecovery(gs.Status) {
-				m.log.Warn("marking gameserver unreachable due to worker disconnect",
-					"gameserver", gs.ID, "worker", nodeID, "was_status", gs.Status)
-				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker disconnected.")
-			}
-		}
-	}
+	// DeriveStatus will return "unreachable" for gameservers on this worker
+	// since the registry no longer reports it as online. No DB write needed.
 
 	m.workerMu.Lock()
 	if cancel, ok := m.workerCancels[nodeID]; ok {
@@ -412,6 +379,103 @@ func (m *StatusManager) detectOrphanInstances(ctx context.Context, nodeID string
 			"worker", nodeID, "instance_id", c.InstanceID[:12], "instance_name", c.InstanceName,
 			"gameserver", c.GameserverID, "state", c.State)
 	}
+}
+
+// --- Runtime state methods ---
+
+// SetRunning marks a gameserver's instance as running (not yet ready).
+// Called by the lifecycle service after StartInstance succeeds.
+func (m *StatusManager) SetRunning(gameserverID string) {
+	m.runtimeMu.Lock()
+	m.runtimeStates[gameserverID] = &InstanceState{Running: true}
+	m.runtimeMu.Unlock()
+}
+
+// SetStopped clears a gameserver's runtime state.
+// Called by the lifecycle service after StopInstance completes.
+func (m *StatusManager) SetStopped(gameserverID string) {
+	m.runtimeMu.Lock()
+	delete(m.runtimeStates, gameserverID)
+	m.runtimeMu.Unlock()
+}
+
+func (m *StatusManager) setReady(gameserverID string) {
+	m.runtimeMu.Lock()
+	if s, ok := m.runtimeStates[gameserverID]; ok {
+		s.Ready = true
+	}
+	m.runtimeMu.Unlock()
+}
+
+func (m *StatusManager) setExited(gameserverID string, exitCode int, reason string) {
+	m.runtimeMu.Lock()
+	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ExitCode: exitCode, ErrorReason: reason}
+	m.runtimeMu.Unlock()
+}
+
+func (m *StatusManager) setError(gameserverID string, reason string) {
+	m.runtimeMu.Lock()
+	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ErrorReason: reason}
+	m.runtimeMu.Unlock()
+}
+
+// GetRuntimeState returns the current instance state for a gameserver.
+func (m *StatusManager) GetRuntimeState(gameserverID string) *InstanceState {
+	m.runtimeMu.RLock()
+	defer m.runtimeMu.RUnlock()
+	return m.runtimeStates[gameserverID]
+}
+
+// DeriveStatus computes the user-facing status for a gameserver by combining
+// runtime state, operation phase, archive flag, and worker reachability.
+// This is the single source of truth — no status column needed.
+func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, errorReason string) {
+	if gs.Archived {
+		return controller.StatusArchived, ""
+	}
+
+	// Check worker reachability
+	if gs.NodeID != nil {
+		if _, online := m.registry.Get(*gs.NodeID); !online {
+			return controller.StatusUnreachable, "Worker offline"
+		}
+	}
+
+	// Check runtime instance state first — this is ground truth
+	rs := m.GetRuntimeState(gs.ID)
+
+	if rs != nil && rs.Exited {
+		reason := rs.ErrorReason
+		if reason == "" {
+			reason = "Instance exited unexpectedly"
+		}
+		return controller.StatusError, reason
+	}
+
+	if rs != nil && rs.Running {
+		// Instance is running — check if ready or still starting
+		if rs.Ready {
+			return controller.StatusRunning, ""
+		}
+		// Check operation phase for more specific status
+		if gs.Operation != nil && gs.Operation.Phase == model.PhaseStarting {
+			return controller.StatusStarting, ""
+		}
+		return controller.StatusStarted, ""
+	}
+
+	// No running/exited instance. If a lifecycle operation is in progress and
+	// hasn't created an instance yet, show the operation phase. Otherwise stopped.
+	if gs.Operation != nil && gs.InstanceID == nil {
+		switch gs.Operation.Phase {
+		case model.PhasePullingImage, model.PhaseDownloadingGame, model.PhaseInstalling:
+			return controller.StatusInstalling, ""
+		case model.PhaseStopping:
+			return controller.StatusStopping, ""
+		}
+	}
+
+	return controller.StatusStopped, ""
 }
 
 const maxAutoRestartAttempts = 3

@@ -31,6 +31,7 @@ func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *status.Sta
 		nil, // restartFunc not needed for recovery tests
 		log,
 	)
+	svc.GameserverSvc.SetStatusProvider(sm)
 	return sm
 }
 
@@ -131,11 +132,10 @@ func TestRecovery_UnreachableStatus_WorkerOffline(t *testing.T) {
 
 	sm := newTestStatusManager(t, svc)
 
-	// Should not crash — unreachable status doesn't need recovery (NeedsRecovery returns false)
+	// Should not crash — worker is offline, so DeriveStatus returns "unreachable"
 	require.NoError(t, sm.RecoverOnStartup(context.Background()))
 
-	fetched, err := s.GetGameserver("gs-unreachable")
+	recovered, err := svc.GameserverSvc.GetGameserver("gs-unreachable")
 	require.NoError(t, err)
-	// Unreachable doesn't satisfy NeedsRecovery, so status is unchanged
-	assert.Equal(t, controller.StatusUnreachable, fetched.Status)
+	assert.Equal(t, controller.StatusUnreachable, recovered.Status)
 }
