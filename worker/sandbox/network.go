@@ -17,43 +17,25 @@ import (
 
 // slirpInstance manages the network namespace holder and slirp4netns process.
 type slirpInstance struct {
-	holder  *exec.Cmd // unshare process holding the netns open
+	holder  *exec.Cmd
 	slirp   *exec.Cmd
 	apiSock string
-	nsPID   int // PID of the namespace holder (for nsenter)
+	nsPID   int
 }
 
-// setupNetworkNamespace creates a user+network namespace, starts slirp4netns
-// for connectivity, and returns the namespace PID for nsenter.
-func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDir string, slirpPath string, log *slog.Logger) (*slirpInstance, error) {
-	if slirpPath == "" {
-		return nil, fmt.Errorf("slirp4netns binary not available")
-	}
-
-	// Step 1: Create a process that holds the user+network namespace open
-	unsharePath := findBinary("unshare")
-	if unsharePath == "" {
-		return nil, fmt.Errorf("unshare binary not found in PATH")
-	}
-
-	shPath := findBinary("sh")
-	if shPath == "" {
-		shPath = "sh"
-	}
-	sleepPath := findBinary("sleep")
-	if sleepPath == "" {
-		sleepPath = "sleep"
-	}
-
-	// Root can create network namespaces directly without a user namespace.
-	// Non-root needs --user for unprivileged network namespace creation.
+// setupNetworkNamespace creates a user+network namespace, starts slirp4netns,
+// and returns the namespace PID for nsenter.
+func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDir string, paths *systemPaths, log *slog.Logger) (*slirpInstance, error) {
 	var holderArgs []string
-	if os.Getuid() == 0 {
-		holderArgs = []string{"--net", "--fork", "--kill-child", "--", shPath, "-c", "echo ready; exec " + sleepPath + " infinity"}
+	if paths.IsRoot {
+		holderArgs = []string{"--net", "--fork", "--kill-child", "--",
+			paths.Sh, "-c", "echo ready; exec " + paths.Sleep + " infinity"}
 	} else {
-		holderArgs = []string{"--user", "--net", "--fork", "--kill-child", "--", shPath, "-c", "echo ready; exec " + sleepPath + " infinity"}
+		holderArgs = []string{"--user", "--net", "--fork", "--kill-child", "--",
+			paths.Sh, "-c", "echo ready; exec " + paths.Sleep + " infinity"}
 	}
-	holder := exec.Command(unsharePath, holderArgs...)
+
+	holder := exec.Command(paths.Unshare, holderArgs...)
 	holderOut, err := holder.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("creating holder pipe: %w", err)
@@ -65,7 +47,6 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 		return nil, fmt.Errorf("starting namespace holder: %w", err)
 	}
 
-	// Wait for "ready" signal
 	scanner := bufio.NewScanner(holderOut)
 	if !scanner.Scan() {
 		holder.Process.Kill()
@@ -75,43 +56,21 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 
 	nsPID := holder.Process.Pid
 
-	// Map a full UID/GID range so chown inside the namespace works.
-	// Root doesn't need this — it already has full permissions.
-	if os.Getuid() != 0 {
+	// Map UID/GID range for non-root so chown works inside the namespace
+	if !paths.IsRoot && paths.hasUIDMapping() {
 		uid := os.Getuid()
 		gid := os.Getgid()
-		newuidmapPath := findBinary("newuidmap")
-		newgidmapPath := findBinary("newgidmap")
-		if newuidmapPath != "" && newgidmapPath != "" {
-			if err := exec.Command(newuidmapPath, fmt.Sprintf("%d", nsPID),
-				"0", fmt.Sprintf("%d", uid), "1",
-				"1", "165536", "65536").Run(); err != nil {
-				log.Warn("newuidmap failed, chown inside sandbox may not work", "error", err)
-			}
-			if err := exec.Command(newgidmapPath, fmt.Sprintf("%d", nsPID),
-				"0", fmt.Sprintf("%d", gid), "1",
-				"1", "165536", "65536").Run(); err != nil {
-				log.Warn("newgidmap failed, chown inside sandbox may not work", "error", err)
-			}
-		} else {
-			log.Warn("newuidmap/newgidmap not found, chown inside sandbox may not work")
-		}
+		exec.Command(paths.NewUIDMap, fmt.Sprintf("%d", nsPID),
+			"0", fmt.Sprintf("%d", uid), "1", "1", "165536", "65536").Run()
+		exec.Command(paths.NewGIDMap, fmt.Sprintf("%d", nsPID),
+			"0", fmt.Sprintf("%d", gid), "1", "1", "165536", "65536").Run()
 	}
 
-	log.Debug("network namespace created", "holder_pid", nsPID)
-
-	// Step 2: Start slirp4netns attached to the namespace holder
+	// Start slirp4netns
 	apiSock := filepath.Join(dataDir, "instances", instanceID, "slirp.sock")
-	slirpArgs := []string{
-		"--configure",
-		"--mtu=65520",
-		"--disable-host-loopback",
-		"--api-socket", apiSock,
-		fmt.Sprintf("%d", nsPID),
-		"tap0",
-	}
-
-	slirpCmd := exec.Command(slirpPath, slirpArgs...)
+	slirpCmd := exec.Command(paths.Slirp4netns,
+		"--configure", "--mtu=65520", "--disable-host-loopback",
+		"--api-socket", apiSock, fmt.Sprintf("%d", nsPID), "tap0")
 	slirpCmd.Stderr = os.Stderr
 	slirpCmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
 
@@ -129,44 +88,32 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Step 3: Add port forwards
+	// Add port forwards
 	for _, p := range ports {
 		if p.HostPort > 0 {
 			proto := p.Protocol
 			if proto == "" {
 				proto = "tcp"
 			}
-			if err := addPortForward(apiSock, p.HostPort, p.HostPort, proto); err != nil {
-				log.Warn("failed to add port forward", "host_port", p.HostPort, "proto", proto, "error", err)
-			}
+			addPortForward(apiSock, p.HostPort, p.HostPort, proto)
 		}
 	}
 
-	si := &slirpInstance{
-		holder:  holder,
-		slirp:   slirpCmd,
-		apiSock: apiSock,
-		nsPID:   nsPID,
-	}
-
+	si := &slirpInstance{holder: holder, slirp: slirpCmd, apiSock: apiSock, nsPID: nsPID}
 	log.Info("network namespace ready", "instance", instanceID, "ns_pid", nsPID, "ports", len(ports))
 	return si, nil
 }
 
-// nsenterPrefix returns the nsenter command prefix to run a process inside
-// the network namespace. Used to wrap bwrap so it inherits the netns.
-func nsenterPrefix(nsPID int) []string {
-	nsenterPath := findBinary("nsenter")
-	if os.Getuid() == 0 {
-		// Root: no user namespace, only enter netns
-		return []string{nsenterPath, fmt.Sprintf("--net=/proc/%d/ns/net", nsPID), "--"}
+// nsenterPrefix returns the nsenter command prefix for entering the namespace.
+func nsenterPrefix(nsPID int, paths *systemPaths) []string {
+	if paths.IsRoot {
+		return []string{paths.Nsenter, fmt.Sprintf("--net=/proc/%d/ns/net", nsPID), "--"}
 	}
-	return []string{nsenterPath, "--preserve-credentials",
+	return []string{paths.Nsenter, "--preserve-credentials",
 		fmt.Sprintf("--user=/proc/%d/ns/user", nsPID),
 		fmt.Sprintf("--net=/proc/%d/ns/net", nsPID), "--"}
 }
 
-// addPortForward tells slirp4netns to forward a host port into the namespace.
 func addPortForward(apiSock string, hostPort, guestPort int, proto string) error {
 	conn, err := net.Dial("unix", apiSock)
 	if err != nil {
@@ -177,54 +124,27 @@ func addPortForward(apiSock string, hostPort, guestPort int, proto string) error
 	req := map[string]any{
 		"execute": "add_hostfwd",
 		"arguments": map[string]any{
-			"proto":      proto,
-			"host_addr":  "0.0.0.0",
-			"host_port":  hostPort,
-			"guest_addr": "10.0.2.100",
-			"guest_port": guestPort,
+			"proto": proto, "host_addr": "0.0.0.0", "host_port": hostPort,
+			"guest_addr": "10.0.2.100", "guest_port": guestPort,
 		},
 	}
-
 	data, _ := json.Marshal(req)
 	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if _, err := conn.Write(data); err != nil {
-		return fmt.Errorf("sending port forward request: %w", err)
-	}
+	conn.Write(data)
 
 	buf := make([]byte, 4096)
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, err := conn.Read(buf)
-	if err != nil {
-		return fmt.Errorf("reading port forward response: %w", err)
+	n, _ := conn.Read(buf)
+	if n > 0 {
+		var resp map[string]any
+		json.Unmarshal(buf[:n], &resp)
+		if errMsg, ok := resp["error"]; ok {
+			return fmt.Errorf("slirp: %v", errMsg)
+		}
 	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(buf[:n], &resp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-	if errMsg, ok := resp["error"]; ok {
-		return fmt.Errorf("slirp error: %v", errMsg)
-	}
-
 	return nil
 }
 
-// findBinary searches PATH and common system locations for a binary.
-func findBinary(name string) string {
-	if path, err := exec.LookPath(name); err == nil {
-		return path
-	}
-	// Common locations not always in systemd's PATH
-	for _, dir := range []string{"/usr/bin", "/bin", "/usr/sbin", "/sbin", "/run/current-system/sw/bin"} {
-		path := filepath.Join(dir, name)
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-	return ""
-}
-
-// stopSlirp kills the slirp4netns process and namespace holder.
 func stopSlirp(si *slirpInstance, log *slog.Logger) {
 	if si == nil {
 		return
@@ -238,5 +158,4 @@ func stopSlirp(si *slirpInstance, log *slog.Logger) {
 		si.holder.Wait()
 	}
 	os.Remove(si.apiSock)
-	log.Debug("network namespace cleaned up", "ns_pid", si.nsPID)
 }

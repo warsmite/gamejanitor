@@ -25,8 +25,7 @@ type SandboxWorker struct {
 	gameStore *games.GameStore
 	dataDir   string
 	resolve   worker.VolumeResolver
-	bwrapPath string
-	slirpPath string
+	paths     *systemPaths
 
 	mu        sync.Mutex
 	instances map[string]*managedInstance
@@ -63,38 +62,30 @@ type instanceManifest struct {
 }
 
 func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxWorker {
+	cleanupOrphanHolders(log)
+
+	paths, err := resolvePaths(dataDir, log)
+	if err != nil {
+		log.Error("sandbox runtime initialization failed", "error", err)
+		paths = &systemPaths{IsRoot: os.Getuid() == 0}
+	}
+
 	w := &SandboxWorker{
 		log:       log,
 		gameStore: gameStore,
 		dataDir:   dataDir,
+		paths:     paths,
 		instances: make(map[string]*managedInstance),
 		eventCh:   make(chan worker.InstanceEvent, 64),
 	}
 	w.resolve = w.volumeResolver()
 
-	// Kill orphaned namespace holders from a previous crash
-	cleanupOrphanHolders(log)
-
-	// Ensure sandbox binaries are available
-	bwrapPath, err := ensureBwrap(dataDir, log)
-	if err != nil {
-		log.Error("failed to ensure bwrap binary", "error", err)
-	} else {
-		w.bwrapPath = bwrapPath
-	}
-
-	slirpPath, err := ensureSlirp4netns(dataDir, log)
-	if err != nil {
-		log.Warn("slirp4netns not available — network isolation disabled", "error", err)
-	} else {
-		w.slirpPath = slirpPath
-	}
-
-	if !hasSystemdRun() {
-		log.Warn("systemd-run not found — resource limits and process survival unavailable")
-	} else {
-		log.Info("sandbox runtime ready", "bwrap", w.bwrapPath, "slirp", w.slirpPath)
-	}
+	log.Info("sandbox runtime ready",
+		"bwrap", paths.Bwrap,
+		"slirp", paths.Slirp4netns,
+		"systemd", paths.hasSystemd(),
+		"network_isolation", paths.hasNetworkIsolation(),
+		"root", paths.IsRoot)
 	return w
 }
 
@@ -180,8 +171,8 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 
 	// Set up network namespace before starting bwrap
 	var slirpInst *slirpInstance
-	if w.slirpPath != "" {
-		si, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.slirpPath, w.log)
+	if w.paths.hasNetworkIsolation() {
+		si, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.paths, w.log)
 		if err != nil {
 			w.log.Warn("network isolation unavailable", "id", id, "error", err)
 		} else {
@@ -190,8 +181,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	}
 
 	// Wrap in systemd-run for lifecycle + cgroups.
-	// If we have a network namespace, wrap bwrap in nsenter to join it.
-	cmd := buildSystemdCommandWithNetns(id, manifest, bwrapArgs, w.bwrapPath, slirpInst)
+	cmd := buildSystemdCommandWithNetns(id, manifest, bwrapArgs, w.paths, slirpInst)
 
 	// Log file
 	logPath := filepath.Join(dir, "output.log")
@@ -273,16 +263,16 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 	}
 
 	// Send SIGTERM to all processes in the systemd scope cgroup
-	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.log)
-	stopSystemdUnit(inst.unitName, w.log)
+	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.paths, w.log)
+	stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 	select {
 	case <-inst.done:
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.log)
-		killSystemdUnit(inst.unitName, w.log)
+		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.paths, w.log)
+		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 		return nil
 	case <-ctx.Done():
@@ -299,7 +289,7 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 	w.mu.Unlock()
 
 	if ok && !inst.exited {
-		killSystemdUnit(inst.unitName, w.log)
+		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 	} else if ok {
 		stopSlirp(inst.slirp, w.log)
@@ -358,7 +348,7 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmd...)
 
-	execCmd := buildExecCommand(bwrapArgs, w.bwrapPath)
+	execCmd := buildExecCommand(bwrapArgs, w.paths.Bwrap)
 	var stdout, stderr []byte
 	var stdoutBuf, stderrBuf safeBuffer
 	execCmd.Stdout = &stdoutBuf
@@ -444,7 +434,7 @@ func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
 		// Files created inside a user namespace are owned by subordinate UIDs
 		// that the current user can't delete. Create a temporary user namespace
 		// with the same UID mapping and delete from inside it.
-		rmErr := removeWithUserNS(path, w.log)
+		rmErr := removeWithUserNS(path, w.paths, w.log)
 		if rmErr != nil {
 			return fmt.Errorf("removing volume %s: %w (ns fallback: %v)", name, err, rmErr)
 		}
@@ -452,34 +442,31 @@ func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
 	return nil
 }
 
-// removeWithUserNS removes a path by entering a user namespace with full UID mapping.
-func removeWithUserNS(path string, log *slog.Logger) error {
-	// Start a holder process in a new user namespace
-	holder := exec.Command(findBinary("unshare"), "--user", "--fork", "--kill-child", "--", findBinary("sleep"), "10")
+// removeWithUserNS removes a path that may contain files owned by mapped UIDs.
+func removeWithUserNS(path string, paths *systemPaths, log *slog.Logger) error {
+	if paths.IsRoot {
+		return exec.Command(paths.Rm, "-rf", path).Run()
+	}
+
+	holder := exec.Command(paths.Unshare, "--user", "--fork", "--kill-child", "--", paths.Sleep, "10")
 	holder.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	if err := holder.Start(); err != nil {
 		return fmt.Errorf("starting cleanup namespace: %w", err)
 	}
-	defer func() {
-		holder.Process.Kill()
-		holder.Wait()
-	}()
+	defer func() { holder.Process.Kill(); holder.Wait() }()
 
 	pid := holder.Process.Pid
-	uid := os.Getuid()
-	gid := os.Getgid()
+	if paths.hasUIDMapping() {
+		uid := os.Getuid()
+		gid := os.Getgid()
+		exec.Command(paths.NewUIDMap, fmt.Sprintf("%d", pid),
+			"0", fmt.Sprintf("%d", uid), "1", "1", "165536", "65536").Run()
+		exec.Command(paths.NewGIDMap, fmt.Sprintf("%d", pid),
+			"0", fmt.Sprintf("%d", gid), "1", "1", "165536", "65536").Run()
+	}
 
-	// Map UIDs/GIDs to match what the sandbox used
-	exec.Command(findBinary("newuidmap"), fmt.Sprintf("%d", pid),
-		"0", fmt.Sprintf("%d", uid), "1",
-		"1", "165536", "65536").Run()
-	exec.Command(findBinary("newgidmap"), fmt.Sprintf("%d", pid),
-		"0", fmt.Sprintf("%d", gid), "1",
-		"1", "165536", "65536").Run()
-
-	// Enter the namespace and rm -rf
-	cmd := exec.Command(findBinary("nsenter"), fmt.Sprintf("--user=/proc/%d/ns/user", pid), "--", findBinary("rm"), "-rf", path)
-	return cmd.Run()
+	return exec.Command(paths.Nsenter, fmt.Sprintf("--user=/proc/%d/ns/user", pid),
+		"--", paths.Rm, "-rf", path).Run()
 }
 
 func (w *SandboxWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
