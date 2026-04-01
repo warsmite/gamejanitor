@@ -145,7 +145,7 @@ func TestIntegration_ProcessCanWriteToVolume(t *testing.T) {
 		t.Fatal("instance did not exit in time")
 	}
 
-	assert.Equal(t, 0, inst.exitCode, "process should exit cleanly")
+	assert.Equal(t, int32(0), inst.exitCode.Load(), "process should exit cleanly")
 
 	// Verify the file was written to the volume
 	volPath := filepath.Join(w.dataDir, "volumes", "test-vol")

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -43,8 +44,8 @@ type managedInstance struct {
 	image     string
 	pid       int
 	startedAt time.Time
-	exitCode  int
-	exited    bool
+	exitCode  atomic.Int32
+	exited    atomic.Bool
 	logFile   *os.File
 	done      chan struct{}
 	unitName  string // systemd unit name
@@ -286,22 +287,22 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 	// Exit watcher
 	go func() {
 		cmd.Wait()
-		inst.exitCode = cmd.ProcessState.ExitCode()
-		inst.exited = true
+		inst.exitCode.Store(int32(cmd.ProcessState.ExitCode()))
+		inst.exited.Store(true)
 		logFile.Close()
 		stopSlirp(inst.slirp, w.log)
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
-		if inst.exitCode != 0 && uptime < 3*time.Second {
+		if inst.exitCode.Load() != 0 && uptime < 3*time.Second {
 			// Immediate exit with error — likely a sandbox/config problem, not a game crash.
 			// Read the output log for the actual error.
 			logData, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
 			w.log.Error("instance failed to start (exited immediately)",
-				"id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Millisecond),
+				"id", id, "exit_code", inst.exitCode.Load(), "uptime", uptime.Round(time.Millisecond),
 				"output", truncate(string(logData), 500))
 		} else {
-			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode, "uptime", uptime.Round(time.Second))
+			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode.Load(), "uptime", uptime.Round(time.Second))
 		}
 		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
 		close(inst.done)
@@ -331,7 +332,7 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 	inst, ok := w.instances[id]
 	w.mu.Unlock()
 
-	if !ok || inst.exited {
+	if !ok || inst.exited.Load() {
 		return nil
 	}
 
@@ -378,7 +379,7 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 	}
 	w.mu.Unlock()
 
-	if ok && !inst.exited {
+	if ok && !inst.exited.Load() {
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 	} else if ok {
@@ -396,14 +397,14 @@ func (w *SandboxWorker) InspectInstance(ctx context.Context, id string) (*worker
 
 	if ok {
 		state := "running"
-		if inst.exited {
+		if inst.exited.Load() {
 			state = "exited"
 		}
 		return &worker.InstanceInfo{
 			ID:        inst.id,
 			State:     state,
 			StartedAt: inst.startedAt,
-			ExitCode:  inst.exitCode,
+			ExitCode:  int(inst.exitCode.Load()),
 		}, nil
 	}
 
@@ -434,7 +435,7 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 	inst, ok := w.instances[instanceID]
 	w.mu.Unlock()
 
-	if !ok || inst.exited {
+	if !ok || inst.exited.Load() {
 		return 1, "", "", fmt.Errorf("instance %s not found or not running", instanceID)
 	}
 
@@ -673,7 +674,7 @@ func (w *SandboxWorker) InstanceStats(ctx context.Context, instanceID string) (*
 	inst, ok := w.instances[instanceID]
 	w.mu.Unlock()
 
-	if !ok || inst.exited {
+	if !ok || inst.exited.Load() {
 		return &worker.InstanceStats{}, nil
 	}
 
@@ -900,7 +901,7 @@ func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 		w.mu.Unlock()
 
 		state := "exited"
-		if inMemory && !inst.exited {
+		if inMemory && !inst.exited.Load() {
 			state = "running"
 		} else if !inMemory {
 			// Check persisted state for instances not yet in memory
@@ -1027,8 +1028,8 @@ func (w *SandboxWorker) recoverInstances() {
 			defer ticker.Stop()
 			for range ticker.C {
 				if !isSystemdScopeActive(inst.unitName, w.paths) {
-					inst.exited = true
-					inst.exitCode = -1
+					inst.exited.Store(true)
+					inst.exitCode.Store(-1)
 					stopSlirp(inst.slirp, w.log)
 					os.Remove(filepath.Join(dir, "state.json"))
 

@@ -285,7 +285,7 @@ func (r *followReader) Read(p []byte) (int, error) {
 		r.worker.mu.Lock()
 		inst, ok := r.worker.instances[r.instanceID]
 		r.worker.mu.Unlock()
-		if !ok || inst.exited {
+		if !ok || inst.exited.Load() {
 			return 0, io.EOF
 		}
 
