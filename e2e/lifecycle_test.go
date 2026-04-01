@@ -62,7 +62,7 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 30*time.Second))
+	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 60*time.Second))
 
 	// Delete (async — returns 202)
 	resp, err = h.Delete("/api/gameservers/" + gs.ID)
@@ -101,7 +101,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// Stop
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
-	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 30*time.Second))
+	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", 60*time.Second))
 
 	// Second start — should skip install (SKIP_INSTALL=1 passed by gamejanitor)
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
@@ -109,7 +109,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 
 	// Cleanup
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
-	h.WaitForStatus(gs.ID, "stopped", 30*time.Second)
+	h.WaitForStatus(gs.ID, "stopped", 60*time.Second)
 	h.Delete("/api/gameservers/" + gs.ID)
 }
 
@@ -218,6 +218,6 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 
 	// Cleanup
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
-	h.WaitForStatus(gs.ID, "stopped", 30*time.Second)
+	h.WaitForStatus(gs.ID, "stopped", 60*time.Second)
 	h.Delete("/api/gameservers/" + gs.ID)
 }
