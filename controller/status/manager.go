@@ -188,11 +188,9 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 
 	switch info.State {
 	case "running":
-		m.log.Info("instance running, re-attaching ready watcher and polling", "gameserver", gs.ID)
+		m.log.Info("instance running, re-attaching ready watcher", "gameserver", gs.ID)
 		m.SetRunning(gs.ID)
 		m.readyWatcher.Watch(gs.ID, w, *gs.InstanceID)
-		m.querySvc.StartPolling(gs.ID)
-		m.statsPoller.StartPolling(gs.ID)
 	case "exited", "dead", "created":
 		m.log.Info("instance is not running, clearing", "gameserver", gs.ID, "state", info.State)
 		gs.InstanceID = nil
@@ -391,6 +389,7 @@ func (m *StatusManager) SetRunning(gameserverID string) {
 	m.runtimeMu.Lock()
 	m.runtimeStates[gameserverID] = &InstanceState{Running: true}
 	m.runtimeMu.Unlock()
+	m.startPolling(gameserverID)
 }
 
 // SetStopped clears a gameserver's runtime state.
@@ -399,6 +398,7 @@ func (m *StatusManager) SetStopped(gameserverID string) {
 	m.runtimeMu.Lock()
 	delete(m.runtimeStates, gameserverID)
 	m.runtimeMu.Unlock()
+	m.stopPolling(gameserverID)
 }
 
 func (m *StatusManager) setReady(gameserverID string) {
@@ -413,12 +413,32 @@ func (m *StatusManager) setExited(gameserverID string, exitCode int, reason stri
 	m.runtimeMu.Lock()
 	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ExitCode: exitCode, ErrorReason: reason}
 	m.runtimeMu.Unlock()
+	m.stopPolling(gameserverID)
 }
 
 func (m *StatusManager) setError(gameserverID string, reason string) {
 	m.runtimeMu.Lock()
 	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ErrorReason: reason}
 	m.runtimeMu.Unlock()
+	m.stopPolling(gameserverID)
+}
+
+func (m *StatusManager) startPolling(gameserverID string) {
+	if m.querySvc != nil {
+		m.querySvc.StartPolling(gameserverID)
+	}
+	if m.statsPoller != nil {
+		m.statsPoller.StartPolling(gameserverID)
+	}
+}
+
+func (m *StatusManager) stopPolling(gameserverID string) {
+	if m.querySvc != nil {
+		m.querySvc.StopPolling(gameserverID)
+	}
+	if m.statsPoller != nil {
+		m.statsPoller.StopPolling(gameserverID)
+	}
 }
 
 // GetRuntimeState returns the current instance state for a gameserver.

@@ -75,49 +75,23 @@ func (s *StatusSubscriber) Stop() {
 }
 
 func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
-	// Status writes are now done synchronously by the lifecycle service and
-	// status manager via TransitionStatus (CAS). The subscriber only handles
-	// side effects: polling start/stop and operation clearing.
+	// Status is derived on read. Polling is managed by StatusManager.
+	// The subscriber only clears operations on terminal events.
 	switch e := event.(type) {
-	case controller.InstanceStartedEvent:
-		s.startPolling(e.GameserverID)
 	case controller.GameserverReadyEvent:
 		s.clearOperation(e.GameserverID)
-		s.startPolling(e.GameserverID)
 	case controller.InstanceStoppedEvent:
 		s.clearOperation(e.GameserverID)
-		s.stopPolling(e.GameserverID)
 	case controller.InstanceExitedEvent:
 		s.clearOperation(e.GameserverID)
-		s.stopPolling(e.GameserverID)
 	case controller.GameserverErrorEvent:
 		s.clearOperation(e.GameserverID)
-		s.stopPolling(e.GameserverID)
 	}
 }
 
 func (s *StatusSubscriber) clearOperation(gameserverID string) {
 	if s.operations != nil {
 		s.operations.ClearOperation(gameserverID)
-	}
-}
-
-
-func (s *StatusSubscriber) startPolling(gameserverID string) {
-	if s.querySvc != nil {
-		s.querySvc.StartPolling(gameserverID)
-	}
-	if s.statsPoller != nil {
-		s.statsPoller.StartPolling(gameserverID)
-	}
-}
-
-func (s *StatusSubscriber) stopPolling(gameserverID string) {
-	if s.querySvc != nil {
-		s.querySvc.StopPolling(gameserverID)
-	}
-	if s.statsPoller != nil {
-		s.statsPoller.StopPolling(gameserverID)
 	}
 }
 
