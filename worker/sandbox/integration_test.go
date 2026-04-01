@@ -34,7 +34,9 @@ func TestIntegration_BwrapRuns(t *testing.T) {
 	require.NotEmpty(t, bwrap)
 
 	// Run a simple command in a bwrap sandbox
-	cmd := exec.Command(bwrap, "--bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--", "/bin/echo", "hello from sandbox")
+	echoPath := lookupBinary("echo")
+	require.NotEmpty(t, echoPath, "echo not found")
+	cmd := exec.Command(bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--", echoPath, "hello from sandbox")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "bwrap should run: %s", string(out))
 	assert.Contains(t, string(out), "hello from sandbox")
