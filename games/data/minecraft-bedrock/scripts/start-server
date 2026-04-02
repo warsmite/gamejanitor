@@ -14,6 +14,7 @@ update_property() {
 PROPS=/data/server/server.properties
 update_property "server-name"      "${SERVER_NAME:-Gamejanitor Bedrock Server}" "$PROPS"
 update_property "server-port"      "${SERVER_PORT:-19132}"                      "$PROPS"
+update_property "server-portv6"   "${SERVER_PORT:-19132}"                      "$PROPS"
 update_property "gamemode"         "${GAMEMODE:-survival}"                      "$PROPS"
 update_property "difficulty"       "${DIFFICULTY:-normal}"                      "$PROPS"
 update_property "max-players"      "${MAX_PLAYERS:-10}"                         "$PROPS"
