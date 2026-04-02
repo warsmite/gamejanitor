@@ -2,12 +2,52 @@
 set -e
 
 PORT="${GAME_PORT:-27015}"
+
+# Failure injection via TEST_BEHAVIOR env var.
+# Default (empty): normal happy-path behavior.
+case "${TEST_BEHAVIOR}" in
+  crash-after-ready)
+    echo "Server is ready"
+    sleep 2
+    echo "[start-server] simulating crash"
+    exit 1
+    ;;
+  crash-before-ready)
+    echo "[start-server] starting..."
+    sleep 1
+    echo "[start-server] fatal error during startup"
+    exit 1
+    ;;
+  ignore-sigterm)
+    echo "Server is ready"
+    trap '' TERM INT
+    echo "[start-server] ignoring shutdown signals"
+    while true; do sleep 1; done
+    ;;
+  slow-ready)
+    DELAY="${READY_DELAY_SECONDS:-10}"
+    echo "[start-server] loading world (${DELAY}s)..."
+    sleep "$DELAY"
+    echo "Server is ready"
+    ;;
+  exit-clean)
+    echo "Server is ready"
+    sleep 2
+    echo "[start-server] shutting down cleanly"
+    exit 0
+    ;;
+  stdout-flood)
+    echo "Server is ready"
+    while true; do
+      dd if=/dev/urandom bs=4096 count=1 2>/dev/null | base64
+    done
+    ;;
+esac
+
+# Default path: normal behavior
 echo "[start-server] starting test game on port $PORT"
 echo "Server is ready"
 
-# Keep the process alive — listen for connections on the game port.
-# Use a simple socat TCP listener if available, fall back to sleep loop.
-# The process must handle SIGTERM cleanly for container stop to work.
 cleanup() {
     echo "[start-server] received shutdown signal"
     exit 0
@@ -15,11 +55,9 @@ cleanup() {
 trap cleanup TERM INT
 
 if command -v socat >/dev/null 2>&1; then
-    # Listen and echo back — allows TCP dial verification in tests
     socat TCP-LISTEN:"$PORT",reuseaddr,fork EXEC:"echo OK" &
     SOCAT_PID=$!
     wait $SOCAT_PID
 else
-    # Fallback: just stay alive
     while true; do sleep 1; done
 fi

@@ -48,6 +48,22 @@ instance:
     - key: QUERY_PORT
       default: "27016"
       system: true
+    # Failure injection for e2e tests — see scripts/start-server
+    - key: TEST_BEHAVIOR
+      system: true
+      hidden: true
+    - key: TEST_INSTALL_BEHAVIOR
+      system: true
+      hidden: true
+    - key: READY_DELAY_SECONDS
+      system: true
+      hidden: true
+    - key: INSTALL_DELAY_SECONDS
+      system: true
+      hidden: true
+    - key: INSTALL_FILE_MB
+      system: true
+      hidden: true
 
   mods:
     categories:

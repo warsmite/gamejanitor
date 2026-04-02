@@ -1,5 +1,27 @@
 #!/bin/sh
 set -e
+
+# Failure injection via TEST_INSTALL_BEHAVIOR env var.
+# Default (empty): normal happy-path install.
+case "${TEST_INSTALL_BEHAVIOR}" in
+  fail)
+    echo "[install-server] downloading..."
+    sleep 1
+    echo "[install-server] ERROR: download failed"
+    exit 1
+    ;;
+  slow)
+    DELAY="${INSTALL_DELAY_SECONDS:-15}"
+    echo "[install-server] downloading large depot (${DELAY}s)..."
+    sleep "$DELAY"
+    ;;
+  write-large-file)
+    SIZE_MB="${INSTALL_FILE_MB:-50}"
+    echo "[install-server] writing ${SIZE_MB}MB test file..."
+    dd if=/dev/zero of=/data/large-file bs=1M count="$SIZE_MB" 2>/dev/null
+    ;;
+esac
+
 echo "[install-server] installing test game..."
 mkdir -p /data/.gamejanitor
 echo "installed" > /data/.gamejanitor/test-marker

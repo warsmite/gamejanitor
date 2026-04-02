@@ -125,6 +125,8 @@ func (h *Harness) GameEnv() map[string]string {
 	switch h.GameID() {
 	case "minecraft-java":
 		return map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
+	case "minecraft-bedrock":
+		return map[string]string{}
 	default:
 		return map[string]string{"REQUIRED_VAR": "yes"}
 	}
