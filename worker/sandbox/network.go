@@ -42,7 +42,6 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	if err != nil {
 		return nil, fmt.Errorf("creating holder pipe: %w", err)
 	}
-	holder.Stderr = os.Stderr
 	holder.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := holder.Start(); err != nil {
@@ -78,7 +77,8 @@ func setupNetworkNamespace(instanceID string, ports []worker.PortBinding, dataDi
 	slirpCmd := exec.Command(paths.Slirp4netns,
 		"--configure", "--mtu=65520", "--disable-host-loopback",
 		"--api-socket", apiSock, fmt.Sprintf("%d", nsPID), "tap0")
-	slirpCmd.Stderr = os.Stderr
+	// Don't inherit stderr — slirp4netns survives parent death for restart
+	// survival, and inherited fds would block the parent's I/O cleanup.
 	slirpCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := slirpCmd.Start(); err != nil {
