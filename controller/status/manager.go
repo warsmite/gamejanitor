@@ -171,8 +171,9 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 
 	info, err := w.InspectInstance(ctx, *gs.InstanceID)
 	if err != nil {
-		m.log.Warn("instance not found, clearing", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
+		m.log.Warn("instance not found, clearing", "gameserver", gs.ID, "instance_id", truncID(*gs.InstanceID), "error", err)
 		gs.InstanceID = nil
+		gs.DesiredState = "stopped"
 		m.store.UpdateGameserver(gs)
 		m.workerStateMu.Lock()
 		delete(m.workerStates, gs.ID)
@@ -194,6 +195,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 	case "exited", "dead", "created":
 		m.log.Info("instance is not running, clearing", "gameserver", gs.ID, "state", info.State)
 		gs.InstanceID = nil
+		gs.DesiredState = "stopped"
 		m.store.UpdateGameserver(gs)
 		m.workerStateMu.Lock()
 		delete(m.workerStates, gs.ID)
@@ -499,6 +501,11 @@ func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, error
 	}
 
 	if ws == nil {
+		// No worker state yet — if desired_state is "running", an async operation
+		// is in progress (doStart hasn't created the instance yet)
+		if gs.DesiredState == "running" {
+			return controller.StatusStarting, ""
+		}
 		return controller.StatusStopped, ""
 	}
 

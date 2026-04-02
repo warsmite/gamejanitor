@@ -43,7 +43,10 @@ func Start(t *testing.T) *Harness {
 
 	url := os.Getenv("GAMEJANITOR_API_URL")
 	if url == "" {
-		localOnce.Do(func() { startLocalInstance(t) })
+		localOnce.Do(func() {
+			startLocalInstance(t)
+			warmImage(t)
+		})
 		url = localURL
 	}
 
@@ -108,6 +111,59 @@ func startLocalInstance(t *testing.T) {
 		cleanupSandboxState()
 		os.RemoveAll(localDir)
 	})
+}
+
+// warmImage pre-pulls the game image by creating, starting, and deleting a
+// throwaway gameserver. This ensures the OCI image is cached before parallel
+// tests start, avoiding concurrent pull races.
+func warmImage(t *testing.T) {
+	t.Helper()
+	h := &Harness{BaseURL: localURL}
+
+	// Wait for the instance to be ready
+	h.waitForReady(t)
+	h.waitForWorker(t)
+
+	gameID := "test-game"
+	if id := os.Getenv("E2E_GAME_ID"); id != "" {
+		gameID = id
+	}
+	env := map[string]string{"REQUIRED_VAR": "yes"}
+	if gameID == "minecraft-java" {
+		env = map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
+	}
+
+	resp, err := h.PostJSON("/api/gameservers", map[string]any{
+		"name": "image-warmup", "game_id": gameID, "env": env,
+	})
+	if err != nil {
+		t.Logf("warmImage: create failed: %v", err)
+		return
+	}
+	var gs struct{ ID string `json:"id"` }
+	if err := DecodeData(resp, &gs); err != nil {
+		t.Logf("warmImage: decode failed: %v", err)
+		return
+	}
+
+	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	if err := h.WaitForStatus(gs.ID, "running", 2*time.Minute); err != nil {
+		t.Logf("warmImage: wait for running failed: %v", err)
+	}
+
+	// Stop and delete
+	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	h.WaitForStatus(gs.ID, "stopped", 30*time.Second)
+	h.Delete("/api/gameservers/" + gs.ID)
+
+	t.Logf("warmImage: image cached for %s", gameID)
 }
 
 // --- Game config ---
