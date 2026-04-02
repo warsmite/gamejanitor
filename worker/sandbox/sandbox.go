@@ -871,21 +871,6 @@ func (w *SandboxWorker) GetAllInstanceStates(ctx context.Context) ([]worker.Inst
 	return w.tracker.Snapshot(), nil
 }
 
-func (w *SandboxWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	exitCode, stdout, stderr, err := w.Exec(ctx, id, []string{"/scripts/install-server"})
-	if err != nil {
-		return -1, "", err
-	}
-	output := stdout
-	if stderr != "" {
-		output += "\n" + stderr
-	}
-	if exitCode == 0 && w.tracker != nil {
-		w.tracker.SetInstalled(id)
-	}
-	return exitCode, output, nil
-}
-
 // --- Worker interface: Discovery ---
 
 func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {

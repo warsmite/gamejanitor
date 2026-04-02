@@ -13,7 +13,6 @@ type Worker interface {
 	PullImage(ctx context.Context, image string) error
 	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
 	StartInstance(ctx context.Context, id string, readyPattern string) error
-	RunInstall(ctx context.Context, id string) (exitCode int, output string, err error)
 	StopInstance(ctx context.Context, id string, timeoutSeconds int) error
 	RemoveInstance(ctx context.Context, id string) error
 	InspectInstance(ctx context.Context, id string) (*InstanceInfo, error)

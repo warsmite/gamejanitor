@@ -104,21 +104,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	return nil
 }
 
-func (w *LocalWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	exitCode, stdout, stderr, err := w.Docker.Exec(ctx, id, []string{"/scripts/install-server"})
-	if err != nil {
-		return -1, "", err
-	}
-	output := stdout
-	if stderr != "" {
-		output += "\n" + stderr
-	}
-	if exitCode == 0 && w.Tracker != nil {
-		w.Tracker.SetInstalled(id)
-	}
-	return exitCode, output, nil
-}
-
 func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
 	return w.Docker.StopInstance(ctx, id, timeoutSeconds)
 }

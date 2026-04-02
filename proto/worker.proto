@@ -11,7 +11,6 @@ service WorkerService {
     rpc PullImage(PullImageRequest) returns (PullImageResponse);
     rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
     rpc StartInstance(StartInstanceRequest) returns (StartInstanceResponse);
-    rpc RunInstall(RunInstallRequest) returns (RunInstallResponse);
     rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
     rpc RemoveInstance(RemoveInstanceRequest) returns (RemoveInstanceResponse);
     rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
@@ -312,16 +311,6 @@ message InstanceStateUpdate {
     int64 started_at_unix = 5;
     int64 exited_at_unix = 6;
     bool installed = 7;
-}
-
-// Install — run-to-completion, separate from StartInstance
-
-message RunInstallRequest {
-    string instance_id = 1;
-}
-message RunInstallResponse {
-    int32 exit_code = 1;
-    string output = 2;
 }
 
 // Health

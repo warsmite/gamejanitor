@@ -190,13 +190,6 @@ func (w *FakeWorker) StartInstance(ctx context.Context, id string, readyPattern 
 	return nil
 }
 
-func (w *FakeWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	if err := w.popFailure("RunInstall"); err != nil {
-		return 0, "", err
-	}
-	return 0, "", nil
-}
-
 func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
 	if err := w.popFailure("StopInstance"); err != nil {
 		return err

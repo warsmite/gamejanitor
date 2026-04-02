@@ -72,14 +72,6 @@ func (w *RemoteWorker) StartInstance(ctx context.Context, id string, readyPatter
 	return err
 }
 
-func (w *RemoteWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	resp, err := w.client.RunInstall(ctx, &pb.RunInstallRequest{InstanceId: id})
-	if err != nil {
-		return 0, "", err
-	}
-	return int(resp.ExitCode), resp.Output, nil
-}
-
 func (w *RemoteWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
 	_, err := w.client.StopInstance(ctx, &pb.StopInstanceRequest{
 		InstanceId:    id,

@@ -22,7 +22,6 @@ const (
 	WorkerService_PullImage_FullMethodName               = "/worker.WorkerService/PullImage"
 	WorkerService_CreateInstance_FullMethodName          = "/worker.WorkerService/CreateInstance"
 	WorkerService_StartInstance_FullMethodName           = "/worker.WorkerService/StartInstance"
-	WorkerService_RunInstall_FullMethodName              = "/worker.WorkerService/RunInstall"
 	WorkerService_StopInstance_FullMethodName            = "/worker.WorkerService/StopInstance"
 	WorkerService_RemoveInstance_FullMethodName          = "/worker.WorkerService/RemoveInstance"
 	WorkerService_InspectInstance_FullMethodName         = "/worker.WorkerService/InspectInstance"
@@ -67,7 +66,6 @@ type WorkerServiceClient interface {
 	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error)
 	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
-	RunInstall(ctx context.Context, in *RunInstallRequest, opts ...grpc.CallOption) (*RunInstallResponse, error)
 	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
 	RemoveInstance(ctx context.Context, in *RemoveInstanceRequest, opts ...grpc.CallOption) (*RemoveInstanceResponse, error)
 	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
@@ -143,16 +141,6 @@ func (c *workerServiceClient) StartInstance(ctx context.Context, in *StartInstan
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StartInstanceResponse)
 	err := c.cc.Invoke(ctx, WorkerService_StartInstance_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *workerServiceClient) RunInstall(ctx context.Context, in *RunInstallRequest, opts ...grpc.CallOption) (*RunInstallResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RunInstallResponse)
-	err := c.cc.Invoke(ctx, WorkerService_RunInstall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -534,7 +522,6 @@ type WorkerServiceServer interface {
 	PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error)
 	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
-	RunInstall(context.Context, *RunInstallRequest) (*RunInstallResponse, error)
 	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
 	RemoveInstance(context.Context, *RemoveInstanceRequest) (*RemoveInstanceResponse, error)
 	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
@@ -594,9 +581,6 @@ func (UnimplementedWorkerServiceServer) CreateInstance(context.Context, *CreateI
 }
 func (UnimplementedWorkerServiceServer) StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartInstance not implemented")
-}
-func (UnimplementedWorkerServiceServer) RunInstall(context.Context, *RunInstallRequest) (*RunInstallResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RunInstall not implemented")
 }
 func (UnimplementedWorkerServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopInstance not implemented")
@@ -762,24 +746,6 @@ func _WorkerService_StartInstance_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServiceServer).StartInstance(ctx, req.(*StartInstanceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WorkerService_RunInstall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RunInstallRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServiceServer).RunInstall(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkerService_RunInstall_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).RunInstall(ctx, req.(*RunInstallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1292,10 +1258,6 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartInstance",
 			Handler:    _WorkerService_StartInstance_Handler,
-		},
-		{
-			MethodName: "RunInstall",
-			Handler:    _WorkerService_RunInstall_Handler,
 		},
 		{
 			MethodName: "StopInstance",

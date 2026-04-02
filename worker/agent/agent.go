@@ -71,17 +71,6 @@ func (a *Agent) StartInstance(ctx context.Context, req *pb.StartInstanceRequest)
 	return &pb.StartInstanceResponse{}, nil
 }
 
-func (a *Agent) RunInstall(ctx context.Context, req *pb.RunInstallRequest) (*pb.RunInstallResponse, error) {
-	exitCode, output, err := a.worker.RunInstall(ctx, req.InstanceId)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.RunInstallResponse{
-		ExitCode: int32(exitCode),
-		Output:   output,
-	}, nil
-}
-
 func (a *Agent) StopInstance(ctx context.Context, req *pb.StopInstanceRequest) (*pb.StopInstanceResponse, error) {
 	if err := a.worker.StopInstance(ctx, req.InstanceId, int(req.TimeoutSeconds)); err != nil {
 		return nil, err
