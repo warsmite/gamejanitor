@@ -21,6 +21,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type InstanceState int32
+
+const (
+	InstanceState_INSTANCE_CREATED  InstanceState = 0
+	InstanceState_INSTANCE_STARTING InstanceState = 1 // started but ready pattern not yet matched
+	InstanceState_INSTANCE_RUNNING  InstanceState = 2 // ready pattern matched or no pattern configured
+	InstanceState_INSTANCE_EXITED   InstanceState = 3
+)
+
+// Enum value maps for InstanceState.
+var (
+	InstanceState_name = map[int32]string{
+		0: "INSTANCE_CREATED",
+		1: "INSTANCE_STARTING",
+		2: "INSTANCE_RUNNING",
+		3: "INSTANCE_EXITED",
+	}
+	InstanceState_value = map[string]int32{
+		"INSTANCE_CREATED":  0,
+		"INSTANCE_STARTING": 1,
+		"INSTANCE_RUNNING":  2,
+		"INSTANCE_EXITED":   3,
+	}
+)
+
+func (x InstanceState) Enum() *InstanceState {
+	p := new(InstanceState)
+	*p = x
+	return p
+}
+
+func (x InstanceState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InstanceState) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_worker_proto_enumTypes[0].Descriptor()
+}
+
+func (InstanceState) Type() protoreflect.EnumType {
+	return &file_proto_worker_proto_enumTypes[0]
+}
+
+func (x InstanceState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InstanceState.Descriptor instead.
+func (InstanceState) EnumDescriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{0}
+}
+
 type DataChunk struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
@@ -376,6 +428,7 @@ func (x *CreateInstanceResponse) GetInstanceId() string {
 type StartInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	ReadyPattern  string                 `protobuf:"bytes,2,opt,name=ready_pattern,json=readyPattern,proto3" json:"ready_pattern,omitempty"` // regex — empty means promote to running immediately
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -413,6 +466,13 @@ func (*StartInstanceRequest) Descriptor() ([]byte, []int) {
 func (x *StartInstanceRequest) GetInstanceId() string {
 	if x != nil {
 		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *StartInstanceRequest) GetReadyPattern() string {
+	if x != nil {
+		return x.ReadyPattern
 	}
 	return ""
 }
@@ -2606,26 +2666,26 @@ func (*CopyTarToInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{51}
 }
 
-type WatchEventsRequest struct {
+type WatchInstanceStatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WatchEventsRequest) Reset() {
-	*x = WatchEventsRequest{}
+func (x *WatchInstanceStatesRequest) Reset() {
+	*x = WatchInstanceStatesRequest{}
 	mi := &file_proto_worker_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WatchEventsRequest) String() string {
+func (x *WatchInstanceStatesRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WatchEventsRequest) ProtoMessage() {}
+func (*WatchInstanceStatesRequest) ProtoMessage() {}
 
-func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
+func (x *WatchInstanceStatesRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2637,34 +2697,31 @@ func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WatchEventsRequest.ProtoReflect.Descriptor instead.
-func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use WatchInstanceStatesRequest.ProtoReflect.Descriptor instead.
+func (*WatchInstanceStatesRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{52}
 }
 
-type InstanceEventMsg struct {
+type GetAllInstanceStatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
-	InstanceName  string                 `protobuf:"bytes,2,opt,name=instance_name,json=instanceName,proto3" json:"instance_name,omitempty"`
-	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InstanceEventMsg) Reset() {
-	*x = InstanceEventMsg{}
+func (x *GetAllInstanceStatesRequest) Reset() {
+	*x = GetAllInstanceStatesRequest{}
 	mi := &file_proto_worker_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InstanceEventMsg) String() string {
+func (x *GetAllInstanceStatesRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InstanceEventMsg) ProtoMessage() {}
+func (*GetAllInstanceStatesRequest) ProtoMessage() {}
 
-func (x *InstanceEventMsg) ProtoReflect() protoreflect.Message {
+func (x *GetAllInstanceStatesRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_worker_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2676,28 +2733,239 @@ func (x *InstanceEventMsg) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InstanceEventMsg.ProtoReflect.Descriptor instead.
-func (*InstanceEventMsg) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetAllInstanceStatesRequest.ProtoReflect.Descriptor instead.
+func (*GetAllInstanceStatesRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{53}
 }
 
-func (x *InstanceEventMsg) GetInstanceId() string {
+type GetAllInstanceStatesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Instances     []*InstanceStateUpdate `protobuf:"bytes,1,rep,name=instances,proto3" json:"instances,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAllInstanceStatesResponse) Reset() {
+	*x = GetAllInstanceStatesResponse{}
+	mi := &file_proto_worker_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAllInstanceStatesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAllInstanceStatesResponse) ProtoMessage() {}
+
+func (x *GetAllInstanceStatesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAllInstanceStatesResponse.ProtoReflect.Descriptor instead.
+func (*GetAllInstanceStatesResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *GetAllInstanceStatesResponse) GetInstances() []*InstanceStateUpdate {
+	if x != nil {
+		return x.Instances
+	}
+	return nil
+}
+
+type InstanceStateUpdate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	InstanceName  string                 `protobuf:"bytes,2,opt,name=instance_name,json=instanceName,proto3" json:"instance_name,omitempty"`
+	State         InstanceState          `protobuf:"varint,3,opt,name=state,proto3,enum=worker.InstanceState" json:"state,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,4,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	StartedAtUnix int64                  `protobuf:"varint,5,opt,name=started_at_unix,json=startedAtUnix,proto3" json:"started_at_unix,omitempty"`
+	ExitedAtUnix  int64                  `protobuf:"varint,6,opt,name=exited_at_unix,json=exitedAtUnix,proto3" json:"exited_at_unix,omitempty"`
+	Installed     bool                   `protobuf:"varint,7,opt,name=installed,proto3" json:"installed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstanceStateUpdate) Reset() {
+	*x = InstanceStateUpdate{}
+	mi := &file_proto_worker_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstanceStateUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstanceStateUpdate) ProtoMessage() {}
+
+func (x *InstanceStateUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstanceStateUpdate.ProtoReflect.Descriptor instead.
+func (*InstanceStateUpdate) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *InstanceStateUpdate) GetInstanceId() string {
 	if x != nil {
 		return x.InstanceId
 	}
 	return ""
 }
 
-func (x *InstanceEventMsg) GetInstanceName() string {
+func (x *InstanceStateUpdate) GetInstanceName() string {
 	if x != nil {
 		return x.InstanceName
 	}
 	return ""
 }
 
-func (x *InstanceEventMsg) GetAction() string {
+func (x *InstanceStateUpdate) GetState() InstanceState {
 	if x != nil {
-		return x.Action
+		return x.State
+	}
+	return InstanceState_INSTANCE_CREATED
+}
+
+func (x *InstanceStateUpdate) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *InstanceStateUpdate) GetStartedAtUnix() int64 {
+	if x != nil {
+		return x.StartedAtUnix
+	}
+	return 0
+}
+
+func (x *InstanceStateUpdate) GetExitedAtUnix() int64 {
+	if x != nil {
+		return x.ExitedAtUnix
+	}
+	return 0
+}
+
+func (x *InstanceStateUpdate) GetInstalled() bool {
+	if x != nil {
+		return x.Installed
+	}
+	return false
+}
+
+type RunInstallRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInstallRequest) Reset() {
+	*x = RunInstallRequest{}
+	mi := &file_proto_worker_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInstallRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInstallRequest) ProtoMessage() {}
+
+func (x *RunInstallRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInstallRequest.ProtoReflect.Descriptor instead.
+func (*RunInstallRequest) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *RunInstallRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+type RunInstallResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExitCode      int32                  `protobuf:"varint,1,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	Output        string                 `protobuf:"bytes,2,opt,name=output,proto3" json:"output,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunInstallResponse) Reset() {
+	*x = RunInstallResponse{}
+	mi := &file_proto_worker_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunInstallResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunInstallResponse) ProtoMessage() {}
+
+func (x *RunInstallResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_worker_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunInstallResponse.ProtoReflect.Descriptor instead.
+func (*RunInstallResponse) Descriptor() ([]byte, []int) {
+	return file_proto_worker_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *RunInstallResponse) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *RunInstallResponse) GetOutput() string {
+	if x != nil {
+		return x.Output
 	}
 	return ""
 }
@@ -2718,7 +2986,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_proto_worker_proto_msgTypes[54]
+	mi := &file_proto_worker_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2730,7 +2998,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[54]
+	mi := &file_proto_worker_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2743,7 +3011,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{54}
+	return file_proto_worker_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *HeartbeatRequest) GetWorkerId() string {
@@ -2811,7 +3079,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_proto_worker_proto_msgTypes[55]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2823,7 +3091,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[55]
+	mi := &file_proto_worker_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2836,7 +3104,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{55}
+	return file_proto_worker_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *HeartbeatResponse) GetAccepted() bool {
@@ -2870,7 +3138,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2882,7 +3150,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[56]
+	mi := &file_proto_worker_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2895,7 +3163,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{56}
+	return file_proto_worker_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *RegisterRequest) GetWorkerId() string {
@@ -3022,7 +3290,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3034,7 +3302,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[57]
+	mi := &file_proto_worker_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3047,7 +3315,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{57}
+	return file_proto_worker_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *RegisterResponse) GetAccepted() bool {
@@ -3088,7 +3356,7 @@ type SFTPLoginRequest struct {
 
 func (x *SFTPLoginRequest) Reset() {
 	*x = SFTPLoginRequest{}
-	mi := &file_proto_worker_proto_msgTypes[58]
+	mi := &file_proto_worker_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3100,7 +3368,7 @@ func (x *SFTPLoginRequest) String() string {
 func (*SFTPLoginRequest) ProtoMessage() {}
 
 func (x *SFTPLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[58]
+	mi := &file_proto_worker_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3113,7 +3381,7 @@ func (x *SFTPLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SFTPLoginRequest.ProtoReflect.Descriptor instead.
 func (*SFTPLoginRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{58}
+	return file_proto_worker_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *SFTPLoginRequest) GetUsername() string {
@@ -3141,7 +3409,7 @@ type SFTPLoginResponse struct {
 
 func (x *SFTPLoginResponse) Reset() {
 	*x = SFTPLoginResponse{}
-	mi := &file_proto_worker_proto_msgTypes[59]
+	mi := &file_proto_worker_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3153,7 +3421,7 @@ func (x *SFTPLoginResponse) String() string {
 func (*SFTPLoginResponse) ProtoMessage() {}
 
 func (x *SFTPLoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[59]
+	mi := &file_proto_worker_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3166,7 +3434,7 @@ func (x *SFTPLoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SFTPLoginResponse.ProtoReflect.Descriptor instead.
 func (*SFTPLoginResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{59}
+	return file_proto_worker_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *SFTPLoginResponse) GetValid() bool {
@@ -3198,7 +3466,7 @@ type ListGameserverInstancesRequest struct {
 
 func (x *ListGameserverInstancesRequest) Reset() {
 	*x = ListGameserverInstancesRequest{}
-	mi := &file_proto_worker_proto_msgTypes[60]
+	mi := &file_proto_worker_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3210,7 +3478,7 @@ func (x *ListGameserverInstancesRequest) String() string {
 func (*ListGameserverInstancesRequest) ProtoMessage() {}
 
 func (x *ListGameserverInstancesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[60]
+	mi := &file_proto_worker_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3223,7 +3491,7 @@ func (x *ListGameserverInstancesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGameserverInstancesRequest.ProtoReflect.Descriptor instead.
 func (*ListGameserverInstancesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{60}
+	return file_proto_worker_proto_rawDescGZIP(), []int{64}
 }
 
 type ListGameserverInstancesResponse struct {
@@ -3235,7 +3503,7 @@ type ListGameserverInstancesResponse struct {
 
 func (x *ListGameserverInstancesResponse) Reset() {
 	*x = ListGameserverInstancesResponse{}
-	mi := &file_proto_worker_proto_msgTypes[61]
+	mi := &file_proto_worker_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3247,7 +3515,7 @@ func (x *ListGameserverInstancesResponse) String() string {
 func (*ListGameserverInstancesResponse) ProtoMessage() {}
 
 func (x *ListGameserverInstancesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[61]
+	mi := &file_proto_worker_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3260,7 +3528,7 @@ func (x *ListGameserverInstancesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGameserverInstancesResponse.ProtoReflect.Descriptor instead.
 func (*ListGameserverInstancesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{61}
+	return file_proto_worker_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListGameserverInstancesResponse) GetInstances() []*GameserverInstance {
@@ -3282,7 +3550,7 @@ type GameserverInstance struct {
 
 func (x *GameserverInstance) Reset() {
 	*x = GameserverInstance{}
-	mi := &file_proto_worker_proto_msgTypes[62]
+	mi := &file_proto_worker_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3294,7 +3562,7 @@ func (x *GameserverInstance) String() string {
 func (*GameserverInstance) ProtoMessage() {}
 
 func (x *GameserverInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[62]
+	mi := &file_proto_worker_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3307,7 +3575,7 @@ func (x *GameserverInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameserverInstance.ProtoReflect.Descriptor instead.
 func (*GameserverInstance) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{62}
+	return file_proto_worker_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GameserverInstance) GetInstanceId() string {
@@ -3348,7 +3616,7 @@ type PrepareGameScriptsRequest struct {
 
 func (x *PrepareGameScriptsRequest) Reset() {
 	*x = PrepareGameScriptsRequest{}
-	mi := &file_proto_worker_proto_msgTypes[63]
+	mi := &file_proto_worker_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3360,7 +3628,7 @@ func (x *PrepareGameScriptsRequest) String() string {
 func (*PrepareGameScriptsRequest) ProtoMessage() {}
 
 func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[63]
+	mi := &file_proto_worker_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3373,7 +3641,7 @@ func (x *PrepareGameScriptsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsRequest.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{63}
+	return file_proto_worker_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *PrepareGameScriptsRequest) GetGameId() string {
@@ -3400,7 +3668,7 @@ type PrepareGameScriptsResponse struct {
 
 func (x *PrepareGameScriptsResponse) Reset() {
 	*x = PrepareGameScriptsResponse{}
-	mi := &file_proto_worker_proto_msgTypes[64]
+	mi := &file_proto_worker_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3412,7 +3680,7 @@ func (x *PrepareGameScriptsResponse) String() string {
 func (*PrepareGameScriptsResponse) ProtoMessage() {}
 
 func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[64]
+	mi := &file_proto_worker_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3425,7 +3693,7 @@ func (x *PrepareGameScriptsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareGameScriptsResponse.ProtoReflect.Descriptor instead.
 func (*PrepareGameScriptsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{64}
+	return file_proto_worker_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *PrepareGameScriptsResponse) GetScriptDir() string {
@@ -3454,7 +3722,7 @@ type EnsureDepotRequest struct {
 
 func (x *EnsureDepotRequest) Reset() {
 	*x = EnsureDepotRequest{}
-	mi := &file_proto_worker_proto_msgTypes[65]
+	mi := &file_proto_worker_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3466,7 +3734,7 @@ func (x *EnsureDepotRequest) String() string {
 func (*EnsureDepotRequest) ProtoMessage() {}
 
 func (x *EnsureDepotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[65]
+	mi := &file_proto_worker_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3479,7 +3747,7 @@ func (x *EnsureDepotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnsureDepotRequest.ProtoReflect.Descriptor instead.
 func (*EnsureDepotRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{65}
+	return file_proto_worker_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *EnsureDepotRequest) GetAppId() uint32 {
@@ -3529,7 +3797,7 @@ type EnsureDepotProgress struct {
 
 func (x *EnsureDepotProgress) Reset() {
 	*x = EnsureDepotProgress{}
-	mi := &file_proto_worker_proto_msgTypes[66]
+	mi := &file_proto_worker_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3541,7 +3809,7 @@ func (x *EnsureDepotProgress) String() string {
 func (*EnsureDepotProgress) ProtoMessage() {}
 
 func (x *EnsureDepotProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[66]
+	mi := &file_proto_worker_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3554,7 +3822,7 @@ func (x *EnsureDepotProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnsureDepotProgress.ProtoReflect.Descriptor instead.
 func (*EnsureDepotProgress) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{66}
+	return file_proto_worker_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *EnsureDepotProgress) GetDepotDir() string {
@@ -3618,7 +3886,7 @@ type DownloadWorkshopItemRequest struct {
 
 func (x *DownloadWorkshopItemRequest) Reset() {
 	*x = DownloadWorkshopItemRequest{}
-	mi := &file_proto_worker_proto_msgTypes[67]
+	mi := &file_proto_worker_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3630,7 +3898,7 @@ func (x *DownloadWorkshopItemRequest) String() string {
 func (*DownloadWorkshopItemRequest) ProtoMessage() {}
 
 func (x *DownloadWorkshopItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[67]
+	mi := &file_proto_worker_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3643,7 +3911,7 @@ func (x *DownloadWorkshopItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadWorkshopItemRequest.ProtoReflect.Descriptor instead.
 func (*DownloadWorkshopItemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{67}
+	return file_proto_worker_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *DownloadWorkshopItemRequest) GetVolumeName() string {
@@ -3682,7 +3950,7 @@ type DownloadWorkshopItemResponse struct {
 
 func (x *DownloadWorkshopItemResponse) Reset() {
 	*x = DownloadWorkshopItemResponse{}
-	mi := &file_proto_worker_proto_msgTypes[68]
+	mi := &file_proto_worker_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3694,7 +3962,7 @@ func (x *DownloadWorkshopItemResponse) String() string {
 func (*DownloadWorkshopItemResponse) ProtoMessage() {}
 
 func (x *DownloadWorkshopItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[68]
+	mi := &file_proto_worker_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3707,7 +3975,7 @@ func (x *DownloadWorkshopItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadWorkshopItemResponse.ProtoReflect.Descriptor instead.
 func (*DownloadWorkshopItemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{68}
+	return file_proto_worker_proto_rawDescGZIP(), []int{72}
 }
 
 type CopyDepotToVolumeRequest struct {
@@ -3720,7 +3988,7 @@ type CopyDepotToVolumeRequest struct {
 
 func (x *CopyDepotToVolumeRequest) Reset() {
 	*x = CopyDepotToVolumeRequest{}
-	mi := &file_proto_worker_proto_msgTypes[69]
+	mi := &file_proto_worker_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3732,7 +4000,7 @@ func (x *CopyDepotToVolumeRequest) String() string {
 func (*CopyDepotToVolumeRequest) ProtoMessage() {}
 
 func (x *CopyDepotToVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[69]
+	mi := &file_proto_worker_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3745,7 +4013,7 @@ func (x *CopyDepotToVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyDepotToVolumeRequest.ProtoReflect.Descriptor instead.
 func (*CopyDepotToVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{69}
+	return file_proto_worker_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *CopyDepotToVolumeRequest) GetDepotDir() string {
@@ -3770,7 +4038,7 @@ type CopyDepotToVolumeResponse struct {
 
 func (x *CopyDepotToVolumeResponse) Reset() {
 	*x = CopyDepotToVolumeResponse{}
-	mi := &file_proto_worker_proto_msgTypes[70]
+	mi := &file_proto_worker_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3782,7 +4050,7 @@ func (x *CopyDepotToVolumeResponse) String() string {
 func (*CopyDepotToVolumeResponse) ProtoMessage() {}
 
 func (x *CopyDepotToVolumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[70]
+	mi := &file_proto_worker_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3795,7 +4063,7 @@ func (x *CopyDepotToVolumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyDepotToVolumeResponse.ProtoReflect.Descriptor instead.
 func (*CopyDepotToVolumeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{70}
+	return file_proto_worker_proto_rawDescGZIP(), []int{74}
 }
 
 var File_proto_worker_proto protoreflect.FileDescriptor
@@ -3830,10 +4098,11 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\fcpu_enforced\x18\v \x01(\bR\vcpuEnforced\"9\n" +
 	"\x16CreateInstanceResponse\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
-	"instanceId\"7\n" +
+	"instanceId\"\\\n" +
 	"\x14StartInstanceRequest\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
-	"instanceId\"\x17\n" +
+	"instanceId\x12#\n" +
+	"\rready_pattern\x18\x02 \x01(\tR\freadyPattern\"\x17\n" +
 	"\x15StartInstanceResponse\"_\n" +
 	"\x13StopInstanceRequest\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
@@ -3974,13 +4243,26 @@ const file_proto_worker_proto_rawDesc = "" +
 	"instanceId\x12\x1b\n" +
 	"\tdest_path\x18\x02 \x01(\tR\bdestPath\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\"\x1b\n" +
-	"\x19CopyTarToInstanceResponse\"\x14\n" +
-	"\x12WatchEventsRequest\"p\n" +
-	"\x10InstanceEventMsg\x12\x1f\n" +
+	"\x19CopyTarToInstanceResponse\"\x1c\n" +
+	"\x1aWatchInstanceStatesRequest\"\x1d\n" +
+	"\x1bGetAllInstanceStatesRequest\"Y\n" +
+	"\x1cGetAllInstanceStatesResponse\x129\n" +
+	"\tinstances\x18\x01 \x03(\v2\x1b.worker.InstanceStateUpdateR\tinstances\"\x91\x02\n" +
+	"\x13InstanceStateUpdate\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
 	"instanceId\x12#\n" +
-	"\rinstance_name\x18\x02 \x01(\tR\finstanceName\x12\x16\n" +
-	"\x06action\x18\x03 \x01(\tR\x06action\"\xac\x02\n" +
+	"\rinstance_name\x18\x02 \x01(\tR\finstanceName\x12+\n" +
+	"\x05state\x18\x03 \x01(\x0e2\x15.worker.InstanceStateR\x05state\x12\x1b\n" +
+	"\texit_code\x18\x04 \x01(\x05R\bexitCode\x12&\n" +
+	"\x0fstarted_at_unix\x18\x05 \x01(\x03R\rstartedAtUnix\x12$\n" +
+	"\x0eexited_at_unix\x18\x06 \x01(\x03R\fexitedAtUnix\x12\x1c\n" +
+	"\tinstalled\x18\a \x01(\bR\tinstalled\"4\n" +
+	"\x11RunInstallRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"I\n" +
+	"\x12RunInstallResponse\x12\x1b\n" +
+	"\texit_code\x18\x01 \x01(\x05R\bexitCode\x12\x16\n" +
+	"\x06output\x18\x02 \x01(\tR\x06output\"\xac\x02\n" +
 	"\x10HeartbeatRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1b\n" +
 	"\tcpu_cores\x18\x02 \x01(\x03R\bcpuCores\x12&\n" +
@@ -4066,11 +4348,18 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\tdepot_dir\x18\x01 \x01(\tR\bdepotDir\x12\x1f\n" +
 	"\vvolume_name\x18\x02 \x01(\tR\n" +
 	"volumeName\"\x1b\n" +
-	"\x19CopyDepotToVolumeResponse2\xff\x13\n" +
+	"\x19CopyDepotToVolumeResponse*g\n" +
+	"\rInstanceState\x12\x14\n" +
+	"\x10INSTANCE_CREATED\x10\x00\x12\x15\n" +
+	"\x11INSTANCE_STARTING\x10\x01\x12\x14\n" +
+	"\x10INSTANCE_RUNNING\x10\x02\x12\x13\n" +
+	"\x0fINSTANCE_EXITED\x10\x032\xba\x15\n" +
 	"\rWorkerService\x12@\n" +
 	"\tPullImage\x12\x18.worker.PullImageRequest\x1a\x19.worker.PullImageResponse\x12O\n" +
 	"\x0eCreateInstance\x12\x1d.worker.CreateInstanceRequest\x1a\x1e.worker.CreateInstanceResponse\x12L\n" +
-	"\rStartInstance\x12\x1c.worker.StartInstanceRequest\x1a\x1d.worker.StartInstanceResponse\x12I\n" +
+	"\rStartInstance\x12\x1c.worker.StartInstanceRequest\x1a\x1d.worker.StartInstanceResponse\x12C\n" +
+	"\n" +
+	"RunInstall\x12\x19.worker.RunInstallRequest\x1a\x1a.worker.RunInstallResponse\x12I\n" +
 	"\fStopInstance\x12\x1b.worker.StopInstanceRequest\x1a\x1c.worker.StopInstanceResponse\x12O\n" +
 	"\x0eRemoveInstance\x12\x1d.worker.RemoveInstanceRequest\x1a\x1e.worker.RemoveInstanceResponse\x12R\n" +
 	"\x0fInspectInstance\x12\x1e.worker.InspectInstanceRequest\x1a\x1f.worker.InspectInstanceResponse\x121\n" +
@@ -4096,8 +4385,9 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x10CopyFromInstance\x12\x1f.worker.CopyFromInstanceRequest\x1a .worker.CopyFromInstanceResponse\x12O\n" +
 	"\x0eCopyToInstance\x12\x1d.worker.CopyToInstanceRequest\x1a\x1e.worker.CopyToInstanceResponse\x12N\n" +
 	"\x13CopyDirFromInstance\x12\".worker.CopyDirFromInstanceRequest\x1a\x11.worker.DataChunk0\x01\x12Z\n" +
-	"\x11CopyTarToInstance\x12 .worker.CopyTarToInstanceRequest\x1a!.worker.CopyTarToInstanceResponse(\x01\x12E\n" +
-	"\vWatchEvents\x12\x1a.worker.WatchEventsRequest\x1a\x18.worker.InstanceEventMsg0\x01\x12j\n" +
+	"\x11CopyTarToInstance\x12 .worker.CopyTarToInstanceRequest\x1a!.worker.CopyTarToInstanceResponse(\x01\x12X\n" +
+	"\x13WatchInstanceStates\x12\".worker.WatchInstanceStatesRequest\x1a\x1b.worker.InstanceStateUpdate0\x01\x12a\n" +
+	"\x14GetAllInstanceStates\x12#.worker.GetAllInstanceStatesRequest\x1a$.worker.GetAllInstanceStatesResponse\x12j\n" +
 	"\x17ListGameserverInstances\x12&.worker.ListGameserverInstancesRequest\x1a'.worker.ListGameserverInstancesResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12[\n" +
 	"\x12PrepareGameScripts\x12!.worker.PrepareGameScriptsRequest\x1a\".worker.PrepareGameScriptsResponse\x12H\n" +
@@ -4121,161 +4411,173 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 	return file_proto_worker_proto_rawDescData
 }
 
-var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
+var file_proto_worker_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
 var file_proto_worker_proto_goTypes = []any{
-	(*DataChunk)(nil),                       // 0: worker.DataChunk
-	(*PullImageRequest)(nil),                // 1: worker.PullImageRequest
-	(*PullImageResponse)(nil),               // 2: worker.PullImageResponse
-	(*PortBinding)(nil),                     // 3: worker.PortBinding
-	(*CreateInstanceRequest)(nil),           // 4: worker.CreateInstanceRequest
-	(*CreateInstanceResponse)(nil),          // 5: worker.CreateInstanceResponse
-	(*StartInstanceRequest)(nil),            // 6: worker.StartInstanceRequest
-	(*StartInstanceResponse)(nil),           // 7: worker.StartInstanceResponse
-	(*StopInstanceRequest)(nil),             // 8: worker.StopInstanceRequest
-	(*StopInstanceResponse)(nil),            // 9: worker.StopInstanceResponse
-	(*RemoveInstanceRequest)(nil),           // 10: worker.RemoveInstanceRequest
-	(*RemoveInstanceResponse)(nil),          // 11: worker.RemoveInstanceResponse
-	(*InspectInstanceRequest)(nil),          // 12: worker.InspectInstanceRequest
-	(*InspectInstanceResponse)(nil),         // 13: worker.InspectInstanceResponse
-	(*ExecRequest)(nil),                     // 14: worker.ExecRequest
-	(*ExecResponse)(nil),                    // 15: worker.ExecResponse
-	(*InstanceLogsRequest)(nil),             // 16: worker.InstanceLogsRequest
-	(*InstanceStatsRequest)(nil),            // 17: worker.InstanceStatsRequest
-	(*InstanceStatsResponse)(nil),           // 18: worker.InstanceStatsResponse
-	(*CreateVolumeRequest)(nil),             // 19: worker.CreateVolumeRequest
-	(*CreateVolumeResponse)(nil),            // 20: worker.CreateVolumeResponse
-	(*RemoveVolumeRequest)(nil),             // 21: worker.RemoveVolumeRequest
-	(*RemoveVolumeResponse)(nil),            // 22: worker.RemoveVolumeResponse
-	(*VolumeSizeRequest)(nil),               // 23: worker.VolumeSizeRequest
-	(*VolumeSizeResponse)(nil),              // 24: worker.VolumeSizeResponse
-	(*BackupVolumeRequest)(nil),             // 25: worker.BackupVolumeRequest
-	(*RestoreVolumeRequest)(nil),            // 26: worker.RestoreVolumeRequest
-	(*RestoreVolumeResponse)(nil),           // 27: worker.RestoreVolumeResponse
-	(*ListFilesRequest)(nil),                // 28: worker.ListFilesRequest
-	(*FileEntryMsg)(nil),                    // 29: worker.FileEntryMsg
-	(*ListFilesResponse)(nil),               // 30: worker.ListFilesResponse
-	(*ReadFileRequest)(nil),                 // 31: worker.ReadFileRequest
-	(*ReadFileResponse)(nil),                // 32: worker.ReadFileResponse
-	(*WriteFileRequest)(nil),                // 33: worker.WriteFileRequest
-	(*WriteFileResponse)(nil),               // 34: worker.WriteFileResponse
-	(*WriteFileStreamRequest)(nil),          // 35: worker.WriteFileStreamRequest
-	(*WriteFileStreamResponse)(nil),         // 36: worker.WriteFileStreamResponse
-	(*DeletePathRequest)(nil),               // 37: worker.DeletePathRequest
-	(*DeletePathResponse)(nil),              // 38: worker.DeletePathResponse
-	(*CreateDirectoryRequest)(nil),          // 39: worker.CreateDirectoryRequest
-	(*CreateDirectoryResponse)(nil),         // 40: worker.CreateDirectoryResponse
-	(*RenamePathRequest)(nil),               // 41: worker.RenamePathRequest
-	(*RenamePathResponse)(nil),              // 42: worker.RenamePathResponse
-	(*DownloadFileRequest)(nil),             // 43: worker.DownloadFileRequest
-	(*DownloadFileResponse)(nil),            // 44: worker.DownloadFileResponse
-	(*CopyFromInstanceRequest)(nil),         // 45: worker.CopyFromInstanceRequest
-	(*CopyFromInstanceResponse)(nil),        // 46: worker.CopyFromInstanceResponse
-	(*CopyToInstanceRequest)(nil),           // 47: worker.CopyToInstanceRequest
-	(*CopyToInstanceResponse)(nil),          // 48: worker.CopyToInstanceResponse
-	(*CopyDirFromInstanceRequest)(nil),      // 49: worker.CopyDirFromInstanceRequest
-	(*CopyTarToInstanceRequest)(nil),        // 50: worker.CopyTarToInstanceRequest
-	(*CopyTarToInstanceResponse)(nil),       // 51: worker.CopyTarToInstanceResponse
-	(*WatchEventsRequest)(nil),              // 52: worker.WatchEventsRequest
-	(*InstanceEventMsg)(nil),                // 53: worker.InstanceEventMsg
-	(*HeartbeatRequest)(nil),                // 54: worker.HeartbeatRequest
-	(*HeartbeatResponse)(nil),               // 55: worker.HeartbeatResponse
-	(*RegisterRequest)(nil),                 // 56: worker.RegisterRequest
-	(*RegisterResponse)(nil),                // 57: worker.RegisterResponse
-	(*SFTPLoginRequest)(nil),                // 58: worker.SFTPLoginRequest
-	(*SFTPLoginResponse)(nil),               // 59: worker.SFTPLoginResponse
-	(*ListGameserverInstancesRequest)(nil),  // 60: worker.ListGameserverInstancesRequest
-	(*ListGameserverInstancesResponse)(nil), // 61: worker.ListGameserverInstancesResponse
-	(*GameserverInstance)(nil),              // 62: worker.GameserverInstance
-	(*PrepareGameScriptsRequest)(nil),       // 63: worker.PrepareGameScriptsRequest
-	(*PrepareGameScriptsResponse)(nil),      // 64: worker.PrepareGameScriptsResponse
-	(*EnsureDepotRequest)(nil),              // 65: worker.EnsureDepotRequest
-	(*EnsureDepotProgress)(nil),             // 66: worker.EnsureDepotProgress
-	(*DownloadWorkshopItemRequest)(nil),     // 67: worker.DownloadWorkshopItemRequest
-	(*DownloadWorkshopItemResponse)(nil),    // 68: worker.DownloadWorkshopItemResponse
-	(*CopyDepotToVolumeRequest)(nil),        // 69: worker.CopyDepotToVolumeRequest
-	(*CopyDepotToVolumeResponse)(nil),       // 70: worker.CopyDepotToVolumeResponse
+	(InstanceState)(0),                      // 0: worker.InstanceState
+	(*DataChunk)(nil),                       // 1: worker.DataChunk
+	(*PullImageRequest)(nil),                // 2: worker.PullImageRequest
+	(*PullImageResponse)(nil),               // 3: worker.PullImageResponse
+	(*PortBinding)(nil),                     // 4: worker.PortBinding
+	(*CreateInstanceRequest)(nil),           // 5: worker.CreateInstanceRequest
+	(*CreateInstanceResponse)(nil),          // 6: worker.CreateInstanceResponse
+	(*StartInstanceRequest)(nil),            // 7: worker.StartInstanceRequest
+	(*StartInstanceResponse)(nil),           // 8: worker.StartInstanceResponse
+	(*StopInstanceRequest)(nil),             // 9: worker.StopInstanceRequest
+	(*StopInstanceResponse)(nil),            // 10: worker.StopInstanceResponse
+	(*RemoveInstanceRequest)(nil),           // 11: worker.RemoveInstanceRequest
+	(*RemoveInstanceResponse)(nil),          // 12: worker.RemoveInstanceResponse
+	(*InspectInstanceRequest)(nil),          // 13: worker.InspectInstanceRequest
+	(*InspectInstanceResponse)(nil),         // 14: worker.InspectInstanceResponse
+	(*ExecRequest)(nil),                     // 15: worker.ExecRequest
+	(*ExecResponse)(nil),                    // 16: worker.ExecResponse
+	(*InstanceLogsRequest)(nil),             // 17: worker.InstanceLogsRequest
+	(*InstanceStatsRequest)(nil),            // 18: worker.InstanceStatsRequest
+	(*InstanceStatsResponse)(nil),           // 19: worker.InstanceStatsResponse
+	(*CreateVolumeRequest)(nil),             // 20: worker.CreateVolumeRequest
+	(*CreateVolumeResponse)(nil),            // 21: worker.CreateVolumeResponse
+	(*RemoveVolumeRequest)(nil),             // 22: worker.RemoveVolumeRequest
+	(*RemoveVolumeResponse)(nil),            // 23: worker.RemoveVolumeResponse
+	(*VolumeSizeRequest)(nil),               // 24: worker.VolumeSizeRequest
+	(*VolumeSizeResponse)(nil),              // 25: worker.VolumeSizeResponse
+	(*BackupVolumeRequest)(nil),             // 26: worker.BackupVolumeRequest
+	(*RestoreVolumeRequest)(nil),            // 27: worker.RestoreVolumeRequest
+	(*RestoreVolumeResponse)(nil),           // 28: worker.RestoreVolumeResponse
+	(*ListFilesRequest)(nil),                // 29: worker.ListFilesRequest
+	(*FileEntryMsg)(nil),                    // 30: worker.FileEntryMsg
+	(*ListFilesResponse)(nil),               // 31: worker.ListFilesResponse
+	(*ReadFileRequest)(nil),                 // 32: worker.ReadFileRequest
+	(*ReadFileResponse)(nil),                // 33: worker.ReadFileResponse
+	(*WriteFileRequest)(nil),                // 34: worker.WriteFileRequest
+	(*WriteFileResponse)(nil),               // 35: worker.WriteFileResponse
+	(*WriteFileStreamRequest)(nil),          // 36: worker.WriteFileStreamRequest
+	(*WriteFileStreamResponse)(nil),         // 37: worker.WriteFileStreamResponse
+	(*DeletePathRequest)(nil),               // 38: worker.DeletePathRequest
+	(*DeletePathResponse)(nil),              // 39: worker.DeletePathResponse
+	(*CreateDirectoryRequest)(nil),          // 40: worker.CreateDirectoryRequest
+	(*CreateDirectoryResponse)(nil),         // 41: worker.CreateDirectoryResponse
+	(*RenamePathRequest)(nil),               // 42: worker.RenamePathRequest
+	(*RenamePathResponse)(nil),              // 43: worker.RenamePathResponse
+	(*DownloadFileRequest)(nil),             // 44: worker.DownloadFileRequest
+	(*DownloadFileResponse)(nil),            // 45: worker.DownloadFileResponse
+	(*CopyFromInstanceRequest)(nil),         // 46: worker.CopyFromInstanceRequest
+	(*CopyFromInstanceResponse)(nil),        // 47: worker.CopyFromInstanceResponse
+	(*CopyToInstanceRequest)(nil),           // 48: worker.CopyToInstanceRequest
+	(*CopyToInstanceResponse)(nil),          // 49: worker.CopyToInstanceResponse
+	(*CopyDirFromInstanceRequest)(nil),      // 50: worker.CopyDirFromInstanceRequest
+	(*CopyTarToInstanceRequest)(nil),        // 51: worker.CopyTarToInstanceRequest
+	(*CopyTarToInstanceResponse)(nil),       // 52: worker.CopyTarToInstanceResponse
+	(*WatchInstanceStatesRequest)(nil),      // 53: worker.WatchInstanceStatesRequest
+	(*GetAllInstanceStatesRequest)(nil),     // 54: worker.GetAllInstanceStatesRequest
+	(*GetAllInstanceStatesResponse)(nil),    // 55: worker.GetAllInstanceStatesResponse
+	(*InstanceStateUpdate)(nil),             // 56: worker.InstanceStateUpdate
+	(*RunInstallRequest)(nil),               // 57: worker.RunInstallRequest
+	(*RunInstallResponse)(nil),              // 58: worker.RunInstallResponse
+	(*HeartbeatRequest)(nil),                // 59: worker.HeartbeatRequest
+	(*HeartbeatResponse)(nil),               // 60: worker.HeartbeatResponse
+	(*RegisterRequest)(nil),                 // 61: worker.RegisterRequest
+	(*RegisterResponse)(nil),                // 62: worker.RegisterResponse
+	(*SFTPLoginRequest)(nil),                // 63: worker.SFTPLoginRequest
+	(*SFTPLoginResponse)(nil),               // 64: worker.SFTPLoginResponse
+	(*ListGameserverInstancesRequest)(nil),  // 65: worker.ListGameserverInstancesRequest
+	(*ListGameserverInstancesResponse)(nil), // 66: worker.ListGameserverInstancesResponse
+	(*GameserverInstance)(nil),              // 67: worker.GameserverInstance
+	(*PrepareGameScriptsRequest)(nil),       // 68: worker.PrepareGameScriptsRequest
+	(*PrepareGameScriptsResponse)(nil),      // 69: worker.PrepareGameScriptsResponse
+	(*EnsureDepotRequest)(nil),              // 70: worker.EnsureDepotRequest
+	(*EnsureDepotProgress)(nil),             // 71: worker.EnsureDepotProgress
+	(*DownloadWorkshopItemRequest)(nil),     // 72: worker.DownloadWorkshopItemRequest
+	(*DownloadWorkshopItemResponse)(nil),    // 73: worker.DownloadWorkshopItemResponse
+	(*CopyDepotToVolumeRequest)(nil),        // 74: worker.CopyDepotToVolumeRequest
+	(*CopyDepotToVolumeResponse)(nil),       // 75: worker.CopyDepotToVolumeResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
-	3,  // 0: worker.CreateInstanceRequest.ports:type_name -> worker.PortBinding
-	29, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
-	62, // 2: worker.ListGameserverInstancesResponse.instances:type_name -> worker.GameserverInstance
-	1,  // 3: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
-	4,  // 4: worker.WorkerService.CreateInstance:input_type -> worker.CreateInstanceRequest
-	6,  // 5: worker.WorkerService.StartInstance:input_type -> worker.StartInstanceRequest
-	8,  // 6: worker.WorkerService.StopInstance:input_type -> worker.StopInstanceRequest
-	10, // 7: worker.WorkerService.RemoveInstance:input_type -> worker.RemoveInstanceRequest
-	12, // 8: worker.WorkerService.InspectInstance:input_type -> worker.InspectInstanceRequest
-	14, // 9: worker.WorkerService.Exec:input_type -> worker.ExecRequest
-	16, // 10: worker.WorkerService.InstanceLogs:input_type -> worker.InstanceLogsRequest
-	17, // 11: worker.WorkerService.InstanceStats:input_type -> worker.InstanceStatsRequest
-	19, // 12: worker.WorkerService.CreateVolume:input_type -> worker.CreateVolumeRequest
-	21, // 13: worker.WorkerService.RemoveVolume:input_type -> worker.RemoveVolumeRequest
-	23, // 14: worker.WorkerService.VolumeSize:input_type -> worker.VolumeSizeRequest
-	25, // 15: worker.WorkerService.BackupVolume:input_type -> worker.BackupVolumeRequest
-	26, // 16: worker.WorkerService.RestoreVolume:input_type -> worker.RestoreVolumeRequest
-	28, // 17: worker.WorkerService.ListFiles:input_type -> worker.ListFilesRequest
-	31, // 18: worker.WorkerService.ReadFile:input_type -> worker.ReadFileRequest
-	33, // 19: worker.WorkerService.WriteFile:input_type -> worker.WriteFileRequest
-	35, // 20: worker.WorkerService.WriteFileStream:input_type -> worker.WriteFileStreamRequest
-	37, // 21: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
-	39, // 22: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
-	41, // 23: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
-	43, // 24: worker.WorkerService.DownloadFile:input_type -> worker.DownloadFileRequest
-	45, // 25: worker.WorkerService.CopyFromInstance:input_type -> worker.CopyFromInstanceRequest
-	47, // 26: worker.WorkerService.CopyToInstance:input_type -> worker.CopyToInstanceRequest
-	49, // 27: worker.WorkerService.CopyDirFromInstance:input_type -> worker.CopyDirFromInstanceRequest
-	50, // 28: worker.WorkerService.CopyTarToInstance:input_type -> worker.CopyTarToInstanceRequest
-	52, // 29: worker.WorkerService.WatchEvents:input_type -> worker.WatchEventsRequest
-	60, // 30: worker.WorkerService.ListGameserverInstances:input_type -> worker.ListGameserverInstancesRequest
-	54, // 31: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	63, // 32: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
-	65, // 33: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
-	67, // 34: worker.WorkerService.DownloadWorkshopItem:input_type -> worker.DownloadWorkshopItemRequest
-	69, // 35: worker.WorkerService.CopyDepotToVolume:input_type -> worker.CopyDepotToVolumeRequest
-	56, // 36: worker.ControllerService.Register:input_type -> worker.RegisterRequest
-	54, // 37: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
-	58, // 38: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
-	2,  // 39: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
-	5,  // 40: worker.WorkerService.CreateInstance:output_type -> worker.CreateInstanceResponse
-	7,  // 41: worker.WorkerService.StartInstance:output_type -> worker.StartInstanceResponse
-	9,  // 42: worker.WorkerService.StopInstance:output_type -> worker.StopInstanceResponse
-	11, // 43: worker.WorkerService.RemoveInstance:output_type -> worker.RemoveInstanceResponse
-	13, // 44: worker.WorkerService.InspectInstance:output_type -> worker.InspectInstanceResponse
-	15, // 45: worker.WorkerService.Exec:output_type -> worker.ExecResponse
-	0,  // 46: worker.WorkerService.InstanceLogs:output_type -> worker.DataChunk
-	18, // 47: worker.WorkerService.InstanceStats:output_type -> worker.InstanceStatsResponse
-	20, // 48: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
-	22, // 49: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
-	24, // 50: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
-	0,  // 51: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
-	27, // 52: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
-	30, // 53: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
-	32, // 54: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
-	34, // 55: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
-	36, // 56: worker.WorkerService.WriteFileStream:output_type -> worker.WriteFileStreamResponse
-	38, // 57: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
-	40, // 58: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
-	42, // 59: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
-	44, // 60: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
-	46, // 61: worker.WorkerService.CopyFromInstance:output_type -> worker.CopyFromInstanceResponse
-	48, // 62: worker.WorkerService.CopyToInstance:output_type -> worker.CopyToInstanceResponse
-	0,  // 63: worker.WorkerService.CopyDirFromInstance:output_type -> worker.DataChunk
-	51, // 64: worker.WorkerService.CopyTarToInstance:output_type -> worker.CopyTarToInstanceResponse
-	53, // 65: worker.WorkerService.WatchEvents:output_type -> worker.InstanceEventMsg
-	61, // 66: worker.WorkerService.ListGameserverInstances:output_type -> worker.ListGameserverInstancesResponse
-	55, // 67: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	64, // 68: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
-	66, // 69: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
-	68, // 70: worker.WorkerService.DownloadWorkshopItem:output_type -> worker.DownloadWorkshopItemResponse
-	70, // 71: worker.WorkerService.CopyDepotToVolume:output_type -> worker.CopyDepotToVolumeResponse
-	57, // 72: worker.ControllerService.Register:output_type -> worker.RegisterResponse
-	55, // 73: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
-	59, // 74: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
-	39, // [39:75] is the sub-list for method output_type
-	3,  // [3:39] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	4,  // 0: worker.CreateInstanceRequest.ports:type_name -> worker.PortBinding
+	30, // 1: worker.ListFilesResponse.entries:type_name -> worker.FileEntryMsg
+	56, // 2: worker.GetAllInstanceStatesResponse.instances:type_name -> worker.InstanceStateUpdate
+	0,  // 3: worker.InstanceStateUpdate.state:type_name -> worker.InstanceState
+	67, // 4: worker.ListGameserverInstancesResponse.instances:type_name -> worker.GameserverInstance
+	2,  // 5: worker.WorkerService.PullImage:input_type -> worker.PullImageRequest
+	5,  // 6: worker.WorkerService.CreateInstance:input_type -> worker.CreateInstanceRequest
+	7,  // 7: worker.WorkerService.StartInstance:input_type -> worker.StartInstanceRequest
+	57, // 8: worker.WorkerService.RunInstall:input_type -> worker.RunInstallRequest
+	9,  // 9: worker.WorkerService.StopInstance:input_type -> worker.StopInstanceRequest
+	11, // 10: worker.WorkerService.RemoveInstance:input_type -> worker.RemoveInstanceRequest
+	13, // 11: worker.WorkerService.InspectInstance:input_type -> worker.InspectInstanceRequest
+	15, // 12: worker.WorkerService.Exec:input_type -> worker.ExecRequest
+	17, // 13: worker.WorkerService.InstanceLogs:input_type -> worker.InstanceLogsRequest
+	18, // 14: worker.WorkerService.InstanceStats:input_type -> worker.InstanceStatsRequest
+	20, // 15: worker.WorkerService.CreateVolume:input_type -> worker.CreateVolumeRequest
+	22, // 16: worker.WorkerService.RemoveVolume:input_type -> worker.RemoveVolumeRequest
+	24, // 17: worker.WorkerService.VolumeSize:input_type -> worker.VolumeSizeRequest
+	26, // 18: worker.WorkerService.BackupVolume:input_type -> worker.BackupVolumeRequest
+	27, // 19: worker.WorkerService.RestoreVolume:input_type -> worker.RestoreVolumeRequest
+	29, // 20: worker.WorkerService.ListFiles:input_type -> worker.ListFilesRequest
+	32, // 21: worker.WorkerService.ReadFile:input_type -> worker.ReadFileRequest
+	34, // 22: worker.WorkerService.WriteFile:input_type -> worker.WriteFileRequest
+	36, // 23: worker.WorkerService.WriteFileStream:input_type -> worker.WriteFileStreamRequest
+	38, // 24: worker.WorkerService.DeletePath:input_type -> worker.DeletePathRequest
+	40, // 25: worker.WorkerService.CreateDirectory:input_type -> worker.CreateDirectoryRequest
+	42, // 26: worker.WorkerService.RenamePath:input_type -> worker.RenamePathRequest
+	44, // 27: worker.WorkerService.DownloadFile:input_type -> worker.DownloadFileRequest
+	46, // 28: worker.WorkerService.CopyFromInstance:input_type -> worker.CopyFromInstanceRequest
+	48, // 29: worker.WorkerService.CopyToInstance:input_type -> worker.CopyToInstanceRequest
+	50, // 30: worker.WorkerService.CopyDirFromInstance:input_type -> worker.CopyDirFromInstanceRequest
+	51, // 31: worker.WorkerService.CopyTarToInstance:input_type -> worker.CopyTarToInstanceRequest
+	53, // 32: worker.WorkerService.WatchInstanceStates:input_type -> worker.WatchInstanceStatesRequest
+	54, // 33: worker.WorkerService.GetAllInstanceStates:input_type -> worker.GetAllInstanceStatesRequest
+	65, // 34: worker.WorkerService.ListGameserverInstances:input_type -> worker.ListGameserverInstancesRequest
+	59, // 35: worker.WorkerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	68, // 36: worker.WorkerService.PrepareGameScripts:input_type -> worker.PrepareGameScriptsRequest
+	70, // 37: worker.WorkerService.EnsureDepot:input_type -> worker.EnsureDepotRequest
+	72, // 38: worker.WorkerService.DownloadWorkshopItem:input_type -> worker.DownloadWorkshopItemRequest
+	74, // 39: worker.WorkerService.CopyDepotToVolume:input_type -> worker.CopyDepotToVolumeRequest
+	61, // 40: worker.ControllerService.Register:input_type -> worker.RegisterRequest
+	59, // 41: worker.ControllerService.Heartbeat:input_type -> worker.HeartbeatRequest
+	63, // 42: worker.ControllerService.ValidateSFTPLogin:input_type -> worker.SFTPLoginRequest
+	3,  // 43: worker.WorkerService.PullImage:output_type -> worker.PullImageResponse
+	6,  // 44: worker.WorkerService.CreateInstance:output_type -> worker.CreateInstanceResponse
+	8,  // 45: worker.WorkerService.StartInstance:output_type -> worker.StartInstanceResponse
+	58, // 46: worker.WorkerService.RunInstall:output_type -> worker.RunInstallResponse
+	10, // 47: worker.WorkerService.StopInstance:output_type -> worker.StopInstanceResponse
+	12, // 48: worker.WorkerService.RemoveInstance:output_type -> worker.RemoveInstanceResponse
+	14, // 49: worker.WorkerService.InspectInstance:output_type -> worker.InspectInstanceResponse
+	16, // 50: worker.WorkerService.Exec:output_type -> worker.ExecResponse
+	1,  // 51: worker.WorkerService.InstanceLogs:output_type -> worker.DataChunk
+	19, // 52: worker.WorkerService.InstanceStats:output_type -> worker.InstanceStatsResponse
+	21, // 53: worker.WorkerService.CreateVolume:output_type -> worker.CreateVolumeResponse
+	23, // 54: worker.WorkerService.RemoveVolume:output_type -> worker.RemoveVolumeResponse
+	25, // 55: worker.WorkerService.VolumeSize:output_type -> worker.VolumeSizeResponse
+	1,  // 56: worker.WorkerService.BackupVolume:output_type -> worker.DataChunk
+	28, // 57: worker.WorkerService.RestoreVolume:output_type -> worker.RestoreVolumeResponse
+	31, // 58: worker.WorkerService.ListFiles:output_type -> worker.ListFilesResponse
+	33, // 59: worker.WorkerService.ReadFile:output_type -> worker.ReadFileResponse
+	35, // 60: worker.WorkerService.WriteFile:output_type -> worker.WriteFileResponse
+	37, // 61: worker.WorkerService.WriteFileStream:output_type -> worker.WriteFileStreamResponse
+	39, // 62: worker.WorkerService.DeletePath:output_type -> worker.DeletePathResponse
+	41, // 63: worker.WorkerService.CreateDirectory:output_type -> worker.CreateDirectoryResponse
+	43, // 64: worker.WorkerService.RenamePath:output_type -> worker.RenamePathResponse
+	45, // 65: worker.WorkerService.DownloadFile:output_type -> worker.DownloadFileResponse
+	47, // 66: worker.WorkerService.CopyFromInstance:output_type -> worker.CopyFromInstanceResponse
+	49, // 67: worker.WorkerService.CopyToInstance:output_type -> worker.CopyToInstanceResponse
+	1,  // 68: worker.WorkerService.CopyDirFromInstance:output_type -> worker.DataChunk
+	52, // 69: worker.WorkerService.CopyTarToInstance:output_type -> worker.CopyTarToInstanceResponse
+	56, // 70: worker.WorkerService.WatchInstanceStates:output_type -> worker.InstanceStateUpdate
+	55, // 71: worker.WorkerService.GetAllInstanceStates:output_type -> worker.GetAllInstanceStatesResponse
+	66, // 72: worker.WorkerService.ListGameserverInstances:output_type -> worker.ListGameserverInstancesResponse
+	60, // 73: worker.WorkerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	69, // 74: worker.WorkerService.PrepareGameScripts:output_type -> worker.PrepareGameScriptsResponse
+	71, // 75: worker.WorkerService.EnsureDepot:output_type -> worker.EnsureDepotProgress
+	73, // 76: worker.WorkerService.DownloadWorkshopItem:output_type -> worker.DownloadWorkshopItemResponse
+	75, // 77: worker.WorkerService.CopyDepotToVolume:output_type -> worker.CopyDepotToVolumeResponse
+	62, // 78: worker.ControllerService.Register:output_type -> worker.RegisterResponse
+	60, // 79: worker.ControllerService.Heartbeat:output_type -> worker.HeartbeatResponse
+	64, // 80: worker.ControllerService.ValidateSFTPLogin:output_type -> worker.SFTPLoginResponse
+	43, // [43:81] is the sub-list for method output_type
+	5,  // [5:43] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_worker_proto_init() }
@@ -4288,13 +4590,14 @@ func file_proto_worker_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_worker_proto_rawDesc), len(file_proto_worker_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   71,
+			NumEnums:      1,
+			NumMessages:   75,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
 		GoTypes:           file_proto_worker_proto_goTypes,
 		DependencyIndexes: file_proto_worker_proto_depIdxs,
+		EnumInfos:         file_proto_worker_proto_enumTypes,
 		MessageInfos:      file_proto_worker_proto_msgTypes,
 	}.Build()
 	File_proto_worker_proto = out.File

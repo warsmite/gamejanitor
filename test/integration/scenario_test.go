@@ -378,7 +378,7 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 	// Set up a running instance directly (avoids lifecycle goroutine races)
 	instanceID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "cmd-test"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartInstance(ctx, instanceID))
+	require.NoError(t, fw.StartInstance(ctx, instanceID, ""))
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.InstanceID = &instanceID

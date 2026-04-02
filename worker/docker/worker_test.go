@@ -64,7 +64,7 @@ func TestWorker_ContainerLifecycle(t *testing.T) {
 	})
 
 	// Start
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	// Inspect — should be running
 	info, err := w.InspectInstance(ctx, id)
@@ -224,14 +224,14 @@ func TestWorker_Rename(t *testing.T) {
 	assert.Equal(t, "content", string(data))
 }
 
-func TestWorker_WatchEvents(t *testing.T) {
+func TestWorker_WatchInstanceStates(t *testing.T) {
 	w := newTestLocalWorker(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	events, errs := w.WatchEvents(ctx)
+	updates, errs := w.WatchInstanceStates(ctx)
 
-	// Pull and start a instance to generate events
+	// Pull and start a instance to generate state updates
 	require.NoError(t, w.PullImage(ctx, "alpine:latest"))
 	containerName := testInstanceName(t)
 	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
@@ -245,23 +245,23 @@ func TestWorker_WatchEvents(t *testing.T) {
 		w.RemoveInstance(context.Background(), id)
 	})
 
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
-	// Should receive a "start" event for our container.
-	// Filter out events from other instances on the host.
+	// Should receive a running state update for our instance.
+	// Filter out updates from other instances on the host.
 	for {
 		select {
-		case evt := <-events:
-			if evt.InstanceID != id {
-				continue // skip events from other instances
+		case update := <-updates:
+			if update.InstanceID != id {
+				continue // skip updates from other instances
 			}
-			assert.Equal(t, "start", evt.Action)
-			assert.Equal(t, id, evt.InstanceID)
+			assert.Equal(t, worker.StateRunning, update.State)
+			assert.Equal(t, id, update.InstanceID)
 			return
 		case err := <-errs:
-			t.Fatalf("error watching events: %v", err)
+			t.Fatalf("error watching instance states: %v", err)
 		case <-time.After(10 * time.Second):
-			t.Fatal("timed out waiting for start event")
+			t.Fatal("timed out waiting for running state update")
 		}
 	}
 }

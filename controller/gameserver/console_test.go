@@ -48,7 +48,7 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 	// which cause flaky cleanup races under parallel test load.
 	instanceID, err := fw.CreateInstance(ctx, worker.InstanceOptions{Name: "test-cmd"})
 	require.NoError(t, err)
-	require.NoError(t, fw.StartInstance(ctx, instanceID))
+	require.NoError(t, fw.StartInstance(ctx, instanceID, ""))
 
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)

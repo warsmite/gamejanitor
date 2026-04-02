@@ -203,12 +203,12 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 	return false
 }
 
-// watchWorkerEvents starts a goroutine that watches instance events from a worker.
+// watchWorkerEvents starts a goroutine that watches instance state updates from a worker.
 func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w worker.Worker) {
-	eventCh, errCh := w.WatchEvents(ctx)
+	updateCh, errCh := w.WatchInstanceStates(ctx)
 
 	go func() {
-		m.log.Debug("watching events", "worker", label)
+		m.log.Debug("watching instance states", "worker", label)
 		for {
 			select {
 			case <-ctx.Done():
@@ -217,42 +217,42 @@ func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w w
 				if !ok {
 					return
 				}
-				m.log.Error("event watcher error", "worker", label, "error", err)
+				m.log.Error("instance state watcher error", "worker", label, "error", err)
 				return
-			case event, ok := <-eventCh:
+			case update, ok := <-updateCh:
 				if !ok {
 					return
 				}
-				m.handleEvent(event)
+				m.handleInstanceStateUpdate(update)
 			}
 		}
 	}()
 }
 
-func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
-	gsID, ok := naming.GameserverIDFromInstanceName(event.InstanceName)
+func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpdate) {
+	gsID, ok := naming.GameserverIDFromInstanceName(update.InstanceName)
 	if !ok {
 		return
 	}
 
 	gs, err := m.store.GetGameserver(gsID)
 	if err != nil || gs == nil {
-		m.log.Debug("instance event for unknown gameserver", "instance_name", event.InstanceName, "action", event.Action)
+		m.log.Debug("instance state update for unknown gameserver", "instance_name", update.InstanceName, "state", update.State)
 		return
 	}
 
-	switch event.Action {
-	case "start":
-		m.log.Debug("instance event: instance started", "gameserver", gsID)
+	switch update.State {
+	case worker.StateRunning:
+		m.log.Debug("instance state: running", "gameserver", gsID)
 
-	case "die", "stop":
+	case worker.StateExited:
 		// Ignore stale events from old instances
-		if gs.InstanceID != nil && *gs.InstanceID != event.InstanceID {
-			m.log.Debug("instance event: ignoring stale event from old instance", "gameserver", gsID, "event_instance", event.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
+		if gs.InstanceID != nil && *gs.InstanceID != update.InstanceID {
+			m.log.Debug("instance state: ignoring stale update from old instance", "gameserver", gsID, "event_instance", update.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
 			return
 		}
 		if gs.InstanceID == nil {
-			m.log.Debug("instance event: ignoring event with no current instance", "gameserver", gsID, "action", event.Action)
+			m.log.Debug("instance state: ignoring update with no current instance", "gameserver", gsID, "state", update.State)
 			return
 		}
 
@@ -265,16 +265,13 @@ func (m *StatusManager) handleEvent(event worker.InstanceEvent) {
 		rs := m.GetRuntimeState(gsID)
 		if rs != nil && rs.Running {
 			// Instance was still marked as running — this is unexpected
-			m.log.Warn("instance event: unexpected instance death", "gameserver", gsID, "action", event.Action)
-			m.setExited(gsID, -1, "Instance exited unexpectedly")
+			m.log.Warn("instance state: unexpected instance death", "gameserver", gsID)
+			m.setExited(gsID, update.ExitCode, "Instance exited unexpectedly")
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		} else {
-			m.log.Debug("instance event: expected instance stop", "gameserver", gsID)
+			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
 		}
-
-	case "kill":
-		m.log.Debug("instance event: instance killed", "gameserver", gsID)
 	}
 }
 

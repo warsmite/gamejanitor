@@ -22,7 +22,7 @@ type FakeWorker struct {
 	mu         sync.Mutex
 	volumes    map[string]string            // volume name → temp dir path
 	instances map[string]*fakeInstance
-	events     chan worker.InstanceEvent
+	events     chan worker.InstanceStateUpdate
 	failures   map[string]error // method name → error to return once
 	t          *testing.T
 	tmpDir     string // parent dir for volume temp dirs
@@ -52,7 +52,7 @@ func NewFakeWorker(t *testing.T) *FakeWorker {
 	fw := &FakeWorker{
 		volumes:    make(map[string]string),
 		instances: make(map[string]*fakeInstance),
-		events:     make(chan worker.InstanceEvent, 64),
+		events:     make(chan worker.InstanceStateUpdate, 64),
 		failures:   make(map[string]error),
 		t:          t,
 		tmpDir:     tmpDir,
@@ -152,7 +152,7 @@ func (w *FakeWorker) CreateInstance(ctx context.Context, opts worker.InstanceOpt
 	return id, nil
 }
 
-func (w *FakeWorker) StartInstance(ctx context.Context, id string) error {
+func (w *FakeWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
 	if err := w.popFailure("StartInstance"); err != nil {
 		return err
 	}
@@ -172,14 +172,21 @@ func (w *FakeWorker) StartInstance(ctx context.Context, id string) error {
 	}
 	w.mu.Unlock()
 
-	// Emit start event
-	w.events <- worker.InstanceEvent{
+	// Emit running state update
+	w.events <- worker.InstanceStateUpdate{
 		InstanceID:   id,
 		InstanceName: c.name,
-		Action:        "start",
+		State:        worker.StateRunning,
 	}
 
 	return nil
+}
+
+func (w *FakeWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
+	if err := w.popFailure("RunInstall"); err != nil {
+		return 0, "", err
+	}
+	return 0, "", nil
 }
 
 func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
@@ -220,10 +227,10 @@ func (w *FakeWorker) SimulateCrash(instanceID string) {
 	}
 	w.mu.Unlock()
 
-	w.events <- worker.InstanceEvent{
+	w.events <- worker.InstanceStateUpdate{
 		InstanceID:   instanceID,
 		InstanceName: c.name,
-		Action:        "die",
+		State:        worker.StateExited,
 	}
 }
 
@@ -573,9 +580,9 @@ func (w *FakeWorker) RestoreVolume(ctx context.Context, volumeName string, tarSt
 
 // Events
 
-func (w *FakeWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
+func (w *FakeWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
 	errCh := make(chan error, 1)
-	outCh := make(chan worker.InstanceEvent, 64)
+	outCh := make(chan worker.InstanceStateUpdate, 64)
 
 	go func() {
 		defer close(outCh)
@@ -594,6 +601,29 @@ func (w *FakeWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEve
 	}()
 
 	return outCh, errCh
+}
+
+func (w *FakeWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var states []worker.InstanceStateUpdate
+	for id, inst := range w.instances {
+		var state worker.InstanceState
+		switch inst.state {
+		case "running":
+			state = worker.StateRunning
+		case "stopped", "exited":
+			state = worker.StateExited
+		default:
+			state = worker.StateCreated
+		}
+		states = append(states, worker.InstanceStateUpdate{
+			InstanceID:   id,
+			InstanceName: inst.name,
+			State:        state,
+		})
+	}
+	return states, nil
 }
 
 // Game scripts

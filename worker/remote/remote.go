@@ -64,9 +64,20 @@ func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceO
 	return resp.InstanceId, nil
 }
 
-func (w *RemoteWorker) StartInstance(ctx context.Context, id string) error {
-	_, err := w.client.StartInstance(ctx, &pb.StartInstanceRequest{InstanceId: id})
+func (w *RemoteWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
+	_, err := w.client.StartInstance(ctx, &pb.StartInstanceRequest{
+		InstanceId:   id,
+		ReadyPattern: readyPattern,
+	})
 	return err
+}
+
+func (w *RemoteWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
+	resp, err := w.client.RunInstall(ctx, &pb.RunInstallRequest{InstanceId: id})
+	if err != nil {
+		return 0, "", err
+	}
+	return int(resp.ExitCode), resp.Output, nil
 }
 
 func (w *RemoteWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
@@ -339,20 +350,20 @@ func (w *RemoteWorker) CopyTarToInstance(ctx context.Context, instanceID string,
 	return err
 }
 
-func (w *RemoteWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
-	events := make(chan worker.InstanceEvent, 64)
+func (w *RemoteWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
+	updates := make(chan worker.InstanceStateUpdate, 64)
 	errs := make(chan error, 1)
 
-	stream, err := w.client.WatchEvents(ctx, &pb.WatchEventsRequest{})
+	stream, err := w.client.WatchInstanceStates(ctx, &pb.WatchInstanceStatesRequest{})
 	if err != nil {
 		errs <- err
-		close(events)
+		close(updates)
 		close(errs)
-		return events, errs
+		return updates, errs
 	}
 
 	go func() {
-		defer close(events)
+		defer close(updates)
 		defer close(errs)
 		for {
 			msg, err := stream.Recv()
@@ -363,18 +374,53 @@ func (w *RemoteWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceE
 				return
 			}
 			select {
-			case events <- worker.InstanceEvent{
-				InstanceID:   msg.InstanceId,
-				InstanceName: msg.InstanceName,
-				Action:        msg.Action,
-			}:
+			case updates <- protoToWorkerState(msg):
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
-	return events, errs
+	return updates, errs
+}
+
+func (w *RemoteWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
+	resp, err := w.client.GetAllInstanceStates(ctx, &pb.GetAllInstanceStatesRequest{})
+	if err != nil {
+		return nil, err
+	}
+	states := make([]worker.InstanceStateUpdate, len(resp.Instances))
+	for i, inst := range resp.Instances {
+		states[i] = protoToWorkerState(inst)
+	}
+	return states, nil
+}
+
+func protoToWorkerState(msg *pb.InstanceStateUpdate) worker.InstanceStateUpdate {
+	return worker.InstanceStateUpdate{
+		InstanceID:   msg.InstanceId,
+		InstanceName: msg.InstanceName,
+		State:        protoToInstanceState(msg.State),
+		ExitCode:     int(msg.ExitCode),
+		StartedAt:    time.Unix(msg.StartedAtUnix, 0),
+		ExitedAt:     time.Unix(msg.ExitedAtUnix, 0),
+		Installed:    msg.Installed,
+	}
+}
+
+func protoToInstanceState(s pb.InstanceState) worker.InstanceState {
+	switch s {
+	case pb.InstanceState_INSTANCE_CREATED:
+		return worker.StateCreated
+	case pb.InstanceState_INSTANCE_STARTING:
+		return worker.StateStarting
+	case pb.InstanceState_INSTANCE_RUNNING:
+		return worker.StateRunning
+	case pb.InstanceState_INSTANCE_EXITED:
+		return worker.StateExited
+	default:
+		return worker.StateCreated
+	}
 }
 
 // grpcStreamReader wraps a gRPC DataChunk stream as an io.ReadCloser.

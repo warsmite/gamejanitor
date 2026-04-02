@@ -312,7 +312,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	s.broadcaster.Publish(controller.InstanceCreatingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Start instance
-	if err := w.StartInstance(ctx, instanceID); err != nil {
+	if err := w.StartInstance(ctx, instanceID, ""); err != nil {
 		s.setError(id, userFriendlyError("Failed to start instance", err))
 		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
 	}
@@ -527,7 +527,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	}
 	defer w.RemoveInstance(ctx, tempID)
 
-	if err := w.StartInstance(ctx, tempID); err != nil {
+	if err := w.StartInstance(ctx, tempID, ""); err != nil {
 		return fmt.Errorf("starting temp instance for update: %w", err)
 	}
 

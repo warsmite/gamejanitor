@@ -62,10 +62,39 @@ type GameserverStats struct {
 	StorageLimitMB  *int
 }
 
-type InstanceEvent struct {
+// InstanceState represents the authoritative state of an instance on the worker.
+type InstanceState int
+
+const (
+	StateCreated  InstanceState = 0
+	StateStarting InstanceState = 1 // started but ready pattern not yet matched
+	StateRunning  InstanceState = 2 // ready pattern matched or no pattern
+	StateExited   InstanceState = 3
+)
+
+func (s InstanceState) String() string {
+	switch s {
+	case StateCreated:
+		return "created"
+	case StateStarting:
+		return "starting"
+	case StateRunning:
+		return "running"
+	case StateExited:
+		return "exited"
+	default:
+		return "unknown"
+	}
+}
+
+type InstanceStateUpdate struct {
 	InstanceID   string
 	InstanceName string
-	Action        string // "start", "stop", "die", "kill", etc.
+	State        InstanceState
+	ExitCode     int
+	StartedAt    time.Time
+	ExitedAt     time.Time
+	Installed    bool
 }
 
 type GameserverInstance struct {

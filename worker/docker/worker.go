@@ -67,8 +67,13 @@ func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOp
 	})
 }
 
-func (w *LocalWorker) StartInstance(ctx context.Context, id string) error {
+func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
+	// readyPattern will be wired to InstanceTracker in a follow-up
 	return w.Docker.StartInstance(ctx, id)
+}
+
+func (w *LocalWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
+	return 0, "", fmt.Errorf("RunInstall not implemented for Docker runtime (uses entrypoint.sh)")
 }
 
 func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
@@ -197,14 +202,16 @@ func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from st
 	return worker.RenamePathDirect(w.Resolve, ctx, volumeName, from, to)
 }
 
-func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
+func (w *LocalWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
+	// Temporary shim: convert Docker events to InstanceStateUpdate.
+	// Will be replaced by InstanceTracker in a follow-up.
 	dockerEventCh, dockerErrCh := w.Docker.WatchEvents(ctx)
 
-	eventCh := make(chan worker.InstanceEvent)
+	updateCh := make(chan worker.InstanceStateUpdate, 64)
 	errCh := make(chan error, 1)
 
 	go func() {
-		defer close(eventCh)
+		defer close(updateCh)
 		defer close(errCh)
 
 		for {
@@ -221,11 +228,20 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEv
 				if !ok {
 					return
 				}
+				var state worker.InstanceState
+				switch de.Action {
+				case "start":
+					state = worker.StateRunning
+				case "die":
+					state = worker.StateExited
+				default:
+					continue
+				}
 				select {
-				case eventCh <- worker.InstanceEvent{
+				case updateCh <- worker.InstanceStateUpdate{
 					InstanceID:   de.InstanceID,
 					InstanceName: de.InstanceName,
-					Action:        de.Action,
+					State:        state,
 				}:
 				case <-ctx.Done():
 					return
@@ -234,7 +250,32 @@ func (w *LocalWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEv
 		}
 	}()
 
-	return eventCh, errCh
+	return updateCh, errCh
+}
+
+func (w *LocalWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
+	instances, err := w.ListGameserverInstances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updates := make([]worker.InstanceStateUpdate, len(instances))
+	for i, inst := range instances {
+		var state worker.InstanceState
+		switch inst.State {
+		case "running":
+			state = worker.StateRunning
+		case "exited":
+			state = worker.StateExited
+		default:
+			state = worker.StateCreated
+		}
+		updates[i] = worker.InstanceStateUpdate{
+			InstanceID:   inst.InstanceID,
+			InstanceName: inst.InstanceName,
+			State:        state,
+		}
+	}
+	return updates, nil
 }
 
 func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {

@@ -22,6 +22,7 @@ const (
 	WorkerService_PullImage_FullMethodName               = "/worker.WorkerService/PullImage"
 	WorkerService_CreateInstance_FullMethodName          = "/worker.WorkerService/CreateInstance"
 	WorkerService_StartInstance_FullMethodName           = "/worker.WorkerService/StartInstance"
+	WorkerService_RunInstall_FullMethodName              = "/worker.WorkerService/RunInstall"
 	WorkerService_StopInstance_FullMethodName            = "/worker.WorkerService/StopInstance"
 	WorkerService_RemoveInstance_FullMethodName          = "/worker.WorkerService/RemoveInstance"
 	WorkerService_InspectInstance_FullMethodName         = "/worker.WorkerService/InspectInstance"
@@ -45,7 +46,8 @@ const (
 	WorkerService_CopyToInstance_FullMethodName          = "/worker.WorkerService/CopyToInstance"
 	WorkerService_CopyDirFromInstance_FullMethodName     = "/worker.WorkerService/CopyDirFromInstance"
 	WorkerService_CopyTarToInstance_FullMethodName       = "/worker.WorkerService/CopyTarToInstance"
-	WorkerService_WatchEvents_FullMethodName             = "/worker.WorkerService/WatchEvents"
+	WorkerService_WatchInstanceStates_FullMethodName     = "/worker.WorkerService/WatchInstanceStates"
+	WorkerService_GetAllInstanceStates_FullMethodName    = "/worker.WorkerService/GetAllInstanceStates"
 	WorkerService_ListGameserverInstances_FullMethodName = "/worker.WorkerService/ListGameserverInstances"
 	WorkerService_Heartbeat_FullMethodName               = "/worker.WorkerService/Heartbeat"
 	WorkerService_PrepareGameScripts_FullMethodName      = "/worker.WorkerService/PrepareGameScripts"
@@ -65,6 +67,7 @@ type WorkerServiceClient interface {
 	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error)
 	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
+	RunInstall(ctx context.Context, in *RunInstallRequest, opts ...grpc.CallOption) (*RunInstallResponse, error)
 	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
 	RemoveInstance(ctx context.Context, in *RemoveInstanceRequest, opts ...grpc.CallOption) (*RemoveInstanceResponse, error)
 	InspectInstance(ctx context.Context, in *InspectInstanceRequest, opts ...grpc.CallOption) (*InspectInstanceResponse, error)
@@ -91,8 +94,9 @@ type WorkerServiceClient interface {
 	CopyToInstance(ctx context.Context, in *CopyToInstanceRequest, opts ...grpc.CallOption) (*CopyToInstanceResponse, error)
 	CopyDirFromInstance(ctx context.Context, in *CopyDirFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
 	CopyTarToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse], error)
-	// Events — long-lived server stream of Docker container events
-	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceEventMsg], error)
+	// Instance state — authoritative state stream from worker to controller
+	WatchInstanceStates(ctx context.Context, in *WatchInstanceStatesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceStateUpdate], error)
+	GetAllInstanceStates(ctx context.Context, in *GetAllInstanceStatesRequest, opts ...grpc.CallOption) (*GetAllInstanceStatesResponse, error)
 	// Discovery
 	ListGameserverInstances(ctx context.Context, in *ListGameserverInstancesRequest, opts ...grpc.CallOption) (*ListGameserverInstancesResponse, error)
 	// Health
@@ -139,6 +143,16 @@ func (c *workerServiceClient) StartInstance(ctx context.Context, in *StartInstan
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StartInstanceResponse)
 	err := c.cc.Invoke(ctx, WorkerService_StartInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerServiceClient) RunInstall(ctx context.Context, in *RunInstallRequest, opts ...grpc.CallOption) (*RunInstallResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunInstallResponse)
+	err := c.cc.Invoke(ctx, WorkerService_RunInstall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -411,13 +425,13 @@ func (c *workerServiceClient) CopyTarToInstance(ctx context.Context, opts ...grp
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_CopyTarToInstanceClient = grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse]
 
-func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceEventMsg], error) {
+func (c *workerServiceClient) WatchInstanceStates(ctx context.Context, in *WatchInstanceStatesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceStateUpdate], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_WatchEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_WatchInstanceStates_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[WatchEventsRequest, InstanceEventMsg]{ClientStream: stream}
+	x := &grpc.GenericClientStream[WatchInstanceStatesRequest, InstanceStateUpdate]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -428,7 +442,17 @@ func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRe
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_WatchEventsClient = grpc.ServerStreamingClient[InstanceEventMsg]
+type WorkerService_WatchInstanceStatesClient = grpc.ServerStreamingClient[InstanceStateUpdate]
+
+func (c *workerServiceClient) GetAllInstanceStates(ctx context.Context, in *GetAllInstanceStatesRequest, opts ...grpc.CallOption) (*GetAllInstanceStatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAllInstanceStatesResponse)
+	err := c.cc.Invoke(ctx, WorkerService_GetAllInstanceStates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 func (c *workerServiceClient) ListGameserverInstances(ctx context.Context, in *ListGameserverInstancesRequest, opts ...grpc.CallOption) (*ListGameserverInstancesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -510,6 +534,7 @@ type WorkerServiceServer interface {
 	PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error)
 	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
+	RunInstall(context.Context, *RunInstallRequest) (*RunInstallResponse, error)
 	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
 	RemoveInstance(context.Context, *RemoveInstanceRequest) (*RemoveInstanceResponse, error)
 	InspectInstance(context.Context, *InspectInstanceRequest) (*InspectInstanceResponse, error)
@@ -536,8 +561,9 @@ type WorkerServiceServer interface {
 	CopyToInstance(context.Context, *CopyToInstanceRequest) (*CopyToInstanceResponse, error)
 	CopyDirFromInstance(*CopyDirFromInstanceRequest, grpc.ServerStreamingServer[DataChunk]) error
 	CopyTarToInstance(grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]) error
-	// Events — long-lived server stream of Docker container events
-	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[InstanceEventMsg]) error
+	// Instance state — authoritative state stream from worker to controller
+	WatchInstanceStates(*WatchInstanceStatesRequest, grpc.ServerStreamingServer[InstanceStateUpdate]) error
+	GetAllInstanceStates(context.Context, *GetAllInstanceStatesRequest) (*GetAllInstanceStatesResponse, error)
 	// Discovery
 	ListGameserverInstances(context.Context, *ListGameserverInstancesRequest) (*ListGameserverInstancesResponse, error)
 	// Health
@@ -568,6 +594,9 @@ func (UnimplementedWorkerServiceServer) CreateInstance(context.Context, *CreateI
 }
 func (UnimplementedWorkerServiceServer) StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartInstance not implemented")
+}
+func (UnimplementedWorkerServiceServer) RunInstall(context.Context, *RunInstallRequest) (*RunInstallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunInstall not implemented")
 }
 func (UnimplementedWorkerServiceServer) StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopInstance not implemented")
@@ -638,8 +667,11 @@ func (UnimplementedWorkerServiceServer) CopyDirFromInstance(*CopyDirFromInstance
 func (UnimplementedWorkerServiceServer) CopyTarToInstance(grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]) error {
 	return status.Error(codes.Unimplemented, "method CopyTarToInstance not implemented")
 }
-func (UnimplementedWorkerServiceServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[InstanceEventMsg]) error {
-	return status.Error(codes.Unimplemented, "method WatchEvents not implemented")
+func (UnimplementedWorkerServiceServer) WatchInstanceStates(*WatchInstanceStatesRequest, grpc.ServerStreamingServer[InstanceStateUpdate]) error {
+	return status.Error(codes.Unimplemented, "method WatchInstanceStates not implemented")
+}
+func (UnimplementedWorkerServiceServer) GetAllInstanceStates(context.Context, *GetAllInstanceStatesRequest) (*GetAllInstanceStatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAllInstanceStates not implemented")
 }
 func (UnimplementedWorkerServiceServer) ListGameserverInstances(context.Context, *ListGameserverInstancesRequest) (*ListGameserverInstancesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGameserverInstances not implemented")
@@ -730,6 +762,24 @@ func _WorkerService_StartInstance_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServiceServer).StartInstance(ctx, req.(*StartInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkerService_RunInstall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunInstallRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).RunInstall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_RunInstall_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).RunInstall(ctx, req.(*RunInstallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1094,16 +1144,34 @@ func _WorkerService_CopyTarToInstance_Handler(srv interface{}, stream grpc.Serve
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_CopyTarToInstanceServer = grpc.ClientStreamingServer[CopyTarToInstanceRequest, CopyTarToInstanceResponse]
 
-func _WorkerService_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WatchEventsRequest)
+func _WorkerService_WatchInstanceStates_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchInstanceStatesRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(WorkerServiceServer).WatchEvents(m, &grpc.GenericServerStream[WatchEventsRequest, InstanceEventMsg]{ServerStream: stream})
+	return srv.(WorkerServiceServer).WatchInstanceStates(m, &grpc.GenericServerStream[WatchInstanceStatesRequest, InstanceStateUpdate]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_WatchEventsServer = grpc.ServerStreamingServer[InstanceEventMsg]
+type WorkerService_WatchInstanceStatesServer = grpc.ServerStreamingServer[InstanceStateUpdate]
+
+func _WorkerService_GetAllInstanceStates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAllInstanceStatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).GetAllInstanceStates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_GetAllInstanceStates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).GetAllInstanceStates(ctx, req.(*GetAllInstanceStatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _WorkerService_ListGameserverInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListGameserverInstancesRequest)
@@ -1226,6 +1294,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkerService_StartInstance_Handler,
 		},
 		{
+			MethodName: "RunInstall",
+			Handler:    _WorkerService_RunInstall_Handler,
+		},
+		{
 			MethodName: "StopInstance",
 			Handler:    _WorkerService_StopInstance_Handler,
 		},
@@ -1294,6 +1366,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkerService_CopyToInstance_Handler,
 		},
 		{
+			MethodName: "GetAllInstanceStates",
+			Handler:    _WorkerService_GetAllInstanceStates_Handler,
+		},
+		{
 			MethodName: "ListGameserverInstances",
 			Handler:    _WorkerService_ListGameserverInstances_Handler,
 		},
@@ -1346,8 +1422,8 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "WatchEvents",
-			Handler:       _WorkerService_WatchEvents_Handler,
+			StreamName:    "WatchInstanceStates",
+			Handler:       _WorkerService_WatchInstanceStates_Handler,
 			ServerStreams: true,
 		},
 		{

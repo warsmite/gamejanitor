@@ -12,7 +12,8 @@ type Worker interface {
 	// Instance lifecycle
 	PullImage(ctx context.Context, image string) error
 	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
-	StartInstance(ctx context.Context, id string) error
+	StartInstance(ctx context.Context, id string, readyPattern string) error
+	RunInstall(ctx context.Context, id string) (exitCode int, output string, err error)
 	StopInstance(ctx context.Context, id string, timeoutSeconds int) error
 	RemoveInstance(ctx context.Context, id string) error
 	InspectInstance(ctx context.Context, id string) (*InstanceInfo, error)
@@ -49,8 +50,9 @@ type Worker interface {
 	// Discovery
 	ListGameserverInstances(ctx context.Context) ([]GameserverInstance, error)
 
-	// Events
-	WatchEvents(ctx context.Context) (<-chan InstanceEvent, <-chan error)
+	// Instance state — authoritative state from worker
+	WatchInstanceStates(ctx context.Context) (<-chan InstanceStateUpdate, <-chan error)
+	GetAllInstanceStates(ctx context.Context) ([]InstanceStateUpdate, error)
 
 	// Game scripts — extract to local filesystem, return host paths for bind-mounts
 	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)

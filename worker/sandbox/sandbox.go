@@ -34,7 +34,7 @@ type SandboxWorker struct {
 	instances map[string]*managedInstance
 
 	eventMu     sync.Mutex
-	eventCh     chan worker.InstanceEvent
+	eventCh     chan worker.InstanceStateUpdate
 	eventActive bool
 }
 
@@ -116,7 +116,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceEvent, 64),
+		eventCh:   make(chan worker.InstanceStateUpdate, 64),
 	}
 	w.resolve = w.volumeResolver()
 	w.recoverInstances()
@@ -189,7 +189,8 @@ func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.Instance
 	return id, nil
 }
 
-func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
+func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
+	// readyPattern will be wired to InstanceTracker in a follow-up
 	dir := w.instanceDir(id)
 	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -315,10 +316,13 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string) error {
 
 		if active {
 			select {
-			case w.eventCh <- worker.InstanceEvent{
+			case w.eventCh <- worker.InstanceStateUpdate{
 				InstanceID:   id,
 				InstanceName: manifest.Name,
-				Action:       "die",
+				State:        worker.StateExited,
+				ExitCode:     int(inst.exitCode.Load()),
+				StartedAt:    inst.startedAt,
+				ExitedAt:     time.Now(),
 			}:
 			default:
 			}
@@ -853,7 +857,7 @@ func (w *SandboxWorker) RestoreVolume(ctx context.Context, volumeName string, ta
 
 // --- Worker interface: Events ---
 
-func (w *SandboxWorker) WatchEvents(ctx context.Context) (<-chan worker.InstanceEvent, <-chan error) {
+func (w *SandboxWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
 	w.eventMu.Lock()
 	w.eventActive = true
 	w.eventMu.Unlock()
@@ -867,6 +871,35 @@ func (w *SandboxWorker) WatchEvents(ctx context.Context) (<-chan worker.Instance
 	}()
 
 	return w.eventCh, errCh
+}
+
+func (w *SandboxWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
+	instances, err := w.ListGameserverInstances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updates := make([]worker.InstanceStateUpdate, len(instances))
+	for i, inst := range instances {
+		var state worker.InstanceState
+		switch inst.State {
+		case "running":
+			state = worker.StateRunning
+		case "exited":
+			state = worker.StateExited
+		default:
+			state = worker.StateCreated
+		}
+		updates[i] = worker.InstanceStateUpdate{
+			InstanceID:   inst.InstanceID,
+			InstanceName: inst.InstanceName,
+			State:        state,
+		}
+	}
+	return updates, nil
+}
+
+func (w *SandboxWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
+	return 0, "", fmt.Errorf("RunInstall not implemented for sandbox runtime")
 }
 
 // --- Worker interface: Discovery ---
@@ -1044,10 +1077,13 @@ func (w *SandboxWorker) recoverInstances() {
 					w.eventMu.Unlock()
 					if active {
 						select {
-						case w.eventCh <- worker.InstanceEvent{
+						case w.eventCh <- worker.InstanceStateUpdate{
 							InstanceID:   inst.id,
 							InstanceName: inst.name,
-							Action:       "die",
+							State:        worker.StateExited,
+							ExitCode:     int(inst.exitCode.Load()),
+							StartedAt:    inst.startedAt,
+							ExitedAt:     time.Now(),
 						}:
 						default:
 						}

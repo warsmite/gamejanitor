@@ -65,10 +65,21 @@ func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceReques
 }
 
 func (a *Agent) StartInstance(ctx context.Context, req *pb.StartInstanceRequest) (*pb.StartInstanceResponse, error) {
-	if err := a.worker.StartInstance(ctx, req.InstanceId); err != nil {
+	if err := a.worker.StartInstance(ctx, req.InstanceId, req.ReadyPattern); err != nil {
 		return nil, err
 	}
 	return &pb.StartInstanceResponse{}, nil
+}
+
+func (a *Agent) RunInstall(ctx context.Context, req *pb.RunInstallRequest) (*pb.RunInstallResponse, error) {
+	exitCode, output, err := a.worker.RunInstall(ctx, req.InstanceId)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RunInstallResponse{
+		ExitCode: int32(exitCode),
+		Output:   output,
+	}, nil
 }
 
 func (a *Agent) StopInstance(ctx context.Context, req *pb.StopInstanceRequest) (*pb.StopInstanceResponse, error) {
@@ -449,22 +460,18 @@ func (a *Agent) RestoreVolume(stream pb.WorkerService_RestoreVolumeServer) error
 	return stream.SendAndClose(&pb.RestoreVolumeResponse{})
 }
 
-func (a *Agent) WatchEvents(req *pb.WatchEventsRequest, stream pb.WorkerService_WatchEventsServer) error {
-	events, errs := a.worker.WatchEvents(stream.Context())
+func (a *Agent) WatchInstanceStates(req *pb.WatchInstanceStatesRequest, stream pb.WorkerService_WatchInstanceStatesServer) error {
+	updates, errs := a.worker.WatchInstanceStates(stream.Context())
 
 	for {
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case event, ok := <-events:
+		case update, ok := <-updates:
 			if !ok {
 				return nil
 			}
-			if err := stream.Send(&pb.InstanceEventMsg{
-				InstanceId:   event.InstanceID,
-				InstanceName: event.InstanceName,
-				Action:        event.Action,
-			}); err != nil {
+			if err := stream.Send(workerStateToProto(update)); err != nil {
 				return err
 			}
 		case err, ok := <-errs:
@@ -473,6 +480,45 @@ func (a *Agent) WatchEvents(req *pb.WatchEventsRequest, stream pb.WorkerService_
 			}
 			return err
 		}
+	}
+}
+
+func (a *Agent) GetAllInstanceStates(ctx context.Context, req *pb.GetAllInstanceStatesRequest) (*pb.GetAllInstanceStatesResponse, error) {
+	states, err := a.worker.GetAllInstanceStates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp := &pb.GetAllInstanceStatesResponse{}
+	for _, s := range states {
+		resp.Instances = append(resp.Instances, workerStateToProto(s))
+	}
+	return resp, nil
+}
+
+func workerStateToProto(u worker.InstanceStateUpdate) *pb.InstanceStateUpdate {
+	return &pb.InstanceStateUpdate{
+		InstanceId:    u.InstanceID,
+		InstanceName:  u.InstanceName,
+		State:         mapInstanceState(u.State),
+		ExitCode:      int32(u.ExitCode),
+		StartedAtUnix: u.StartedAt.Unix(),
+		ExitedAtUnix:  u.ExitedAt.Unix(),
+		Installed:     u.Installed,
+	}
+}
+
+func mapInstanceState(s worker.InstanceState) pb.InstanceState {
+	switch s {
+	case worker.StateCreated:
+		return pb.InstanceState_INSTANCE_CREATED
+	case worker.StateStarting:
+		return pb.InstanceState_INSTANCE_STARTING
+	case worker.StateRunning:
+		return pb.InstanceState_INSTANCE_RUNNING
+	case worker.StateExited:
+		return pb.InstanceState_INSTANCE_EXITED
+	default:
+		return pb.InstanceState_INSTANCE_CREATED
 	}
 }
 

@@ -11,6 +11,7 @@ service WorkerService {
     rpc PullImage(PullImageRequest) returns (PullImageResponse);
     rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
     rpc StartInstance(StartInstanceRequest) returns (StartInstanceResponse);
+    rpc RunInstall(RunInstallRequest) returns (RunInstallResponse);
     rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
     rpc RemoveInstance(RemoveInstanceRequest) returns (RemoveInstanceResponse);
     rpc InspectInstance(InspectInstanceRequest) returns (InspectInstanceResponse);
@@ -41,8 +42,9 @@ service WorkerService {
     rpc CopyDirFromInstance(CopyDirFromInstanceRequest) returns (stream DataChunk);
     rpc CopyTarToInstance(stream CopyTarToInstanceRequest) returns (CopyTarToInstanceResponse);
 
-    // Events — long-lived server stream of Docker container events
-    rpc WatchEvents(WatchEventsRequest) returns (stream InstanceEventMsg);
+    // Instance state — authoritative state stream from worker to controller
+    rpc WatchInstanceStates(WatchInstanceStatesRequest) returns (stream InstanceStateUpdate);
+    rpc GetAllInstanceStates(GetAllInstanceStatesRequest) returns (GetAllInstanceStatesResponse);
 
     // Discovery
     rpc ListGameserverInstances(ListGameserverInstancesRequest) returns (ListGameserverInstancesResponse);
@@ -108,6 +110,7 @@ message CreateInstanceResponse {
 
 message StartInstanceRequest {
     string instance_id = 1;
+    string ready_pattern = 2; // regex — empty means promote to running immediately
 }
 message StartInstanceResponse {}
 
@@ -287,13 +290,38 @@ message CopyTarToInstanceRequest {
 }
 message CopyTarToInstanceResponse {}
 
-// Events
+// Instance state
 
-message WatchEventsRequest {}
-message InstanceEventMsg {
+enum InstanceState {
+    INSTANCE_CREATED = 0;
+    INSTANCE_STARTING = 1; // started but ready pattern not yet matched
+    INSTANCE_RUNNING = 2;  // ready pattern matched or no pattern configured
+    INSTANCE_EXITED = 3;
+}
+
+message WatchInstanceStatesRequest {}
+message GetAllInstanceStatesRequest {}
+message GetAllInstanceStatesResponse {
+    repeated InstanceStateUpdate instances = 1;
+}
+message InstanceStateUpdate {
     string instance_id = 1;
     string instance_name = 2;
-    string action = 3;
+    InstanceState state = 3;
+    int32 exit_code = 4;
+    int64 started_at_unix = 5;
+    int64 exited_at_unix = 6;
+    bool installed = 7;
+}
+
+// Install — run-to-completion, separate from StartInstance
+
+message RunInstallRequest {
+    string instance_id = 1;
+}
+message RunInstallResponse {
+    int32 exit_code = 1;
+    string output = 2;
 }
 
 // Health

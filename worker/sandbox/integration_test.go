@@ -50,7 +50,7 @@ func newTestWorker(t *testing.T) *SandboxWorker {
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceEvent, 64),
+		eventCh:   make(chan worker.InstanceStateUpdate, 64),
 	}
 	w.resolve = w.volumeResolver()
 	return w
@@ -133,7 +133,7 @@ func TestIntegration_ProcessCanWriteToVolume(t *testing.T) {
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	// Wait for process to finish
 	w.mu.Lock()
@@ -174,7 +174,7 @@ func TestIntegration_RootfsIsReadOnly(t *testing.T) {
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	w.mu.Lock()
 	inst := w.instances[id]
@@ -211,7 +211,7 @@ func TestIntegration_ProcessRunsAsCorrectUID(t *testing.T) {
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	w.mu.Lock()
 	inst := w.instances[id]
@@ -250,7 +250,7 @@ while true; do sleep 1; done
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	// Wait for "ready" in logs
 	require.Eventually(t, func() bool {
@@ -294,7 +294,7 @@ while true; do sleep 1; done
 		Binds:      append(testHostBinds(), scriptsDir+":/scripts:ro"),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	// Wait for process to be ready
 	require.Eventually(t, func() bool {
@@ -341,7 +341,7 @@ while true; do sleep 1; done
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w1.StartInstance(ctx, id))
+	require.NoError(t, w1.StartInstance(ctx, id, ""))
 
 	// Wait for ready
 	require.Eventually(t, func() bool {
@@ -416,7 +416,7 @@ func TestIntegration_RecoverySkipsExitedInstances(t *testing.T) {
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w1.StartInstance(ctx, id))
+	require.NoError(t, w1.StartInstance(ctx, id, ""))
 
 	// Wait for it to exit
 	w1.mu.Lock()
@@ -458,7 +458,7 @@ while true; do sleep 1; done
 		Binds:      testHostBinds(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id))
+	require.NoError(t, w.StartInstance(ctx, id, ""))
 
 	require.Eventually(t, func() bool {
 		data, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
@@ -500,7 +500,7 @@ func newTestWorkerWithDir(t *testing.T, dataDir string) *SandboxWorker {
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceEvent, 64),
+		eventCh:   make(chan worker.InstanceStateUpdate, 64),
 	}
 	w.resolve = w.volumeResolver()
 	return w
