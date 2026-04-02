@@ -64,7 +64,7 @@ class GameserverStore {
 
   isRunning(id: string): boolean {
     const s = this.gameservers[id]?.gameserver.status;
-    return s === 'running' || s === 'started';
+    return s === 'running';
   }
 
   isStopped(id: string): boolean {
@@ -159,7 +159,7 @@ class GameserverStore {
         if (gs.status !== 'stopped') {
           this.connectLogStream(gs.id);
         }
-        if (gs.status === 'running' || gs.status === 'started') {
+        if (gs.status === 'running') {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.status(gs.id).then(s => {
@@ -220,67 +220,53 @@ class GameserverStore {
       });
     }));
 
-    // Lifecycle events — log refresh, uptime, operations
-    this.unsubs.push(onEvent('gameserver.*', (data: any) => {
-      if (!data.gameserver_id || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
+    // Status changes — server sends the derived display status directly
+    this.unsubs.push(onEvent('gameserver.status_changed', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
       if (!state) return;
 
+      const prevStatus = state.gameserver.status;
+      state.gameserver = {
+        ...state.gameserver,
+        status: data.status,
+        error_reason: data.error_reason || '',
+      };
+
       // Uptime tracking
-      if (data.type === 'gameserver.instance_started' || data.type === 'gameserver.ready') {
-        state.instanceStartedAt = new Date().toISOString();
+      if (data.status === 'running' || data.status === 'starting') {
+        if (!state.instanceStartedAt) {
+          state.instanceStartedAt = new Date().toISOString();
+        }
       }
-      if (data.type === 'gameserver.instance_stopped' || data.type === 'gameserver.instance_exited') {
+      if (data.status === 'stopped' || data.status === 'error') {
         state.instanceStartedAt = '';
       }
 
-      // Derive status from lifecycle events (replaces status_changed)
-      const statusMap: Record<string, string> = {
-        'gameserver.image_pulling': 'installing',
-        'gameserver.depot_downloading': 'installing',
-        'gameserver.instance_creating': 'starting',
-        'gameserver.instance_started': 'started',
-        'gameserver.ready': 'running',
-        'gameserver.instance_stopping': 'stopping',
-        'gameserver.instance_stopped': 'stopped',
-        'gameserver.instance_exited': 'error',
-        'gameserver.error': 'error',
-      };
-      if (data.type in statusMap) {
-        const wasInactive = state.gameserver.status === 'stopped';
-        const newStatus = statusMap[data.type];
+      // Log stream and polling data lifecycle
+      if (data.status === 'stopped' || data.status === 'error') {
+        this.disconnectLogStream(data.gameserver_id);
+        state.stats = null;
+        state.query = null;
+        state.logLines = [];
+      } else if (prevStatus === 'stopped' && data.status !== 'stopped') {
+        this.connectLogStream(data.gameserver_id);
+      }
+    }));
 
-        state.gameserver = {
-          ...state.gameserver,
-          status: newStatus,
-          error_reason: data.type === 'gameserver.error' ? (data.reason || '') : state.gameserver.error_reason,
-        };
+    // Operation state — update from event payload on phase changes
+    this.unsubs.push(onEvent('gameserver.operation', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (!state) return;
+      state.gameserver = { ...state.gameserver, operation: data.operation ?? null };
+    }));
 
-        if (newStatus === 'stopped') {
-          this.disconnectLogStream(data.gameserver_id);
-          state.stats = null;
-          state.query = null;
-          state.logLines = [];
-          state.instanceStartedAt = '';
-        } else {
-          this.connectLogStream(data.gameserver_id);
+    // Re-fetch gameserver on update (name/config changed)
+    this.unsubs.push(onEvent('gameserver.update', (data: any) => {
+      api.gameservers.get(data.gameserver_id).then(gs => {
+        if (this.gameservers[gs.id]) {
+          this.gameservers[gs.id].gameserver = gs;
         }
-      }
-
-      // Operation state — update from event payload on phase changes
-      if (data.type === 'gameserver.operation') {
-        state.gameserver = { ...state.gameserver, operation: data.operation ?? null };
-      }
-
-      // Re-fetch gameserver on update (name/config changed)
-      if (data.type === 'gameserver.update') {
-        api.gameservers.get(data.gameserver_id).then(gs => {
-          if (this.gameservers[gs.id]) {
-            this.gameservers[gs.id].gameserver = gs;
-          }
-        }).catch((e) => { console.warn('gameserverStore:', e); });
-      }
-
+      }).catch((e) => { console.warn('gameserverStore:', e); });
     }));
 
     // Backup events — list refresh

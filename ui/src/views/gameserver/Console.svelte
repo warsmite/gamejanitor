@@ -32,7 +32,7 @@
   const gsState = $derived(gameserverStore.getState(id));
   const status = $derived(gsState?.gameserver?.status ?? 'stopped');
   const isStreamable = $derived(
-    ['installing', 'starting', 'started', 'running', 'stopping'].includes(status)
+    ['installing', 'starting', 'running', 'stopping'].includes(status)
   );
 
   // React to status changes: connect when streamable, disconnect when not

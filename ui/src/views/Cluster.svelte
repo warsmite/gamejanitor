@@ -63,7 +63,7 @@
 
   async function bulkAction(action: 'stop' | 'restart') {
     const label = action === 'stop' ? 'Stop' : 'Restart';
-    const running = gameservers.filter(gs => gs.status === 'running' || gs.status === 'started');
+    const running = gameservers.filter(gs => gs.status === 'running');
     if (running.length === 0) {
       toast('No running gameservers', 'info');
       return;

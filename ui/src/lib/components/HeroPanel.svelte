@@ -19,7 +19,7 @@
       onaction?: (action: string) => void;
     } = $props();
 
-  const isRunning = $derived(gameserver.status === 'running' || gameserver.status === 'started');
+  const isRunning = $derived(gameserver.status === 'running');
   const isStopped = $derived(gameserver.status === 'stopped');
   const isArchived = $derived(gameserver.desired_state === 'archived');
 
