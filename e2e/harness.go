@@ -176,21 +176,46 @@ func DecodeData(resp *http.Response, v any) error {
 
 // --- Status helpers ---
 
+// WaitForStatus polls until the gameserver reaches the target status.
+// Fails fast if the status reaches a terminal state that can't transition
+// to the target (e.g. waiting for "running" but status becomes "error").
 func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var lastStatus string
 	for time.Now().Before(deadline) {
 		resp, err := h.Get("/api/gameservers/" + gsID)
 		if err != nil {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			continue
 		}
-		var gs struct{ Status string `json:"status"` }
-		if err := DecodeData(resp, &gs); err == nil && gs.Status == targetStatus {
+		var gs struct {
+			Status      string `json:"status"`
+			ErrorReason string `json:"error_reason"`
+		}
+		if err := DecodeData(resp, &gs); err != nil {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		}
+		if gs.Status == targetStatus {
 			return nil
 		}
-		time.Sleep(500 * time.Millisecond)
+		lastStatus = gs.Status
+
+		// Fail fast on terminal states that can't reach the target
+		if targetStatus == "running" && (gs.Status == "error" || gs.Status == "stopped") {
+			reason := gs.ErrorReason
+			if reason == "" {
+				reason = "no error reason"
+			}
+			return fmt.Errorf("gameserver %s reached terminal status %q (wanted %q): %s", gsID, gs.Status, targetStatus, reason)
+		}
+		if targetStatus == "stopped" && gs.Status == "error" {
+			return fmt.Errorf("gameserver %s reached %q instead of %q: %s", gsID, gs.Status, targetStatus, gs.ErrorReason)
+		}
+
+		time.Sleep(250 * time.Millisecond)
 	}
-	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q", gsID, targetStatus)
+	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q (last seen: %q)", gsID, targetStatus, lastStatus)
 }
 
 func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
