@@ -496,13 +496,20 @@ func (a *Agent) GetAllInstanceStates(ctx context.Context, req *pb.GetAllInstance
 }
 
 func workerStateToProto(u worker.InstanceStateUpdate) *pb.InstanceStateUpdate {
+	var startedAt, exitedAt int64
+	if !u.StartedAt.IsZero() {
+		startedAt = u.StartedAt.Unix()
+	}
+	if !u.ExitedAt.IsZero() {
+		exitedAt = u.ExitedAt.Unix()
+	}
 	return &pb.InstanceStateUpdate{
 		InstanceId:    u.InstanceID,
 		InstanceName:  u.InstanceName,
 		State:         mapInstanceState(u.State),
 		ExitCode:      int32(u.ExitCode),
-		StartedAtUnix: u.StartedAt.Unix(),
-		ExitedAtUnix:  u.ExitedAt.Unix(),
+		StartedAtUnix: startedAt,
+		ExitedAtUnix:  exitedAt,
 		Installed:     u.Installed,
 	}
 }
