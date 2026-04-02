@@ -251,6 +251,15 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	m.workerStates[gsID] = &update
 	m.workerStateMu.Unlock()
 
+	// Publish status change so SSE/webhook consumers get the derived display status
+	newStatus, newReason := m.DeriveStatus(gs)
+	m.broadcaster.Publish(controller.GameserverStatusChangedEvent{
+		GameserverID: gsID,
+		Status:       newStatus,
+		ErrorReason:  newReason,
+		Timestamp:    time.Now(),
+	})
+
 	switch update.State {
 	case worker.StateRunning:
 		m.log.Info("instance ready", "gameserver", gsID)

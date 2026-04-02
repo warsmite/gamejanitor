@@ -60,6 +60,7 @@ const (
 	EventScheduleTaskCompleted  = "schedule.task.completed"
 	EventScheduleTaskFailed     = "schedule.task.failed"
 	EventScheduleTaskMissed     = "schedule.task.missed"
+	EventGameserverStatusChanged = "gameserver.status_changed"
 	EventGameserverStats        = "gameserver.stats"
 	EventGameserverQuery        = "gameserver.query"
 	EventGameserverWarning      = "gameserver.warning"
@@ -89,6 +90,7 @@ var AllEventTypes = []string{
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,
 	EventScheduleTaskCompleted, EventScheduleTaskFailed, EventScheduleTaskMissed,
+	EventGameserverStatusChanged,
 	EventGameserverStats, EventGameserverQuery,
 	// Warnings & checks
 	EventGameserverWarning,
@@ -235,6 +237,21 @@ func (e GameserverErrorEvent) EventType() string        { return EventGameserver
 func (e GameserverErrorEvent) EventTimestamp() time.Time { return e.Timestamp }
 func (e GameserverErrorEvent) EventGameserverID() string { return e.GameserverID }
 func (e GameserverErrorEvent) EventActor() Actor          { return SystemActor }
+
+// GameserverStatusChangedEvent carries the derived display status so SSE/webhook
+// consumers don't need to replicate DeriveStatus logic. Published by the
+// StatusManager whenever a worker state update changes the gameserver's status.
+type GameserverStatusChangedEvent struct {
+	GameserverID string    `json:"gameserver_id"`
+	Status       string    `json:"status"`
+	ErrorReason  string    `json:"error_reason,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+func (e GameserverStatusChangedEvent) EventType() string        { return EventGameserverStatusChanged }
+func (e GameserverStatusChangedEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e GameserverStatusChangedEvent) EventGameserverID() string { return e.GameserverID }
+func (e GameserverStatusChangedEvent) EventActor() Actor         { return SystemActor }
 
 type GameserverStatsEvent struct {
 	GameserverID    string    `json:"gameserver_id"`
