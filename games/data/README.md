@@ -129,8 +129,8 @@ Scripts run inside a Docker container with the game's base image. They are bind-
 
 | Script | When it runs | Purpose |
 |--------|-------------|---------|
-| `install-server` | First start (SKIP_INSTALL not set) | Download and install the game server |
-| `start-server` | Every start | Configure and launch the game server process |
+| `install-server` | First start (separate short-lived instance) | Download and install the game server |
+| `start-server` | Every start (long-lived instance entrypoint) | Configure and launch the game server process |
 | `stop-server` | Before container stop | Announce shutdown, save world, prepare for SIGTERM |
 | `send-command` | User sends a console command | Execute a command via RCON or stdin pipe |
 | `save-server` | Before backups | Trigger a world save |
@@ -184,7 +184,7 @@ echo "[start-server] ERROR: <what went wrong>"
 **install-server must:**
 1. Download the game server binary/files
 2. Log progress for long operations
-3. The entrypoint prints `[gamejanitor:installed]` after this script succeeds
+3. Exit 0 on success — the controller marks the gameserver as installed on successful exit
 
 **send-command patterns:**
 - RCON games: `rcon -a "localhost:${RCON_PORT}" -p "$RCON_PASSWORD" "$1"`

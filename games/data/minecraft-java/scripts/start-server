@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Console log — persisted on the volume for log history across restarts
+LOG_DIR=/data/.gamejanitor/logs
+mkdir -p "$LOG_DIR"
+exec > >(tee "$LOG_DIR/console.log") 2>&1
+
 # Write eula.txt from env var
 echo "eula=${EULA:-false}" > /data/eula.txt
 

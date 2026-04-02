@@ -14,8 +14,6 @@ const (
 
 // Instance contract constants.
 const (
-	EnvSkipInstall = "SKIP_INSTALL=1" // Passed to instance when gs.Installed is true
-
 	PortNameQuery = "query" // Port used for server query polling (A2S/GJQ)
 	PortNameGame  = "game"  // Fallback port for query polling if no "query" port defined
 )

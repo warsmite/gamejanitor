@@ -3,6 +3,8 @@ package gameserver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -206,10 +208,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
-	if gs.Installed {
-		env = append(env, controller.EnvSkipInstall)
-	}
-
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
@@ -271,10 +269,67 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		s.log.Debug("no stale instance to remove by name", "name", instanceName)
 	}
 
-	// Create instance — the install script runs when the instance starts
-	if s.operations != nil {
-		s.operations.SetOperation(id, "start", model.PhaseInstalling)
+	// Install phase — runs install-server in a short-lived instance, then marks installed
+	if !gs.Installed {
+		if s.operations != nil {
+			s.operations.SetOperation(id, "start", model.PhaseInstalling)
+		}
+
+		s.rotateConsoleLogs(w, gs.VolumeName)
+		s.copyDefaults(w, gs.VolumeName, defaultsDir)
+
+		installName := naming.InstallInstanceName(id)
+		// Clean up any stale install instance from a prior failed attempt
+		w.RemoveInstance(ctx, installName)
+
+		s.log.Info("running install phase", "gameserver", id)
+		installID, installErr := w.CreateInstance(ctx, worker.InstanceOptions{
+			Name:          installName,
+			Image:         game.ResolveImage(map[string]string(gs.Env)),
+			Env:           env,
+			Ports:         ports,
+			VolumeName:    gs.VolumeName,
+			MemoryLimitMB: gs.MemoryLimitMB,
+			CPULimit:      gs.CPULimit,
+			CPUEnforced:   gs.CPUEnforced,
+			Binds:         binds,
+			Entrypoint:    []string{"/bin/sh", "-c", "/scripts/install-server"},
+		})
+		if installErr != nil {
+			s.setError(id, userFriendlyError("Failed to create install instance", installErr))
+			return fmt.Errorf("creating install instance for gameserver %s: %w", id, installErr)
+		}
+
+		if installErr = w.StartInstance(ctx, installID, ""); installErr != nil {
+			w.RemoveInstance(ctx, installID)
+			s.setError(id, userFriendlyError("Failed to start install instance", installErr))
+			return fmt.Errorf("starting install instance for gameserver %s: %w", id, installErr)
+		}
+
+		exitCode, installErr := s.waitForInstanceExit(ctx, w, installID)
+		w.RemoveInstance(ctx, installID)
+
+		if installErr != nil {
+			s.setError(id, "Install phase failed.")
+			return fmt.Errorf("install phase for gameserver %s: %w", id, installErr)
+		}
+		if exitCode != 0 {
+			s.setError(id, fmt.Sprintf("Install script failed with exit code %d.", exitCode))
+			return fmt.Errorf("install-server exited with code %d for gameserver %s", exitCode, id)
+		}
+
+		gs.Installed = true
+		if err := s.store.UpdateGameserver(gs); err != nil {
+			return fmt.Errorf("marking gameserver %s as installed: %w", id, err)
+		}
+		s.log.Info("install phase complete", "gameserver", id)
 	}
+
+	// Start phase — create the long-lived instance with start-server as entrypoint
+	if s.operations != nil {
+		s.operations.SetOperation(id, "start", model.PhaseStarting)
+	}
+
 	instanceID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:          instanceName,
 		Image:         game.ResolveImage(map[string]string(gs.Env)),
@@ -285,6 +340,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		CPULimit:      gs.CPULimit,
 		CPUEnforced:   gs.CPUEnforced,
 		Binds:         binds,
+		Entrypoint:    []string{"/bin/sh", "-c", "exec /scripts/start-server"},
 	})
 	if err != nil {
 		s.setError(id, userFriendlyError("Failed to create instance", err))
@@ -311,10 +367,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		s.statusProvider.SetRunning(id)
 	}
 	s.broadcaster.Publish(controller.InstanceStartedEvent{GameserverID: id, Timestamp: time.Now()})
-
-	if s.operations != nil {
-		s.operations.SetOperation(id, "start", model.PhaseStarting)
-	}
 
 	s.log.Info("gameserver started", "gameserver", id, "instance_id", instanceID[:12])
 	return nil
@@ -495,7 +547,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return fmt.Errorf("merging env for update: %w", err)
 	}
 
-	// Run update-server in temp instance
+	// Run update-server in a short-lived instance with entrypoint override
 	tempName := naming.UpdateInstanceName(id)
 	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
@@ -503,6 +555,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		Env:        env,
 		VolumeName: gs.VolumeName,
 		Binds:      updateBinds,
+		Entrypoint: []string{"/bin/sh", "-c", "/scripts/update-server"},
 	})
 	if err != nil {
 		return fmt.Errorf("creating temp instance for update: %w", err)
@@ -513,17 +566,13 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return fmt.Errorf("starting temp instance for update: %w", err)
 	}
 
-	exitCode, stdout, stderr, err := w.Exec(ctx, tempID, []string{"/scripts/update-server"})
-	if err != nil {
-		return fmt.Errorf("running update-server: %w", err)
+	exitCode, waitErr := s.waitForInstanceExit(ctx, w, tempID)
+	if waitErr != nil {
+		return fmt.Errorf("waiting for update-server: %w", waitErr)
 	}
 	if exitCode != 0 {
-		s.log.Error("update-server failed", "gameserver", id, "exit_code", exitCode, "stdout", stdout, "stderr", stderr)
+		s.log.Error("update-server failed", "gameserver", id, "exit_code", exitCode)
 		return fmt.Errorf("update-server exited with code %d", exitCode)
-	}
-
-	if err := w.StopInstance(ctx, tempID, 10); err != nil {
-		s.log.Warn("failed to stop temp update instance", "gameserver", id, "error", err)
 	}
 
 	s.log.Info("game updated, restarting gameserver", "gameserver", id)
@@ -656,4 +705,66 @@ func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 		}
 	}
 	return bindings, nil
+}
+
+// rotateConsoleLogs rotates console.log files on the volume before a fresh install.
+// Keeps up to 3 rotated copies (console.log.0 through console.log.2).
+func (s *GameserverService) rotateConsoleLogs(w worker.Worker, volumeName string) {
+	ctx := context.Background()
+	logDir := ".gamejanitor/logs"
+	w.CreateDirectory(ctx, volumeName, logDir)
+
+	for i := 2; i >= 0; i-- {
+		from := fmt.Sprintf("%s/console.log.%d", logDir, i)
+		to := fmt.Sprintf("%s/console.log.%d", logDir, i+1)
+		w.RenamePath(ctx, volumeName, from, to)
+	}
+	w.RenamePath(ctx, volumeName, logDir+"/console.log", logDir+"/console.log.0")
+}
+
+// copyDefaults copies files from the game's defaults directory into the volume root.
+// Only copies files that don't already exist on the volume (first-run behavior).
+func (s *GameserverService) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
+	if defaultsDir == "" {
+		return
+	}
+	ctx := context.Background()
+	entries, err := os.ReadDir(defaultsDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		destPath := "/" + entry.Name()
+		if _, err := w.ReadFile(ctx, volumeName, destPath); err == nil {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(defaultsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		w.WriteFile(ctx, volumeName, destPath, data, 0644)
+	}
+}
+
+// waitForInstanceExit polls InspectInstance until the instance exits, returning the exit code.
+func (s *GameserverService) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return -1, ctx.Err()
+		case <-ticker.C:
+			info, err := w.InspectInstance(ctx, instanceID)
+			if err != nil {
+				return -1, fmt.Errorf("inspecting instance %s: %w", instanceID, err)
+			}
+			if info.State == "exited" || info.State == "created" {
+				return info.ExitCode, nil
+			}
+		}
+	}
 }

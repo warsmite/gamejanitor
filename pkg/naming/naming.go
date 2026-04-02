@@ -3,13 +3,18 @@ package naming
 import "strings"
 
 const (
-	InstancePrefix        = "gamejanitor-"
-	UpdateInstancePrefix  = InstancePrefix + "update-"
-	FileopsInstancePrefix = InstancePrefix + "fileops-"
+	InstancePrefix         = "gamejanitor-"
+	InstallInstancePrefix  = InstancePrefix + "install-"
+	UpdateInstancePrefix   = InstancePrefix + "update-"
+	FileopsInstancePrefix  = InstancePrefix + "fileops-"
 )
 
 func InstanceName(gameserverID string) string {
 	return InstancePrefix + gameserverID
+}
+
+func InstallInstanceName(gameserverID string) string {
+	return InstallInstancePrefix + gameserverID
 }
 
 func UpdateInstanceName(gameserverID string) string {
@@ -27,7 +32,7 @@ func GameserverIDFromInstanceName(name string) (string, bool) {
 		return "", false
 	}
 	id := strings.TrimPrefix(name, InstancePrefix)
-	if strings.HasPrefix(id, "update-") || strings.HasPrefix(id, "reinstall-") ||
+	if strings.HasPrefix(id, "install-") || strings.HasPrefix(id, "update-") || strings.HasPrefix(id, "reinstall-") ||
 		strings.HasPrefix(id, "backup-") || strings.HasPrefix(id, "fileops-") {
 		return "", false
 	}

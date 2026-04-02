@@ -91,6 +91,7 @@ type instanceManifest struct {
 	MemoryLimitMB int                  `json:"memory_limit_mb"`
 	CPULimit      float64              `json:"cpu_limit"`
 	Binds         []string             `json:"binds"`
+	Entrypoint    []string             `json:"entrypoint,omitempty"`
 }
 
 func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxWorker {
@@ -174,6 +175,7 @@ func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.Instance
 		MemoryLimitMB: opts.MemoryLimitMB,
 		CPULimit:      opts.CPULimit,
 		Binds:         opts.Binds,
+		Entrypoint:    opts.Entrypoint,
 	}
 	data, err := json.Marshal(manifest)
 	if err != nil {
@@ -205,7 +207,13 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 		return fmt.Errorf("resolving image rootfs: %w", err)
 	}
 
-	cmdArgs := append(imgCfg.Entrypoint, imgCfg.Cmd...)
+	// Use manifest entrypoint override if set, otherwise fall back to image config
+	var cmdArgs []string
+	if len(manifest.Entrypoint) > 0 {
+		cmdArgs = manifest.Entrypoint
+	} else {
+		cmdArgs = append(imgCfg.Entrypoint, imgCfg.Cmd...)
+	}
 	if len(cmdArgs) == 0 {
 		return fmt.Errorf("image %s has no entrypoint or cmd", manifest.Image)
 	}

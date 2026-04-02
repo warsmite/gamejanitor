@@ -45,14 +45,14 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute),
 		"gameserver should reach 'running' after ready pattern detected in real instance logs")
 
-	// Verify installed flag set (entrypoint.sh emits [gamejanitor:installed])
+	// Verify installed flag set (controller marks installed after install phase completes)
 	resp, err = h.Get("/api/gameservers/" + gs.ID)
 	require.NoError(t, err)
 	var fetched struct {
 		Installed bool `json:"installed"`
 	}
 	require.NoError(t, DecodeData(resp, &fetched))
-	assert.True(t, fetched.Installed, "installed flag should be set from real entrypoint log output")
+	assert.True(t, fetched.Installed, "installed flag should be set after install phase")
 
 	// Stop
 	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
@@ -97,7 +97,7 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", time.Minute))
 
-	// Second start — should skip install (SKIP_INSTALL=1 passed by gamejanitor)
+	// Second start — should skip install phase (gs.Installed is true)
 	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 

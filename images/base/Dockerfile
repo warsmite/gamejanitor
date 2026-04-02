@@ -26,10 +26,5 @@ RUN useradd -m -s /bin/bash gameserver && \
     mkdir -p /data /scripts && \
     chown gameserver:gameserver /data
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 WORKDIR /data
 USER gameserver
-
-ENTRYPOINT ["/entrypoint.sh"]

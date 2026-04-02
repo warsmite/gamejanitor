@@ -163,10 +163,18 @@ func (w *FakeWorker) StartInstance(ctx context.Context, id string, readyPattern 
 		w.mu.Unlock()
 		return fmt.Errorf("instance %s not found", id)
 	}
-	c.state = "running"
 
-	// Write install marker and ready pattern to log buffer
-	c.logBuf.WriteString("[gamejanitor:installed]\n")
+	// Short-lived instances (install/update) run to completion and exit.
+	// Detected by entrypoint override — these run a script and exit rather
+	// than staying alive as a long-running game server.
+	isShortLived := len(c.opts.Entrypoint) > 0 && readyPattern == ""
+	if isShortLived {
+		c.state = "exited"
+		w.mu.Unlock()
+		return nil
+	}
+
+	c.state = "running"
 	if w.ReadyPattern != "" {
 		c.logBuf.WriteString(w.ReadyPattern + "\n")
 	}
