@@ -74,6 +74,20 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
+	// Wait for stop to complete before deleting (operations are async)
+	require.Eventually(t, func() bool {
+		resp, err = http.Get(api.Server.URL + "/api/gameservers/" + gsID)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		var body struct {
+			Data struct{ Status string } `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&body)
+		return body.Data.Status == "stopped"
+	}, 5*time.Second, 100*time.Millisecond, "gameserver should reach stopped")
+
 	// 6. Delete it
 	req, _ := http.NewRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, nil)
 	resp, err = http.DefaultClient.Do(req)

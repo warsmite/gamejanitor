@@ -24,7 +24,7 @@ type TestAPI struct {
 func NewTestAPI(t *testing.T) *TestAPI {
 	t.Helper()
 
-	svc := NewTestServices(t)
+	svc := NewTestServicesWithSubscribers(t)
 
 	cfg := config.Config{
 		Bind:       "127.0.0.1",
