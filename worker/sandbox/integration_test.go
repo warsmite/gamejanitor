@@ -50,7 +50,7 @@ func newTestWorker(t *testing.T) *SandboxWorker {
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceStateUpdate, 64),
+		tracker:   worker.NewInstanceTracker(log),
 	}
 	w.resolve = w.volumeResolver()
 	return w
@@ -500,7 +500,7 @@ func newTestWorkerWithDir(t *testing.T, dataDir string) *SandboxWorker {
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceStateUpdate, 64),
+		tracker:   worker.NewInstanceTracker(log),
 	}
 	w.resolve = w.volumeResolver()
 	return w

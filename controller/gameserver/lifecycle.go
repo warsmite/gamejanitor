@@ -311,13 +311,12 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 	s.broadcaster.Publish(controller.InstanceCreatingEvent{GameserverID: id, Timestamp: time.Now()})
 
-	// Start instance
-	if err := w.StartInstance(ctx, instanceID, ""); err != nil {
+	// Start instance — worker handles ready detection via the ready pattern
+	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
 		s.setError(id, userFriendlyError("Failed to start instance", err))
 		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
 	}
 
-	// Mark instance as running in the runtime state map
 	if s.statusProvider != nil {
 		s.statusProvider.SetRunning(id)
 	}
@@ -325,10 +324,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhaseStarting)
-	}
-
-	if s.readyWatcher != nil {
-		s.readyWatcher.Watch(id, w, instanceID)
 	}
 
 	s.log.Info("gameserver started", "gameserver", id, "instance_id", instanceID[:12])

@@ -24,6 +24,7 @@ type LocalWorker struct {
 	GameStore *games.GameStore
 	DataDir   string
 	Resolve   worker.VolumeResolver
+	Tracker   *worker.InstanceTracker
 
 	// Volume size cache (120s staleness)
 	VolumeSizeMu    sync.Mutex
@@ -68,12 +69,33 @@ func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOp
 }
 
 func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
-	// readyPattern will be wired to InstanceTracker in a follow-up
-	return w.Docker.StartInstance(ctx, id)
+	if err := w.Docker.StartInstance(ctx, id); err != nil {
+		return err
+	}
+	if w.Tracker != nil {
+		w.Tracker.Track(id, id) // Docker uses container ID as both ID and name
+		w.Tracker.SetState(id, worker.StateStarting)
+		logReader, err := w.Docker.InstanceLogs(ctx, id, 0, true)
+		if err == nil {
+			w.Tracker.WatchLogs(context.Background(), id, readyPattern, logReader)
+		}
+	}
+	return nil
 }
 
 func (w *LocalWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	return 0, "", fmt.Errorf("RunInstall not implemented for Docker runtime (uses entrypoint.sh)")
+	exitCode, stdout, stderr, err := w.Docker.Exec(ctx, id, []string{"/scripts/install-server"})
+	if err != nil {
+		return -1, "", err
+	}
+	output := stdout
+	if stderr != "" {
+		output += "\n" + stderr
+	}
+	if exitCode == 0 && w.Tracker != nil {
+		w.Tracker.SetInstalled(id)
+	}
+	return exitCode, output, nil
 }
 
 func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
@@ -81,6 +103,9 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 }
 
 func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
+	if w.Tracker != nil {
+		w.Tracker.Remove(id)
+	}
 	return w.Docker.RemoveInstance(ctx, id)
 }
 
@@ -203,79 +228,47 @@ func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from st
 }
 
 func (w *LocalWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
-	// Temporary shim: convert Docker events to InstanceStateUpdate.
-	// Will be replaced by InstanceTracker in a follow-up.
-	dockerEventCh, dockerErrCh := w.Docker.WatchEvents(ctx)
-
-	updateCh := make(chan worker.InstanceStateUpdate, 64)
 	errCh := make(chan error, 1)
+	if w.Tracker == nil {
+		return make(chan worker.InstanceStateUpdate), errCh
+	}
+	return w.Tracker.Events(), errCh
+}
 
+// WatchDockerEvents translates Docker container "die" events into tracker state
+// changes. Must be called once when the worker starts (e.g. from serve.go).
+func (w *LocalWorker) WatchDockerEvents(ctx context.Context) {
+	if w.Tracker == nil {
+		return
+	}
+	eventCh, errCh := w.Docker.WatchEvents(ctx)
 	go func() {
-		defer close(updateCh)
-		defer close(errCh)
-
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case err, ok := <-dockerErrCh:
+			case _, ok := <-errCh:
 				if !ok {
 					return
 				}
-				errCh <- err
 				return
-			case de, ok := <-dockerEventCh:
+			case ev, ok := <-eventCh:
 				if !ok {
 					return
 				}
-				var state worker.InstanceState
-				switch de.Action {
-				case "start":
-					state = worker.StateRunning
-				case "die":
-					state = worker.StateExited
-				default:
-					continue
-				}
-				select {
-				case updateCh <- worker.InstanceStateUpdate{
-					InstanceID:   de.InstanceID,
-					InstanceName: de.InstanceName,
-					State:        state,
-				}:
-				case <-ctx.Done():
-					return
+				if ev.Action == "die" {
+					w.Tracker.SetExited(ev.InstanceID, 0) // exit code from Docker event isn't available, will be refined
 				}
 			}
 		}
 	}()
-
-	return updateCh, errCh
 }
 
 func (w *LocalWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
-	instances, err := w.ListGameserverInstances(ctx)
-	if err != nil {
-		return nil, err
+	if w.Tracker == nil {
+		return nil, nil
 	}
-	updates := make([]worker.InstanceStateUpdate, len(instances))
-	for i, inst := range instances {
-		var state worker.InstanceState
-		switch inst.State {
-		case "running":
-			state = worker.StateRunning
-		case "exited":
-			state = worker.StateExited
-		default:
-			state = worker.StateCreated
-		}
-		updates[i] = worker.InstanceStateUpdate{
-			InstanceID:   inst.InstanceID,
-			InstanceName: inst.InstanceName,
-			State:        state,
-		}
-	}
-	return updates, nil
+	return w.Tracker.Snapshot(), nil
 }
 
 func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {

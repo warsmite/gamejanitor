@@ -243,7 +243,19 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 
 	switch update.State {
 	case worker.StateRunning:
-		m.log.Debug("instance state: running", "gameserver", gsID)
+		m.log.Info("instance state: running (ready)", "gameserver", gsID)
+		m.setReady(gsID)
+		m.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gsID, Timestamp: time.Now()})
+		m.startPolling(gsID)
+
+		if update.Installed && gs != nil && !gs.Installed {
+			gs.Installed = true
+			if err := m.store.UpdateGameserver(gs); err != nil {
+				m.log.Error("failed to mark gameserver as installed", "gameserver", gsID, "error", err)
+			} else {
+				m.log.Info("gameserver marked as installed", "gameserver", gsID)
+			}
+		}
 
 	case worker.StateExited:
 		// Ignore stale events from old instances

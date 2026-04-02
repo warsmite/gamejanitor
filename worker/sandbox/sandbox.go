@@ -33,9 +33,7 @@ type SandboxWorker struct {
 	mu        sync.Mutex
 	instances map[string]*managedInstance
 
-	eventMu     sync.Mutex
-	eventCh     chan worker.InstanceStateUpdate
-	eventActive bool
+	tracker *worker.InstanceTracker
 }
 
 type managedInstance struct {
@@ -116,8 +114,8 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		eventCh:   make(chan worker.InstanceStateUpdate, 64),
 	}
+	w.tracker = worker.NewInstanceTracker(log)
 	w.resolve = w.volumeResolver()
 	w.recoverInstances()
 
@@ -190,7 +188,6 @@ func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.Instance
 }
 
 func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
-	// readyPattern will be wired to InstanceTracker in a follow-up
 	dir := w.instanceDir(id)
 	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -285,6 +282,16 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 		w.log.Warn("failed to persist instance state", "id", id, "error", err)
 	}
 
+	if w.tracker != nil {
+		w.tracker.Track(id, manifest.Name)
+		w.tracker.SetState(id, worker.StateStarting)
+
+		logReader, err := w.InstanceLogs(context.Background(), id, 0, true)
+		if err == nil {
+			w.tracker.WatchLogs(context.Background(), id, readyPattern, logReader)
+		}
+	}
+
 	// Exit watcher
 	go func() {
 		cmd.Wait()
@@ -310,22 +317,8 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
 		close(inst.done)
 
-		w.eventMu.Lock()
-		active := w.eventActive
-		w.eventMu.Unlock()
-
-		if active {
-			select {
-			case w.eventCh <- worker.InstanceStateUpdate{
-				InstanceID:   id,
-				InstanceName: manifest.Name,
-				State:        worker.StateExited,
-				ExitCode:     int(inst.exitCode.Load()),
-				StartedAt:    inst.startedAt,
-				ExitedAt:     time.Now(),
-			}:
-			default:
-			}
+		if w.tracker != nil {
+			w.tracker.SetExited(id, int(inst.exitCode.Load()))
 		}
 	}()
 
@@ -390,6 +383,10 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 		<-inst.done
 	} else if ok {
 		stopSlirp(inst.slirp, w.log)
+	}
+
+	if w.tracker != nil {
+		w.tracker.Remove(id)
 	}
 
 	os.RemoveAll(w.instanceDir(id))
@@ -858,48 +855,27 @@ func (w *SandboxWorker) RestoreVolume(ctx context.Context, volumeName string, ta
 // --- Worker interface: Events ---
 
 func (w *SandboxWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
-	w.eventMu.Lock()
-	w.eventActive = true
-	w.eventMu.Unlock()
-
 	errCh := make(chan error, 1)
-	go func() {
-		<-ctx.Done()
-		w.eventMu.Lock()
-		w.eventActive = false
-		w.eventMu.Unlock()
-	}()
-
-	return w.eventCh, errCh
+	return w.tracker.Events(), errCh
 }
 
 func (w *SandboxWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
-	instances, err := w.ListGameserverInstances(ctx)
-	if err != nil {
-		return nil, err
-	}
-	updates := make([]worker.InstanceStateUpdate, len(instances))
-	for i, inst := range instances {
-		var state worker.InstanceState
-		switch inst.State {
-		case "running":
-			state = worker.StateRunning
-		case "exited":
-			state = worker.StateExited
-		default:
-			state = worker.StateCreated
-		}
-		updates[i] = worker.InstanceStateUpdate{
-			InstanceID:   inst.InstanceID,
-			InstanceName: inst.InstanceName,
-			State:        state,
-		}
-	}
-	return updates, nil
+	return w.tracker.Snapshot(), nil
 }
 
 func (w *SandboxWorker) RunInstall(ctx context.Context, id string) (int, string, error) {
-	return 0, "", fmt.Errorf("RunInstall not implemented for sandbox runtime")
+	exitCode, stdout, stderr, err := w.Exec(ctx, id, []string{"/scripts/install-server"})
+	if err != nil {
+		return -1, "", err
+	}
+	output := stdout
+	if stderr != "" {
+		output += "\n" + stderr
+	}
+	if exitCode == 0 && w.tracker != nil {
+		w.tracker.SetInstalled(id)
+	}
+	return exitCode, output, nil
 }
 
 // --- Worker interface: Discovery ---
@@ -1057,6 +1033,10 @@ func (w *SandboxWorker) recoverInstances() {
 		w.instances[id] = inst
 		w.mu.Unlock()
 
+		if w.tracker != nil {
+			w.tracker.Recover(id, manifest.Name, worker.StateRunning, state.StartedAt, true)
+		}
+
 		// Polling exit watcher — checks scope liveness every 2 seconds
 		go func(inst *managedInstance, dir string) {
 			ticker := time.NewTicker(2 * time.Second)
@@ -1072,21 +1052,8 @@ func (w *SandboxWorker) recoverInstances() {
 						"uptime", time.Since(inst.startedAt).Round(time.Second))
 					close(inst.done)
 
-					w.eventMu.Lock()
-					active := w.eventActive
-					w.eventMu.Unlock()
-					if active {
-						select {
-						case w.eventCh <- worker.InstanceStateUpdate{
-							InstanceID:   inst.id,
-							InstanceName: inst.name,
-							State:        worker.StateExited,
-							ExitCode:     int(inst.exitCode.Load()),
-							StartedAt:    inst.startedAt,
-							ExitedAt:     time.Now(),
-						}:
-						default:
-						}
+					if w.tracker != nil {
+						w.tracker.SetExited(inst.id, int(inst.exitCode.Load()))
 					}
 					return
 				}
