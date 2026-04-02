@@ -276,7 +276,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	case worker.StateExited:
 		// Ignore stale events from old instances
 		if gs.InstanceID != nil && *gs.InstanceID != update.InstanceID {
-			m.log.Debug("instance state: ignoring stale update from old instance", "gameserver", gsID, "event_instance", update.InstanceID[:12], "current_instance", (*gs.InstanceID)[:12])
+			m.log.Debug("instance state: ignoring stale update from old instance", "gameserver", gsID, "event_instance", truncID(update.InstanceID), "current_instance", truncID(*gs.InstanceID))
 			return
 		}
 		if gs.InstanceID == nil {
@@ -396,7 +396,7 @@ func (m *StatusManager) detectOrphanInstances(ctx context.Context, nodeID string
 			continue
 		}
 		m.log.Warn("orphan instance detected — instance exists on worker but gameserver not found in database",
-			"worker", nodeID, "instance_id", c.InstanceID[:12], "instance_name", c.InstanceName,
+			"worker", nodeID, "instance_id", truncID(c.InstanceID), "instance_name", c.InstanceName,
 			"gameserver", c.GameserverID, "state", c.State)
 	}
 }
@@ -526,4 +526,11 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 			m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
 		}
 	}()
+}
+
+func truncID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
