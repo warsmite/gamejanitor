@@ -51,10 +51,12 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 
 	// Start should work
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 	assert.Greater(t, fw.InstanceCount(), 0)
 
 	// Stop should work
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 }
 
 func TestScenario_Newbie_DefaultSettings_Safe(t *testing.T) {

@@ -19,6 +19,7 @@ func TestActivity_StartCreatesEvent(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	s := store.New(svc.DB)
 	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
@@ -59,6 +60,7 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	// Set an operation in progress
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -69,6 +71,7 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	// Stop should still work despite the running operation
 	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
+	svc.GameserverSvc.WaitForOperations()
 }
 
 func TestActivity_RestartCreatesOneEvent(t *testing.T) {
@@ -78,11 +81,13 @@ func TestActivity_RestartCreatesOneEvent(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	// Clear events from the start
 	svc.DB.Exec("DELETE FROM events")
 
 	require.NoError(t, svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	s := store.New(svc.DB)
 	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
@@ -122,6 +127,7 @@ func TestActivity_BackupBlocksStart(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	// Trigger a backup
 	_, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "test-backup")
@@ -148,8 +154,11 @@ func TestActivity_MultipleStopsAllowed(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 }
 
 func ptrStr(s string) *string { return &s }

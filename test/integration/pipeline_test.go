@@ -79,7 +79,9 @@ func TestPipeline_StopDerivesStopped(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	// Poll until DeriveStatus reflects the stopped state. The worker event
 	// stream is async — stale "running" events from Start may arrive after

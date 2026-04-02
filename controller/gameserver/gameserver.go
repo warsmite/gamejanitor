@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +82,13 @@ type GameserverService struct {
 	placement       *PlacementService
 	activity        *ActivityTracker
 	operations      *OperationTracker
+	operationWg     sync.WaitGroup
+}
+
+// WaitForOperations blocks until all background lifecycle operations complete.
+// Intended for tests — production code should not call this.
+func (s *GameserverService) WaitForOperations() {
+	s.operationWg.Wait()
 }
 
 func (s *GameserverService) SetModReconciler(r ModReconciler) {

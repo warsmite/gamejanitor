@@ -42,6 +42,7 @@ func TestRecovery_RunningInDB_InstanceGone(t *testing.T) {
 
 	// Start the gameserver so it gets a real instance
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)

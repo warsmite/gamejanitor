@@ -109,11 +109,13 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	svc.GameserverSvc.SetStatusProvider(svc.StatusMgr)
 
 	ctx := TestContext()
+	svc.StatusMgr.Start(ctx)
 	svc.StatusSub.Start(ctx)
 
 	t.Cleanup(func() {
 		svc.QuerySvc.StopAll()
 		svc.StatusSub.Stop()
+		svc.StatusMgr.Stop()
 	})
 
 	return svc
