@@ -36,7 +36,7 @@ update_xml_property "GameDifficulty"       "${GAME_DIFFICULTY:-2}"              
 update_xml_property "DayNightLength"       "${DAY_NIGHT_LENGTH:-60}"                 "$CONFIG"
 update_xml_property "UserDataFolder"       "/data/worlds"                            "$CONFIG"
 update_xml_property "TelnetEnabled"        "true"                                    "$CONFIG"
-update_xml_property "TelnetPort"           "8081"                                    "$CONFIG"
+update_xml_property "TelnetPort"           "${TELNET_PORT:-8081}"                    "$CONFIG"
 update_xml_property "TelnetPassword"       "${TELNET_PASSWORD:-}"                    "$CONFIG"
 
 echo "[start-server] updated serverconfig.xml"

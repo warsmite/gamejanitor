@@ -12,6 +12,9 @@ ports:
   - name: game-tcp
     port: 26900
     protocol: tcp
+  - name: rcon
+    port: 8081
+    protocol: tcp
 
 query:
   protocol: source
