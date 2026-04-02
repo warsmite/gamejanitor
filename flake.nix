@@ -449,7 +449,7 @@
           # Usage: test-homelab | E2E_GAME_ID=test-game test-homelab
           test-homelab = pkgs.writeShellScriptBin "test-homelab" ''
             export GAMEJANITOR_API_URL="http://sleepy:8080"
-            export E2E_GAME_ID="''${E2E_GAME_ID:-minecraft-java}"
+            export E2E_GAME_ID="''${E2E_GAME_ID:-minecraft-bedrock}"
             echo "Running e2e against homelab (game=$E2E_GAME_ID)..."
             exec go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@"
           '';
