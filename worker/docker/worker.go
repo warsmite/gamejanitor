@@ -26,6 +26,10 @@ type LocalWorker struct {
 	Resolve   worker.VolumeResolver
 	Tracker   *worker.InstanceTracker
 
+	// Instance name cache (container ID → instance name)
+	instanceNamesMu sync.Mutex
+	instanceNames   map[string]string
+
 	// Volume size cache (120s staleness)
 	VolumeSizeMu    sync.Mutex
 	VolumeSizeCache map[string]*VolumeSizeEntry
@@ -53,7 +57,7 @@ func (w *LocalWorker) PullImage(ctx context.Context, image string) error {
 }
 
 func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
-	return w.Docker.CreateInstance(ctx, InstanceOptions{
+	id, err := w.Docker.CreateInstance(ctx, InstanceOptions{
 		Name:          opts.Name,
 		Image:         opts.Image,
 		Env:           opts.Env,
@@ -66,6 +70,15 @@ func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOp
 		User:          opts.User,
 		Binds:         opts.Binds,
 	})
+	if err == nil && opts.Name != "" {
+		w.instanceNamesMu.Lock()
+		if w.instanceNames == nil {
+			w.instanceNames = make(map[string]string)
+		}
+		w.instanceNames[id] = opts.Name
+		w.instanceNamesMu.Unlock()
+	}
+	return id, err
 }
 
 func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
@@ -73,7 +86,13 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return err
 	}
 	if w.Tracker != nil {
-		w.Tracker.Track(id, id) // Docker uses container ID as both ID and name
+		w.instanceNamesMu.Lock()
+		name := w.instanceNames[id]
+		w.instanceNamesMu.Unlock()
+		if name == "" {
+			name = id
+		}
+		w.Tracker.Track(id, name)
 		w.Tracker.SetState(id, worker.StateStarting)
 		logReader, err := w.Docker.InstanceLogs(ctx, id, 0, true)
 		if err == nil {
