@@ -21,15 +21,6 @@ WORLD_FILE="${WORLD_DIR}/${WORLD_NAME}.wld"
 # TShock config/db stored in persistent volume
 mkdir -p /data/tshock
 
-# Enable REST API for query support and set the port to match QUERY_PORT.
-# TShock defaults to port 7878 but gamejanitor remaps ports, so the REST
-# API port must match the allocated query port for reachability.
-TSHOCK_CONFIG="/data/tshock/config.json"
-if [ -f "$TSHOCK_CONFIG" ]; then
-    jq ".Settings.RestApiEnabled = true | .Settings.RestApiPort = ${QUERY_PORT}" "$TSHOCK_CONFIG" > "${TSHOCK_CONFIG}.tmp" && mv "${TSHOCK_CONFIG}.tmp" "$TSHOCK_CONFIG"
-else
-    echo "{\"Settings\":{\"RestApiEnabled\":true,\"RestApiPort\":${QUERY_PORT}}}" > "$TSHOCK_CONFIG"
-fi
 echo "[start-server] REST API enabled on port ${QUERY_PORT}"
 
 echo "[start-server] config: world=${WORLD_NAME} size=${WORLD_SIZE} difficulty=${DIFFICULTY}"
@@ -46,6 +37,8 @@ ARGS=(
     -maxplayers "$MAX_PLAYERS"
     -port "$GAME_PORT"
     -configpath /data/tshock
+    -rest-enabled true
+    -rest-port "$QUERY_PORT"
     -secure
     -lang "en-US"
 )
