@@ -149,6 +149,7 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 
 	// Migrate to EU
 	require.NoError(t, svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "node-eu"))
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	assert.Equal(t, "node-eu", *fetched.NodeID)

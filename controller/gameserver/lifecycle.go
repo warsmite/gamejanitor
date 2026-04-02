@@ -67,11 +67,17 @@ func (s *GameserverService) runOperation(ctx context.Context, gsID, workerID, op
 		return err
 	}
 
+	// Capture actor before spawning the goroutine so it's available
+	// in the background context (the HTTP request context will be cancelled)
+	actor := controller.ActorFromContext(ctx)
+
 	s.operationWg.Add(1)
 	go func() {
 		defer s.operationWg.Done()
-		// Use background context — the HTTP request context is already cancelled
 		bgCtx := context.Background()
+		if actor.Type != "" {
+			bgCtx = controller.SetActorInContext(bgCtx, actor)
+		}
 		if err := work(bgCtx); err != nil {
 			s.log.Error("operation failed", "gameserver", gsID, "operation", opType, "error", err)
 			if opID != "" {
@@ -126,7 +132,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 			}
 
 			s.log.Info("auto-migrating before start", "gameserver", id, "from_node", *gs.NodeID, "to_node", foundNode)
-			if err := s.MigrateGameserver(ctx, id, foundNode); err != nil {
+			// Call doMigrate directly — MigrateGameserver is async, but auto-migration
+			// must complete synchronously before start proceeds
+			if err := s.doMigrate(ctx, id, foundNode); err != nil {
 				return fmt.Errorf("auto-migration before start failed: %w", err)
 			}
 

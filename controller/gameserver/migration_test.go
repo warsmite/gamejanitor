@@ -33,6 +33,7 @@ func TestMigration_HappyPath(t *testing.T) {
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -164,6 +165,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -192,15 +194,16 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "worker-2", *fetched.NodeID)
 }
 
-// TestMigration_ReadDuringMigration_ConsistentData starts a migration in a
-// goroutine and reads the gameserver concurrently. The node_id must always be
-// either the original or the target — never nil or a third value.
+// TestMigration_ReadDuringMigration_ConsistentData starts a migration and reads
+// the gameserver concurrently. The node_id must always be either the original
+// or the target — never nil or a third value.
 func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
@@ -218,42 +221,37 @@ func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	require.NoError(t, err)
 	testutil.SeedVolumeData(t, wA, gs.VolumeName)
 
-	done := make(chan error, 1)
-	go func() {
-		done <- svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "node-b")
-	}()
+	// Launch async migration
+	require.NoError(t, svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "node-b"))
 
-	// Read the gameserver repeatedly while migration runs
+	// Read the gameserver repeatedly while migration runs in the background
 	validNodes := map[string]bool{"node-a": true, "node-b": true}
 	readCount := 0
-	for {
-		select {
-		case migErr := <-done:
-			// Migration finished — do a final read
-			require.NoError(t, migErr)
-			fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
-			require.NoError(t, err)
-			require.NotNil(t, fetched.NodeID, "node_id should not be nil after migration")
-			assert.Equal(t, "node-b", *fetched.NodeID)
-			assert.Greater(t, readCount, 0, "should have read at least once during migration")
-			return
-		default:
-			fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
-			if err != nil {
-				// Gameserver might be briefly unavailable during migration — acceptable
-				continue
-			}
-			require.NotNil(t, fetched, "gameserver should always be readable during migration")
-			require.NotNil(t, fetched.NodeID, "node_id should never be nil during migration")
-			assert.True(t, validNodes[*fetched.NodeID],
-				"node_id should be node-a or node-b, got %s", *fetched.NodeID)
-			readCount++
+	for i := 0; i < 100; i++ {
+		fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+		if err != nil {
+			continue
 		}
+		require.NotNil(t, fetched, "gameserver should always be readable during migration")
+		require.NotNil(t, fetched.NodeID, "node_id should never be nil during migration")
+		assert.True(t, validNodes[*fetched.NodeID],
+			"node_id should be node-a or node-b, got %s", *fetched.NodeID)
+		readCount++
 	}
+
+	// Wait for migration to complete
+	svc.GameserverSvc.WaitForOperations()
+
+	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fetched.NodeID, "node_id should not be nil after migration")
+	assert.Equal(t, "node-b", *fetched.NodeID)
+	assert.Greater(t, readCount, 0, "should have read at least once during migration")
 }
 
 // TestMigration_ConcurrentMigrate_Rejected starts a migration and immediately
-// attempts a second migration for the same gameserver. The second should fail.
+// attempts a second migration for the same gameserver. The second should fail
+// because trackActivity rejects concurrent operations.
 func TestMigration_ConcurrentMigrate_Rejected(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
@@ -284,6 +282,9 @@ func TestMigration_ConcurrentMigrate_Rejected(t *testing.T) {
 
 	err1 := <-errCh1
 	err2 := <-errCh2
+
+	// Wait for background operations to complete
+	svc.GameserverSvc.WaitForOperations()
 
 	// At least one should succeed; the other might fail or both succeed
 	// (if the first completes before the second starts). The key: no panic,

@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// Archive stops the gameserver, backs up its volume to archive storage,
-// removes the instance and volume from the worker, and marks it archived.
+// Archive validates the gameserver can be archived and launches the heavy work
+// (stop, backup, upload, cleanup) in a background goroutine via runOperation.
 func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
@@ -29,36 +30,47 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 		return controller.ErrBadRequest("backup storage is not configured, cannot archive")
 	}
 
-	// Stop if running
-	if gs.Status != controller.StatusStopped {
-		if err := s.Stop(ctx, id); err != nil {
-			return fmt.Errorf("stopping gameserver before archive: %w", err)
-		}
-	}
-
 	workerID := ""
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	opID, _ := s.trackActivity(ctx, id, workerID, model.OpArchive, nil, nil)
-	if opID != "" {
-		ctx = WithActivityID(ctx, opID)
+
+	return s.runOperation(ctx, id, workerID, model.OpArchive, func(ctx context.Context) error {
+		return s.doArchive(ctx, id)
+	})
+}
+
+// doArchive performs the heavy work of archiving a gameserver. Runs in a
+// background goroutine — re-reads the gameserver from DB since state may have changed.
+func (s *GameserverService) doArchive(ctx context.Context, id string) error {
+	gs, err := s.getGameserverWithStatus(id)
+	if err != nil {
+		return err
+	}
+	if gs == nil {
+		return fmt.Errorf("gameserver %s not found", id)
+	}
+
+	// Stop if running — use doStop directly since we're already inside runOperation
+	if gs.Status != controller.StatusStopped {
+		if s.statusProvider != nil {
+			s.statusProvider.SetStopped(id)
+		}
+		s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+
+		if err := s.doStop(ctx, id); err != nil {
+			return fmt.Errorf("stopping gameserver before archive: %w", err)
+		}
 	}
 
 	w := s.dispatcher.WorkerFor(id)
 	if w == nil {
-		if opID != "" {
-			s.failActivity(id, fmt.Errorf("worker unavailable"))
-		}
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
 	// Backup volume to archive storage (gzipped tar)
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("backing up volume for archive: %w", err)
 	}
 
@@ -83,16 +95,10 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	}()
 
 	if err := s.backupStore.SaveArchive(ctx, id, pr); err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("saving archive to store: %w", err)
 	}
 	if compressErr != nil {
 		s.backupStore.DeleteArchive(ctx, id)
-		if opID != "" {
-			s.failActivity(id, compressErr)
-		}
 		return compressErr
 	}
 
@@ -113,22 +119,16 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	gs.InstanceID = nil
 	gs.NodeID = nil
 	if err := s.store.UpdateGameserver(gs); err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("updating gameserver as archived: %w", err)
-	}
-
-	if opID != "" {
-		s.completeActivity(id)
 	}
 
 	s.log.Info("gameserver archived", "gameserver", id)
 	return nil
 }
 
-// Unarchive restores an archived gameserver. If targetNodeID is empty, a node
-// is selected automatically via placement ranking.
+// Unarchive validates the gameserver can be unarchived and launches the heavy
+// work (download, decompress, restore) in a background goroutine via runOperation.
+// If targetNodeID is empty, a node is selected automatically via placement ranking.
 func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNodeID string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
@@ -144,8 +144,6 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		return controller.ErrBadRequest("backup storage is not configured, cannot unarchive")
 	}
 
-	actor := controller.ActorFromContext(ctx)
-
 	// Pick a node — use explicit target or auto-place
 	var nodeID string
 	if targetNodeID != "" {
@@ -158,88 +156,91 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 		nodeID = candidates[0].NodeID
 	}
 
-	opID, _ := s.trackActivity(ctx, id, nodeID, model.OpUnarchive, nil, nil)
-	if opID != "" {
-		ctx = WithActivityID(ctx, opID)
+	// Validate the target worker is reachable before going async
+	w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
+	if err != nil || w == nil {
+		return controller.ErrUnavailablef("worker %s unavailable", nodeID)
 	}
+
+	// Set desired_state to stopped immediately so DeriveStatus reflects intent
+	gs.DesiredState = "stopped"
+	gs.NodeID = &nodeID
+	if err := s.store.UpdateGameserver(gs); err != nil {
+		return fmt.Errorf("updating gameserver desired state for unarchive: %w", err)
+	}
+
+	return s.runOperation(ctx, id, nodeID, model.OpUnarchive, func(ctx context.Context) error {
+		return s.doUnarchive(ctx, id, nodeID)
+	})
+}
+
+// doUnarchive performs the heavy work of restoring an archived gameserver. Runs
+// in a background goroutine — re-reads the gameserver from DB since state may have changed.
+func (s *GameserverService) doUnarchive(ctx context.Context, id string, nodeID string) error {
+	gs, err := s.store.GetGameserver(id)
+	if err != nil {
+		return err
+	}
+	if gs == nil {
+		return fmt.Errorf("gameserver %s not found", id)
+	}
+
+	actor := controller.ActorFromContext(ctx)
 
 	w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 	if err != nil || w == nil {
-		if opID != "" {
-			s.failActivity(id, fmt.Errorf("worker unavailable"))
-		}
-		return controller.ErrUnavailablef("worker %s unavailable", nodeID)
+		return fmt.Errorf("worker %s unavailable", nodeID)
 	}
 
 	// Create volume on target node
 	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("creating volume for unarchive: %w", err)
 	}
 
 	// Restore archive to volume
 	reader, err := s.backupStore.LoadArchive(ctx, id)
 	if err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("loading archive from store: %w", err)
 	}
 
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
 		reader.Close()
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("decompressing archive: %w", err)
 	}
 
 	if err := w.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
 		gzReader.Close()
 		reader.Close()
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("restoring archive to volume: %w", err)
 	}
 	gzReader.Close()
 	reader.Close()
 
-	// Update gameserver record
-	gs.DesiredState = "stopped"
-	gs.NodeID = &nodeID
+	// Re-read to avoid stale data
+	gs, err = s.store.GetGameserver(id)
+	if err != nil {
+		return err
+	}
+	if gs == nil {
+		return fmt.Errorf("gameserver %s not found after restore", id)
+	}
 
 	// Reallocate ports if using per-node port scope
 	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {
-			if opID != "" {
-				s.failActivity(id, fmt.Errorf("game %s not found", gs.GameID))
-			}
-			return controller.ErrNotFoundf("game %s not found", gs.GameID)
+			return fmt.Errorf("game %s not found", gs.GameID)
 		}
 		newPorts, err := s.placement.ReallocatePorts(game, nodeID, "")
 		if err != nil {
-			if opID != "" {
-				s.failActivity(id, err)
-			}
 			return fmt.Errorf("allocating ports on target node: %w", err)
 		}
 		gs.Ports = newPorts
 	}
 
 	if err := s.store.UpdateGameserver(gs); err != nil {
-		if opID != "" {
-			s.failActivity(id, err)
-		}
 		return fmt.Errorf("updating gameserver after unarchive: %w", err)
-	}
-
-	if opID != "" {
-		s.completeActivity(id)
 	}
 
 	actorJSON, _ := json.Marshal(actor)
