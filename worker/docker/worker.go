@@ -46,9 +46,11 @@ func NewWorker(dockerClient *Client, gameStore *games.GameStore, dataDir string,
 		Log:             log,
 		GameStore:       gameStore,
 		DataDir:         dataDir,
+		Tracker:         worker.NewInstanceTracker(log),
 		VolumeSizeCache: make(map[string]*VolumeSizeEntry),
 	}
 	w.Resolve = w.DockerVolumeResolver()
+	w.WatchDockerEvents(context.Background())
 	return w
 }
 

@@ -165,7 +165,7 @@ func (w *FakeWorker) StartInstance(ctx context.Context, id string, readyPattern 
 	}
 	c.state = "running"
 
-	// Write install marker and ready pattern to log buffer for ReadyWatcher
+	// Write install marker and ready pattern to log buffer
 	c.logBuf.WriteString("[gamejanitor:installed]\n")
 	if w.ReadyPattern != "" {
 		c.logBuf.WriteString(w.ReadyPattern + "\n")

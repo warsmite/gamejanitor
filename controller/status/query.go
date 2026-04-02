@@ -120,7 +120,7 @@ func (s *QueryService) StopAll() {
 }
 
 // pollLoop collects query data at a steady interval.
-// Does not manage gameserver status — that's ReadyWatcher's job.
+// Does not manage gameserver status — the worker handles that via InstanceTracker.
 func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug string, port uint16) {
 	s.log.Debug("starting GJQ poll loop", "gameserver", gameserverID, "game", gameSlug, "port", port)
 
