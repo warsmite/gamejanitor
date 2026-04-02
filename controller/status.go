@@ -1,13 +1,10 @@
 package controller
 
-// Gameserver status constants.
-// Lifecycle: Stopped → Pulling → Starting → Started → Running → Stopping → Stopped
-// Gameserver statuses — reflect current instance state, not the operation that triggered it.
+// Gameserver display statuses — derived from desired state + worker state + operation.
 const (
 	StatusStopped     = "stopped"
 	StatusInstalling  = "installing"
 	StatusStarting    = "starting"
-	StatusStarted     = "started"
 	StatusRunning     = "running"
 	StatusStopping    = "stopping"
 	StatusError       = "error"
@@ -15,11 +12,9 @@ const (
 	StatusArchived    = "archived"
 )
 
-// Instance contract constants — shared between gamejanitor and game instance scripts.
-// Changing these requires updating the corresponding entrypoint.sh in images/base/.
+// Instance contract constants.
 const (
-	InstallMarker = "[gamejanitor:installed]" // Emitted by entrypoint.sh after first install completes
-	EnvSkipInstall = "SKIP_INSTALL=1"         // Passed to instance when gs.Installed is true
+	EnvSkipInstall = "SKIP_INSTALL=1" // Passed to instance when gs.Installed is true
 
 	PortNameQuery = "query" // Port used for server query polling (A2S/GJQ)
 	PortNameGame  = "game"  // Fallback port for query polling if no "query" port defined
@@ -39,7 +34,7 @@ func NeedsRecoveryOnReconnect(status string) bool {
 }
 
 func IsRunningStatus(status string) bool {
-	return status == StatusStarted || status == StatusRunning
+	return status == StatusRunning
 }
 
 // IsPollableStatus returns true if a gameserver is in a state where polling should continue.

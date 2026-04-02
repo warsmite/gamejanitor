@@ -113,7 +113,7 @@ func (s *Subscriber) SyncExisting(ctx context.Context) {
 		return
 	}
 	for _, gs := range gameservers {
-		if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted {
+		if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarting {
 			s.addRoutes(gs.ID)
 		}
 	}

@@ -68,7 +68,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	gs := gameserverStatus{Total: len(gameservers)}
 	for _, g := range gameservers {
 		switch g.Status {
-		case controller.StatusRunning, controller.StatusStarted:
+		case controller.StatusRunning:
 			gs.Running++
 		case controller.StatusStopped:
 			gs.Stopped++

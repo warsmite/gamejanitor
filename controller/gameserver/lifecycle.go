@@ -66,7 +66,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	}
 
 	switch gs.Status {
-	case controller.StatusInstalling, controller.StatusStarting, controller.StatusStarted, controller.StatusRunning:
+	case controller.StatusInstalling, controller.StatusStarting, controller.StatusRunning:
 		s.log.Info("gameserver already active, skipping start", "gameserver", id, "status", gs.Status)
 		return nil
 	}
