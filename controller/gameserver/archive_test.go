@@ -199,6 +199,7 @@ func TestDeleteArchived_SkipsWorkerCleanup(t *testing.T) {
 
 	err := svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
 	require.NoError(t, err, "deleting archived gameserver should not require a live worker")
+	svc.GameserverSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)

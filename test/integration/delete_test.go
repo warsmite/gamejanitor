@@ -35,6 +35,7 @@ func TestDelete_CleansUpBackupStoreFiles(t *testing.T) {
 
 	// Delete the gameserver — should clean up backup store files
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	// Verify backup DB records are gone (cascade)
 	backups, err := svc.BackupSvc.ListBackups(model.BackupFilter{GameserverID: gs.ID})
@@ -58,6 +59,7 @@ func TestDelete_CleansUpSchedules(t *testing.T) {
 	require.NoError(t, svc.ScheduleSvc.CreateSchedule(ctx, sched))
 
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
 	schedules, err := svc.ScheduleSvc.ListSchedules(gs.ID)
 	require.NoError(t, err)
@@ -74,6 +76,7 @@ func TestDelete_CleansUpVolume(t *testing.T) {
 	assert.True(t, fw.VolumeExists(gs.VolumeName))
 
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 	assert.False(t, fw.VolumeExists(gs.VolumeName), "volume should be removed on delete")
 }
 
@@ -88,7 +91,7 @@ func TestDelete_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestDelete_VolumeRemovalFailure_ReturnsError(t *testing.T) {
+func TestDelete_VolumeRemovalFailure_DeleteStillCompletes(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
@@ -96,14 +99,13 @@ func TestDelete_VolumeRemovalFailure_ReturnsError(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Make volume removal fail
+	// Volume removal fails but delete should still complete —
+	// an orphan volume is better than an orphan DB record
 	fw.FailNext("RemoveVolume", assert.AnError)
 
-	err := svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
-	require.Error(t, err, "delete should fail if volume removal fails")
-	assert.Contains(t, err.Error(), "removing volume")
+	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
+	svc.GameserverSvc.WaitForOperations()
 
-	// Gameserver should still exist in DB since delete failed
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	assert.NotNil(t, fetched, "gameserver should still exist after failed delete")
+	assert.Nil(t, fetched, "gameserver should be deleted even if volume removal failed")
 }

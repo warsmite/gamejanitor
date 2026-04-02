@@ -18,6 +18,7 @@ const (
 	OpRestore   = "restore"
 	OpArchive   = "archive"
 	OpUnarchive = "unarchive"
+	OpDelete    = "delete"
 )
 
 // Event represents a persisted event in the events table.
