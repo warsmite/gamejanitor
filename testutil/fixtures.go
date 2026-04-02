@@ -54,19 +54,18 @@ func SeedVolumeData(t *testing.T, worker *FakeWorker, volumeName string) {
 	}
 }
 
-// SetGameserverStatus writes a status_changed activity to set the gameserver's derived status.
-// Use this in tests that need to put a gameserver into a specific status without going
-// through the full lifecycle.
-func SetGameserverStatus(t *testing.T, db *store.DB, gameserverID, newStatus string) {
+// SetGameserverDesiredState updates the gameserver's desired_state in the database.
+// Use this in tests that need to put a gameserver into a specific desired state
+// without going through the full lifecycle.
+func SetGameserverDesiredState(t *testing.T, db *store.DB, gameserverID, desiredState string) {
 	t.Helper()
 	gs, err := db.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		t.Fatalf("getting gameserver for status update: %v", err)
+		t.Fatalf("getting gameserver for desired state update: %v", err)
 	}
-	gs.Status = newStatus
-	gs.ErrorReason = ""
+	gs.DesiredState = desiredState
 	if err := db.UpdateGameserver(gs); err != nil {
-		t.Fatalf("setting gameserver status: %v", err)
+		t.Fatalf("setting gameserver desired state: %v", err)
 	}
 }
 

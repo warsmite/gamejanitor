@@ -31,8 +31,8 @@ type Gameserver struct {
 	CPUEnforced    bool            `json:"cpu_enforced"`
 	InstanceID    *string         `json:"instance_id"`
 	VolumeName     string          `json:"volume_name"`
-	Status         string          `json:"status"`
-	ErrorReason    string          `json:"error_reason"`
+	Status         string          `json:"status"`         // derived at read time, not persisted
+	ErrorReason    string          `json:"error_reason"`   // derived at read time, not persisted
 	Operation      *Operation      `json:"operation,omitempty"`
 	PortMode       string          `json:"port_mode"`
 	NodeID         *string         `json:"node_id"`
@@ -46,7 +46,7 @@ type Gameserver struct {
 	AutoRestart        *bool           `json:"auto_restart"`
 	ConnectionAddress  *string         `json:"connection_address"`
 	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
-	Archived           bool            `json:"archived"`
+	DesiredState       string          `json:"desired_state"`  // stopped, running, archived
 	OperationType      *string         `json:"operation_type"`   // current running operation (start, stop, backup, etc.), nil when idle
 	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
 	RestartRequired    bool            `json:"restart_required"` // derived, not stored
@@ -105,6 +105,11 @@ func (gs *Gameserver) ComputeRestartRequired() {
 		ac.CPULimit != gs.CPULimit ||
 		ac.CPUEnforced != gs.CPUEnforced ||
 		!ac.Env.Equal(gs.Env)
+}
+
+// IsArchived returns true if the gameserver's desired state is archived.
+func (gs *Gameserver) IsArchived() bool {
+	return gs.DesiredState == "archived"
 }
 
 // FlexInt handles JSON values that may be a number or a string containing a number.

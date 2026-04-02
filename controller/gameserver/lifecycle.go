@@ -302,8 +302,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("creating instance for gameserver %s: %w", id, err)
 	}
 
-	// Save instance ID and snapshot the applied config for restart-required detection
+	// Save instance ID, desired state, and snapshot the applied config for restart-required detection
 	gs.InstanceID = &instanceID
+	gs.DesiredState = "running"
 	gs.AppliedConfig = gs.SnapshotConfig()
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		w.RemoveInstance(ctx, instanceID)
@@ -391,6 +392,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.InstanceID = nil
+	gs.DesiredState = "stopped"
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
 	}

@@ -25,8 +25,8 @@ func TestArchive_HappyPath(t *testing.T) {
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	assert.True(t, fetched.Archived)
-	assert.Equal(t, "archived", fetched.Status)
+	assert.True(t, fetched.IsArchived())
+	assert.Equal(t, "archived", fetched.DesiredState)
 	assert.Nil(t, fetched.NodeID)
 	assert.Nil(t, fetched.InstanceID)
 
@@ -78,8 +78,8 @@ func TestUnarchive_HappyPath(t *testing.T) {
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	assert.False(t, fetched.Archived)
-	assert.NotEqual(t, "archived", fetched.Status)
+	assert.False(t, fetched.IsArchived())
+	assert.NotEqual(t, "archived", fetched.DesiredState)
 	assert.NotNil(t, fetched.NodeID)
 
 	// Data should be restored to the volume

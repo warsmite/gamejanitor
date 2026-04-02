@@ -14,28 +14,18 @@ import (
 
 func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 	return &model.Gameserver{
-		ID:         id,
-		Name:       name,
-		GameID:     gameID,
-		Ports:      model.Ports{},
-		Env:        model.Env{},
-		VolumeName: "vol-" + id,
-		PortMode:   "auto",
-		Status:     "stopped",
-		NodeID:     nodeID,
-		NodeTags:    model.Labels{},
-		AutoRestart: boolPtr(false),
+		ID:           id,
+		Name:         name,
+		GameID:       gameID,
+		Ports:        model.Ports{},
+		Env:          model.Env{},
+		VolumeName:   "vol-" + id,
+		PortMode:     "auto",
+		DesiredState: "stopped",
+		NodeID:       nodeID,
+		NodeTags:     model.Labels{},
+		AutoRestart:  boolPtr(false),
 	}
-}
-
-// setStatus directly updates the gameserver status on the row.
-func setStatus(t *testing.T, db *store.DB, gsID, newStatus string) {
-	t.Helper()
-	gs, err := db.GetGameserver(gsID)
-	require.NoError(t, err)
-	require.NotNil(t, gs)
-	gs.Status = newStatus
-	require.NoError(t, db.UpdateGameserver(gs))
 }
 
 func boolPtr(b bool) *bool { return &b
@@ -53,7 +43,7 @@ func TestGameserver_CreateAndGet(t *testing.T) {
 	require.NotNil(t, fetched)
 	assert.Equal(t, "Test Server", fetched.Name)
 	assert.Equal(t, "minecraft-java", fetched.GameID)
-	assert.Equal(t, "stopped", fetched.Status)
+	assert.Equal(t, "stopped", fetched.DesiredState)
 }
 
 func TestGameserver_GetNotFound(t *testing.T) {
@@ -73,15 +63,13 @@ func TestGameserver_Update(t *testing.T) {
 	require.NoError(t, db.CreateGameserver(gs))
 
 	gs.Name = "Updated"
+	gs.DesiredState = "running"
 	require.NoError(t, db.UpdateGameserver(gs))
-
-	// Set status via activity
-	setStatus(t, db, "gs-1", "running")
 
 	fetched, err := db.GetGameserver("gs-1")
 	require.NoError(t, err)
 	assert.Equal(t, "Updated", fetched.Name)
-	assert.Equal(t, "running", fetched.Status)
+	assert.Equal(t, "running", fetched.DesiredState)
 	assert.True(t, fetched.UpdatedAt.After(fetched.CreatedAt) || fetched.UpdatedAt.Equal(fetched.CreatedAt))
 }
 
@@ -110,23 +98,11 @@ func TestGameserver_ListFilters(t *testing.T) {
 	require.NoError(t, db.CreateGameserver(gs2))
 	require.NoError(t, db.CreateGameserver(gs3))
 
-	// Set statuses via activity records
-	setStatus(t, db, "gs-1", "running")
-	// gs-2 and gs-3 have no status activity, so they default to "stopped"
-
 	t.Run("filter by game_id", func(t *testing.T) {
 		gameID := "minecraft-java"
 		list, err := db.ListGameservers(model.GameserverFilter{GameID: &gameID})
 		require.NoError(t, err)
 		assert.Len(t, list, 2)
-	})
-
-	t.Run("filter by status", func(t *testing.T) {
-		status := "running"
-		list, err := db.ListGameservers(model.GameserverFilter{Status: &status})
-		require.NoError(t, err)
-		assert.Len(t, list, 1)
-		assert.Equal(t, "gs-1", list[0].ID)
 	})
 
 	t.Run("filter by node_id", func(t *testing.T) {
@@ -188,32 +164,6 @@ func TestGameserver_AllocationExcluding(t *testing.T) {
 	mem, err := db.AllocatedMemoryByNodeExcluding("node-a", "gs-1")
 	require.NoError(t, err)
 	assert.Equal(t, 4096, mem, "should exclude gs-1's 2048")
-}
-
-func TestGameserver_TransitionStatus(t *testing.T) {
-	t.Parallel()
-	db := store.New(testutil.NewTestDB(t))
-	nodeA := "node-a"
-	gs := newGameserver("gs-1", "CAS Test", "test-game", &nodeA)
-	require.NoError(t, db.CreateGameserver(gs))
-
-	// Transition from stopped to installing should succeed
-	ok, err := db.TransitionStatus("gs-1", []string{"stopped", "error"}, "installing", "")
-	require.NoError(t, err)
-	assert.True(t, ok, "should transition from stopped to installing")
-
-	fetched, _ := db.GetGameserver("gs-1")
-	assert.Equal(t, "installing", fetched.Status)
-
-	// Transition from stopped should fail (status is now installing)
-	ok, err = db.TransitionStatus("gs-1", []string{"stopped"}, "starting", "")
-	require.NoError(t, err)
-	assert.False(t, ok, "should not transition from stopped when status is installing")
-
-	// Transition from installing to starting should succeed
-	ok, err = db.TransitionStatus("gs-1", []string{"installing"}, "starting", "")
-	require.NoError(t, err)
-	assert.True(t, ok)
 }
 
 func TestGameserver_JSONColumns(t *testing.T) {

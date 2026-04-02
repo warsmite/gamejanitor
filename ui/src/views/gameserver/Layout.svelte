@@ -91,7 +91,7 @@
   const logLines = $derived(gsState?.logLines ?? []);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
-  const isArchived = $derived(gameserver?.archived === true);
+  const isArchived = $derived(gameserver?.desired_state === 'archived');
   const isTransitioning = $derived(() => {
     const s = gameserver?.status;
     return s === 'starting' || s === 'installing' || s === 'stopping';

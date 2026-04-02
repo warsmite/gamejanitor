@@ -28,7 +28,7 @@ func TestGameserver_Create_HappyPath(t *testing.T) {
 	assert.NotEmpty(t, sftpPassword, "should return SFTP password")
 	assert.NotEmpty(t, gs.ID, "should assign an ID")
 	assert.NotEmpty(t, gs.VolumeName, "should assign a volume name")
-	assert.Equal(t, "stopped", gs.Status)
+	assert.Equal(t, "stopped", gs.DesiredState)
 	assert.NotEmpty(t, gs.SFTPUsername)
 
 	// Verify it persisted in the DB

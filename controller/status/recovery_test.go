@@ -49,7 +49,7 @@ func TestRecovery_RunningInDB_InstanceGone(t *testing.T) {
 
 	// Set status to "running" via activity to simulate a crash recovery scenario
 	s := store.New(svc.DB)
-	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
+	testutil.SetGameserverDesiredState(t, s, gs.ID, "running")
 
 	// Remove the instance from the fake worker so InspectInstance fails
 	fw.FailNext("InspectInstance", fmt.Errorf("instance not found"))
@@ -90,7 +90,7 @@ func TestRecovery_RunningInDB_InstanceRunning(t *testing.T) {
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.InstanceID = &instanceID
 	require.NoError(t, s.UpdateGameserver(fetched))
-	testutil.SetGameserverStatus(t, s, gs.ID, controller.StatusRunning)
+	testutil.SetGameserverDesiredState(t, s, gs.ID, "running")
 
 	// Instance is "running" in fake worker — recovery should re-attach (set to "started")
 	sm := newTestStatusManager(t, svc)
@@ -127,7 +127,8 @@ func TestRecovery_UnreachableStatus_WorkerOffline(t *testing.T) {
 		AutoRestart: &autoRestart,
 	}
 	require.NoError(t, s.CreateGameserver(gs))
-	testutil.SetGameserverStatus(t, s, "gs-unreachable", controller.StatusUnreachable)
+	// Gameserver wants to be running but worker is offline — DeriveStatus returns "unreachable"
+	testutil.SetGameserverDesiredState(t, s, "gs-unreachable", "running")
 
 	sm := newTestStatusManager(t, svc)
 

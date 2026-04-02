@@ -21,7 +21,7 @@
 
   const isRunning = $derived(gameserver.status === 'running' || gameserver.status === 'started');
   const isStopped = $derived(gameserver.status === 'stopped');
-  const isArchived = $derived(gameserver.archived === true);
+  const isArchived = $derived(gameserver.desired_state === 'archived');
 
   const memPercent = $derived(
     stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0

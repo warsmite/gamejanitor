@@ -78,13 +78,22 @@ func TestPipeline_StopDerivesStopped(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start writes status synchronously — no polling needed
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-
-	// Stop writes stopped synchronously via CAS
 	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "stopped", fetched.Status, "status should be stopped after stop")
+	// Poll until DeriveStatus reflects the stopped state. The worker event
+	// stream is async — stale "running" events from Start may arrive after
+	// Stop clears the worker state cache.
+	deadline := time.Now().Add(3 * time.Second)
+	var lastStatus string
+	for time.Now().Before(deadline) {
+		fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+		require.NoError(t, err)
+		lastStatus = fetched.Status
+		if lastStatus == "stopped" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("status should be stopped after stop, got %s", lastStatus)
 }

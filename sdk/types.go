@@ -29,7 +29,7 @@ type Gameserver struct {
 	NodeTags          map[string]string `json:"node_tags"`
 	AutoRestart       *bool             `json:"auto_restart"`
 	ConnectionAddress *string           `json:"connection_address"`
-	Archived          bool              `json:"archived"`
+	DesiredState      string            `json:"desired_state"`
 	RestartRequired   bool              `json:"restart_required"`
 	CreatedAt         time.Time         `json:"created_at"`
 	UpdatedAt         time.Time         `json:"updated_at"`

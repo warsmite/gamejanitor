@@ -22,7 +22,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	if gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
-	if gs.Archived {
+	if gs.IsArchived() {
 		return controller.ErrConflictf("gameserver %s is already archived", id)
 	}
 	if s.backupStore == nil {
@@ -109,8 +109,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 	}
 
 	// Update gameserver record
-	gs.Archived = true
-	gs.Status = controller.StatusArchived
+	gs.DesiredState = "archived"
 	gs.InstanceID = nil
 	gs.NodeID = nil
 	if err := s.store.UpdateGameserver(gs); err != nil {
@@ -138,7 +137,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	if gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
-	if !gs.Archived {
+	if !gs.IsArchived() {
 		return controller.ErrConflictf("gameserver %s is not archived", id)
 	}
 	if s.backupStore == nil {
@@ -213,8 +212,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	reader.Close()
 
 	// Update gameserver record
-	gs.Archived = false
-	gs.Status = controller.StatusStopped
+	gs.DesiredState = "stopped"
 	gs.NodeID = &nodeID
 
 	// Reallocate ports if using per-node port scope

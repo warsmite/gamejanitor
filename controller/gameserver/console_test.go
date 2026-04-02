@@ -53,7 +53,7 @@ func TestConsole_SendCommand_HappyPath(t *testing.T) {
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.InstanceID = &instanceID
 	s.UpdateGameserver(fetched)
-	testutil.SetGameserverStatus(t, s, gs.ID, "running")
+	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{InstanceID: instanceID, State: worker.StateRunning})
 
 	output, err := svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")
 	require.NoError(t, err)

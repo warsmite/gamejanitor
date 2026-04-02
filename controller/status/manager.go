@@ -245,6 +245,14 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		return
 	}
 
+	// Ignore stale events from instances that no longer match the current gameserver.
+	// After Stop(), InstanceID is nil — any late "running" event from the old instance
+	// should not re-populate worker state.
+	if gs.InstanceID == nil || *gs.InstanceID != update.InstanceID {
+		m.log.Debug("instance state: ignoring stale update", "gameserver", gsID, "event_instance", truncID(update.InstanceID), "gs_instance", gs.InstanceID, "state", update.State)
+		return
+	}
+
 	// Capture previous state before update
 	m.workerStateMu.Lock()
 	prev := m.workerStates[gsID]
@@ -283,16 +291,6 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		}
 
 	case worker.StateExited:
-		// Ignore stale events from old instances
-		if gs.InstanceID != nil && *gs.InstanceID != update.InstanceID {
-			m.log.Debug("instance state: ignoring stale update from old instance", "gameserver", gsID, "event_instance", truncID(update.InstanceID), "current_instance", truncID(*gs.InstanceID))
-			return
-		}
-		if gs.InstanceID == nil {
-			m.log.Debug("instance state: ignoring update with no current instance", "gameserver", gsID, "state", update.State)
-			return
-		}
-
 		m.stopPolling(gsID)
 
 		// If previous state was running/starting, this is an unexpected death
@@ -428,6 +426,18 @@ func (m *StatusManager) SetStopped(gameserverID string) {
 	m.stopPolling(gameserverID)
 }
 
+// InjectWorkerState sets the worker state for a gameserver. Used in tests to simulate
+// the status subscriber having received a state update from the worker.
+func (m *StatusManager) InjectWorkerState(gameserverID string, state *worker.InstanceStateUpdate) {
+	m.workerStateMu.Lock()
+	defer m.workerStateMu.Unlock()
+	if state == nil {
+		delete(m.workerStates, gameserverID)
+	} else {
+		m.workerStates[gameserverID] = state
+	}
+}
+
 func (m *StatusManager) getWorkerState(gameserverID string) *worker.InstanceStateUpdate {
 	m.workerStateMu.RLock()
 	defer m.workerStateMu.RUnlock()
@@ -456,7 +466,7 @@ func (m *StatusManager) stopPolling(gameserverID string) {
 // worker-reported state, operation phase, archive flag, and worker reachability.
 // This is the single source of truth — no status column needed.
 func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, errorReason string) {
-	if gs.Archived {
+	if gs.DesiredState == "archived" {
 		return controller.StatusArchived, ""
 	}
 

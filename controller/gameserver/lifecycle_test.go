@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 
@@ -53,8 +53,8 @@ func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
-	// Manually set status to running to simulate the status subscriber
-	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
+	// Inject worker state to simulate the status subscriber receiving a running event
+	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
 
 	// Starting again should be a no-op
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
@@ -120,8 +120,8 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 	// Start it first
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
-	// Set status to running so stop doesn't short-circuit
-	testutil.SetGameserverStatus(t, store.New(svc.DB), gs.ID, "running")
+	// Inject worker state so stop sees the gameserver as running
+	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
 
 	// Unregister the worker
 	svc.Registry.Unregister("worker-1")

@@ -153,7 +153,7 @@ export interface Gameserver {
   installed: boolean;
   auto_restart: boolean;
   connection_address?: string;
-  archived: boolean;
+  desired_state: string;
   created_at: string;
   updated_at: string;
 }

@@ -33,7 +33,6 @@ type Store interface {
 	CreateGameserver(gs *model.Gameserver) error
 	UpdateGameserver(gs *model.Gameserver) error
 	DeleteGameserver(id string) error
-	TransitionStatus(id string, fromStatuses []string, toStatus string, errorReason string) (bool, error)
 	PopulateNode(gs *model.Gameserver)
 	PopulateNodes(gameservers []model.Gameserver)
 	GetWorkerNode(id string) (*model.WorkerNode, error)
@@ -263,7 +262,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
-	gs.Status = controller.StatusStopped // Not persisted — status is derived from activities
+	gs.DesiredState = "stopped"
 	if gs.PortMode == "" {
 		gs.PortMode = "auto"
 	}
@@ -710,10 +709,10 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "archived", gs.Archived)
+	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "desired_state", gs.DesiredState)
 
 	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
-	if !gs.Archived {
+	if !gs.IsArchived() {
 		if gs.InstanceID != nil {
 			if err := s.Stop(ctx, id); err != nil {
 				return fmt.Errorf("stopping gameserver before delete: %w", err)
