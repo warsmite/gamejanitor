@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,16 +78,9 @@ type GameserverService struct {
 	gameStore       *games.GameStore
 	backupStore     BackupStore
 	dataDir         string
-	placementMu     sync.Mutex // serializes port allocation + gameserver creation to prevent races
-	portProbe    func(int) bool // nil uses default net.Listen probe
-	activity     *ActivityTracker
-	operations   *OperationTracker
-}
-
-// SetPortProbe overrides the host port availability check. Used in tests
-// where net.Listen probes would interfere with port allocation.
-func (s *GameserverService) SetPortProbe(fn func(int) bool) {
-	s.portProbe = fn
+	placement       *PlacementService
+	activity        *ActivityTracker
+	operations      *OperationTracker
 }
 
 func (s *GameserverService) SetModReconciler(r ModReconciler) {
@@ -192,7 +184,14 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 }
 
 func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
-	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+	placement := NewPlacementService(store, dispatcher, settingsSvc, log)
+	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placement}
+}
+
+// SetPortProbe overrides the host port availability check. Used in tests
+// where net.Listen probes would interfere with port allocation.
+func (s *GameserverService) SetPortProbe(fn func(int) bool) {
+	s.placement.SetPortProbe(fn)
 }
 
 // Called after both services are created to break the circular dependency.
@@ -255,11 +254,6 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		return "", err
 	}
 
-	// Serialize placement + port allocation + DB write to prevent concurrent creates
-	// from allocating the same ports or overcommitting a node.
-	s.placementMu.Lock()
-	defer s.placementMu.Unlock()
-
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
 	gs.DesiredState = "stopped"
@@ -292,65 +286,26 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		return "", err
 	}
 
+	// Select node and allocate ports via placement service (serialized to prevent races)
+	nodeID, ports, err := s.placement.PlaceGameserver(game, gs)
+	if err != nil {
+		return "", err
+	}
+	if ports != nil {
+		gs.Ports = ports
+	}
+	if nodeID != "" {
+		gs.NodeID = &nodeID
+	}
+
+	// Validate the selected worker is reachable
 	var targetWorker worker.Worker
-	var nodeID string
 	if gs.NodeID != nil && *gs.NodeID != "" {
-		// User chose a specific node — no fallback
-		nodeID = *gs.NodeID
-		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
+		w, err := s.dispatcher.SelectWorkerByNodeID(*gs.NodeID)
 		if err != nil {
 			return "", controller.ErrUnavailablef("selected worker unavailable: %v", err)
 		}
 		targetWorker = w
-
-		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
-			return "", err
-		}
-		if gs.PortMode == "auto" {
-			allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
-			if err != nil {
-				return "", controller.ErrUnavailablef("no available ports for this gameserver")
-			}
-			gs.Ports = allocatedPorts
-		}
-	} else {
-		// Try candidates in ranked order until one passes limit check + port allocation
-		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
-		if len(candidates) == 0 {
-			if !gs.NodeTags.IsEmpty() {
-				return "", controller.ErrUnavailablef("no workers available with required labels %v", gs.NodeTags)
-			}
-			return "", controller.ErrUnavailable("no workers available — connect a worker node first")
-		}
-
-		var lastErr error
-		for _, c := range candidates {
-			if c.NodeID != "" {
-				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
-					s.log.Debug("worker skipped during placement", "worker", c.NodeID, "reason", err)
-					lastErr = err
-					continue
-				}
-			}
-			if gs.PortMode == "auto" {
-				allocatedPorts, err := s.AllocatePorts(game, c.NodeID, "")
-				if err != nil {
-					s.log.Debug("worker skipped during placement", "worker", c.NodeID, "reason", err)
-					lastErr = err
-					continue
-				}
-				gs.Ports = allocatedPorts
-			}
-			targetWorker = c.Worker
-			nodeID = c.NodeID
-			break
-		}
-		if targetWorker == nil {
-			return "", controller.ErrUnavailablef("no worker has capacity for this gameserver: %v", lastErr)
-		}
-		if nodeID != "" {
-			gs.NodeID = &nodeID
-		}
 	}
 
 	if err := applyGameDefaults(gs, game); err != nil {
@@ -548,11 +503,6 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		}
 	}
 
-	// Lock port allocation to prevent races with concurrent CreateGameserver,
-	// MigrateGameserver, or Unarchive calls that also allocate ports.
-	s.placementMu.Lock()
-	defer s.placementMu.Unlock()
-
 	// Merge: only overwrite fields that were actually provided
 	if gs.Name != "" {
 		existing.Name = gs.Name
@@ -605,23 +555,12 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	needsMigration := false
 
 	if resourcesChanged && existing.NodeID != nil && *existing.NodeID != "" {
-		limitErr := s.checkWorkerLimitsExcluding(*existing.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.ID)
+		limitErr := s.placement.CheckWorkerLimitsExcluding(*existing.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.ID)
 		if limitErr != nil {
 			// Current node can't fit — find a new one
-			candidates := s.dispatcher.RankWorkersForPlacement(existing.NodeTags)
+			foundNode, findErr := s.placement.FindNodeWithCapacity(existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.NodeTags, *existing.NodeID)
 
-			foundNode := ""
-			for _, c := range candidates {
-				if c.NodeID == *existing.NodeID {
-					continue // skip current node
-				}
-				if err := s.checkWorkerLimits(c.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB)); err == nil {
-					foundNode = c.NodeID
-					break
-				}
-			}
-
-			if foundNode == "" {
+			if findErr != nil {
 				reason := fmt.Sprintf("Upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity.", existing.MemoryLimitMB, existing.CPULimit)
 				s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: existing.ID, Reason: reason, Timestamp: time.Now()})
 				return false, fmt.Errorf("%s Resource values unchanged.", reason)

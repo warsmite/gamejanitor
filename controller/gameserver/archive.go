@@ -151,14 +151,11 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 	if targetNodeID != "" {
 		nodeID = targetNodeID
 	} else {
-		s.placementMu.Lock()
 		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
 		if len(candidates) == 0 {
-			s.placementMu.Unlock()
 			return controller.ErrUnavailable("no workers available for placement")
 		}
 		nodeID = candidates[0].NodeID
-		s.placementMu.Unlock()
 	}
 
 	opID, _ := s.trackActivity(ctx, id, nodeID, model.OpUnarchive, nil, nil)
@@ -217,25 +214,21 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 
 	// Reallocate ports if using per-node port scope
 	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
-		s.placementMu.Lock()
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {
-			s.placementMu.Unlock()
 			if opID != "" {
 				s.failActivity(id, fmt.Errorf("game %s not found", gs.GameID))
 			}
 			return controller.ErrNotFoundf("game %s not found", gs.GameID)
 		}
-		newPorts, err := s.AllocatePorts(game, nodeID, "")
+		newPorts, err := s.placement.ReallocatePorts(game, nodeID, "")
 		if err != nil {
-			s.placementMu.Unlock()
 			if opID != "" {
 				s.failActivity(id, err)
 			}
 			return fmt.Errorf("allocating ports on target node: %w", err)
 		}
 		gs.Ports = newPorts
-		s.placementMu.Unlock()
 	}
 
 	if err := s.store.UpdateGameserver(gs); err != nil {

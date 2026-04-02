@@ -84,24 +84,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	// Check if assigned node can fit this gameserver's resources.
 	// If not, auto-migrate to a node that can before starting.
 	if gs.NodeID != nil && *gs.NodeID != "" {
-		limitErr := s.checkWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
+		limitErr := s.placement.CheckWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
 		if limitErr != nil {
 			s.log.Warn("assigned node cannot fit gameserver resources, attempting auto-migration",
 				"gameserver", id, "node_id", *gs.NodeID, "error", limitErr)
 
-			candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
-			foundNode := ""
-			for _, c := range candidates {
-				if c.NodeID == *gs.NodeID {
-					continue
-				}
-				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err == nil {
-					foundNode = c.NodeID
-					break
-				}
-			}
-
-			if foundNode == "" {
+			foundNode, findErr := s.placement.FindNodeWithCapacity(gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.NodeTags, *gs.NodeID)
+			if findErr != nil {
 				return fmt.Errorf("cannot start: node %s lacks capacity and no other node can fit %d MB / %.1f CPU", *gs.NodeID, gs.MemoryLimitMB, gs.CPULimit)
 			}
 

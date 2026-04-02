@@ -65,7 +65,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}
 
 	// Check target node limits
-	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
+	if err := s.placement.CheckWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
 		return err
 	}
 
@@ -174,19 +174,15 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	gs.NodeID = &targetNodeID
 
 	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
-		s.placementMu.Lock()
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {
-			s.placementMu.Unlock()
 			return controller.ErrNotFoundf("game %s not found", gs.GameID)
 		}
-		newPorts, err := s.AllocatePorts(game, targetNodeID, "")
+		newPorts, err := s.placement.ReallocatePorts(game, targetNodeID, "")
 		if err != nil {
-			s.placementMu.Unlock()
 			return fmt.Errorf("allocating ports on target node: %w", err)
 		}
 		gs.Ports = newPorts
-		s.placementMu.Unlock()
 	}
 
 	if err := s.store.UpdateGameserver(gs); err != nil {
