@@ -103,14 +103,9 @@ func startLocalInstance(t *testing.T) {
 
 	localURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 
-	t.Cleanup(func() {
-		if localCmd != nil && localCmd.Process != nil {
-			localCmd.Process.Signal(os.Interrupt)
-			localCmd.Wait()
-		}
-		cleanupSandboxState()
-		os.RemoveAll(localDir)
-	})
+	// Cleanup is handled by TestMain after all tests finish, not here.
+	// Registering cleanup on the first test's t would kill the shared
+	// instance when that test finishes — while others still need it.
 }
 
 // warmImage pre-pulls the game image by creating, starting, and deleting a

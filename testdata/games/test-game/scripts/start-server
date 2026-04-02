@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # Console log — persisted on the volume for log history across restarts
@@ -13,7 +13,7 @@ PORT="${GAME_PORT:-27015}"
 case "${TEST_BEHAVIOR}" in
   crash-after-ready)
     echo "Server is ready"
-    sleep 2
+    sleep 3
     echo "[start-server] simulating crash"
     exit 1
     ;;
@@ -37,7 +37,7 @@ case "${TEST_BEHAVIOR}" in
     ;;
   exit-clean)
     echo "Server is ready"
-    sleep 2
+    sleep 3
     echo "[start-server] shutting down cleanly"
     exit 0
     ;;

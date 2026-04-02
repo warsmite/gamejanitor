@@ -50,6 +50,7 @@ type StatusProvider interface {
 	DeriveStatus(gs *model.Gameserver) (status string, errorReason string)
 	SetRunning(gameserverID string)
 	SetStopped(gameserverID string)
+	ClearError(gameserverID string)
 }
 
 // BackupStore abstracts backup file storage (local disk or S3).

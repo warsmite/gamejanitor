@@ -150,6 +150,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		}
 	}
 
+	// Clear stale error state from a prior crash so DeriveStatus doesn't return
+	// "error" during the new start sequence (error reasons are checked before
+	// worker state, so a leftover reason blocks all other status derivation).
+	if s.statusProvider != nil {
+		s.statusProvider.ClearError(id)
+	}
+
 	// Set desired state immediately so DeriveStatus reflects intent
 	gs.DesiredState = "running"
 	s.store.UpdateGameserver(gs)
@@ -427,12 +434,18 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) Stop(ctx context.Context, id string) error {
-	gs, err := s.store.GetGameserver(id)
+	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
 	}
 	if gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
+	}
+
+	// Already stopped or in error — nothing to do
+	if gs.Status == controller.StatusStopped || gs.Status == controller.StatusError {
+		s.log.Info("gameserver already stopped, skipping stop", "gameserver", id, "status", gs.Status)
+		return nil
 	}
 
 	// Clear runtime state BEFORE sending SIGTERM. The sandbox exit watcher fires
@@ -456,6 +469,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 // doStop performs the heavy work of stopping a gameserver. Runs in a background
 // goroutine — re-reads the gameserver from DB since state may have changed.
 func (s *GameserverService) doStop(ctx context.Context, id string) error {
+	// Set the operation phase so DeriveStatus returns "stopping" instead of
+	// interpreting the non-zero exit code from SIGKILL as an error.
+	if s.operations != nil {
+		s.operations.SetOperation(id, model.OpStop, model.PhaseStopping)
+	}
+
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s for stop: %w", id, err)
@@ -469,14 +488,21 @@ func (s *GameserverService) doStop(ctx context.Context, id string) error {
 		if w == nil {
 			s.log.Warn("worker unavailable during stop, skipping instance cleanup", "gameserver", id)
 		} else {
-			// Run stop-server script if it exists — announces shutdown, saves world
-			_, _, _, execErr := w.Exec(ctx, *gs.InstanceID, []string{"/scripts/stop-server"})
+			// Run stop-server script if it exists — announces shutdown, saves world.
+			// Use a short timeout so a missing/failing script doesn't delay the stop.
+			execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
+			_, _, _, execErr := w.Exec(execCtx, *gs.InstanceID, []string{"/scripts/stop-server"})
+			execCancel()
 			if execErr != nil {
 				s.log.Info("stop-server script not available or failed, proceeding with instance stop", "gameserver", id, "error", execErr)
 			}
-			if err := w.StopInstance(ctx, *gs.InstanceID, 10); err != nil {
+			// StopInstance sends SIGTERM, waits timeoutSeconds, then SIGKILL.
+			// Add a context deadline as a safety net in case the worker hangs.
+			stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+			if err := w.StopInstance(stopCtx, *gs.InstanceID, 10); err != nil {
 				s.log.Warn("failed to stop instance gracefully", "gameserver", id, "error", err)
 			}
+			stopCancel()
 			if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
 				s.log.Warn("failed to remove instance", "gameserver", id, "error", err)
 			}
@@ -495,6 +521,13 @@ func (s *GameserverService) doStop(ctx context.Context, id string) error {
 	gs.DesiredState = "stopped"
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
+	}
+
+	// Clear any worker state that was re-injected by the exit event during stop.
+	// Without this, DeriveStatus sees StateExited with non-zero exit code (from SIGKILL)
+	// and returns "error" instead of "stopped".
+	if s.statusProvider != nil {
+		s.statusProvider.SetStopped(id)
 	}
 
 	s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: id, Timestamp: time.Now()})

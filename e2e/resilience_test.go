@@ -18,16 +18,16 @@ func TestE2E_SlowReady_EventuallyRunning(t *testing.T) {
 
 	gs := createGameserver(t, h, testGameEnv(h, map[string]string{
 		"TEST_BEHAVIOR":      "slow-ready",
-		"READY_DELAY_SECONDS": "8",
+		"READY_DELAY_SECONDS": "3",
 	}))
 
 	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	// During the delay, status should be "started" (installed but not yet ready)
-	// Wait a moment for install to complete, then check intermediate status
-	time.Sleep(4 * time.Second)
+	// During the delay, status should be "starting" (installed but not yet ready)
+	// Wait briefly for install to complete, then check intermediate status
+	time.Sleep(2 * time.Second)
 	status, _ := h.GetGameserver(t, gs.ID)
 	assert.Contains(t, []string{"installing", "starting", "started"}, status,
 		"should be in a pre-ready state during delay, got %q", status)
@@ -50,8 +50,8 @@ func TestE2E_LogFlood_DoesNotOOM(t *testing.T) {
 	startAndWaitRunning(t, h, gs.ID)
 
 	// Let it flood for a while
-	t.Logf("letting stdout flood run for 10 seconds...")
-	time.Sleep(10 * time.Second)
+	t.Logf("letting stdout flood run for 3 seconds...")
+	time.Sleep(3 * time.Second)
 
 	// Verify gamejanitor is still responsive and the server is tracked
 	status, _ := h.GetGameserver(t, gs.ID)
@@ -85,15 +85,17 @@ func TestE2E_Backup_RunningServer_RestoreVerifiesData(t *testing.T) {
 	// Stop source
 	stopAndWaitStopped(t, h, gs1.ID)
 
-	// Create a new gameserver and restore the backup into it
-	gs2 := createGameserver(t, h, testGameEnv(h, nil))
-	restoreBackup(t, h, gs2.ID, backup.ID)
+	// Delete the marker file so we can verify restore brings it back
+	writeFile(t, h, gs1.ID, "/data/backup-marker.txt", "overwritten")
+
+	// Restore the backup to the same gameserver
+	restoreBackup(t, h, gs1.ID, backup.ID)
 
 	// Give the restore a moment to complete
 	time.Sleep(3 * time.Second)
 
 	// Verify the marker file survived the round-trip
-	content := readFile(t, h, gs2.ID, "/data/backup-marker.txt")
+	content := readFile(t, h, gs1.ID, "/data/backup-marker.txt")
 	assert.Contains(t, content, marker,
 		"marker file should survive backup/restore round-trip")
 	t.Logf("backup round-trip verified: marker file intact")

@@ -418,6 +418,16 @@ func (m *StatusManager) SetRunning(gameserverID string) {
 	// Worker reports state via stream — no controller-side state to set.
 }
 
+// ClearError removes any cached error reason for a gameserver.
+// Called when starting a gameserver that was previously in error state so
+// DeriveStatus doesn't return stale error during the new start sequence.
+func (m *StatusManager) ClearError(gameserverID string) {
+	m.workerStateMu.Lock()
+	delete(m.errorReasons, gameserverID)
+	delete(m.workerStates, gameserverID)
+	m.workerStateMu.Unlock()
+}
+
 // SetStopped clears the worker state cache so DeriveStatus doesn't show stale "running".
 // Called by the lifecycle service after StopInstance completes.
 func (m *StatusManager) SetStopped(gameserverID string) {
