@@ -339,10 +339,6 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	if s.readyWatcher != nil {
-		s.readyWatcher.Stop(id)
-	}
-
 	// Clear runtime state BEFORE sending SIGTERM. The sandbox exit watcher fires
 	// the "die" event almost immediately — if the runtime state still says "running",
 	// the status manager treats it as an unexpected death.

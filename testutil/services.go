@@ -33,7 +33,6 @@ type ServiceBundle struct {
 	GameserverSvc *gameserver.GameserverService
 	QuerySvc      *status.QueryService
 	StatsPoller   *status.StatsPoller
-	ReadyWatcher  *status.ReadyWatcher
 	ConsoleSvc    *gameserver.ConsoleService
 	FileSvc       *gameserver.FileService
 	BackupSvc     *backup.BackupService
@@ -80,7 +79,6 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		GameserverSvc: svcs.GameserverSvc,
 		QuerySvc:      svcs.QuerySvc,
 		StatsPoller:   svcs.StatsPoller,
-		ReadyWatcher:  svcs.ReadyWatcher,
 		ConsoleSvc:    svcs.ConsoleSvc,
 		FileSvc:       svcs.FileSvc,
 		BackupSvc:     svcs.BackupSvc,
@@ -94,7 +92,6 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	}
 
 	t.Cleanup(func() {
-		svcs.ReadyWatcher.StopAll()
 		svcs.QuerySvc.StopAll()
 	})
 
@@ -115,7 +112,6 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	svc.StatusSub.Start(ctx)
 
 	t.Cleanup(func() {
-		svc.ReadyWatcher.StopAll()
 		svc.QuerySvc.StopAll()
 		svc.StatusSub.Stop()
 	})

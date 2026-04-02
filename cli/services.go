@@ -29,7 +29,6 @@ type Services struct {
 	GameserverSvc   *gameserver.GameserverService
 	QuerySvc        *status.QueryService
 	StatsPoller     *status.StatsPoller
-	ReadyWatcher    *status.ReadyWatcher
 	ConsoleSvc      *gameserver.ConsoleService
 	FileSvc         *gameserver.FileService
 	BackupSvc       *backup.BackupService
@@ -83,8 +82,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		}
 		return 0
 	})
-	readyWatcher := status.NewReadyWatcher(db, broadcaster, gameStore, logger)
-	gameserverSvc.SetReadyWatcher(readyWatcher)
+	// ReadyWatcher is now worker-side — no controller-side watcher needed
 	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
 	fileSvc := gameserver.NewFileService(db, dispatcher, logger)
 
@@ -119,7 +117,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, gameserverSvc.Start, logger)
 	gameserverSvc.SetStatusProvider(statusMgr)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)
@@ -157,7 +155,6 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		GameserverSvc:   gameserverSvc,
 		QuerySvc:        querySvc,
 		StatsPoller:     statsPoller,
-		ReadyWatcher:    readyWatcher,
 		ConsoleSvc:      consoleSvc,
 		FileSvc:         fileSvc,
 		BackupSvc:       backupSvc,

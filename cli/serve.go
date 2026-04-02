@@ -311,7 +311,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start scheduler: %w", err)
 	}
 	defer svcs.Scheduler.Stop()
-	defer svcs.ReadyWatcher.StopAll()
 	defer svcs.QuerySvc.StopAll()
 
 	// --- 4. TLS and gRPC ---
@@ -560,7 +559,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// (backups, webhook deliveries) complete cleanly.
 	svcs.StatsPoller.StopAll()
 	svcs.QuerySvc.StopAll()
-	svcs.ReadyWatcher.StopAll()
 	svcs.AuthSvc.Stop()
 	router.Stop()
 	bgWg.Wait()

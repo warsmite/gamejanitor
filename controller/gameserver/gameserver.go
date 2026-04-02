@@ -46,12 +46,6 @@ type Store interface {
 	ListBackups(filter model.BackupFilter) ([]model.Backup, error)
 }
 
-// ReadyWatcher watches for gameserver readiness after start.
-type ReadyWatcher interface {
-	Watch(gameserverID string, wkr worker.Worker, instanceID string)
-	Stop(gameserverID string)
-}
-
 // StatusProvider derives the current status for a gameserver from runtime state.
 type StatusProvider interface {
 	DeriveStatus(gs *model.Gameserver) (status string, errorReason string)
@@ -80,7 +74,6 @@ type GameserverService struct {
 	dispatcher      *orchestrator.Dispatcher
 	log             *slog.Logger
 	broadcaster     *controller.EventBus
-	readyWatcher    ReadyWatcher
 	statusProvider  StatusProvider
 	modReconciler   ModReconciler
 	settingsSvc     *settings.SettingsService
@@ -204,10 +197,6 @@ func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broa
 }
 
 // Called after both services are created to break the circular dependency.
-func (s *GameserverService) SetReadyWatcher(rw ReadyWatcher) {
-	s.readyWatcher = rw
-}
-
 func (s *GameserverService) SetStatusProvider(sp StatusProvider) {
 	s.statusProvider = sp
 }
@@ -722,10 +711,6 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	}
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "archived", gs.Archived)
-
-	if s.readyWatcher != nil {
-		s.readyWatcher.Stop(id)
-	}
 
 	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
 	if !gs.Archived {

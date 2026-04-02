@@ -25,7 +25,6 @@ func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *status.Sta
 		svc.Broadcaster,
 		svc.QuerySvc,
 		svc.StatsPoller,
-		svc.ReadyWatcher,
 		svc.Dispatcher,
 		svc.Registry,
 		nil, // restartFunc not needed for recovery tests

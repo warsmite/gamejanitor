@@ -30,6 +30,7 @@ type StatusManager struct {
 	// Worker-reported state: the source of truth for instance lifecycle
 	workerStateMu sync.RWMutex
 	workerStates  map[string]*worker.InstanceStateUpdate // gameserverID → last worker report
+	errorReasons  map[string]string                      // gameserverID → controller-side error reason
 
 	// Per-worker event watchers for multi-node
 	workerCancels map[string]context.CancelFunc
@@ -40,7 +41,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		store:         store,
 		broadcaster:   broadcaster,
@@ -51,6 +52,7 @@ func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *Q
 		restartFunc:   restartFunc,
 		log:           log,
 		workerStates:  make(map[string]*worker.InstanceStateUpdate),
+		errorReasons:  make(map[string]string),
 		workerCancels: make(map[string]context.CancelFunc),
 		crashCounts:   make(map[string]int),
 	}
@@ -82,6 +84,10 @@ func (m *StatusManager) Start(ctx context.Context) {
 				switch e := ev.(type) {
 				case controller.GameserverErrorEvent:
 					m.log.Warn("gameserver error event", "gameserver", e.GameserverID, "reason", e.Reason)
+					m.workerStateMu.Lock()
+					m.errorReasons[e.GameserverID] = e.Reason
+					m.workerStateMu.Unlock()
+					m.stopPolling(e.GameserverID)
 				}
 			}
 		}
@@ -251,7 +257,10 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		m.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gsID, Timestamp: time.Now()})
 		m.startPolling(gsID)
 
-		// Reset crash counter on successful start
+		// Clear error state and crash counter on successful start
+		m.workerStateMu.Lock()
+		delete(m.errorReasons, gsID)
+		m.workerStateMu.Unlock()
 		m.crashMu.Lock()
 		delete(m.crashCounts, gsID)
 		m.crashMu.Unlock()
@@ -405,6 +414,7 @@ func (m *StatusManager) SetRunning(gameserverID string) {
 func (m *StatusManager) SetStopped(gameserverID string) {
 	m.workerStateMu.Lock()
 	delete(m.workerStates, gameserverID)
+	delete(m.errorReasons, gameserverID)
 	m.workerStateMu.Unlock()
 	m.stopPolling(gameserverID)
 }
@@ -446,6 +456,14 @@ func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, error
 		if _, online := m.registry.Get(*gs.NodeID); !online {
 			return controller.StatusUnreachable, "Worker offline"
 		}
+	}
+
+	// Check for controller-side errors (migration failed, backup restore failed, etc.)
+	m.workerStateMu.RLock()
+	errReason := m.errorReasons[gs.ID]
+	m.workerStateMu.RUnlock()
+	if errReason != "" {
+		return controller.StatusError, errReason
 	}
 
 	// Get worker-reported state
