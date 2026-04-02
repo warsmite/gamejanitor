@@ -102,12 +102,20 @@ func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-fetch so DeriveStatus populates the status field
+	fetched, err := h.svc.GetGameserver(gs.ID)
+	if err != nil || fetched == nil {
+		h.log.Error("fetching gameserver after create", "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to fetch created gameserver")
+		return
+	}
+
 	// Include the raw SFTP password in the create response only (show once)
 	type createResponse struct {
 		model.Gameserver
 		SFTPPassword string `json:"sftp_password"`
 	}
-	respondCreated(w, createResponse{Gameserver: gs, SFTPPassword: rawPassword})
+	respondCreated(w, createResponse{Gameserver: *fetched, SFTPPassword: rawPassword})
 }
 
 func (h *GameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *http.Request) {
