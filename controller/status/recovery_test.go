@@ -99,8 +99,8 @@ func TestRecovery_RunningInDB_InstanceRunning(t *testing.T) {
 
 	recovered, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	// Recovery sets running instances to "started" and re-attaches the ready watcher
-	assert.Equal(t, controller.StatusStarted, recovered.Status)
+	// Recovery populates worker state cache with running — DeriveStatus returns "running"
+	assert.Equal(t, controller.StatusRunning, recovered.Status)
 }
 
 func TestRecovery_UnreachableStatus_WorkerOffline(t *testing.T) {

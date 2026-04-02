@@ -18,14 +18,25 @@ func TestPipeline_StatusDerivedFromLifecycleEvents(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start writes status synchronously via CAS
+	// Start triggers the lifecycle; worker state arrives asynchronously via the event stream
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
-	require.NoError(t, err)
-	// Status should be one of the active or terminal states (fake worker completes instantly)
-	assert.Contains(t, []string{"installing", "starting", "started", "running", "error"}, fetched.Status,
-		"status should not still be stopped after start, got %s", fetched.Status)
+	// Poll until the worker-reported state is reflected in DeriveStatus
+	activeStatuses := []string{"installing", "starting", "running", "error"}
+	deadline := time.Now().Add(3 * time.Second)
+	var lastStatus string
+	for time.Now().Before(deadline) {
+		fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+		require.NoError(t, err)
+		lastStatus = fetched.Status
+		for _, s := range activeStatuses {
+			if lastStatus == s {
+				return // success
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("status should be one of %v after start, got %s", activeStatuses, lastStatus)
 }
 
 func TestPipeline_StatusChangedEventPublished(t *testing.T) {

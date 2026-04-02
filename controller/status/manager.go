@@ -14,32 +14,22 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// InstanceState tracks the runtime state of a gameserver's instance.
-type InstanceState struct {
-	Running     bool
-	Exited      bool
-	ExitCode    int
-	ErrorReason string
-	Ready       bool
-}
-
 type StatusManager struct {
 	store       Store
 	log         *slog.Logger
 	broadcaster *controller.EventBus
 	querySvc    *QueryService
 	statsPoller *StatsPoller
-	readyWatcher *ReadyWatcher
-	dispatcher   *orchestrator.Dispatcher
-	registry     *orchestrator.Registry
-	restartFunc  func(ctx context.Context, id string) error
+	dispatcher  *orchestrator.Dispatcher
+	registry    *orchestrator.Registry
+	restartFunc func(ctx context.Context, id string) error
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	// Runtime state: the source of truth for instance lifecycle
-	runtimeMu     sync.RWMutex
-	runtimeStates map[string]*InstanceState // gameserverID → state
+	// Worker-reported state: the source of truth for instance lifecycle
+	workerStateMu sync.RWMutex
+	workerStates  map[string]*worker.InstanceStateUpdate // gameserverID → last worker report
 
 	// Per-worker event watchers for multi-node
 	workerCancels map[string]context.CancelFunc
@@ -56,12 +46,11 @@ func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *Q
 		broadcaster:   broadcaster,
 		querySvc:      querySvc,
 		statsPoller:   statsPoller,
-		readyWatcher:  readyWatcher,
 		dispatcher:    dispatcher,
 		registry:      registry,
 		restartFunc:   restartFunc,
 		log:           log,
-		runtimeStates: make(map[string]*InstanceState),
+		workerStates:  make(map[string]*worker.InstanceStateUpdate),
 		workerCancels: make(map[string]context.CancelFunc),
 		crashCounts:   make(map[string]int),
 	}
@@ -76,7 +65,7 @@ func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *Q
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
 
-	// Listen for lifecycle events to update runtime state
+	// Listen for error events from lifecycle code
 	events, unsub := m.broadcaster.Subscribe()
 	m.wg.Add(1)
 	go func() {
@@ -91,13 +80,8 @@ func (m *StatusManager) Start(ctx context.Context) {
 					return
 				}
 				switch e := ev.(type) {
-				case controller.GameserverReadyEvent:
-					m.setReady(e.GameserverID)
-					m.crashMu.Lock()
-					delete(m.crashCounts, e.GameserverID)
-					m.crashMu.Unlock()
 				case controller.GameserverErrorEvent:
-					m.setError(e.GameserverID, e.Reason)
+					m.log.Warn("gameserver error event", "gameserver", e.GameserverID, "reason", e.Reason)
 				}
 			}
 		}
@@ -173,7 +157,9 @@ func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker 
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.InstanceID == nil {
 		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.ID)
-		m.SetStopped(gs.ID)
+		m.workerStateMu.Lock()
+		delete(m.workerStates, gs.ID)
+		m.workerStateMu.Unlock()
 		return false
 	}
 
@@ -182,23 +168,35 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 		m.log.Warn("instance not found, clearing", "gameserver", gs.ID, "instance_id", (*gs.InstanceID)[:12], "error", err)
 		gs.InstanceID = nil
 		m.store.UpdateGameserver(gs)
-		m.SetStopped(gs.ID)
+		m.workerStateMu.Lock()
+		delete(m.workerStates, gs.ID)
+		m.workerStateMu.Unlock()
 		return true
 	}
 
 	switch info.State {
 	case "running":
-		m.log.Info("instance running, re-attaching ready watcher", "gameserver", gs.ID)
-		m.SetRunning(gs.ID)
-		m.readyWatcher.Watch(gs.ID, w, *gs.InstanceID)
+		m.log.Info("instance running, populating worker state cache", "gameserver", gs.ID)
+		m.workerStateMu.Lock()
+		m.workerStates[gs.ID] = &worker.InstanceStateUpdate{
+			InstanceID: *gs.InstanceID,
+			State:      worker.StateRunning,
+			StartedAt:  info.StartedAt,
+		}
+		m.workerStateMu.Unlock()
+		m.startPolling(gs.ID)
 	case "exited", "dead", "created":
 		m.log.Info("instance is not running, clearing", "gameserver", gs.ID, "state", info.State)
 		gs.InstanceID = nil
 		m.store.UpdateGameserver(gs)
-		m.SetStopped(gs.ID)
+		m.workerStateMu.Lock()
+		delete(m.workerStates, gs.ID)
+		m.workerStateMu.Unlock()
 	default:
 		m.log.Warn("instance in unexpected state", "gameserver", gs.ID, "state", info.State)
-		m.setExited(gs.ID, -1, "Instance found in unexpected state.")
+		m.workerStateMu.Lock()
+		delete(m.workerStates, gs.ID)
+		m.workerStateMu.Unlock()
 	}
 	return false
 }
@@ -241,19 +239,28 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		return
 	}
 
+	// Capture previous state before update
+	m.workerStateMu.Lock()
+	prev := m.workerStates[gsID]
+	m.workerStates[gsID] = &update
+	m.workerStateMu.Unlock()
+
 	switch update.State {
 	case worker.StateRunning:
-		m.log.Info("instance state: running (ready)", "gameserver", gsID)
-		m.setReady(gsID)
+		m.log.Info("instance ready", "gameserver", gsID)
 		m.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gsID, Timestamp: time.Now()})
 		m.startPolling(gsID)
 
-		if update.Installed && gs != nil && !gs.Installed {
+		// Reset crash counter on successful start
+		m.crashMu.Lock()
+		delete(m.crashCounts, gsID)
+		m.crashMu.Unlock()
+
+		// Persist install flag
+		if update.Installed && !gs.Installed {
 			gs.Installed = true
 			if err := m.store.UpdateGameserver(gs); err != nil {
-				m.log.Error("failed to mark gameserver as installed", "gameserver", gsID, "error", err)
-			} else {
-				m.log.Info("gameserver marked as installed", "gameserver", gsID)
+				m.log.Error("failed to mark installed", "gameserver", gsID, "error", err)
 			}
 		}
 
@@ -268,17 +275,12 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 			return
 		}
 
-		m.readyWatcher.Stop(gsID)
-		m.querySvc.StopPolling(gsID)
-		m.statsPoller.StopPolling(gsID)
+		m.stopPolling(gsID)
 
-		// Check if this was an expected stop (lifecycle already cleared the state)
-		// or an unexpected death (instance crashed while running)
-		rs := m.GetRuntimeState(gsID)
-		if rs != nil && rs.Running {
-			// Instance was still marked as running — this is unexpected
-			m.log.Warn("instance state: unexpected instance death", "gameserver", gsID)
-			m.setExited(gsID, update.ExitCode, "Instance exited unexpectedly")
+		// If previous state was running/starting, this is an unexpected death
+		wasRunning := prev != nil && (prev.State == worker.StateRunning || prev.State == worker.StateStarting)
+		if wasRunning {
+			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode)
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		} else {
@@ -392,44 +394,25 @@ func (m *StatusManager) detectOrphanInstances(ctx context.Context, nodeID string
 
 // --- Runtime state methods ---
 
-// SetRunning marks a gameserver's instance as running (not yet ready).
-// Called by the lifecycle service after StartInstance succeeds.
+// SetRunning is kept for StatusProvider interface compatibility.
+// Worker reports state via stream — no controller-side state to set.
 func (m *StatusManager) SetRunning(gameserverID string) {
-	m.runtimeMu.Lock()
-	m.runtimeStates[gameserverID] = &InstanceState{Running: true}
-	m.runtimeMu.Unlock()
-	m.startPolling(gameserverID)
+	// Worker reports state via stream — no controller-side state to set.
 }
 
-// SetStopped clears a gameserver's runtime state.
+// SetStopped clears the worker state cache so DeriveStatus doesn't show stale "running".
 // Called by the lifecycle service after StopInstance completes.
 func (m *StatusManager) SetStopped(gameserverID string) {
-	m.runtimeMu.Lock()
-	delete(m.runtimeStates, gameserverID)
-	m.runtimeMu.Unlock()
+	m.workerStateMu.Lock()
+	delete(m.workerStates, gameserverID)
+	m.workerStateMu.Unlock()
 	m.stopPolling(gameserverID)
 }
 
-func (m *StatusManager) setReady(gameserverID string) {
-	m.runtimeMu.Lock()
-	if s, ok := m.runtimeStates[gameserverID]; ok {
-		s.Ready = true
-	}
-	m.runtimeMu.Unlock()
-}
-
-func (m *StatusManager) setExited(gameserverID string, exitCode int, reason string) {
-	m.runtimeMu.Lock()
-	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ExitCode: exitCode, ErrorReason: reason}
-	m.runtimeMu.Unlock()
-	m.stopPolling(gameserverID)
-}
-
-func (m *StatusManager) setError(gameserverID string, reason string) {
-	m.runtimeMu.Lock()
-	m.runtimeStates[gameserverID] = &InstanceState{Exited: true, ErrorReason: reason}
-	m.runtimeMu.Unlock()
-	m.stopPolling(gameserverID)
+func (m *StatusManager) getWorkerState(gameserverID string) *worker.InstanceStateUpdate {
+	m.workerStateMu.RLock()
+	defer m.workerStateMu.RUnlock()
+	return m.workerStates[gameserverID]
 }
 
 func (m *StatusManager) startPolling(gameserverID string) {
@@ -450,15 +433,8 @@ func (m *StatusManager) stopPolling(gameserverID string) {
 	}
 }
 
-// GetRuntimeState returns the current instance state for a gameserver.
-func (m *StatusManager) GetRuntimeState(gameserverID string) *InstanceState {
-	m.runtimeMu.RLock()
-	defer m.runtimeMu.RUnlock()
-	return m.runtimeStates[gameserverID]
-}
-
 // DeriveStatus computes the user-facing status for a gameserver by combining
-// runtime state, operation phase, archive flag, and worker reachability.
+// worker-reported state, operation phase, archive flag, and worker reachability.
 // This is the single source of truth — no status column needed.
 func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, errorReason string) {
 	if gs.Archived {
@@ -472,38 +448,33 @@ func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, error
 		}
 	}
 
-	// Check runtime instance state first — this is ground truth
-	rs := m.GetRuntimeState(gs.ID)
+	// Get worker-reported state
+	ws := m.getWorkerState(gs.ID)
 
-	if rs != nil && rs.Exited {
-		reason := rs.ErrorReason
-		if reason == "" {
-			reason = "Instance exited unexpectedly"
-		}
-		return controller.StatusError, reason
-	}
-
-	if rs != nil && rs.Running {
-		// Instance is running — check if ready or still starting
-		if rs.Ready {
-			return controller.StatusRunning, ""
-		}
-		// Check operation phase for more specific status
-		if gs.Operation != nil && gs.Operation.Phase == model.PhaseStarting {
-			return controller.StatusStarting, ""
-		}
-		return controller.StatusStarted, ""
-	}
-
-	// No running/exited instance. If a lifecycle operation is in progress and
-	// hasn't created an instance yet, show the operation phase. Otherwise stopped.
-	if gs.Operation != nil && gs.InstanceID == nil {
+	// Check operation phase first — operations override worker state display
+	if gs.Operation != nil {
 		switch gs.Operation.Phase {
 		case model.PhasePullingImage, model.PhaseDownloadingGame, model.PhaseInstalling:
 			return controller.StatusInstalling, ""
 		case model.PhaseStopping:
 			return controller.StatusStopping, ""
 		}
+	}
+
+	if ws == nil {
+		return controller.StatusStopped, ""
+	}
+
+	switch ws.State {
+	case worker.StateCreated, worker.StateStarting:
+		return controller.StatusStarting, ""
+	case worker.StateRunning:
+		return controller.StatusRunning, ""
+	case worker.StateExited:
+		if ws.ExitCode == 0 {
+			return controller.StatusStopped, ""
+		}
+		return controller.StatusError, "Instance exited unexpectedly"
 	}
 
 	return controller.StatusStopped, ""
