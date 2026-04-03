@@ -429,6 +429,10 @@
           '';
 
           test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
+            if [ -n "$1" ] && [[ "$1" != -* ]]; then
+              export SMOKE_GAME="$1"
+              shift
+            fi
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
             echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-terraria})..."
