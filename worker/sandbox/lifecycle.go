@@ -41,14 +41,9 @@ func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArg
 		sdArgs = append(sdArgs, fmt.Sprintf("--property=CPUQuota=%d%%", int(manifest.CPULimit*100)))
 	}
 
-	for _, p := range manifest.Ports {
-		if p.HostPort > 0 {
-			sdArgs = append(sdArgs, fmt.Sprintf("--property=SocketBindAllow=%d", p.HostPort))
-		}
-	}
-	if len(manifest.Ports) > 0 {
-		sdArgs = append(sdArgs, "--property=SocketBindDeny=any")
-	}
+	// Don't restrict socket binding — games may bind internal ports not
+	// declared in the game definition (e.g. Bedrock's LAN discovery on 19132).
+	// Restricting causes EPERM which some games don't handle gracefully.
 
 	sdArgs = append(sdArgs, "--")
 	sdArgs = append(sdArgs, innerArgs...)
