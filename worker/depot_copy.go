@@ -37,16 +37,8 @@ func CopyDepotToVolume(depotDir string, volumeMountpoint string) error {
 		return fmt.Errorf("copying depot to volume: %w", err)
 	}
 
-	// Ensure gameserver user (1001) can read/write.
-	// Skip when DisableChown is set (sandbox with user namespace) — the caller's
-	// UID maps to the target UID inside the namespace, so files should stay
-	// owned by the caller.
-	if !DisableChown {
-		filepath.Walk(serverDir, func(path string, info os.FileInfo, _ error) error {
-			os.Chown(path, 1001, 1001)
-			return nil
-		})
-	}
+	// Files stay owned by the caller (root). The runtime handles UID mapping:
+	// sandbox uses --uid 1001, Docker uses --user at launch time.
 
 	return nil
 }

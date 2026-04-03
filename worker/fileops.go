@@ -16,7 +16,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/warsmite/gamejanitor/model"
 )
 
 // VolumeResolver maps a volume name to its host filesystem path.
@@ -98,10 +97,6 @@ func OpenFileDirect(resolve VolumeResolver, ctx context.Context, volumeName stri
 }
 
 func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	mountpoint, err := resolve(ctx, volumeName)
-	if err != nil {
-		return err
-	}
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
@@ -110,22 +105,15 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
-	if err := chownToGameserver(parentDir, mountpoint); err != nil {
-		return fmt.Errorf("setting directory ownership: %w", err)
-	}
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
-	return chownBestEffort(hostPath)
+	return nil
 }
 
 // WriteFileStreamDirect streams from reader directly to the volume without buffering
 // the entire file in memory. Used for large file uploads.
 func WriteFileStreamDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
-	mountpoint, err := resolve(ctx, volumeName)
-	if err != nil {
-		return err
-	}
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
@@ -133,9 +121,6 @@ func WriteFileStreamDirect(resolve VolumeResolver, ctx context.Context, volumeNa
 	parentDir := filepath.Dir(hostPath)
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
-	}
-	if err := chownToGameserver(parentDir, mountpoint); err != nil {
-		return fmt.Errorf("setting directory ownership: %w", err)
 	}
 	f, err := os.OpenFile(hostPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 	if err != nil {
@@ -148,7 +133,7 @@ func WriteFileStreamDirect(resolve VolumeResolver, ctx context.Context, volumeNa
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("closing file: %w", err)
 	}
-	return chownBestEffort(hostPath)
+	return nil
 }
 
 func DeletePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) error {
@@ -167,12 +152,7 @@ func CreateDirectoryDirect(resolve VolumeResolver, ctx context.Context, volumeNa
 	if err := os.MkdirAll(hostPath, fs.ModePerm); err != nil {
 		return err
 	}
-	return filepath.WalkDir(hostPath, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		return chownBestEffort(p)
-	})
+	return nil
 }
 
 func RenamePathDirect(resolve VolumeResolver, ctx context.Context, volumeName string, from string, to string) error {
@@ -314,7 +294,6 @@ func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName
 		if err != nil {
 			return nil
 		}
-		chownBestEffort(path)
 		return nil
 	})
 
@@ -351,10 +330,6 @@ func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName st
 var downloadClient = &http.Client{}
 
 func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
-	mountpoint, err := resolve(ctx, volumeName)
-	if err != nil {
-		return err
-	}
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, destPath)
 	if err != nil {
 		return err
@@ -363,9 +338,6 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	parentDir := filepath.Dir(hostPath)
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
-	}
-	if err := chownToGameserver(parentDir, mountpoint); err != nil {
-		return fmt.Errorf("setting directory ownership: %w", err)
 	}
 
 	// Try up to 2 attempts — first failure on hash mismatch could be a transient
@@ -387,9 +359,6 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		slog.Warn("download hash mismatch after retry, keeping file", "path", destPath)
 	}
 
-	if err := chownBestEffort(hostPath); err != nil {
-		return fmt.Errorf("setting ownership on downloaded file %s: %w", destPath, err)
-	}
 	return nil
 }
 
@@ -482,56 +451,7 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 	return data, nil
 }
 
-// DisableChown skips file ownership changes for runtimes with user namespace
-// remapping (sandbox). In sandbox mode, bwrap --unshare-user maps the caller's
-// UID to the game user inside the namespace — files must stay owned by the
-// caller on the host. Chowning to UID 1001 on the host would make files
-// appear as "nobody" inside the namespace.
-var DisableChown bool
 
-// chownBestEffort chowns a path to the gameserver UID/GID.
-// No-op when DisableChown is set (sandbox runtime with user namespace).
-// Returns nil on permission errors.
-func chownBestEffort(path string) error {
-	if DisableChown {
-		return nil
-	}
-	if err := os.Chown(path, model.GameserverUID, model.GameserverGID); err != nil {
-		if os.IsPermission(err) {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
-// chownToGameserver chowns the given directory and all parent directories up to
-// the volume mountpoint. Best-effort — silently skips if not permitted.
-// No-op when DisableChown is set.
-func chownToGameserver(dir string, volumeRoot string) error {
-	if DisableChown {
-		return nil
-	}
-	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
-		info, err := os.Stat(p)
-		if err != nil {
-			return fmt.Errorf("stat %s: %w", p, err)
-		}
-		if info.IsDir() {
-			if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
-				// Skip chown failures
-				if os.IsPermission(err) {
-					return nil
-				}
-				return fmt.Errorf("chown %s: %w", p, err)
-			}
-		}
-		if p == volumeRoot {
-			break
-		}
-	}
-	return nil
-}
 
 func SortFileEntries(entries []FileEntry) {
 	sort.Slice(entries, func(i, j int) bool {

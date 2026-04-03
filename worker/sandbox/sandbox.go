@@ -107,7 +107,6 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 	// Sandbox uses --unshare-user which maps the caller's UID to the game
 	// user inside the namespace. Files must stay owned by the caller on the
 	// host — chowning to UID 1001 would make them inaccessible inside.
-	worker.DisableChown = true
 
 	w := &SandboxWorker{
 		log:       log,

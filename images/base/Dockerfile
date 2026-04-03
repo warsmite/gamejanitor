@@ -26,8 +26,6 @@ COPY run-server /usr/local/bin/run-server
 RUN chmod +x /usr/local/bin/run-server
 
 RUN useradd -m -s /bin/bash gameserver && \
-    mkdir -p /data /scripts /defaults /depot && \
-    chown gameserver:gameserver /data
+    mkdir -p /data /scripts /defaults /depot
 
 WORKDIR /data
-USER gameserver
