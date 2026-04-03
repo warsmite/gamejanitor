@@ -551,11 +551,20 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 
 	if count > maxAutoRestartAttempts {
 		m.log.Error("auto-restart limit reached, giving up", "gameserver", gs.ID, "attempts", maxAutoRestartAttempts)
+		gs.DesiredState = "stopped"
+		m.store.UpdateGameserver(gs)
 		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
 		return
 	}
 
 	m.log.Warn("auto-restarting crashed gameserver", "gameserver", gs.ID, "attempt", count, "max", maxAutoRestartAttempts)
+
+	// Clear error state so DeriveStatus doesn't block on the previous crash
+	m.workerStateMu.Lock()
+	delete(m.errorReasons, gs.ID)
+	delete(m.workerStates, gs.ID)
+	m.workerStateMu.Unlock()
+
 	go func() {
 		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
 			m.log.Error("auto-restart failed", "gameserver", gs.ID, "attempt", count, "error", err)
