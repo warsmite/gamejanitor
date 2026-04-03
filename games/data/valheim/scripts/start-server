@@ -24,7 +24,7 @@ echo "[start-server] config: name=${SERVER_NAME} world=${WORLD_NAME} port=${GAME
 
 # Valheim stores worlds under ~/.config/unity3d/IronGate/Valheim/worlds_local
 # Symlink to /data/worlds so saves persist on the Docker volume
-SAVE_DIR="/home/gameserver/.config/unity3d/IronGate/Valheim/worlds_local"
+SAVE_DIR="${HOME}/.config/unity3d/IronGate/Valheim/worlds_local"
 mkdir -p /data/worlds
 mkdir -p "$(dirname "$SAVE_DIR")"
 ln -sfn /data/worlds "$SAVE_DIR"

@@ -48,6 +48,10 @@ fi
 
 echo "[start-server] launching Project Zomboid dedicated server (java: $JAVA)"
 
+# JVM heap at 85% of container limit — leaves room for native memory (metaspace, threads, GC)
+HEAP=$((${MEMORY_LIMIT_MB:-4096} * 85 / 100))
+echo "[start-server] JVM heap: ${HEAP}m (from ${MEMORY_LIMIT_MB:-4096}m limit)"
+
 # Launch PZ directly, bypassing start-server.sh which requires the `file` command
 # for Java detection. This mirrors what start-server.sh does internally.
 export LD_LIBRARY_PATH="/data/server/linux64:/data/server/natives:${LD_LIBRARY_PATH}"
@@ -59,8 +63,8 @@ exec "$JAVA" \
     -XX:+UseZGC \
     -XX:-CreateCoredumpOnCrash \
     -XX:-OmitStackTraceInFastThrow \
-    -Xms2048m \
-    -Xmx2048m \
+    -Xms${HEAP}m \
+    -Xmx${HEAP}m \
     -cp java/:java/*:pzexe.jar \
     -Djava.library.path=natives/linux64:natives/:linux64/ \
     zombie.network.GameServer \

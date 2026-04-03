@@ -23,7 +23,7 @@ echo "[start-server] config: game_port=${GAME_PORT} reliable_port=${RELIABLE_POR
 
 # Satisfactory stores saves/config in ~/.config/Epic/FactoryGame/Saved/
 # Symlink to /data/saves so everything persists on the Docker volume
-SAVE_DIR="/home/gameserver/.config/Epic/FactoryGame/Saved"
+SAVE_DIR="${HOME}/.config/Epic/FactoryGame/Saved"
 mkdir -p /data/saves
 mkdir -p "$(dirname "$SAVE_DIR")"
 if [ -d "$SAVE_DIR" ] && [ ! -L "$SAVE_DIR" ]; then
