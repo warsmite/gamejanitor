@@ -93,6 +93,22 @@ func (s *GameserverService) runOperation(ctx context.Context, gsID, workerID, op
 }
 
 func (s *GameserverService) Start(ctx context.Context, id string) error {
+	// User-initiated start: reset crash counter and clear error state
+	if s.statusProvider != nil {
+		s.statusProvider.ClearError(id)
+		s.statusProvider.ResetCrashCount(id)
+	}
+	return s.startInternal(ctx, id)
+}
+
+// RestartAfterCrash is called by the auto-restart system. Unlike Start(),
+// it does NOT reset the crash counter — the counter must accumulate across
+// retries so the 3-attempt limit works.
+func (s *GameserverService) RestartAfterCrash(ctx context.Context, id string) error {
+	return s.startInternal(ctx, id)
+}
+
+func (s *GameserverService) startInternal(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -148,13 +164,6 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 				return controller.ErrUnavailablef("worker unavailable after migration for gameserver %s", id)
 			}
 		}
-	}
-
-	// Clear stale error state from a prior crash so DeriveStatus doesn't return
-	// "error" during the new start sequence (error reasons are checked before
-	// worker state, so a leftover reason blocks all other status derivation).
-	if s.statusProvider != nil {
-		s.statusProvider.ClearError(id)
 	}
 
 	// Set desired state immediately so DeriveStatus reflects intent

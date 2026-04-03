@@ -117,7 +117,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, gameserverSvc.Start, logger)
+	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, gameserverSvc.RestartAfterCrash, logger)
 	gameserverSvc.SetStatusProvider(statusMgr)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)

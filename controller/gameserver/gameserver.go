@@ -51,6 +51,7 @@ type StatusProvider interface {
 	SetRunning(gameserverID string)
 	SetStopped(gameserverID string)
 	ClearError(gameserverID string)
+	ResetCrashCount(gameserverID string)
 }
 
 // BackupStore abstracts backup file storage (local disk or S3).

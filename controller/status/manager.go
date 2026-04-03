@@ -276,13 +276,10 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		m.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gsID, Timestamp: time.Now()})
 		m.startPolling(gsID)
 
-		// Clear error state and crash counter on successful start
+		// Clear error state on successful start
 		m.workerStateMu.Lock()
 		delete(m.errorReasons, gsID)
 		m.workerStateMu.Unlock()
-		m.crashMu.Lock()
-		delete(m.crashCounts, gsID)
-		m.crashMu.Unlock()
 
 		// Persist install flag
 		if update.Installed && !gs.Installed {
@@ -426,6 +423,14 @@ func (m *StatusManager) ClearError(gameserverID string) {
 	delete(m.errorReasons, gameserverID)
 	delete(m.workerStates, gameserverID)
 	m.workerStateMu.Unlock()
+}
+
+// ResetCrashCount clears the auto-restart crash counter for a gameserver.
+// Called on user-initiated Start so they get a fresh retry budget.
+func (m *StatusManager) ResetCrashCount(gameserverID string) {
+	m.crashMu.Lock()
+	delete(m.crashCounts, gameserverID)
+	m.crashMu.Unlock()
 }
 
 // SetStopped clears the worker state cache so DeriveStatus doesn't show stale "running".
