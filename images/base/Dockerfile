@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
-    apt-get install -y --no-install-recommends curl wget bash procps jq ca-certificates unzip lib32gcc-s1 lib32stdc++6 && \
+    apt-get install -y --no-install-recommends curl wget bash procps jq ca-certificates unzip lib32gcc-s1 lib32stdc++6 strace && \
     rm -rf /var/lib/apt/lists/*
 
 # rcon-cli for RCON command support (used by any game with RCON)
