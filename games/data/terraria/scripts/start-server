@@ -51,4 +51,10 @@ fi
 export DOTNET_BUNDLE_EXTRACT_BASE_DIR="${DOTNET_BUNDLE_EXTRACT_BASE_DIR:-/tmp/.dotnet}"
 
 echo "[start-server] starting TShock server"
-exec /data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO")
+/data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO") &
+SERVER_PID=$!
+trap "kill $SERVER_PID 2>/dev/null" TERM INT
+wait $SERVER_PID
+EXIT_CODE=$?
+kill 0 2>/dev/null
+exit $EXIT_CODE
