@@ -78,6 +78,9 @@ func buildBwrapArgs(rootFS string, manifest instanceManifest, imgCfg *imageConfi
 		args = append(args, "--chdir", "/data")
 	}
 
+	// HOME must always be set — many programs (Steam SDK, .NET, etc.) expect it
+	args = append(args, "--setenv", "HOME", "/home/gameserver")
+
 	// Environment variables from image config
 	for _, e := range imgCfg.Env {
 		args = append(args, "--setenv", envKey(e), envVal(e))
