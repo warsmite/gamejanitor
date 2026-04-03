@@ -7,6 +7,9 @@ ports:
   - name: game
     port: 19132
     protocol: udp
+  - name: gamev6
+    port: 19133
+    protocol: udp
 
 query:
   protocol: raknet
@@ -51,6 +54,9 @@ instance:
       type: number
     - key: SERVER_PORT
       default: "19132"
+      system: true
+    - key: SERVER_PORTV6
+      default: "19133"
       system: true
     - key: SAVE_TIMEOUT_SECONDS
       default: "5"
