@@ -10,5 +10,8 @@ PID=$!
 trap "kill $PID 2>/dev/null" TERM INT
 wait $PID
 EXIT=$?
+# Kill all children without killing ourselves — disable trap first
+# so the SIGTERM from kill doesn't re-enter the handler
+trap - TERM INT
 kill 0 2>/dev/null
 exit $EXIT
