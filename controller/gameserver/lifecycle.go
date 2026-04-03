@@ -94,9 +94,7 @@ func (s *GameserverService) runOperation(ctx context.Context, gsID, workerID, op
 }
 
 func (s *GameserverService) Start(ctx context.Context, id string) error {
-	// User-initiated start: reset crash counter and clear error state
 	if s.statusProvider != nil {
-		s.statusProvider.ClearError(id)
 		s.statusProvider.ResetCrashCount(id)
 	}
 	return s.startInternal(ctx, id)
@@ -122,6 +120,13 @@ func (s *GameserverService) startInternal(ctx context.Context, id string) error 
 	case controller.StatusInstalling, controller.StatusStarting, controller.StatusRunning:
 		s.log.Info("gameserver already active, skipping start", "gameserver", id, "status", gs.Status)
 		return nil
+	}
+
+	// Clear stale error/worker state only when we're actually going to start.
+	// Must be after the guard — ClearError wipes the worker state cache, and
+	// calling it on an already-running server would lose the "running" state.
+	if s.statusProvider != nil {
+		s.statusProvider.ClearError(id)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
