@@ -33,6 +33,8 @@ type SandboxWorker struct {
 	mu        sync.Mutex
 	instances map[string]*managedInstance
 
+	pullMu sync.Mutex // serializes image pulls to prevent index corruption
+
 	tracker *worker.InstanceTracker
 }
 
@@ -146,6 +148,8 @@ func (w *SandboxWorker) instanceDir(id string) string {
 // --- Worker interface: Instance lifecycle ---
 
 func (w *SandboxWorker) PullImage(ctx context.Context, image string) error {
+	w.pullMu.Lock()
+	defer w.pullMu.Unlock()
 	_, err := pullAndExtractOCIImage(ctx, image, w.imagesDir(), w.log)
 	return err
 }
