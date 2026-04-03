@@ -3,6 +3,7 @@ package gameserver
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -377,6 +378,25 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 		}
 
 		exitCode, installErr := s.waitForInstanceExit(ctx, w, installID)
+
+		// Copy install output to the volume's console log so the user can see
+		// it in the console tab — the install instance is about to be removed.
+		if logReader, logErr := w.InstanceLogs(ctx, installID, 0, false); logErr == nil {
+			logData, _ := io.ReadAll(logReader)
+			logReader.Close()
+			if len(logData) > 0 {
+				logPath := ".gamejanitor/logs/console.log"
+				w.WriteFile(ctx, gs.VolumeName, logPath, logData, 0644)
+			}
+			if exitCode != 0 || installErr != nil {
+				out := string(logData)
+				if len(out) > 500 {
+					out = out[len(out)-500:]
+				}
+				s.log.Error("install phase failed", "gameserver", id, "exit_code", exitCode, "output", out)
+			}
+		}
+
 		w.RemoveInstance(ctx, installID)
 
 		if installErr != nil {
