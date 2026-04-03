@@ -88,6 +88,9 @@
                           echo "Fast mode — skipping UI build"
                         fi
 
+                        echo "Syncing vendor..."
+                        go mod vendor
+
                         echo "Building binary..."
                         CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
                         echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
