@@ -435,7 +435,7 @@
             fi
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
-            echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-terraria})..."
+            echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-minecraft-java})..."
             exec go test -tags smoke -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
           '';
 

@@ -135,7 +135,9 @@ func warmImage(t *testing.T) {
 		t.Logf("warmImage: create failed: %v", err)
 		return
 	}
-	var gs struct{ ID string `json:"id"` }
+	var gs struct {
+		ID string `json:"id"`
+	}
 	if err := DecodeData(resp, &gs); err != nil {
 		t.Logf("warmImage: decode failed: %v", err)
 		return
@@ -176,8 +178,6 @@ func (h *Harness) GameEnv() map[string]string {
 	switch h.GameID() {
 	case "minecraft-java":
 		return map[string]string{"EULA": "true", "MINECRAFT_VERSION": "1.21.4"}
-	case "minecraft-bedrock":
-		return map[string]string{}
 	default:
 		return map[string]string{"REQUIRED_VAR": "yes"}
 	}
@@ -330,7 +330,9 @@ func (h *Harness) ListFiles(t *testing.T, gsID string, path string) []string {
 	if err != nil {
 		return nil
 	}
-	var files []struct{ Name string `json:"name"` }
+	var files []struct {
+		Name string `json:"name"`
+	}
 	if err := DecodeData(resp, &files); err != nil {
 		return nil
 	}

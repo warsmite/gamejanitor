@@ -16,7 +16,7 @@ import (
 )
 
 // TestSmoke runs a full lifecycle against a real game.
-// Parameterized by SMOKE_GAME (default: terraria) or SMOKE_GAMES (comma-separated).
+// Parameterized by SMOKE_GAME (default: minecraft-java) or SMOKE_GAMES (comma-separated).
 func TestSmoke(t *testing.T) {
 	gameIDs := smokeGames(t)
 
@@ -49,7 +49,7 @@ func smokeGames(t *testing.T) []string {
 		return []string{v}
 	}
 
-	return []string{"terraria"}
+	return []string{"minecraft-java"}
 }
 
 func runSmokeTest(t *testing.T, gameID string) {
