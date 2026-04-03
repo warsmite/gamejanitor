@@ -295,9 +295,10 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		// If previous state was running/starting, this is an unexpected death
 		wasRunning := prev != nil && (prev.State == worker.StateRunning || prev.State == worker.StateStarting)
 		if wasRunning {
-			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode)
+			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), m.statsPoller.GetCachedStats(gsID))
+			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode, "reason", reason)
 			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
-			m.handleUnexpectedDeath(gs)
+			m.handleUnexpectedDeath(gs, reason)
 		} else {
 			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
 		}
@@ -543,9 +544,9 @@ const maxAutoRestartAttempts = 3
 
 // handleUnexpectedDeath handles an unexpected instance death. If auto-restart
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
-func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
+func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason string) {
 	if gs.AutoRestart == nil || !*gs.AutoRestart || m.restartFunc == nil {
-		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: reason, Timestamp: time.Now()})
 		return
 	}
 
@@ -555,10 +556,10 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	m.crashMu.Unlock()
 
 	if count > maxAutoRestartAttempts {
-		m.log.Error("auto-restart limit reached, giving up", "gameserver", gs.ID, "attempts", maxAutoRestartAttempts)
+		m.log.Error("auto-restart limit reached, giving up", "gameserver", gs.ID, "attempts", maxAutoRestartAttempts, "reason", reason)
 		gs.DesiredState = "stopped"
 		m.store.UpdateGameserver(gs)
-		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", maxAutoRestartAttempts, reason), Timestamp: time.Now()})
 		return
 	}
 
@@ -576,6 +577,40 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 			m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
 		}
 	}()
+}
+
+// describeExit produces a human-readable crash reason from the exit code,
+// uptime, and last-known resource usage.
+func describeExit(exitCode int, uptime time.Duration, lastStats *controller.GameserverStatsEvent) string {
+	uptimeStr := uptime.Round(time.Second).String()
+
+	var reason string
+	switch exitCode {
+	case 137:
+		reason = "Killed by system (out of memory)"
+		if lastStats != nil && lastStats.MemoryLimitMB > 0 {
+			pct := float64(lastStats.MemoryUsageMB) / float64(lastStats.MemoryLimitMB) * 100
+			reason = fmt.Sprintf("Killed by system (out of memory — was using %d/%d MB, %.0f%%). Increase memory limit.", lastStats.MemoryUsageMB, lastStats.MemoryLimitMB, pct)
+		}
+	case 139:
+		reason = "Crashed (segmentation fault)"
+	case 143:
+		reason = "Terminated by signal"
+	case -1:
+		reason = "Killed by signal"
+	case 1:
+		reason = "Server exited with error (exit code 1). Check console for details."
+	case 2:
+		reason = "Server exited (interrupted)"
+	default:
+		if exitCode > 128 {
+			reason = fmt.Sprintf("Killed by signal %d", exitCode-128)
+		} else {
+			reason = fmt.Sprintf("Server exited with code %d. Check console for details.", exitCode)
+		}
+	}
+
+	return fmt.Sprintf("%s (after %s)", reason, uptimeStr)
 }
 
 func truncID(id string) string {
