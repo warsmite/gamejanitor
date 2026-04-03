@@ -1,0 +1,14 @@
+#!/bin/bash
+# Wraps a game server binary with process group cleanup.
+# Usage: run-server ./binary [args...]
+#
+# Ensures that when the game process exits (crash or clean shutdown),
+# all background processes (tail -f, tee, etc.) are killed so the
+# container exits cleanly and crash detection works.
+"$@" &
+PID=$!
+trap "kill $PID 2>/dev/null" TERM INT
+wait $PID
+EXIT=$?
+kill 0 2>/dev/null
+exit $EXIT

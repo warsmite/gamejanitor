@@ -55,7 +55,7 @@ fi
 # Tail console.log to stdout in background so Docker captures it
 (while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done; tail -f -n +1 "$CONSOLE_LOG") &
 
-./srcds_linux -game garrysmod \
+exec run-server ./srcds_linux -game garrysmod \
     -ip 0.0.0.0 \
     -port "$GAME_PORT" \
     -norestart \
@@ -65,10 +65,4 @@ fi
     +gamemode "$GAMEMODE" \
     +map "$MAP" \
     +rcon_password "$RCON_PASSWORD" \
-    $WORKSHOP_ARG &
-SERVER_PID=$!
-trap "kill $SERVER_PID 2>/dev/null" TERM INT
-wait $SERVER_PID
-EXIT_CODE=$?
-kill 0 2>/dev/null
-exit $EXIT_CODE
+    $WORKSHOP_ARG

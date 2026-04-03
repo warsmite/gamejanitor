@@ -22,6 +22,9 @@ RUN mkdir -p /usr/lib/steam/sdk32 /usr/lib/steam/sdk64 /tmp/steamcmd && \
     rm -rf /tmp/steamcmd /root/.local/share/Steam /root/.steam && \
     ldconfig
 
+COPY run-server /usr/local/bin/run-server
+RUN chmod +x /usr/local/bin/run-server
+
 RUN useradd -m -s /bin/bash gameserver && \
     mkdir -p /data /scripts && \
     chown gameserver:gameserver /data

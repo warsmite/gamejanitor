@@ -121,10 +121,4 @@ case "$MODLOADER" in
 esac
 
 echo "[start-server] starting Minecraft server (modloader=$MODLOADER, jar=$SERVER_JAR)"
-"$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m "${AIKAR_FLAGS[@]}" -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO") &
-SERVER_PID=$!
-trap "kill $SERVER_PID 2>/dev/null" TERM INT
-wait $SERVER_PID
-EXIT_CODE=$?
-kill 0 2>/dev/null
-exit $EXIT_CODE
+exec run-server "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m "${AIKAR_FLAGS[@]}" -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")

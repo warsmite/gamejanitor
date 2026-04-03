@@ -39,11 +39,4 @@ export LD_LIBRARY_PATH=/data/server
 cd /data/server
 
 echo "[start-server] starting Bedrock server"
-./bedrock_server < <(tail -f "$FIFO") &
-SERVER_PID=$!
-trap "kill $SERVER_PID 2>/dev/null" TERM INT
-wait $SERVER_PID
-EXIT_CODE=$?
-# Kill lingering background processes (tail -f) so the container exits cleanly
-kill 0 2>/dev/null
-exit $EXIT_CODE
+exec run-server ./bedrock_server < <(tail -f "$FIFO")
