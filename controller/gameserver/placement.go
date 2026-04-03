@@ -23,15 +23,38 @@ type PlacementService struct {
 	log         *slog.Logger
 	mu          sync.Mutex     // serializes port allocation + node assignment
 	portProbe   func(int) bool // nil uses default net.Listen probe
+
+	// pendingPorts tracks ports that have been allocated but not yet persisted
+	// to the database. Prevents TOCTOU races where concurrent creates both
+	// query the DB, see the same ports as free, and allocate duplicates.
+	// Key: gameserver ID, Value: list of allocated host ports.
+	pendingPorts map[string][]int
 }
 
 func NewPlacementService(store Store, dispatcher *orchestrator.Dispatcher, settingsSvc *settings.SettingsService, log *slog.Logger) *PlacementService {
 	return &PlacementService{
-		store:       store,
-		dispatcher:  dispatcher,
-		settingsSvc: settingsSvc,
-		log:         log,
+		store:        store,
+		dispatcher:   dispatcher,
+		settingsSvc:  settingsSvc,
+		log:          log,
+		pendingPorts: make(map[string][]int),
 	}
+}
+
+// CommitPorts removes a gameserver's ports from the pending set.
+// Call after the gameserver has been persisted to the database.
+func (p *PlacementService) CommitPorts(gameserverID string) {
+	p.mu.Lock()
+	delete(p.pendingPorts, gameserverID)
+	p.mu.Unlock()
+}
+
+// ReleasePorts removes a gameserver's ports from the pending set without persisting.
+// Call when gameserver creation fails and the allocated ports should be freed.
+func (p *PlacementService) ReleasePorts(gameserverID string) {
+	p.mu.Lock()
+	delete(p.pendingPorts, gameserverID)
+	p.mu.Unlock()
 }
 
 // SetPortProbe overrides the host port availability check. Used in tests
@@ -52,7 +75,7 @@ func (p *PlacementService) PlaceGameserver(game *games.Game, gs *model.Gameserve
 			return "", nil, err
 		}
 		if gs.PortMode == "auto" {
-			ports, err = p.AllocatePorts(game, nodeID, "")
+			ports, err = p.AllocatePorts(game, nodeID, "", gs.ID)
 			if err != nil {
 				return "", nil, controller.ErrUnavailablef("no available ports for this gameserver")
 			}
@@ -79,7 +102,7 @@ func (p *PlacementService) PlaceGameserver(game *games.Game, gs *model.Gameserve
 			}
 		}
 		if gs.PortMode == "auto" {
-			allocatedPorts, err := p.AllocatePorts(game, c.NodeID, "")
+			allocatedPorts, err := p.AllocatePorts(game, c.NodeID, "", gs.ID)
 			if err != nil {
 				p.log.Debug("worker skipped during placement", "worker", c.NodeID, "reason", err)
 				lastErr = err
@@ -95,10 +118,11 @@ func (p *PlacementService) PlaceGameserver(game *games.Game, gs *model.Gameserve
 
 // ReallocatePorts allocates new ports for a gameserver on a specific node.
 // Used during migration and unarchive when moving to a different node.
+// No pending tracking needed — the gameserver already exists in the DB.
 func (p *PlacementService) ReallocatePorts(game *games.Game, nodeID string, excludeID string) (model.Ports, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.AllocatePorts(game, nodeID, excludeID)
+	return p.AllocatePorts(game, nodeID, excludeID, "")
 }
 
 // FindNodeWithCapacity finds a node that can fit the given resources.
@@ -141,6 +165,18 @@ func (p *PlacementService) UsedHostPorts(nodeID string, excludeID string) (map[i
 			}
 		}
 	}
+
+	// Include ports that have been allocated but not yet persisted to the DB.
+	// Without this, concurrent creates can allocate the same ports.
+	for id, ports := range p.pendingPorts {
+		if id == excludeID {
+			continue
+		}
+		for _, port := range ports {
+			used[port] = true
+		}
+	}
+
 	return used, nil
 }
 
@@ -242,7 +278,9 @@ func (p *PlacementService) CheckWorkerLimitsExcluding(nodeID string, memoryNeede
 }
 
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
-func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, excludeID string) (model.Ports, error) {
+// gameserverID is used to track the allocation in pendingPorts until CommitPorts/ReleasePorts is called.
+// Pass empty string if pending tracking is not needed (e.g. reallocation for existing gameservers).
+func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, excludeID string, gameserverID string) (model.Ports, error) {
 	gamePorts := game.DefaultPorts
 	if len(gamePorts) == 0 {
 		return model.Ports{}, nil
@@ -311,6 +349,15 @@ func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, exclud
 			InstancePort: model.FlexInt(allocatedPort),
 			Protocol:     gp.Protocol,
 		}
+	}
+
+	// Track as pending so concurrent allocations see these ports as used.
+	if gameserverID != "" {
+		allocated := make([]int, len(result))
+		for i, pm := range result {
+			allocated[i] = int(pm.HostPort)
+		}
+		p.pendingPorts[gameserverID] = allocated
 	}
 
 	p.log.Info("auto-allocated ports", "game", game.ID, "base", base, "block_size", blockSize)

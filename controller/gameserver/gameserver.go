@@ -296,11 +296,19 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		return "", err
 	}
 
-	// Select node and allocate ports via placement service (serialized to prevent races)
+	// Select node and allocate ports via placement service (serialized to prevent races).
+	// Ports are tracked as "pending" until CommitPorts so concurrent creates don't
+	// allocate the same ports.
 	nodeID, ports, err := s.placement.PlaceGameserver(game, gs)
 	if err != nil {
 		return "", err
 	}
+	portsCommitted := false
+	defer func() {
+		if !portsCommitted {
+			s.placement.ReleasePorts(gs.ID)
+		}
+	}()
 	if ports != nil {
 		gs.Ports = ports
 	}
@@ -358,6 +366,8 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		}
 		return "", err
 	}
+	portsCommitted = true
+	s.placement.CommitPorts(gs.ID)
 
 	actor := controller.ActorFromContext(ctx)
 	actorJSON, _ := json.Marshal(actor)
