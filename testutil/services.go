@@ -63,7 +63,6 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	cfg.DataDir = dataDir
 
 	svcs, err := cli.InitServices(db, dispatcher, registry, gameStore, cfg, log, &cli.InitServicesOpts{
-		PortProbe:       func(int) bool { return true },
 		BackupStorage:   backup.NewLocalStorage(dataDir),
 		SkipConfigApply: true,
 	})

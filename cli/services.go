@@ -49,9 +49,7 @@ type Services struct {
 
 // InitServicesOpts configures optional overrides for service initialization.
 type InitServicesOpts struct {
-	// PortProbe overrides the port availability check. Tests set this to always return true.
-	PortProbe func(int) bool
-	// BackupStorage overrides the backup storage backend. Nil uses config-based detection.
+// BackupStorage overrides the backup storage backend. Nil uses config-based detection.
 	BackupStorage backup.Storage
 	// SkipConfigApply skips applying config file settings to DB. Used in tests.
 	SkipConfigApply bool
@@ -94,10 +92,6 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	operationTracker := gameserver.NewOperationTracker(broadcaster, logger)
 	gameserverSvc.SetOperationTracker(operationTracker)
 
-	// Port probe override (tests skip host port checking)
-	if opts.PortProbe != nil {
-		gameserverSvc.SetPortProbe(opts.PortProbe)
-	}
 
 	// Backup storage
 	var backupStorage backup.Storage

@@ -198,12 +198,6 @@ func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broa
 	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placement}
 }
 
-// SetPortProbe overrides the host port availability check. Used in tests
-// where net.Listen probes would interfere with port allocation.
-func (s *GameserverService) SetPortProbe(fn func(int) bool) {
-	s.placement.SetPortProbe(fn)
-}
-
 // Called after both services are created to break the circular dependency.
 func (s *GameserverService) SetStatusProvider(sp StatusProvider) {
 	s.statusProvider = sp

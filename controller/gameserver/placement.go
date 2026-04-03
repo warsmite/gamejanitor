@@ -22,7 +22,6 @@ type PlacementService struct {
 	settingsSvc *settings.SettingsService
 	log         *slog.Logger
 	mu          sync.Mutex     // serializes port allocation + node assignment
-	portProbe   func(int) bool // nil uses default net.Listen probe
 
 	// pendingPorts tracks ports that have been allocated but not yet persisted
 	// to the database. Prevents TOCTOU races where concurrent creates both
@@ -57,11 +56,6 @@ func (p *PlacementService) ReleasePorts(gameserverID string) {
 	p.mu.Unlock()
 }
 
-// SetPortProbe overrides the host port availability check. Used in tests
-// where net.Listen probes would interfere with port allocation.
-func (p *PlacementService) SetPortProbe(fn func(int) bool) {
-	p.portProbe = fn
-}
 
 // PlaceGameserver selects a node and allocates ports for a new or relocated gameserver.
 // Acquires the placement lock to prevent concurrent port allocation races.
@@ -312,18 +306,14 @@ func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, exclud
 	}
 
 	// Find first contiguous block of blockSize free ports.
-	// Checks both DB (gamejanitor-managed) and host (net.Listen probe) to avoid
-	// conflicts with other Docker instances or services on the host.
-	probe := isPortAvailable
-	if p.portProbe != nil {
-		probe = p.portProbe
-	}
+	// Port availability is determined by the DB (gamejanitor-managed allocations)
+	// plus any pending in-flight allocations.
 	base := -1
 	for candidate := rangeStart; candidate+blockSize-1 <= rangeEnd; candidate++ {
 		free := true
 		for offset := 0; offset < blockSize; offset++ {
 			port := candidate + offset
-			if used[port] || !probe(port) {
+			if used[port] {
 				free = false
 				candidate = candidate + offset // skip ahead
 				break
