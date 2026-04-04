@@ -49,6 +49,7 @@ type Gameserver struct {
 	DesiredState       string          `json:"desired_state"`  // stopped, running, archived
 	OperationType      *string         `json:"operation_type"`   // current running operation (start, stop, backup, etc.), nil when idle
 	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
+	CreatedByTokenID   *string         `json:"created_by_token_id,omitempty"`
 	RestartRequired    bool            `json:"restart_required"` // derived, not stored
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`

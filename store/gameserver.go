@@ -17,12 +17,12 @@ func NewGameserverStore(db *sql.DB) *GameserverStore {
 	return &GameserverStore{db: db}
 }
 
-const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, instance_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, desired_state, operation, operation_id, created_at, updated_at"
+const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, instance_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, desired_state, operation, operation_id, created_by_token_id, created_at, updated_at"
 
 func scanGameserver(scan func(dest ...any) error) (model.Gameserver, error) {
 	var gs model.Gameserver
 	var appliedConfig model.AppliedConfig
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.InstanceID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.DesiredState, &gs.OperationType, &gs.OperationID, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.InstanceID, &gs.VolumeName, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.ConnectionAddress, &appliedConfig, &gs.DesiredState, &gs.OperationType, &gs.OperationID, &gs.CreatedByTokenID, &gs.CreatedAt, &gs.UpdatedAt)
 	if appliedConfig.Env != nil {
 		gs.AppliedConfig = &appliedConfig
 	}
@@ -97,8 +97,8 @@ func (s *GameserverStore) CreateGameserver(gs *model.Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := s.db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, instance_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, desired_state, operation, operation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.InstanceID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.DesiredState, gs.OperationType, gs.OperationID, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, instance_id, volume_name, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, connection_address, applied_config, desired_state, operation, operation_id, created_by_token_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.CPUEnforced, gs.InstanceID, gs.VolumeName, gs.PortMode, gs.NodeID, gs.SFTPUsername, gs.HashedSFTPPassword, gs.Installed, gs.BackupLimit, gs.StorageLimitMB, gs.NodeTags, gs.AutoRestart, gs.ConnectionAddress, gs.AppliedConfig, gs.DesiredState, gs.OperationType, gs.OperationID, gs.CreatedByTokenID, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -275,4 +275,61 @@ func (s *GameserverStore) PopulateNodes(gameservers []model.Gameserver) {
 		seen[nid] = n
 		gs.Node = n
 	}
+}
+
+// --- Token ownership / quota queries ---
+
+// CountGameserversByToken returns the number of gameservers owned by a token.
+func (s *GameserverStore) CountGameserversByToken(tokenID string) (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM gameservers WHERE created_by_token_id = ?", tokenID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting gameservers for token %s: %w", tokenID, err)
+	}
+	return count, nil
+}
+
+// SumResourcesByToken returns total memory, CPU, and storage allocated to gameservers owned by a token.
+func (s *GameserverStore) SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error) {
+	err = s.db.QueryRow(
+		"SELECT COALESCE(SUM(memory_limit_mb), 0), COALESCE(SUM(cpu_limit), 0), COALESCE(SUM(COALESCE(storage_limit_mb, 0)), 0) FROM gameservers WHERE created_by_token_id = ?",
+		tokenID,
+	).Scan(&memoryMB, &cpu, &storageMB)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("summing resources for token %s: %w", tokenID, err)
+	}
+	return
+}
+
+// ListGameserverIDsByToken returns IDs of gameservers owned by a token.
+func (s *GameserverStore) ListGameserverIDsByToken(tokenID string) ([]string, error) {
+	rows, err := s.db.Query("SELECT id FROM gameservers WHERE created_by_token_id = ?", tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("listing gameserver IDs for token %s: %w", tokenID, err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scanning gameserver ID: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// GetGameserverOwner returns the created_by_token_id for a gameserver.
+// Returns nil if the gameserver doesn't exist or has no owner.
+func (s *GameserverStore) GetGameserverOwner(gameserverID string) (*string, error) {
+	var owner *string
+	err := s.db.QueryRow("SELECT created_by_token_id FROM gameservers WHERE id = ?", gameserverID).Scan(&owner)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting owner for gameserver %s: %w", gameserverID, err)
+	}
+	return owner, nil
 }

@@ -33,7 +33,7 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	if raw, ok := req[settings.SettingAuthEnabled]; ok {
 		var enabling bool
 		if err := json.Unmarshal(raw, &enabling); err == nil && enabling {
-			tokens, _ := h.authSvc.ListTokensByScope("admin")
+			tokens, _ := h.authSvc.ListTokensByRole("admin")
 			if len(tokens) == 0 {
 				respondError(w, http.StatusBadRequest, "cannot enable auth: no admin tokens exist. Create one first with: gamejanitor tokens offline create --name admin --type admin")
 				return

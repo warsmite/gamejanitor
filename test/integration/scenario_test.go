@@ -170,10 +170,10 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a token scoped to gs1 with start/stop only
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("mc-operator",
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("mc-operator",
 		[]string{gs1.ID},
 		[]string{auth.PermGameserverStart, auth.PermGameserverStop},
-		nil)
+		nil, nil)
 	require.NoError(t, err)
 
 	token := svc.AuthSvc.ValidateToken(rawToken)

@@ -8,7 +8,7 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-const tokenColumns = "id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, claim_code, created_at, last_used_at, expires_at"
+const tokenColumns = "id, name, hashed_token, token_prefix, role, gameserver_ids, permissions, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, last_used_at, expires_at"
 
 type TokenStore struct {
 	db *sql.DB
@@ -20,7 +20,7 @@ func NewTokenStore(db *sql.DB) *TokenStore {
 
 func scanToken(scan func(dest ...any) error) (model.Token, error) {
 	var t model.Token
-	err := scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.ClaimCode, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	err := scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Role, &t.GameserverIDs, &t.Permissions, &t.MaxGameservers, &t.MaxMemoryMB, &t.MaxCPU, &t.MaxStorageMB, &t.ClaimCode, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
 	return t, err
 }
 
@@ -28,8 +28,8 @@ func (s *TokenStore) ListTokens() ([]model.Token, error) {
 	return s.listTokens("SELECT "+tokenColumns+" FROM tokens ORDER BY created_at DESC")
 }
 
-func (s *TokenStore) ListTokensByScope(scope string) ([]model.Token, error) {
-	return s.listTokens("SELECT "+tokenColumns+" FROM tokens WHERE scope = ? ORDER BY created_at DESC", scope)
+func (s *TokenStore) ListTokensByRole(role string) ([]model.Token, error) {
+	return s.listTokens("SELECT "+tokenColumns+" FROM tokens WHERE role = ? ORDER BY created_at DESC", role)
 }
 
 func (s *TokenStore) listTokens(query string, args ...any) ([]model.Token, error) {
@@ -77,8 +77,8 @@ func (s *TokenStore) GetTokenByPrefix(prefix string) (*model.Token, error) {
 func (s *TokenStore) CreateToken(t *model.Token) error {
 	t.CreatedAt = time.Now()
 	_, err := s.db.Exec(
-		"INSERT INTO tokens (id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, claim_code, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Scope, t.GameserverIDs, t.Permissions, t.ClaimCode, t.CreatedAt, t.ExpiresAt,
+		"INSERT INTO tokens (id, name, hashed_token, token_prefix, role, gameserver_ids, permissions, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Role, t.GameserverIDs, t.Permissions, t.MaxGameservers, t.MaxMemoryMB, t.MaxCPU, t.MaxStorageMB, t.ClaimCode, t.CreatedAt, t.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating token %s: %w", t.ID, err)
@@ -110,39 +110,39 @@ func (s *TokenStore) DeleteToken(id string) error {
 	return nil
 }
 
-// GetTokenByNameAndScope finds a token by its (name, scope) pair.
+// GetTokenByNameAndRole finds a token by its (name, role) pair.
 // Returns nil if no matching token exists.
-func (s *TokenStore) GetTokenByNameAndScope(name string, scope string) (*model.Token, error) {
+func (s *TokenStore) GetTokenByNameAndRole(name string, role string) (*model.Token, error) {
 	t, err := scanToken(s.db.QueryRow(
-		"SELECT "+tokenColumns+" FROM tokens WHERE name = ? AND scope = ?",
-		name, scope,
+		"SELECT "+tokenColumns+" FROM tokens WHERE name = ? AND role = ?",
+		name, role,
 	).Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("getting token by name=%s scope=%s: %w", name, scope, err)
+		return nil, fmt.Errorf("getting token by name=%s role=%s: %w", name, role, err)
 	}
 	return &t, nil
 }
 
-// DeleteTokenByNameAndScope removes a token by its (name, scope) pair.
+// DeleteTokenByNameAndRole removes a token by its (name, role) pair.
 // Returns false if no matching token existed.
-func (s *TokenStore) DeleteTokenByNameAndScope(name string, scope string) (bool, error) {
-	result, err := s.db.Exec("DELETE FROM tokens WHERE name = ? AND scope = ?", name, scope)
+func (s *TokenStore) DeleteTokenByNameAndRole(name string, role string) (bool, error) {
+	result, err := s.db.Exec("DELETE FROM tokens WHERE name = ? AND role = ?", name, role)
 	if err != nil {
-		return false, fmt.Errorf("deleting token name=%s scope=%s: %w", name, scope, err)
+		return false, fmt.Errorf("deleting token name=%s role=%s: %w", name, role, err)
 	}
 	rows, _ := result.RowsAffected()
 	return rows > 0, nil
 }
 
-// TokenExistsByScope checks if a token with the given ID and scope still exists and is not expired.
-func (s *TokenStore) TokenExistsByScope(id string, scope string) bool {
+// TokenExistsByRole checks if a token with the given ID and role still exists and is not expired.
+func (s *TokenStore) TokenExistsByRole(id string, role string) bool {
 	var exists int
 	err := s.db.QueryRow(
-		"SELECT 1 FROM tokens WHERE id = ? AND scope = ? AND (expires_at IS NULL OR expires_at > ?)",
-		id, scope, time.Now(),
+		"SELECT 1 FROM tokens WHERE id = ? AND role = ? AND (expires_at IS NULL OR expires_at > ?)",
+		id, role, time.Now(),
 	).Scan(&exists)
 	return err == nil
 }

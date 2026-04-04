@@ -66,7 +66,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	// Validate worker token
 	rawToken := agent.TokenFromContext(ctx)
 	token := c.tokenAuth.ValidateToken(rawToken)
-	if token == nil || token.Scope != "worker" {
+	if token == nil || token.Role != "worker" {
 		c.log.Warn("worker registration rejected: invalid or non-worker token", "worker", req.WorkerId)
 		return &pb.RegisterResponse{Accepted: false}, nil
 	}
@@ -157,7 +157,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		// Worker not in registry — first heartbeat after enrollment. Establish dial-back.
 		rawToken := agent.TokenFromContext(ctx)
 		token := c.tokenAuth.ValidateToken(rawToken)
-		if token == nil || token.Scope != "worker" {
+		if token == nil || token.Role != "worker" {
 			c.log.Warn("heartbeat rejected: invalid or non-worker token", "worker", req.WorkerId)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}

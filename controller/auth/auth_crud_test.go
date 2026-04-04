@@ -21,22 +21,22 @@ func TestAuth_ListTokens(t *testing.T) {
 	assert.GreaterOrEqual(t, len(tokens), 2)
 }
 
-func TestAuth_ListTokensByScope(t *testing.T) {
+func TestAuth_ListTokensByRole(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
 	svc.AuthSvc.CreateAdminToken("admin-1")
 	svc.AuthSvc.CreateWorkerToken("worker-1")
 
-	adminTokens, err := svc.AuthSvc.ListTokensByScope("admin")
+	adminTokens, err := svc.AuthSvc.ListTokensByRole("admin")
 	require.NoError(t, err)
 	assert.Len(t, adminTokens, 1)
-	assert.Equal(t, "admin", adminTokens[0].Scope)
+	assert.Equal(t, "admin", adminTokens[0].Role)
 
-	workerTokens, err := svc.AuthSvc.ListTokensByScope("worker")
+	workerTokens, err := svc.AuthSvc.ListTokensByRole("worker")
 	require.NoError(t, err)
 	assert.Len(t, workerTokens, 1)
-	assert.Equal(t, "worker", workerTokens[0].Scope)
+	assert.Equal(t, "worker", workerTokens[0].Role)
 }
 
 func TestAuth_DeleteToken(t *testing.T) {
@@ -77,7 +77,7 @@ func TestAuth_GetToken(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, fetched)
 	assert.Equal(t, "get-test", fetched.Name)
-	assert.Equal(t, "admin", fetched.Scope)
+	assert.Equal(t, "admin", fetched.Role)
 }
 
 func TestAuth_GetToken_NotFound(t *testing.T) {
@@ -100,7 +100,7 @@ func TestAuth_GenerateAdminToken(t *testing.T) {
 	// Should be a valid admin token
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
-	assert.Equal(t, "admin", validated.Scope)
+	assert.Equal(t, "admin", validated.Role)
 }
 
 func TestAuth_IsWorkerTokenValid(t *testing.T) {

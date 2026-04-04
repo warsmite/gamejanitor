@@ -19,14 +19,14 @@ func TestAuth_CreateAndValidateAdminToken(t *testing.T) {
 	rawToken, token, err := svc.AuthSvc.CreateAdminToken("my-admin")
 	require.NoError(t, err)
 	assert.NotEmpty(t, rawToken)
-	assert.Equal(t, "admin", token.Scope)
+	assert.Equal(t, "admin", token.Role)
 	assert.Equal(t, "my-admin", token.Name)
 
 	// Validate the token
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
 	assert.Equal(t, token.ID, validated.ID)
-	assert.Equal(t, "admin", validated.Scope)
+	assert.Equal(t, "admin", validated.Role)
 }
 
 func TestAuth_ValidateToken_InvalidTokenRejected(t *testing.T) {
@@ -42,7 +42,7 @@ func TestAuth_ValidateToken_ExpiredTokenRejected(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 
 	past := time.Now().Add(-1 * time.Hour)
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("expired", nil, []string{"gameserver.start"}, &past)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", nil, []string{"gameserver.start"}, &past, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -64,7 +64,7 @@ func TestAuth_CustomToken_GameserverScoping(t *testing.T) {
 	require.NoError(t, err)
 
 	// Token scoped to gs1 only
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("scoped", []string{gs1.ID}, []string{auth.PermGameserverStart}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("scoped", []string{gs1.ID}, []string{auth.PermGameserverStart}, nil, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -108,21 +108,22 @@ func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	// Empty gameserver_ids = all gameservers
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("all-access", nil, []string{auth.PermGameserverStart}, nil)
+	// Empty gameserver_ids = no granted access (ownership-based only)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("no-grants", nil, []string{auth.PermGameserverStart}, nil, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
 
-	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart))
+	assert.False(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart),
+		"empty gameserver_ids should not grant access — ownership is checked separately")
 }
 
 func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	_, _, err := svc.AuthSvc.CreateCustomToken("bad-scope", []string{"nonexistent-gs"}, []string{auth.PermGameserverStart}, nil)
+	_, _, err := svc.AuthSvc.CreateUserToken("bad-scope", []string{"nonexistent-gs"}, []string{auth.PermGameserverStart}, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -218,17 +219,17 @@ func TestAuth_CreateWorkerToken_DifferentNames(t *testing.T) {
 	assert.NotEqual(t, rawToken1, rawToken2)
 }
 
-func TestAuth_CustomToken_WrongPermission(t *testing.T) {
+func TestAuth_UserToken_WrongPermission(t *testing.T) {
 	t.Parallel()
-	svc := testutil.NewTestServices(t)
 
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverStart}, nil)
-	require.NoError(t, err)
+	// Test HasPermission directly — no store needed
+	token := &model.Token{
+		Role:          "user",
+		GameserverIDs: model.StringSlice{"gs-1"},
+		Permissions:   model.StringSlice{auth.PermGameserverStart},
+	}
 
-	validated := svc.AuthSvc.ValidateToken(rawToken)
-	require.NotNil(t, validated)
-
-	// Has start but not delete
-	assert.True(t, auth.HasPermission(validated, "any-id", auth.PermGameserverStart))
-	assert.False(t, auth.HasPermission(validated, "any-id", auth.PermGameserverDelete))
+	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
+	assert.False(t, auth.HasPermission(token, "gs-1", auth.PermGameserverDelete))
+	assert.False(t, auth.HasPermission(token, "gs-2", auth.PermGameserverStart))
 }

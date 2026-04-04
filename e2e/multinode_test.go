@@ -200,7 +200,7 @@ func createWorkerToken(t *testing.T, baseURL string, name string) string {
 	t.Helper()
 	resp := postJSON(t, baseURL+"/api/tokens", map[string]any{
 		"name":  name,
-		"scope": "worker",
+		"role": "worker",
 	})
 	var result struct {
 		Token string `json:"token"`

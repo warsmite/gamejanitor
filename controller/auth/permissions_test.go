@@ -14,10 +14,10 @@ func TestPermission_HasPermission_NilToken_ReturnsFalse(t *testing.T) {
 	assert.False(t, auth.HasPermission(nil, "any-id", auth.PermGameserverStart))
 }
 
-func TestPermission_HasPermission_AdminScope_AlwaysTrue(t *testing.T) {
+func TestPermission_HasPermission_AdminRole_AlwaysTrue(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
-		Scope:         "admin",
+		Role:          "admin",
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice{},
 	}
@@ -26,10 +26,10 @@ func TestPermission_HasPermission_AdminScope_AlwaysTrue(t *testing.T) {
 	assert.True(t, auth.HasPermission(token, "", auth.PermSettingsEdit))
 }
 
-func TestPermission_HasPermission_CustomScope_ChecksGameserverIDs(t *testing.T) {
+func TestPermission_HasPermission_UserRole_ChecksGameserverIDs(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
-		Scope:         "custom",
+		Role:          "user",
 		GameserverIDs: model.StringSlice{"gs-1", "gs-2"},
 		Permissions:   model.StringSlice{"gameserver.start"},
 	}
@@ -38,21 +38,22 @@ func TestPermission_HasPermission_CustomScope_ChecksGameserverIDs(t *testing.T) 
 	assert.False(t, auth.HasPermission(token, "gs-3", auth.PermGameserverStart))
 }
 
-func TestPermission_HasPermission_CustomScope_EmptyIDs_AllAccess(t *testing.T) {
+func TestPermission_HasPermission_UserRole_EmptyIDs_NoAccess(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
-		Scope:         "custom",
+		Role:          "user",
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice{"gameserver.start"},
 	}
-	assert.True(t, auth.HasPermission(token, "any-gs", auth.PermGameserverStart))
+	// Empty gameserver_ids = no granted access (only owns what they created)
+	assert.False(t, auth.HasPermission(token, "any-gs", auth.PermGameserverStart))
 }
 
-func TestPermission_HasPermission_CustomScope_MissingPermission(t *testing.T) {
+func TestPermission_HasPermission_UserRole_MissingPermission(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
-		Scope:         "custom",
-		GameserverIDs: model.StringSlice{},
+		Role:          "user",
+		GameserverIDs: model.StringSlice{"gs-1"},
 		Permissions:   model.StringSlice{"gameserver.start"},
 	}
 	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
@@ -61,12 +62,12 @@ func TestPermission_HasPermission_CustomScope_MissingPermission(t *testing.T) {
 
 func TestPermission_IsAdmin(t *testing.T) {
 	t.Parallel()
-	admin := &model.Token{Scope: "admin"}
-	custom := &model.Token{Scope: "custom"}
-	worker := &model.Token{Scope: "worker"}
+	admin := &model.Token{Role: "admin"}
+	user := &model.Token{Role: "user"}
+	worker := &model.Token{Role: "worker"}
 
 	assert.True(t, auth.IsAdmin(admin))
-	assert.False(t, auth.IsAdmin(custom))
+	assert.False(t, auth.IsAdmin(user))
 	assert.False(t, auth.IsAdmin(worker))
 	assert.False(t, auth.IsAdmin(nil))
 }

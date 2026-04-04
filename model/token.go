@@ -12,9 +12,13 @@ type Token struct {
 	Name          string      `json:"name"`
 	HashedToken   string      `json:"-"`
 	TokenPrefix   string      `json:"-"`
-	Scope         string      `json:"scope"`
+	Role          string      `json:"role"`
 	GameserverIDs StringSlice `json:"gameserver_ids"`
 	Permissions   StringSlice `json:"permissions"`
+	MaxGameservers *int       `json:"max_gameservers,omitempty"`
+	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
+	MaxCPU         *float64   `json:"max_cpu,omitempty"`
+	MaxStorageMB   *int       `json:"max_storage_mb,omitempty"`
 	ClaimCode     *string     `json:"claim_code,omitempty"`
 	CreatedAt     time.Time   `json:"created_at"`
 	LastUsedAt    *time.Time  `json:"last_used_at,omitempty"`

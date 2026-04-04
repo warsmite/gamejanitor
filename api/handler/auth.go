@@ -21,17 +21,17 @@ func NewAuthHandlers(authSvc *auth.AuthService, log *slog.Logger) *AuthHandlers 
 }
 
 func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
-	scope := r.URL.Query().Get("scope")
+	role := r.URL.Query().Get("role")
 
 	var tokens []model.Token
 	var err error
-	if scope != "" {
-		tokens, err = h.authSvc.ListTokensByScope(scope)
+	if role != "" {
+		tokens, err = h.authSvc.ListTokensByRole(role)
 	} else {
 		tokens, err = h.authSvc.ListTokens()
 	}
 	if err != nil {
-		h.log.Error("listing tokens", "scope", scope, "error", err)
+		h.log.Error("listing tokens", "role", role, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -43,26 +43,30 @@ func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name          string   `json:"name"`
-		Scope         string   `json:"scope"`
-		GameserverIDs []string `json:"gameserver_ids"`
-		Permissions   []string `json:"permissions"`
-		ExpiresIn     string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
+		Name           string   `json:"name"`
+		Role           string   `json:"role"`
+		GameserverIDs  []string `json:"gameserver_ids"`
+		Permissions    []string `json:"permissions"`
+		ExpiresIn      string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
+		MaxGameservers *int     `json:"max_gameservers,omitempty"`
+		MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
+		MaxCPU         *float64 `json:"max_cpu,omitempty"`
+		MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 
-	if req.Scope == "" {
-		req.Scope = "custom"
+	if req.Role == "" {
+		req.Role = "user"
 	}
-	if req.Scope != "admin" && req.Scope != "custom" && req.Scope != "worker" {
-		respondError(w, http.StatusBadRequest, "scope must be \"admin\", \"custom\", or \"worker\"")
+	if req.Role != "admin" && req.Role != "user" && req.Role != "worker" {
+		respondError(w, http.StatusBadRequest, "role must be \"admin\", \"user\", or \"worker\"")
 		return
 	}
 
-	if req.Scope == "worker" {
+	if req.Role == "worker" {
 		rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
 		if err != nil {
 			h.log.Error("creating worker token", "error", err)
@@ -85,7 +89,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Scope == "admin" {
+	if req.Role == "admin" {
 		rawToken, token, err := h.authSvc.CreateAdminToken(req.Name)
 		if err != nil {
 			h.log.Error("creating admin token", "error", err)
@@ -119,7 +123,16 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
-	rawToken, token, err := h.authSvc.CreateCustomToken(req.Name, req.GameserverIDs, req.Permissions, expiresAt)
+	var quotas *auth.UserTokenQuotas
+	if req.MaxGameservers != nil || req.MaxMemoryMB != nil || req.MaxCPU != nil || req.MaxStorageMB != nil {
+		quotas = &auth.UserTokenQuotas{
+			MaxGameservers: req.MaxGameservers,
+			MaxMemoryMB:    req.MaxMemoryMB,
+			MaxCPU:         req.MaxCPU,
+			MaxStorageMB:   req.MaxStorageMB,
+		}
+	}
+	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, req.GameserverIDs, req.Permissions, expiresAt, quotas)
 	if err != nil {
 		h.log.Error("creating token", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -150,7 +163,7 @@ func (h *AuthHandlers) RotateToken(w http.ResponseWriter, r *http.Request) {
 		respondError(w, 404, "token not found")
 		return
 	}
-	if token.Scope != "worker" {
+	if token.Role != "worker" {
 		respondError(w, 400, "only worker tokens can be rotated")
 		return
 	}

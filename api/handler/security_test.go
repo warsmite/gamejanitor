@@ -104,8 +104,8 @@ func TestSecurity_ExpiredToken_Rejected(t *testing.T) {
 
 	// Create and use an expired token
 	past := testutil.PastTime(1) // 1 hour ago
-	rawToken, _, err := api.Services.AuthSvc.CreateCustomToken("expired", nil,
-		[]string{auth.PermGameserverStart}, &past)
+	rawToken, _, err := api.Services.AuthSvc.CreateUserToken("expired", nil,
+		[]string{auth.PermGameserverStart}, &past, nil)
 	require.NoError(t, err)
 
 	req := authRequest("GET", api.Server.URL+"/api/gameservers", rawToken, nil)

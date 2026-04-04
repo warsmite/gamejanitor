@@ -23,10 +23,10 @@ type Store interface {
 	CreateToken(t *model.Token) error
 	DeleteToken(id string) error
 	GetToken(id string) (*model.Token, error)
-	ListTokensByScope(scope string) ([]model.Token, error)
-	GetTokenByNameAndScope(name, scope string) (*model.Token, error)
-	DeleteTokenByNameAndScope(name, scope string) (bool, error)
-	TokenExistsByScope(id, scope string) bool
+	ListTokensByRole(scope string) ([]model.Token, error)
+	GetTokenByNameAndRole(name, scope string) (*model.Token, error)
+	DeleteTokenByNameAndRole(name, scope string) (bool, error)
+	TokenExistsByRole(id, scope string) bool
 	GetGameserver(id string) (*model.Gameserver, error)
 	GetTokenByClaimCode(code string) (*model.Token, error)
 	SetClaimCode(tokenID string, code *string) error
@@ -48,9 +48,9 @@ func TokenFromContext(ctx context.Context) *model.Token {
 }
 
 const (
-	ScopeAdmin  = "admin"
-	ScopeCustom = "custom"
-	ScopeWorker = "worker"
+	RoleAdmin  = "admin"
+	RoleUser   = "user"
+	RoleWorker = "worker"
 )
 
 
@@ -199,7 +199,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		return "", nil, err
 	}
 
-	existing, err := s.store.GetTokenByNameAndScope(name, ScopeAdmin)
+	existing, err := s.store.GetTokenByNameAndRole(name, RoleAdmin)
 	if err != nil {
 		return "", nil, fmt.Errorf("checking existing admin token: %w", err)
 	}
@@ -224,7 +224,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
-		Scope:         ScopeAdmin,
+		Role:         RoleAdmin,
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice(AllPermissions),
 	}
@@ -237,7 +237,15 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 	return rawToken, token, nil
 }
 
-func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *model.Token, error) {
+// UserTokenQuotas defines optional resource limits for a user token.
+type UserTokenQuotas struct {
+	MaxGameservers *int
+	MaxMemoryMB    *int
+	MaxCPU         *float64
+	MaxStorageMB   *int
+}
+
+func (s *AuthService) CreateUserToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
 	t := &model.Token{Name: name}
 	if err := t.Validate(); err != nil {
 		return "", nil, err
@@ -281,17 +289,23 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
-		Scope:         ScopeCustom,
+		Role:          RoleUser,
 		GameserverIDs: model.StringSlice(gameserverIDs),
 		Permissions:   model.StringSlice(permissions),
 		ExpiresAt:     expiresAt,
 	}
-
-	if err := s.store.CreateToken(token); err != nil {
-		return "", nil, fmt.Errorf("saving custom token: %w", err)
+	if quotas != nil {
+		token.MaxGameservers = quotas.MaxGameservers
+		token.MaxMemoryMB = quotas.MaxMemoryMB
+		token.MaxCPU = quotas.MaxCPU
+		token.MaxStorageMB = quotas.MaxStorageMB
 	}
 
-	s.log.Info("custom token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
+	if err := s.store.CreateToken(token); err != nil {
+		return "", nil, fmt.Errorf("saving user token: %w", err)
+	}
+
+	s.log.Info("user token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
 	return rawToken, token, nil
 }
 
@@ -300,7 +314,7 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		return "", nil, fmt.Errorf("token name is required")
 	}
 
-	existing, err := s.store.GetTokenByNameAndScope(name, ScopeWorker)
+	existing, err := s.store.GetTokenByNameAndRole(name, RoleWorker)
 	if err != nil {
 		return "", nil, fmt.Errorf("checking existing worker token: %w", err)
 	}
@@ -324,7 +338,7 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
-		Scope:         ScopeWorker,
+		Role:         RoleWorker,
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice{},
 	}
@@ -345,7 +359,7 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		return "", nil, err
 	}
 
-	if deleted, err := s.store.DeleteTokenByNameAndScope(name, ScopeAdmin); err != nil {
+	if deleted, err := s.store.DeleteTokenByNameAndRole(name, RoleAdmin); err != nil {
 		return "", nil, fmt.Errorf("deleting old admin token: %w", err)
 	} else if deleted {
 		s.log.Info("rotated out old admin token", "name", name)
@@ -366,7 +380,7 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
-		Scope:         ScopeAdmin,
+		Role:         RoleAdmin,
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice(AllPermissions),
 	}
@@ -386,7 +400,7 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		return "", nil, fmt.Errorf("token name is required")
 	}
 
-	if deleted, err := s.store.DeleteTokenByNameAndScope(name, ScopeWorker); err != nil {
+	if deleted, err := s.store.DeleteTokenByNameAndRole(name, RoleWorker); err != nil {
 		return "", nil, fmt.Errorf("deleting old worker token: %w", err)
 	} else if deleted {
 		s.log.Info("rotated out old worker token", "name", name)
@@ -407,7 +421,7 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
-		Scope:         ScopeWorker,
+		Role:         RoleWorker,
 		GameserverIDs: model.StringSlice{},
 		Permissions:   model.StringSlice{},
 	}
@@ -423,15 +437,15 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 // IsWorkerTokenValid checks if a token ID still exists with worker scope.
 // Used for heartbeat fast-path validation (no bcrypt needed).
 func (s *AuthService) IsWorkerTokenValid(tokenID string) bool {
-	return s.store.TokenExistsByScope(tokenID, ScopeWorker)
+	return s.store.TokenExistsByRole(tokenID, RoleWorker)
 }
 
 func (s *AuthService) ListTokens() ([]model.Token, error) {
 	return s.store.ListTokens()
 }
 
-func (s *AuthService) ListTokensByScope(scope string) ([]model.Token, error) {
-	return s.store.ListTokensByScope(scope)
+func (s *AuthService) ListTokensByRole(scope string) ([]model.Token, error) {
+	return s.store.ListTokensByRole(scope)
 }
 
 func (s *AuthService) GetToken(id string) (*model.Token, error) {
@@ -446,32 +460,31 @@ func (s *AuthService) DeleteToken(id string) error {
 // IsAdmin checks if the token was created as an admin token.
 // The scope is a creation-time label — admin tokens have all permissions.
 func IsAdmin(token *model.Token) bool {
-	return token != nil && token.Scope == ScopeAdmin
+	return token != nil && token.Role == RoleAdmin
 }
 
 // HasPermission checks if a token has a specific permission on a gameserver.
-// Empty gameserver_ids means all-access (no ID filtering).
-// Admin tokens always have permission (via scope shortcut).
+// Checks the granted gameserver_ids list — empty means no granted access.
+// Ownership is checked separately by the middleware/service layer.
+// Admin tokens always have permission.
 func HasPermission(token *model.Token, gameserverID string, permission string) bool {
 	if token == nil {
 		return false
 	}
-	if token.Scope == ScopeAdmin {
+	if token.Role == RoleAdmin {
 		return true
 	}
 
-	// Check gameserver access — empty list means all-access
-	if len(token.GameserverIDs) > 0 {
-		hasAccess := false
-		for _, id := range token.GameserverIDs {
-			if id == gameserverID {
-				hasAccess = true
-				break
-			}
+	// Check gameserver access via grants list
+	hasAccess := false
+	for _, id := range token.GameserverIDs {
+		if id == gameserverID {
+			hasAccess = true
+			break
 		}
-		if !hasAccess {
-			return false
-		}
+	}
+	if !hasAccess {
+		return false
 	}
 
 	// Check permission
@@ -486,7 +499,7 @@ func HasPermission(token *model.Token, gameserverID string, permission string) b
 // AllowedGameserverIDs extracts the gameserver IDs a token is scoped to.
 // Returns nil if the token is nil, admin, or all-access (empty list).
 func AllowedGameserverIDs(token *model.Token) []string {
-	if token == nil || token.Scope == ScopeAdmin {
+	if token == nil || token.Role == RoleAdmin {
 		return nil
 	}
 	if len(token.GameserverIDs) == 0 {

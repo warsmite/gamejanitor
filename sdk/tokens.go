@@ -8,11 +8,11 @@ type TokenService struct {
 }
 
 // List returns API tokens (hashed values excluded).
-// If a scope is provided, only tokens with that scope are returned.
-func (s *TokenService) List(ctx context.Context, scope ...string) ([]Token, error) {
+// If a role is provided, only tokens with that role are returned.
+func (s *TokenService) List(ctx context.Context, role ...string) ([]Token, error) {
 	path := "/api/tokens"
-	if len(scope) > 0 && scope[0] != "" {
-		path += "?scope=" + scope[0]
+	if len(role) > 0 && role[0] != "" {
+		path += "?role=" + role[0]
 	}
 	var tokens []Token
 	if err := s.client.get(ctx, path, &tokens); err != nil {

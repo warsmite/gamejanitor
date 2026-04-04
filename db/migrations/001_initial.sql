@@ -23,9 +23,12 @@ CREATE TABLE gameservers (
     desired_state TEXT NOT NULL DEFAULT 'stopped',
     operation TEXT,
     operation_id TEXT,
+    created_by_token_id TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_gameservers_created_by_token ON gameservers(created_by_token_id) WHERE created_by_token_id IS NOT NULL;
 
 CREATE TABLE schedules (
     id TEXT PRIMARY KEY,
@@ -55,9 +58,13 @@ CREATE TABLE tokens (
     name TEXT NOT NULL,
     hashed_token TEXT NOT NULL,
     token_prefix TEXT NOT NULL DEFAULT '',
-    scope TEXT NOT NULL DEFAULT 'gameserver',
+    role TEXT NOT NULL DEFAULT 'user',
     gameserver_ids JSON NOT NULL DEFAULT '[]',
     permissions JSON NOT NULL DEFAULT '[]',
+    max_gameservers INTEGER,
+    max_memory_mb INTEGER,
+    max_cpu REAL,
+    max_storage_mb INTEGER,
     claim_code TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME,

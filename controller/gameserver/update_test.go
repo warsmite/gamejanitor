@@ -54,7 +54,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Create a non-admin token and put it in context
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverConfigureEnv}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("limited", nil, []string{auth.PermGameserverConfigureEnv}, nil, nil)
 	require.NoError(t, err)
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, token)

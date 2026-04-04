@@ -17,12 +17,12 @@ var tokensCmd = &cobra.Command{
 
 func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
-	tokensCreateCmd.Flags().String("scope", "custom", "Token scope: admin, custom, or worker")
-	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Scope to gameserver (repeatable, name or ID)")
+	tokensCreateCmd.Flags().String("role", "user", "Token role: admin, user, or worker")
+	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Grant access to gameserver (repeatable, name or ID)")
 	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable). Examples: gameserver.start, gameserver.stop, gameserver.configure.name, backup.read, schedule.read. Run 'gamejanitor tokens permissions' to list all.")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
 
-	tokensListCmd.Flags().String("scope", "", "Filter by scope: admin, custom, or worker")
+	tokensListCmd.Flags().String("role", "", "Filter by role: admin, user, or worker")
 
 	tokensRotateCmd.Flags().String("name", "", "Worker token name to rotate (required)")
 
@@ -33,8 +33,8 @@ var tokensListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tokens",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		scope, _ := cmd.Flags().GetString("scope")
-		tokens, err := getClient().Tokens.List(ctx(), scope)
+		role, _ := cmd.Flags().GetString("role")
+		tokens, err := getClient().Tokens.List(ctx(), role)
 		if err != nil {
 			return exitError(err)
 		}
@@ -50,7 +50,7 @@ var tokensListCmd = &cobra.Command{
 		}
 
 		w := newTabWriter()
-		fmt.Fprintln(w, "ID\tNAME\tSCOPE\tCREATED\tLAST USED\tEXPIRES")
+		fmt.Fprintln(w, "ID\tNAME\tROLE\tCREATED\tLAST USED\tEXPIRES")
 		for _, t := range tokens {
 			lastUsed := "-"
 			if t.LastUsedAt != nil {
@@ -61,7 +61,7 @@ var tokensListCmd = &cobra.Command{
 				expires = t.ExpiresAt.Format("2006-01-02T15:04:05Z")
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				t.ID[:8], t.Name, t.Scope, t.CreatedAt.Format("2006-01-02T15:04:05Z"), lastUsed, expires)
+				t.ID[:8], t.Name, t.Role, t.CreatedAt.Format("2006-01-02T15:04:05Z"), lastUsed, expires)
 		}
 		w.Flush()
 		return nil
@@ -71,21 +71,21 @@ var tokensListCmd = &cobra.Command{
 var tokensCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a token",
-	Example: `  gamejanitor tokens create --name admin-key --scope admin
-  gamejanitor tokens create --name worker-1 --scope worker
-  gamejanitor tokens create --name panel --scope custom --gameserver "My Server" --permission start,stop,logs`,
+	Example: `  gamejanitor tokens create --name admin-key --role admin
+  gamejanitor tokens create --name worker-1 --role worker
+  gamejanitor tokens create --name panel --role user --gameserver "My Server" --permission start,stop,logs`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		if name == "" {
 			return exitError(fmt.Errorf("--name is required"))
 		}
 
-		scope, _ := cmd.Flags().GetString("scope")
+		role, _ := cmd.Flags().GetString("role")
 
-		if scope == "worker" {
+		if role == "worker" {
 			result, err := getClient().Tokens.Create(ctx(), &gamejanitor.CreateTokenRequest{
-				Name:  name,
-				Scope: "worker",
+				Name: name,
+				Role: "worker",
 			})
 			if err != nil {
 				return exitError(err)
@@ -120,7 +120,7 @@ var tokensCreateCmd = &cobra.Command{
 
 		req := &gamejanitor.CreateTokenRequest{
 			Name:          name,
-			Scope:         scope,
+			Role:          role,
 			GameserverIDs: gameserverIDs,
 			Permissions:   permissions,
 		}
@@ -140,11 +140,33 @@ var tokensCreateCmd = &cobra.Command{
 
 		fmt.Fprintf(os.Stderr, "Token %q created (id: %s)\n", result.Name, result.TokenID)
 		if len(gameserverIDs) > 0 {
-			fmt.Fprintf(os.Stderr, "Scoped to %d gameserver(s), permissions: %s\n", len(gameserverIDs), strings.Join(permissions, ", "))
+			fmt.Fprintf(os.Stderr, "Granted access to %d gameserver(s), permissions: %s\n", len(gameserverIDs), strings.Join(permissions, ", "))
 		}
 		fmt.Fprintf(os.Stderr, "Store this token — it cannot be retrieved later.\n")
 		// Raw token to stdout for piping
 		fmt.Println(result.Token)
+		return nil
+	},
+}
+
+var tokensDeleteCmd = &cobra.Command{
+	Use:   "delete <token-id>",
+	Short: "Delete a token",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !confirmAction(fmt.Sprintf("Delete token %s?", args[0])) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		err := getClient().Tokens.Delete(ctx(), args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		if !jsonOutput {
+			fmt.Println("Token deleted.")
+		}
 		return nil
 	},
 }
@@ -194,31 +216,9 @@ var tokensRotateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Fprintf(os.Stderr, "Worker token %q rotated (new id: %s)\n", result.Name, result.TokenID)
-		fmt.Fprintf(os.Stderr, "Update the worker's config with the new token. The old token is now invalid.\n")
+		fmt.Fprintf(os.Stderr, "Worker token %q rotated (id: %s)\n", name, result.TokenID)
+		fmt.Fprintf(os.Stderr, "Old token is now invalid. Store the new token.\n")
 		fmt.Println(result.Token)
-		return nil
-	},
-}
-
-var tokensDeleteCmd = &cobra.Command{
-	Use:   "delete <token-id>",
-	Short: "Delete a token",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction(fmt.Sprintf("Delete token %s?", args[0])) {
-			fmt.Println("Aborted.")
-			return nil
-		}
-
-		err := getClient().Tokens.Delete(ctx(), args[0])
-		if err != nil {
-			return exitError(err)
-		}
-
-		if !jsonOutput {
-			fmt.Println("Token deleted.")
-		}
 		return nil
 	},
 }
