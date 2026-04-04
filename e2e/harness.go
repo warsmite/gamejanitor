@@ -225,6 +225,33 @@ func DecodeData(resp *http.Response, v any) error {
 	return nil
 }
 
+// --- Auth helpers ---
+
+// AuthGet makes a GET request with a Bearer token.
+func (h *Harness) AuthGet(path, token string) (*http.Response, error) {
+	req, _ := http.NewRequest("GET", h.BaseURL+path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	return http.DefaultClient.Do(req)
+}
+
+// AuthPost makes a POST request with a Bearer token and JSON body.
+func (h *Harness) AuthPost(path, token string, body any) (*http.Response, error) {
+	data, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", h.BaseURL+path, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	return http.DefaultClient.Do(req)
+}
+
+// AuthPatch makes a PATCH request with a Bearer token and JSON body.
+func (h *Harness) AuthPatch(path, token string, body any) (*http.Response, error) {
+	data, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PATCH", h.BaseURL+path, bytes.NewReader(data))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	return http.DefaultClient.Do(req)
+}
+
 // --- Status helpers ---
 
 // WaitForStatus polls until the gameserver reaches the target status.
