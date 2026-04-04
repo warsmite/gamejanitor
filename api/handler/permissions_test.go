@@ -165,3 +165,97 @@ func TestAPI_WorkersEndpoint_RequiresNodesManage(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
+
+// mustCreateCanCreateToken creates a user token with can_create=true via the API.
+func mustCreateCanCreateToken(t *testing.T, api *testutil.TestAPI) string {
+	t.Helper()
+	adminToken := testutil.MustCreateAdminToken(t, api.Services)
+	body, _ := json.Marshal(map[string]any{
+		"name": "creator", "role": "user", "can_create": true,
+	})
+	req := authRequest("POST", api.Server.URL+"/api/tokens", adminToken, body)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result struct{ Data struct{ Token string } }
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Data.Token
+}
+
+func TestAPI_CanCreate_AllowsGameserverCreation(t *testing.T) {
+	t.Parallel()
+	api := testutil.NewTestAPI(t)
+	enableAuth(api)
+	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
+
+	creatorToken := mustCreateCanCreateToken(t, api)
+
+	body, _ := json.Marshal(map[string]any{
+		"name": "My Server", "game_id": testutil.TestGameID,
+		"env": map[string]string{"REQUIRED_VAR": "v"},
+	})
+	req := authRequest("POST", api.Server.URL+"/api/gameservers", creatorToken, body)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+
+func TestAPI_CanCreateFalse_BlocksGameserverCreation(t *testing.T) {
+	t.Parallel()
+	api := testutil.NewTestAPI(t)
+	enableAuth(api)
+	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
+
+	// User token without can_create
+	noCreateToken := testutil.MustCreateUserToken(t, api.Services, nil, nil)
+
+	body, _ := json.Marshal(map[string]any{
+		"name": "Blocked", "game_id": testutil.TestGameID,
+		"env": map[string]string{"REQUIRED_VAR": "v"},
+	})
+	req := authRequest("POST", api.Server.URL+"/api/gameservers", noCreateToken, body)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestAPI_CanCreate_CannotAccessClusterRoutes(t *testing.T) {
+	t.Parallel()
+	api := testutil.NewTestAPI(t)
+	enableAuth(api)
+
+	creatorToken := mustCreateCanCreateToken(t, api)
+
+	// Tokens
+	req := authRequest("GET", api.Server.URL+"/api/tokens", creatorToken, nil)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant tokens access")
+
+	// Settings
+	req = authRequest("GET", api.Server.URL+"/api/settings", creatorToken, nil)
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant settings access")
+
+	// Workers
+	req = authRequest("GET", api.Server.URL+"/api/workers", creatorToken, nil)
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant workers access")
+
+	// Webhooks
+	req = authRequest("GET", api.Server.URL+"/api/webhooks", creatorToken, nil)
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant webhooks access")
+}
