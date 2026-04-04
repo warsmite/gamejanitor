@@ -272,31 +272,29 @@ type UpdateWorkerRequest struct {
 
 // Token represents an API token (hashed value is never returned).
 type Token struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	Role           string     `json:"role"`
-	GameserverIDs  []string   `json:"gameserver_ids"`
-	Permissions    []string   `json:"permissions"`
-	MaxGameservers *int       `json:"max_gameservers,omitempty"`
-	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
-	MaxCPU         *float64   `json:"max_cpu,omitempty"`
-	MaxStorageMB   *int       `json:"max_storage_mb,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	Role           string                `json:"role"`
+	Grants         map[string][]string   `json:"grants"`
+	MaxGameservers *int                  `json:"max_gameservers,omitempty"`
+	MaxMemoryMB    *int                  `json:"max_memory_mb,omitempty"`
+	MaxCPU         *float64              `json:"max_cpu,omitempty"`
+	MaxStorageMB   *int                  `json:"max_storage_mb,omitempty"`
+	CreatedAt      time.Time             `json:"created_at"`
+	LastUsedAt     *time.Time            `json:"last_used_at,omitempty"`
+	ExpiresAt      *time.Time            `json:"expires_at,omitempty"`
 }
 
 // CreateTokenRequest is the request body for creating an API token.
 type CreateTokenRequest struct {
-	Name           string   `json:"name"`
-	Role           string   `json:"role"` // "admin", "user", or "worker"
-	GameserverIDs  []string `json:"gameserver_ids,omitempty"`
-	Permissions    []string `json:"permissions,omitempty"`
-	ExpiresIn      string   `json:"expires_in,omitempty"` // Go duration string, e.g. "720h"
-	MaxGameservers *int     `json:"max_gameservers,omitempty"`
-	MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
-	MaxCPU         *float64 `json:"max_cpu,omitempty"`
-	MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
+	Name           string              `json:"name"`
+	Role           string              `json:"role"` // "admin", "user", or "worker"
+	Grants         map[string][]string `json:"grants,omitempty"`
+	ExpiresIn      string              `json:"expires_in,omitempty"` // Go duration string, e.g. "720h"
+	MaxGameservers *int                `json:"max_gameservers,omitempty"`
+	MaxMemoryMB    *int                `json:"max_memory_mb,omitempty"`
+	MaxCPU         *float64            `json:"max_cpu,omitempty"`
+	MaxStorageMB   *int                `json:"max_storage_mb,omitempty"`
 }
 
 // CreateTokenResponse is returned when a token is created.

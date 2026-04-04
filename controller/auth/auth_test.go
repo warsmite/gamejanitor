@@ -42,7 +42,7 @@ func TestAuth_ValidateToken_ExpiredTokenRejected(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 
 	past := time.Now().Add(-1 * time.Hour)
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", nil, []string{"gameserver.start"}, &past, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", nil, &past, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -64,7 +64,7 @@ func TestAuth_CustomToken_GameserverScoping(t *testing.T) {
 	require.NoError(t, err)
 
 	// Token scoped to gs1 only
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("scoped", []string{gs1.ID}, []string{auth.PermGameserverStart}, nil, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("scoped", model.GrantMap{gs1.ID: []string{auth.PermGameserverStart}}, nil, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -109,7 +109,7 @@ func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// Empty gameserver_ids = no granted access (ownership-based only)
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("no-grants", nil, []string{auth.PermGameserverStart}, nil, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("no-grants", nil, nil, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -123,7 +123,7 @@ func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	_, _, err := svc.AuthSvc.CreateUserToken("bad-scope", []string{"nonexistent-gs"}, []string{auth.PermGameserverStart}, nil, nil)
+	_, _, err := svc.AuthSvc.CreateUserToken("bad-scope", model.GrantMap{"nonexistent-gs": []string{auth.PermGameserverStart}}, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -225,8 +225,7 @@ func TestAuth_UserToken_WrongPermission(t *testing.T) {
 	// Test HasPermission directly — no store needed
 	token := &model.Token{
 		Role:          "user",
-		GameserverIDs: model.StringSlice{"gs-1"},
-		Permissions:   model.StringSlice{auth.PermGameserverStart},
+		Grants: model.GrantMap{"gs-1": []string{auth.PermGameserverStart}},
 	}
 
 	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))

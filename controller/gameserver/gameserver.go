@@ -219,7 +219,7 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 			return nil, fmt.Errorf("listing owned gameservers: %w", err)
 		}
 		// Granted gameservers
-		visibleIDs := append(ownedIDs, []string(token.GameserverIDs)...)
+		visibleIDs := append(ownedIDs, token.GrantedGameserverIDs()...)
 		if len(visibleIDs) == 0 {
 			return []model.Gameserver{}, nil
 		}

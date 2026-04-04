@@ -105,10 +105,27 @@ func serviceErrorMessage(err error) string {
 
 // effectivePermissions returns the current token's permissions.
 // Admin tokens get all permissions. No token (auth disabled) gets all permissions.
+// effectivePermissions returns the unique set of permissions a token has across all grants.
+// Admin or no-auth returns all permissions.
 func effectivePermissions(r *http.Request) []string {
 	token := auth.TokenFromContext(r.Context())
 	if token == nil || auth.IsAdmin(token) {
 		return auth.AllPermissions
 	}
-	return []string(token.Permissions)
+
+	// Union of all permissions from grants. Empty grant = all permissions.
+	seen := make(map[string]bool)
+	for _, perms := range token.Grants {
+		if len(perms) == 0 {
+			return auth.AllPermissions
+		}
+		for _, p := range perms {
+			seen[p] = true
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for p := range seen {
+		result = append(result, p)
+	}
+	return result
 }

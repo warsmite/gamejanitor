@@ -39,7 +39,7 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Token scoping — only send events for gameservers the token can access
-	allowedIDs := auth.AllowedGameserverIDs(auth.TokenFromContext(r.Context()))
+	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
 	var allowedSet map[string]bool
 	if len(allowedIDs) > 0 {
 		allowedSet = make(map[string]bool, len(allowedIDs))
@@ -99,7 +99,7 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 		p.Limit = PaginationDefaultLimit
 	}
 
-	allowedIDs := auth.AllowedGameserverIDs(auth.TokenFromContext(r.Context()))
+	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
 
 	// If a specific gameserver_id is requested, verify it's in the allowed set
 	requestedGSID := r.URL.Query().Get("gameserver_id")

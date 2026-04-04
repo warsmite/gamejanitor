@@ -41,7 +41,7 @@ func (h *ActivityHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Scope to allowed gameservers for non-admin tokens
-	allowedIDs := auth.AllowedGameserverIDs(auth.TokenFromContext(r.Context()))
+	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
 	if len(allowedIDs) > 0 && filter.GameserverID == nil {
 		respondOK(w, []model.Event{})
 		return

@@ -110,12 +110,11 @@ func RequireClusterPermission(settingsSvc *settings.SettingsService, permission 
 				next.ServeHTTP(w, r)
 				return
 			}
-			// Check if token has the specific cluster permission
-			for _, p := range token.Permissions {
-				if p == permission {
-					next.ServeHTTP(w, r)
-					return
-				}
+			// gameserver.create is the only cluster-level permission for user tokens.
+			// It's implied by having quotas set (can create within limits).
+			if permission == auth.PermGameserverCreate && token.CanCreate() {
+				next.ServeHTTP(w, r)
+				return
 			}
 			handleForbidden(w, r)
 		})
@@ -131,11 +130,9 @@ type OwnershipChecker interface {
 // tokenCanAccessGameserver checks if a token can access a gameserver via
 // ownership (created_by_token_id) or grants (gameserver_ids on the token).
 func tokenCanAccessGameserver(token *model.Token, gsID string, ownerCheck OwnershipChecker) bool {
-	// Check grants list
-	for _, id := range token.GameserverIDs {
-		if id == gsID {
-			return true
-		}
+	// Check grants
+	if _, granted := token.Grants[gsID]; granted {
+		return true
 	}
 	// Check ownership
 	if ownerCheck != nil {

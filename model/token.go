@@ -8,21 +8,72 @@ import (
 )
 
 type Token struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	HashedToken   string      `json:"-"`
-	TokenPrefix   string      `json:"-"`
-	Role          string      `json:"role"`
-	GameserverIDs StringSlice `json:"gameserver_ids"`
-	Permissions   StringSlice `json:"permissions"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	HashedToken    string     `json:"-"`
+	TokenPrefix    string     `json:"-"`
+	Role           string     `json:"role"`
+	Grants         GrantMap   `json:"grants"`
 	MaxGameservers *int       `json:"max_gameservers,omitempty"`
 	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
 	MaxCPU         *float64   `json:"max_cpu,omitempty"`
 	MaxStorageMB   *int       `json:"max_storage_mb,omitempty"`
-	ClaimCode     *string     `json:"claim_code,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
-	LastUsedAt    *time.Time  `json:"last_used_at,omitempty"`
-	ExpiresAt     *time.Time  `json:"expires_at,omitempty"`
+	ClaimCode      *string    `json:"claim_code,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+}
+
+// CanCreate returns true if this token has any quota set, meaning it can create gameservers.
+func (t *Token) CanCreate() bool {
+	return t.MaxGameservers != nil || t.MaxMemoryMB != nil || t.MaxCPU != nil || t.MaxStorageMB != nil
+}
+
+// GrantedGameserverIDs returns the list of gameserver IDs this token has been granted access to.
+func (t *Token) GrantedGameserverIDs() []string {
+	ids := make([]string, 0, len(t.Grants))
+	for id := range t.Grants {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// GrantMap maps gameserver IDs to permission lists.
+// Empty permission list = all gameserver permissions on that server.
+// Absent key = no access to that server.
+type GrantMap map[string][]string
+
+func (g *GrantMap) Scan(src any) error {
+	if src == nil {
+		*g = GrantMap{}
+		return nil
+	}
+	var data []byte
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("grant_map: unsupported scan type %T", src)
+	}
+	var parsed GrantMap
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return fmt.Errorf("grant_map: invalid JSON %q: %w", string(data), err)
+	}
+	*g = parsed
+	return nil
+}
+
+func (g GrantMap) Value() (driver.Value, error) {
+	if g == nil {
+		return "{}", nil
+	}
+	data, err := json.Marshal(g)
+	if err != nil {
+		return nil, fmt.Errorf("grant_map: marshal error: %w", err)
+	}
+	return string(data), nil
 }
 
 // StringSlice is a []string stored as JSON in the database.

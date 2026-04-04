@@ -259,8 +259,7 @@ export interface Token {
   id: string;
   name: string;
   role: string;
-  gameserver_ids: string[];
-  permissions: string[];
+  grants: Record<string, string[]>;
   max_gameservers?: number;
   max_memory_mb?: number;
   max_cpu?: number;

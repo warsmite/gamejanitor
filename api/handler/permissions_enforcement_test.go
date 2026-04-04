@@ -79,13 +79,17 @@ func TestPermissions_Me_UserTokenGetsOwnPermissions(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
+	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
+
+	// Create a gameserver to grant access to
+	gs := testutil.CreateTestGameserver(t, api.Services)
 
 	wantPerms := []string{
 		auth.PermGameserverStart,
 		auth.PermGameserverStop,
 		auth.PermGameserverLogs,
 	}
-	scopedToken := testutil.MustCreateCustomToken(t, api.Services, wantPerms, nil)
+	scopedToken := testutil.MustCreateCustomToken(t, api.Services, wantPerms, []string{gs.ID})
 
 	req := authRequest("GET", api.Server.URL+"/api/me", scopedToken, nil)
 	resp, err := http.DefaultClient.Do(req)

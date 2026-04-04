@@ -18,8 +18,7 @@ func newTestToken(id, name, role string) *model.Token {
 		HashedToken:   "hashed-" + id,
 		TokenPrefix:   "pfx-" + id,
 		Role:          role,
-		GameserverIDs: model.StringSlice{},
-		Permissions:   model.StringSlice{},
+		Grants: model.GrantMap{},
 	}
 }
 
@@ -149,16 +148,14 @@ func TestToken_GameserverIDsJSON(t *testing.T) {
 	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-gs", "Scoped Token", "user")
-	tok.GameserverIDs = model.StringSlice{"gs-1", "gs-2"}
-	tok.Permissions = model.StringSlice{"console", "backup.create"}
+	tok.Grants = model.GrantMap{"gs-1": []string{"console"}, "gs-2": []string{"backup.create"}}
 	require.NoError(t, db.CreateToken(tok))
 
 	got, err := db.GetToken("tok-gs")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	assert.Equal(t, model.StringSlice{"gs-1", "gs-2"}, got.GameserverIDs)
-	assert.Equal(t, model.StringSlice{"console", "backup.create"}, got.Permissions)
+	assert.Equal(t, model.GrantMap{"gs-1": []string{"console"}, "gs-2": []string{"backup.create"}}, got.Grants)
 }
 
 func TestToken_ExistsByRole_ValidToken(t *testing.T) {

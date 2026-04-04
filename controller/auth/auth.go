@@ -225,8 +225,8 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleAdmin,
-		GameserverIDs: model.StringSlice{},
-		Permissions:   model.StringSlice(AllPermissions),
+		Grants: model.GrantMap{},
+		
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -245,13 +245,14 @@ type UserTokenQuotas struct {
 	MaxStorageMB   *int
 }
 
-func (s *AuthService) CreateUserToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
+func (s *AuthService) CreateUserToken(name string, grants model.GrantMap, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
 	t := &model.Token{Name: name}
 	if err := t.Validate(); err != nil {
 		return "", nil, err
 	}
 
-	for _, gsID := range gameserverIDs {
+	// Validate granted gameserver IDs exist
+	for gsID := range grants {
 		gs, err := s.store.GetGameserver(gsID)
 		if err != nil {
 			return "", nil, fmt.Errorf("validating gameserver ID %s: %w", gsID, err)
@@ -261,11 +262,14 @@ func (s *AuthService) CreateUserToken(name string, gameserverIDs []string, permi
 		}
 	}
 
-	for _, p := range permissions {
-		if !isValidPermission(p) {
-			var fe validate.FieldErrors
-			fe.Add("permissions", fmt.Sprintf("invalid permission: %q", p))
-			return "", nil, fe
+	// Validate permissions in each grant
+	for gsID, perms := range grants {
+		for _, p := range perms {
+			if !isValidPermission(p) {
+				var fe validate.FieldErrors
+				fe.Add("grants", fmt.Sprintf("invalid permission %q for gameserver %s", p, gsID))
+				return "", nil, fe
+			}
 		}
 	}
 
@@ -279,20 +283,18 @@ func (s *AuthService) CreateUserToken(name string, gameserverIDs []string, permi
 		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
-	// Default to all-access if no gameserver IDs specified
-	if gameserverIDs == nil {
-		gameserverIDs = []string{}
+	if grants == nil {
+		grants = model.GrantMap{}
 	}
 
 	token := &model.Token{
-		ID:            uuid.New().String(),
-		Name:          name,
-		HashedToken:   string(hashed),
-		TokenPrefix:   tokenPrefix(rawToken),
-		Role:          RoleUser,
-		GameserverIDs: model.StringSlice(gameserverIDs),
-		Permissions:   model.StringSlice(permissions),
-		ExpiresAt:     expiresAt,
+		ID:          uuid.New().String(),
+		Name:        name,
+		HashedToken: string(hashed),
+		TokenPrefix: tokenPrefix(rawToken),
+		Role:        RoleUser,
+		Grants:      grants,
+		ExpiresAt:   expiresAt,
 	}
 	if quotas != nil {
 		token.MaxGameservers = quotas.MaxGameservers
@@ -305,7 +307,7 @@ func (s *AuthService) CreateUserToken(name string, gameserverIDs []string, permi
 		return "", nil, fmt.Errorf("saving user token: %w", err)
 	}
 
-	s.log.Info("user token created", "id", token.ID, "name", name, "gameservers", len(gameserverIDs), "permissions", permissions)
+	s.log.Info("user token created", "id", token.ID, "name", name, "grants", len(grants))
 	return rawToken, token, nil
 }
 
@@ -339,8 +341,8 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleWorker,
-		GameserverIDs: model.StringSlice{},
-		Permissions:   model.StringSlice{},
+		Grants: model.GrantMap{},
+		
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -381,8 +383,8 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleAdmin,
-		GameserverIDs: model.StringSlice{},
-		Permissions:   model.StringSlice(AllPermissions),
+		Grants: model.GrantMap{},
+		
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -422,8 +424,8 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleWorker,
-		GameserverIDs: model.StringSlice{},
-		Permissions:   model.StringSlice{},
+		Grants: model.GrantMap{},
+		
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -463,8 +465,8 @@ func IsAdmin(token *model.Token) bool {
 	return token != nil && token.Role == RoleAdmin
 }
 
-// HasPermission checks if a token has a specific permission on a gameserver.
-// Checks the granted gameserver_ids list — empty means no granted access.
+// HasPermission checks if a token has a specific permission on a gameserver via grants.
+// Empty permission list in a grant = all permissions on that server.
 // Ownership is checked separately by the middleware/service layer.
 // Admin tokens always have permission.
 func HasPermission(token *model.Token, gameserverID string, permission string) bool {
@@ -475,20 +477,17 @@ func HasPermission(token *model.Token, gameserverID string, permission string) b
 		return true
 	}
 
-	// Check gameserver access via grants list
-	hasAccess := false
-	for _, id := range token.GameserverIDs {
-		if id == gameserverID {
-			hasAccess = true
-			break
-		}
-	}
-	if !hasAccess {
+	perms, granted := token.Grants[gameserverID]
+	if !granted {
 		return false
 	}
 
-	// Check permission
-	for _, p := range token.Permissions {
+	// Empty permission list = all permissions on this server
+	if len(perms) == 0 {
+		return true
+	}
+
+	for _, p := range perms {
 		if p == permission {
 			return true
 		}
@@ -496,16 +495,13 @@ func HasPermission(token *model.Token, gameserverID string, permission string) b
 	return false
 }
 
-// AllowedGameserverIDs extracts the gameserver IDs a token is scoped to.
-// Returns nil if the token is nil, admin, or all-access (empty list).
-func AllowedGameserverIDs(token *model.Token) []string {
+// GrantedGameserverIDs returns the gameserver IDs this token has been granted access to.
+// Returns nil if the token is nil or admin.
+func GrantedGameserverIDs(token *model.Token) []string {
 	if token == nil || token.Role == RoleAdmin {
 		return nil
 	}
-	if len(token.GameserverIDs) == 0 {
-		return nil // all-access
-	}
-	return []string(token.GameserverIDs)
+	return token.GrantedGameserverIDs()
 }
 
 // intersectIDs returns the intersection of requested and allowed ID sets.

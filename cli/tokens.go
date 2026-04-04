@@ -118,11 +118,16 @@ var tokensCreateCmd = &cobra.Command{
 			gameserverIDs = append(gameserverIDs, id)
 		}
 
+		// Build grants map: each gameserver gets the same permissions
+		grants := make(map[string][]string)
+		for _, id := range gameserverIDs {
+			grants[id] = permissions
+		}
+
 		req := &gamejanitor.CreateTokenRequest{
-			Name:          name,
-			Role:          role,
-			GameserverIDs: gameserverIDs,
-			Permissions:   permissions,
+			Name:   name,
+			Role:   role,
+			Grants: grants,
 		}
 		if expiresIn != "" {
 			req.ExpiresIn = expiresIn
