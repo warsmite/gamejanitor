@@ -343,6 +343,39 @@ func TestPermissions_AdminCreate_SetsCreatedByTokenID(t *testing.T) {
 	assert.Equal(t, adminToken.ID, *fetched.CreatedByTokenID)
 }
 
+func TestPermissions_GrantsPersistedViaPatch(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	adminCtx := testutil.TestContext()
+	db := store.New(svc.DB)
+
+	// Admin creates a gameserver
+	gs := &model.Gameserver{Name: "Grant Persist", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
+	_, err := svc.GameserverSvc.CreateGameserver(adminCtx, gs)
+	require.NoError(t, err)
+
+	// Create a user token
+	_, granteeToken, err := svc.AuthSvc.CreateUserToken("grantee", false, nil, nil)
+	require.NoError(t, err)
+
+	// Update grants via the service (simulating PATCH)
+	update := &model.Gameserver{
+		ID:     gs.ID,
+		Grants: model.GrantMap{granteeToken.ID: {auth.PermGameserverStart}},
+	}
+	_, err = svc.GameserverSvc.UpdateGameserver(adminCtx, update)
+	require.NoError(t, err)
+
+	// Verify grants persisted
+	fetched, err := db.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fetched.Grants)
+	perms, ok := fetched.Grants[granteeToken.ID]
+	assert.True(t, ok, "grant should exist for token")
+	assert.Equal(t, []string{auth.PermGameserverStart}, perms)
+}
+
 func TestPermissions_NoToken_CreatedByTokenIDNil(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)

@@ -322,7 +322,7 @@ func (s *GameserverStore) ListGameserverIDsByToken(tokenID string) ([]string, er
 
 // ListGrantedGameserverIDs returns IDs of gameservers that have a grant entry for the given token.
 func (s *GameserverStore) ListGrantedGameserverIDs(tokenID string) ([]string, error) {
-	rows, err := s.db.Query(`SELECT id FROM gameservers WHERE json_extract(grants, ?) IS NOT NULL`, `$."`+tokenID+`"`)
+	rows, err := s.db.Query("SELECT id FROM gameservers WHERE json_extract(grants, ?) IS NOT NULL", "$."+tokenID)
 	if err != nil {
 		return nil, fmt.Errorf("listing granted gameserver IDs for token %s: %w", tokenID, err)
 	}

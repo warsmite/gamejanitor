@@ -622,6 +622,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	if gs.AutoRestart != nil {
 		existing.AutoRestart = gs.AutoRestart
 	}
+	if gs.Grants != nil {
+		existing.Grants = gs.Grants
+	}
 
 	// Enforce require_* settings
 	if s.settingsSvc.GetBool(settings.SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
