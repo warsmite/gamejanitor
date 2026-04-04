@@ -121,13 +121,6 @@ class GameserverStore {
     return grant.includes(permission);
   }
 
-  // Check a cluster-level capability (e.g. gameserver.create).
-  // Admin = yes. User with quotas = yes for create. Otherwise no.
-  canCluster(permission: string): boolean {
-    if (!this.tokenId) return true; // no auth = full access
-    // Handled by isAdmin in the UI for most cases
-    return false;
-  }
 
   // ── Data loading (lazy, called by pages on first visit) ──
 

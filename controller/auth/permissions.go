@@ -66,12 +66,3 @@ var AllPermissions = []string{
 	PermBackupRead, PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
 	PermScheduleRead, PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
 }
-
-func isValidPermission(p string) bool {
-	for _, valid := range AllPermissions {
-		if p == valid {
-			return true
-		}
-	}
-	return p == PermWorkerConnect
-}

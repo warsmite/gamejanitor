@@ -50,7 +50,7 @@ func decodeErrorBody(t *testing.T, resp *http.Response) string {
 // Test 1: Permissions in list response
 // ---------------------------------------------------------------------------
 
-func TestPermissions_Me_AdminGetsAllPermissions(t *testing.T) {
+func TestPermissions_Me_AdminRole(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
@@ -65,17 +65,14 @@ func TestPermissions_Me_AdminGetsAllPermissions(t *testing.T) {
 
 	var result struct {
 		Data struct {
-			Role        string   `json:"role"`
-			Permissions []string `json:"permissions"`
+			Role string `json:"role"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-
 	assert.Equal(t, "admin", result.Data.Role)
-	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
-func TestPermissions_Me_UserTokenGetsRole(t *testing.T) {
+func TestPermissions_Me_UserRole(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
@@ -90,18 +87,16 @@ func TestPermissions_Me_UserTokenGetsRole(t *testing.T) {
 
 	var result struct {
 		Data struct {
-			Role        string   `json:"role"`
-			Permissions []string `json:"permissions"`
+			Role    string `json:"role"`
+			TokenID string `json:"token_id"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-
 	assert.Equal(t, "user", result.Data.Role)
-	// Permissions returns the full vocabulary — per-server enforcement is via gameserver grants
-	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
+	assert.NotEmpty(t, result.Data.TokenID)
 }
 
-func TestPermissions_Me_AuthDisabled_GetsAllPermissions(t *testing.T) {
+func TestPermissions_Me_AuthDisabled(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 
@@ -112,14 +107,11 @@ func TestPermissions_Me_AuthDisabled_GetsAllPermissions(t *testing.T) {
 
 	var result struct {
 		Data struct {
-			Role        string   `json:"role"`
-			Permissions []string `json:"permissions"`
+			Role string `json:"role"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-
 	assert.Equal(t, "admin", result.Data.Role)
-	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
 // ---------------------------------------------------------------------------
