@@ -1,11 +1,10 @@
 import { writable, derived } from 'svelte/store';
 
 export const token = writable<string | null>(null);
+export const role = writable<string>('');
 export const permissions = writable<string[]>([]);
 
-export const isAdmin = derived(permissions, ($perms) =>
-  $perms.length > 0 && $perms.includes('settings.edit')
-);
+export const isAdmin = derived(role, ($role) => $role === 'admin' || $role === '');
 
 export const isAuthenticated = derived(token, ($token) => $token !== null);
 
@@ -34,5 +33,6 @@ export function setToken(rawToken: string) {
 export function clearToken() {
   document.cookie = '_token=; path=/; max-age=0';
   token.set(null);
+  role.set('');
   permissions.set([]);
 }

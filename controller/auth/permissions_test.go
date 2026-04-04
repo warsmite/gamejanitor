@@ -23,7 +23,7 @@ func TestPermission_HasPermission_AdminRole_AlwaysTrue(t *testing.T) {
 	}
 	assert.True(t, auth.HasPermission(token, "any-id", auth.PermGameserverStart))
 	assert.True(t, auth.HasPermission(token, "other-id", auth.PermGameserverDelete))
-	assert.True(t, auth.HasPermission(token, "", auth.PermSettingsEdit))
+	assert.True(t, auth.HasPermission(token, "", auth.PermGameserverCreate))
 }
 
 func TestPermission_HasPermission_UserRole_ChecksGameserverIDs(t *testing.T) {

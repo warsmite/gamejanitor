@@ -44,19 +44,13 @@ const (
 	PermScheduleUpdate = "schedule.update"
 	PermScheduleDelete = "schedule.delete"
 
-	// Cluster management
-	PermSettingsView   = "settings.view"
-	PermSettingsEdit   = "settings.edit"
-	PermTokensManage   = "tokens.manage"
-	PermNodesManage    = "nodes.manage"
-	PermWebhooksManage = "webhooks.manage"
-
 	// Worker
 	PermWorkerConnect = "worker.connect"
 )
 
-// AllPermissions is every permission that can be assigned to a token.
-// Admin tokens are created with all of these.
+// AllPermissions is every permission that can be assigned to a user token.
+// These are all gameserver-scoped (except gameserver.create which is cluster-level).
+// Cluster management (settings, tokens, nodes, webhooks) requires admin role.
 var AllPermissions = []string{
 	PermGameserverCreate, PermGameserverDelete,
 	PermGameserverStart, PermGameserverStop, PermGameserverRestart,
@@ -71,8 +65,6 @@ var AllPermissions = []string{
 	PermGameserverModsRead, PermGameserverModsWrite,
 	PermBackupRead, PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
 	PermScheduleRead, PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
-	PermSettingsView, PermSettingsEdit,
-	PermTokensManage, PermNodesManage, PermWebhooksManage,
 }
 
 func isValidPermission(p string) bool {

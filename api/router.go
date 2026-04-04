@@ -225,7 +225,7 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Get("/activity", activityHandlers.List)
 
 		r.Route("/workers", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermNodesManage))
+			r.Use(requireAdmin)
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
@@ -234,12 +234,13 @@ func NewRouter(opts RouterOptions) *Router {
 		})
 
 		r.Route("/settings", func(r chi.Router) {
-			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
-			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
+			r.Use(requireAdmin)
+			r.Get("/", settingsAPIHandlers.Get)
+			r.Patch("/", settingsAPIHandlers.Update)
 		})
 
 		r.Route("/webhooks", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermWebhooksManage))
+			r.Use(requireAdmin)
 			r.Get("/", webhookHandlers.List)
 			r.Post("/", webhookHandlers.Create)
 			r.Get("/{webhookId}", webhookHandlers.Get)
@@ -250,12 +251,12 @@ func NewRouter(opts RouterOptions) *Router {
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermTokensManage))
+			r.Use(requireAdmin)
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
-			r.With(requireAdmin).Post("/{tokenId}/rotate", authHandlers.RotateToken)
-			r.With(requireAdmin).Post("/{tokenId}/claim-code", authHandlers.GenerateClaimCode)
+			r.Post("/{tokenId}/rotate", authHandlers.RotateToken)
+			r.Post("/{tokenId}/claim-code", authHandlers.GenerateClaimCode)
 		})
 	})
 

@@ -3,6 +3,7 @@
 
 import { api, type Gameserver, type GameserverStats, type QueryData, type Game, type Backup, type Schedule } from '$lib/api';
 import { basePath } from '$lib/base';
+import { role as roleStore } from './auth';
 import { onEvent } from './sse';
 
 export interface GameserverState {
@@ -146,6 +147,7 @@ class GameserverStore {
       }
 
       this.permissions = meResponse?.permissions || [];
+      roleStore.set(meResponse?.role || '');
 
       for (const g of gameList) {
         this.games[g.id] = g;

@@ -1,14 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Token, type WebhookEndpoint, type WorkerView, type Event } from '$lib/api';
-  import { toast, confirm, prompt, setToken, gameserverStore } from '$lib/stores';
+  import { toast, confirm, prompt, setToken, gameserverStore, isAdmin } from '$lib/stores';
   import { getRoute, navigate } from '$lib/router';
 
-  const can = (p: string) => gameserverStore.can(p);
-  const canEdit = $derived(can('settings.edit'));
-  const canTokens = $derived(can('tokens.manage'));
-  const canWebhooks = $derived(can('webhooks.manage'));
-  const canNodes = $derived(can('nodes.manage'));
+  const canEdit = $derived($isAdmin);
+  const canTokens = $derived($isAdmin);
+  const canWebhooks = $derived($isAdmin);
+  const canNodes = $derived($isAdmin);
 
   let loading = $state(true);
   let saving = $state(false);
@@ -71,13 +70,6 @@
       { value: 'schedule.create', label: 'Create' },
       { value: 'schedule.update', label: 'Update' },
       { value: 'schedule.delete', label: 'Delete' },
-    ]},
-    { label: 'Cluster', permissions: [
-      { value: 'settings.view', label: 'Settings (View)' },
-      { value: 'settings.edit', label: 'Settings (Edit)' },
-      { value: 'tokens.manage', label: 'Tokens' },
-      { value: 'nodes.manage', label: 'Nodes' },
-      { value: 'webhooks.manage', label: 'Webhooks' },
     ]},
   ];
 

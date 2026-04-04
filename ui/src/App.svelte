@@ -2,7 +2,7 @@
   import './styles/tokens.css';
   import { onMount, onDestroy } from 'svelte';
   import { ToastContainer, ConfirmModal } from '$lib/components';
-  import { connect, disconnect, enableAutoToasts, initAuth, clearToken, gameserverStore } from '$lib/stores';
+  import { connect, disconnect, enableAutoToasts, initAuth, clearToken, isAdmin, gameserverStore } from '$lib/stores';
   import { api } from '$lib/api';
   import { getRoute, navigate } from '$lib/router';
   import { embedded, basePath } from '$lib/base';
@@ -85,10 +85,10 @@
       <a href="/" class="brand">Game<span class="brand-accent">Janitor</span></a>
       <div class="n-links">
         <a href="/">Dashboard</a>
-        {#if multiNode && gameserverStore.can('nodes.manage')}
+        {#if multiNode && $isAdmin}
           <a href="/cluster">Cluster</a>
         {/if}
-        {#if gameserverStore.can('settings.view')}
+        {#if $isAdmin}
           <a href="/settings">Settings</a>
         {/if}
       </div>
