@@ -35,6 +35,7 @@ class GameserverStore {
   games = $state<Record<string, Game>>({});
   tokenId = $state<string>('');
   tokenRole = $state<string>('');
+  canCreate = $state(false);
   sftpPort = $state(0);
   cluster = $state<{ total_memory_mb: number; allocated_memory_mb: number; total_cpu: number; allocated_cpu: number; total_storage_mb: number; allocated_storage_mb: number } | null>(null);
   loading = $state(true);
@@ -165,6 +166,7 @@ class GameserverStore {
 
       this.tokenId = meResponse?.token_id || '';
       this.tokenRole = meResponse?.role || '';
+      this.canCreate = this.tokenRole === 'admin' || meResponse?.can_create || false;
       roleStore.set(this.tokenRole);
 
       for (const g of gameList) {
@@ -215,6 +217,7 @@ class GameserverStore {
     this.authRequired = false;
     this.tokenId = '';
     this.tokenRole = '';
+    this.canCreate = false;
   }
 
   // Reset and re-initialize after a token change (e.g. invite claim, login).

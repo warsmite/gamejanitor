@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { gameserverStore, toast, isAdmin } from '$lib/stores';
+  import { gameserverStore, toast } from '$lib/stores';
   import { api } from '$lib/api';
   import { HeroPanel } from '$lib/components';
 
-  const can = (p: string) => p === 'gameserver.create' ? $isAdmin : false;
+  const canCreate = $derived(gameserverStore.canCreate);
   let search = $state('');
 
   const gameservers = $derived(gameserverStore.list);
@@ -38,7 +38,7 @@
 <main>
   <div class="page-header">
     <h1>Gameservers</h1>
-    {#if can('gameserver.create')}
+    {#if canCreate}
       <a href="/gameservers/new" class="btn-new">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
         New
@@ -87,7 +87,7 @@
       </div>
       <h2>No gameservers yet</h2>
       <p>Create your first gameserver to get started. Pick a game, name it, and you're live in minutes.</p>
-      {#if can('gameserver.create')}
+      {#if canCreate}
         <a href="/gameservers/new" class="btn-solid">
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
           Create Gameserver
