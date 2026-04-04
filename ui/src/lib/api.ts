@@ -262,11 +262,11 @@ export interface Token {
   name: string;
   role: string;
   can_create: boolean;
-  grants: Record<string, string[]>;
   max_gameservers?: number;
   max_memory_mb?: number;
   max_cpu?: number;
   max_storage_mb?: number;
+  claim_code?: string;
   created_at: string;
   last_used_at?: string;
   expires_at?: string;
