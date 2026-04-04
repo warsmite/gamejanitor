@@ -34,31 +34,20 @@ func TestBackup_DeleteDuringBackup_NoPanic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, model.BackupStatusInProgress, backup.Status)
 
-	// Immediately delete the gameserver while backup goroutine is running
+	// Wait for the backup to finish — delete is blocked while an operation is in progress
+	waitForBackupDone(t, svc, backup.ID)
+
+	// Now delete the gameserver — backup goroutine is done, no operation guard conflict
 	err = svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
 	require.NoError(t, err)
 
-	// Wait for the backup goroutine to finish. The goroutine may complete, fail,
-	// or find the gameserver gone. The key assertion: no panic.
-	// Poll backup status — it may be gone (cascaded delete) or failed.
+	// Backup record should be gone (cascaded delete) or completed
 	s := store.New(svc.DB)
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		b, err := s.GetBackup(backup.ID)
-		if err != nil || b == nil {
-			// Record was deleted via cascade — that's fine
-			return
-		}
-		if b.Status != model.BackupStatusInProgress {
-			// Goroutine finished (likely failed) — acceptable
-			assert.Contains(t, []string{model.BackupStatusFailed, model.BackupStatusCompleted}, b.Status,
-				"backup should be failed or completed, got %s", b.Status)
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
+	b, err := s.GetBackup(backup.ID)
+	if err != nil || b == nil {
+		return // cascade deleted — fine
 	}
-	// If we get here, the backup is still in_progress after 5s.
-	// The goroutine may be stuck but the test passes if no panic occurred.
+	assert.Contains(t, []string{model.BackupStatusFailed, model.BackupStatusCompleted}, b.Status)
 }
 
 // TestBackup_TwoSimultaneous_BothComplete triggers two backups back-to-back on
