@@ -24,76 +24,13 @@
   let workerTokens = $state<Token[]>([]);
   let showCreateToken = $state(false);
   let newTokenName = $state('');
-  let newTokenScope = $state('admin');
-  let newTokenPermissions = $state<string[]>([]);
+  let newTokenRole = $state('admin');
+  let newTokenMaxGs = $state('');
+  let newTokenMaxMem = $state('');
+  let newTokenMaxCpu = $state('');
+  let newTokenMaxStorage = $state('');
   let creatingToken = $state(false);
   let revealedToken = $state('');
-
-  // Permission groups for the token permission picker
-  const permissionGroups = [
-    { label: 'Lifecycle', permissions: [
-      { value: 'gameserver.start', label: 'Start' },
-      { value: 'gameserver.stop', label: 'Stop' },
-      { value: 'gameserver.restart', label: 'Restart' },
-      { value: 'gameserver.update-game', label: 'Update Game' },
-      { value: 'gameserver.reinstall', label: 'Reinstall' },
-      { value: 'gameserver.delete', label: 'Delete' },
-    ]},
-    { label: 'Configuration', permissions: [
-      { value: 'gameserver.configure.name', label: 'Name' },
-      { value: 'gameserver.configure.env', label: 'Environment' },
-      { value: 'gameserver.configure.resources', label: 'Resources' },
-      { value: 'gameserver.configure.ports', label: 'Ports' },
-      { value: 'gameserver.configure.connection', label: 'Connection' },
-      { value: 'gameserver.configure.auto-restart', label: 'Auto-Restart' },
-      { value: 'gameserver.regenerate-sftp', label: 'Regenerate SFTP' },
-    ]},
-    { label: 'Access', permissions: [
-      { value: 'gameserver.logs', label: 'Logs' },
-      { value: 'gameserver.command', label: 'Commands' },
-      { value: 'gameserver.files.read', label: 'Files (Read)' },
-      { value: 'gameserver.files.write', label: 'Files (Write)' },
-    ]},
-    { label: 'Mods', permissions: [
-      { value: 'gameserver.mods.read', label: 'Mods (Read)' },
-      { value: 'gameserver.mods.write', label: 'Mods (Write)' },
-    ]},
-    { label: 'Backups', permissions: [
-      { value: 'backup.read', label: 'Read' },
-      { value: 'backup.create', label: 'Create' },
-      { value: 'backup.delete', label: 'Delete' },
-      { value: 'backup.restore', label: 'Restore' },
-      { value: 'backup.download', label: 'Download' },
-    ]},
-    { label: 'Schedules', permissions: [
-      { value: 'schedule.read', label: 'Read' },
-      { value: 'schedule.create', label: 'Create' },
-      { value: 'schedule.update', label: 'Update' },
-      { value: 'schedule.delete', label: 'Delete' },
-    ]},
-  ];
-
-  // Common permissions pre-checked when switching to custom scope
-  const defaultCustomPermissions = [
-    'gameserver.start', 'gameserver.stop', 'gameserver.restart',
-    'gameserver.logs', 'gameserver.files.read',
-  ];
-
-  function togglePermission(perm: string) {
-    if (newTokenPermissions.includes(perm)) {
-      newTokenPermissions = newTokenPermissions.filter(p => p !== perm);
-    } else {
-      newTokenPermissions = [...newTokenPermissions, perm];
-    }
-  }
-
-  function selectAllPermissions() {
-    newTokenPermissions = permissionGroups.flatMap(g => g.permissions.map(p => p.value));
-  }
-
-  function deselectAllPermissions() {
-    newTokenPermissions = [];
-  }
 
   // Webhooks state
   let webhooks = $state<WebhookEndpoint[]>([]);
@@ -185,16 +122,22 @@
   async function createToken() {
     creatingToken = true;
     try {
-      const body: any = { name: newTokenName, role: newTokenScope };
-      if (newTokenScope === 'user') {
-        body.permissions = newTokenPermissions;
+      const body: any = { name: newTokenName, role: newTokenRole };
+      if (newTokenRole === 'user') {
+        if (newTokenMaxGs) body.max_gameservers = parseInt(newTokenMaxGs);
+        if (newTokenMaxMem) body.max_memory_mb = parseInt(newTokenMaxMem);
+        if (newTokenMaxCpu) body.max_cpu = parseFloat(newTokenMaxCpu);
+        if (newTokenMaxStorage) body.max_storage_mb = parseInt(newTokenMaxStorage);
       }
       const result = await api.tokens.create(body);
       revealedToken = result.raw_token || result.token || '';
       tokens = await api.tokens.list();
       showCreateToken = false;
       newTokenName = '';
-      newTokenPermissions = [];
+      newTokenMaxGs = '';
+      newTokenMaxMem = '';
+      newTokenMaxCpu = '';
+      newTokenMaxStorage = '';
     } catch (e: any) {
       toast(`Failed to create token: ${e.message}`, 'error');
     } finally {
@@ -562,49 +505,42 @@
             <div class="field-grid">
               <div class="field">
                 <label class="label">Name</label>
-                <input class="input" type="text" placeholder="e.g. ci-deploy" bind:value={newTokenName}>
+                <input class="input" type="text" placeholder="e.g. my-friend" bind:value={newTokenName}>
               </div>
               <div class="field">
                 <label class="label">Role</label>
-                <select class="select" bind:value={newTokenScope} onchange={() => {
-                  if (newTokenScope === 'user' && newTokenPermissions.length === 0) {
-                    newTokenPermissions = [...defaultCustomPermissions];
-                  }
-                }}>
-                  <option value="admin">Admin (full access)</option>
-                  <option value="user">User (select permissions)</option>
+                <select class="select" bind:value={newTokenRole}>
+                  <option value="admin">Admin (full cluster access)</option>
+                  <option value="user">User (per-server access via grants)</option>
                 </select>
               </div>
             </div>
-            {#if newTokenScope === 'user'}
-              <div class="perm-picker">
-                <div class="perm-header">
-                  <span class="perm-title">Permissions</span>
-                  <div class="perm-bulk">
-                    <button class="perm-bulk-btn" onclick={selectAllPermissions}>Select All</button>
-                    <button class="perm-bulk-btn" onclick={deselectAllPermissions}>Deselect All</button>
-                  </div>
+            {#if newTokenRole === 'user'}
+              <div class="field-hint" style="margin: 4px 0 10px;">
+                User tokens see only servers they create or are granted access to. Set quotas to allow creating servers.
+              </div>
+              <div class="s-title" style="font-size:0.78rem; margin-top:8px;">Resource Quotas</div>
+              <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="field">
+                  <label class="label">Max Gameservers</label>
+                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxGs}>
                 </div>
-                <div class="perm-groups">
-                  {#each permissionGroups as group}
-                    <div class="perm-group">
-                      <div class="perm-group-label">{group.label}</div>
-                      <div class="perm-checkboxes">
-                        {#each group.permissions as perm}
-                          <label class="perm-checkbox">
-                            <input type="checkbox" checked={newTokenPermissions.includes(perm.value)} onchange={() => togglePermission(perm.value)}>
-                            <span class="perm-label">{perm.label}</span>
-                          </label>
-                        {/each}
-                      </div>
-                    </div>
-                  {/each}
+                <div class="field">
+                  <label class="label">Max Memory (MB)</label>
+                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxMem}>
                 </div>
-                <div class="perm-count">{newTokenPermissions.length} permission{newTokenPermissions.length !== 1 ? 's' : ''} selected</div>
+                <div class="field">
+                  <label class="label">Max CPU</label>
+                  <input class="input" type="number" min="0" step="0.5" placeholder="No limit" bind:value={newTokenMaxCpu}>
+                </div>
+                <div class="field">
+                  <label class="label">Max Storage (MB)</label>
+                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxStorage}>
+                </div>
               </div>
             {/if}
             <div class="panel-actions">
-              <button class="btn-solid" onclick={createToken} disabled={creatingToken || !newTokenName || (newTokenScope === 'user' && newTokenPermissions.length === 0)} style="font-size:0.82rem;">
+              <button class="btn-solid" onclick={createToken} disabled={creatingToken || !newTokenName} style="font-size:0.82rem;">
                 {creatingToken ? 'Creating...' : 'Create'}
               </button>
               <button class="btn-accent" onclick={() => showCreateToken = false} style="font-size:0.82rem;">Cancel</button>
@@ -622,6 +558,15 @@
                   <div class="list-name">{token.name}</div>
                   <div class="list-meta">
                     <span class="scope-badge">{token.role}</span>
+                    {#if token.role === 'user' && (token.max_gameservers || token.max_memory_mb)}
+                      <span class="meta-sep">·</span>
+                      {#if token.max_gameservers}<span class="quota-tag">{token.max_gameservers} servers</span>{/if}
+                      {#if token.max_memory_mb}<span class="quota-tag">{token.max_memory_mb} MB</span>{/if}
+                      {#if token.max_cpu}<span class="quota-tag">{token.max_cpu} CPU</span>{/if}
+                    {:else if token.role === 'user'}
+                      <span class="meta-sep">·</span>
+                      <span class="quota-tag dim">No quotas (view only)</span>
+                    {/if}
                     <span class="meta-sep">·</span>
                     Created {shortDate(token.created_at)}
                     {#if token.last_used_at}
@@ -989,6 +934,10 @@
     background: var(--accent-dim); color: var(--accent);
   }
   .scope-badge.caution { background: rgba(245,158,11,0.08); color: var(--caution); }
+  .quota-tag {
+    font-size: 0.7rem; font-family: var(--font-mono); color: var(--muted);
+  }
+  .quota-tag.dim { opacity: 0.6; font-style: italic; }
 
   .empty-row {
     padding: 20px 0;
@@ -1059,65 +1008,6 @@
   .live { color: var(--live); }
   .idle { color: var(--idle); }
 
-  /* ═══════════ PERMISSION PICKER ═══════════ */
-  .perm-picker {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-dim);
-    position: relative; z-index: 1;
-  }
-  .perm-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 14px;
-  }
-  .perm-title {
-    font-size: 0.64rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-tertiary);
-  }
-  .perm-bulk { display: flex; gap: 6px; }
-  .perm-bulk-btn {
-    padding: 3px 8px; border-radius: 4px;
-    font-size: 0.66rem; font-family: var(--font-mono);
-    color: var(--text-tertiary); background: none;
-    border: 1px solid var(--border-dim);
-    cursor: pointer; transition: color 0.15s, border-color 0.15s;
-  }
-  .perm-bulk-btn:hover { color: var(--accent); border-color: var(--accent-border); }
-
-  .perm-groups {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 16px 20px;
-  }
-  .perm-group-label {
-    font-size: 0.72rem; font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border-dim);
-  }
-  .perm-checkboxes {
-    display: flex; flex-direction: column; gap: 5px;
-  }
-  .perm-checkbox {
-    display: flex; align-items: center; gap: 7px;
-    cursor: pointer;
-  }
-  .perm-checkbox input[type="checkbox"] {
-    width: 14px; height: 14px;
-    accent-color: var(--accent);
-    cursor: pointer;
-  }
-  .perm-label {
-    font-size: 0.76rem; font-family: var(--font-mono);
-    color: var(--text-secondary);
-  }
-  .perm-count {
-    margin-top: 12px;
-    font-size: 0.68rem; font-family: var(--font-mono);
-    color: var(--text-tertiary);
-  }
-
   /* ═══════════ MOBILE ═══════════ */
   @media (max-width: 720px) {
     .settings-layout {
@@ -1135,6 +1025,5 @@
     }
     .content { padding-left: 0; max-width: 100%; }
     .field-grid { grid-template-columns: 1fr; }
-    .perm-groups { grid-template-columns: 1fr; }
   }
 </style>

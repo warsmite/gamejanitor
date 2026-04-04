@@ -2,8 +2,8 @@
   import { navigate } from '$lib/router';
   import { embedded } from '$lib/base';
   import { onMount } from 'svelte';
-  import { api, type Gameserver, type Game, type DynamicOption } from '$lib/api';
-  import { toast, confirm, gameserverStore } from '$lib/stores';
+  import { api, type Gameserver, type Game, type Token, type DynamicOption } from '$lib/api';
+  import { toast, confirm, gameserverStore, isAdmin } from '$lib/stores';
   import { ResourceSlider, EnvEditor } from '$lib/components';
 
   let { id }: { id: string } = $props();
@@ -34,6 +34,84 @@
   let updating = $state(false);
   let reinstalling = $state(false);
   let deleting = $state(false);
+
+  // Access / grants
+  let allTokens = $state<Token[]>([]);
+  let showGrantForm = $state(false);
+  let grantTokenId = $state('');
+  let grantFullAccess = $state(true);
+  let grantPerms = $state<string[]>([]);
+  let savingGrant = $state(false);
+
+  const permissionOptions = [
+    { value: 'gameserver.start', label: 'Start' },
+    { value: 'gameserver.stop', label: 'Stop' },
+    { value: 'gameserver.restart', label: 'Restart' },
+    { value: 'gameserver.update-game', label: 'Update Game' },
+    { value: 'gameserver.reinstall', label: 'Reinstall' },
+    { value: 'gameserver.delete', label: 'Delete' },
+    { value: 'gameserver.configure.name', label: 'Configure Name' },
+    { value: 'gameserver.configure.env', label: 'Configure Env' },
+    { value: 'gameserver.configure.resources', label: 'Configure Resources' },
+    { value: 'gameserver.configure.ports', label: 'Configure Ports' },
+    { value: 'gameserver.configure.auto-restart', label: 'Configure Auto-Restart' },
+    { value: 'gameserver.regenerate-sftp', label: 'Regenerate SFTP' },
+    { value: 'gameserver.logs', label: 'Logs' },
+    { value: 'gameserver.command', label: 'Commands' },
+    { value: 'gameserver.files.read', label: 'Files (Read)' },
+    { value: 'gameserver.files.write', label: 'Files (Write)' },
+    { value: 'gameserver.mods.read', label: 'Mods (Read)' },
+    { value: 'gameserver.mods.write', label: 'Mods (Write)' },
+    { value: 'backup.read', label: 'Backups (Read)' },
+    { value: 'backup.create', label: 'Backups (Create)' },
+    { value: 'backup.delete', label: 'Backups (Delete)' },
+    { value: 'backup.restore', label: 'Backups (Restore)' },
+    { value: 'backup.download', label: 'Backups (Download)' },
+    { value: 'schedule.read', label: 'Schedules (Read)' },
+    { value: 'schedule.create', label: 'Schedules (Create)' },
+    { value: 'schedule.update', label: 'Schedules (Update)' },
+    { value: 'schedule.delete', label: 'Schedules (Delete)' },
+  ];
+
+  // Resolve token ID → name for display
+  function tokenName(tokenId: string): string {
+    const t = allTokens.find(t => t.id === tokenId);
+    return t?.name || tokenId.slice(0, 8);
+  }
+
+  async function addGrant() {
+    if (!grantTokenId || !gameserver) return;
+    savingGrant = true;
+    try {
+      const grants = { ...(gameserver.grants || {}) };
+      grants[grantTokenId] = grantFullAccess ? [] : grantPerms;
+      await api.gameservers.update(gsId, { grants });
+      gameserver = await api.gameservers.get(gsId);
+      showGrantForm = false;
+      grantTokenId = '';
+      grantPerms = [];
+      toast('Access granted');
+    } catch (e: any) {
+      toast(`Failed to add grant: ${e.message}`, 'error');
+    } finally {
+      savingGrant = false;
+    }
+  }
+
+  async function removeGrant(tokenId: string) {
+    if (!gameserver) return;
+    const name = tokenName(tokenId);
+    if (!await confirm(`Remove access for "${name}"?`)) return;
+    try {
+      const grants = { ...(gameserver.grants || {}) };
+      delete grants[tokenId];
+      await api.gameservers.update(gsId, { grants });
+      gameserver = await api.gameservers.get(gsId);
+      toast('Access removed');
+    } catch (e: any) {
+      toast(`Failed to remove grant: ${e.message}`, 'error');
+    }
+  }
 
   // Can this user edit anything?
   const canEditAnything = $derived(
@@ -76,6 +154,12 @@
           }
         }
       } catch (e) { console.warn('GameserverSettings: game definition not found', e); }
+
+      // Load token list for grant management (admin only)
+      if ($isAdmin) {
+        try { allTokens = await api.tokens.list(); }
+        catch (e) { console.warn('GameserverSettings: failed to load tokens', e); }
+      }
     } catch (e: any) {
       toast(`Failed to load: ${e.message}`, 'error');
     } finally {
@@ -256,6 +340,77 @@
       </div>
     {/if}
 
+    <!-- ═══════════ ACCESS ═══════════ -->
+    {#if $isAdmin || (gameserver && gameserver.created_by_token_id === gameserverStore.tokenId)}
+      <div class="s-section">
+        <div class="s-title">Access</div>
+
+        {#if gameserver?.created_by_token_id}
+          <div class="access-row owner">
+            <div class="access-info">
+              <span class="access-name">{tokenName(gameserver.created_by_token_id)}</span>
+              <span class="access-badge">owner</span>
+            </div>
+          </div>
+        {/if}
+
+        {#each Object.entries(gameserver?.grants || {}) as [tokenId, perms]}
+          <div class="access-row">
+            <div class="access-info">
+              <span class="access-name">{tokenName(tokenId)}</span>
+              {#if perms.length === 0}
+                <span class="access-badge">full access</span>
+              {:else}
+                <span class="access-perms">{perms.length} permission{perms.length !== 1 ? 's' : ''}</span>
+              {/if}
+            </div>
+            <button class="btn-action stop" style="font-size:0.72rem; padding:4px 10px;" onclick={() => removeGrant(tokenId)}>Remove</button>
+          </div>
+        {/each}
+
+        {#if !showGrantForm}
+          <button class="btn-accent" style="margin-top:8px; font-size:0.78rem;" onclick={() => showGrantForm = true}>Add Access</button>
+        {:else}
+          <div class="grant-form">
+            <div class="field">
+              <label class="label">Token</label>
+              <select class="select" bind:value={grantTokenId}>
+                <option value="">Select a token...</option>
+                {#each allTokens.filter(t => t.role === 'user' && !Object.keys(gameserver?.grants || {}).includes(t.id) && t.id !== gameserver?.created_by_token_id) as t}
+                  <option value={t.id}>{t.name}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="field">
+              <label class="perm-checkbox" style="margin:6px 0;">
+                <input type="checkbox" bind:checked={grantFullAccess}>
+                <span class="label" style="margin:0;">Full access (all permissions)</span>
+              </label>
+            </div>
+            {#if !grantFullAccess}
+              <div class="grant-perms">
+                {#each permissionOptions as perm}
+                  <label class="perm-checkbox">
+                    <input type="checkbox" checked={grantPerms.includes(perm.value)} onchange={() => {
+                      if (grantPerms.includes(perm.value)) grantPerms = grantPerms.filter(p => p !== perm.value);
+                      else grantPerms = [...grantPerms, perm.value];
+                    }}>
+                    <span class="perm-label">{perm.label}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+            <div class="panel-actions" style="margin-top:8px;">
+              <button class="btn-solid" onclick={addGrant} disabled={savingGrant || !grantTokenId} style="font-size:0.78rem;">
+                {savingGrant ? 'Granting...' : 'Grant Access'}
+              </button>
+              <button class="btn-accent" onclick={() => showGrantForm = false} style="font-size:0.78rem;">Cancel</button>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if can('gameserver.update-game') || can('gameserver.reinstall') || can('gameserver.delete')}
       <div class="s-section">
         <div class="danger-zone">
@@ -373,8 +528,34 @@
   .danger-label { font-size: 0.88rem; font-weight: 500; color: var(--text-primary); }
   .danger-desc { font-size: 0.76rem; color: var(--text-tertiary); margin-top: 2px; }
 
+  /* ═══════════ ACCESS ═══════════ */
+  .access-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-dim);
+  }
+  .access-row:last-of-type { border-bottom: none; }
+  .access-info { display: flex; align-items: center; gap: 8px; }
+  .access-name { font-size: 0.84rem; font-family: var(--font-mono); color: var(--text-primary); }
+  .access-badge {
+    display: inline-flex; padding: 2px 7px; border-radius: 4px;
+    font-size: 0.62rem; font-family: var(--font-mono); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    background: var(--accent-dim); color: var(--accent);
+  }
+  .access-perms { font-size: 0.72rem; font-family: var(--font-mono); color: var(--muted); }
+  .grant-form { margin-top: 10px; padding: 12px; border: 1px solid var(--border-dim); border-radius: 8px; }
+  .grant-perms {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px;
+    margin-top: 8px; max-height: 200px; overflow-y: auto;
+  }
+  .perm-checkbox { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .perm-checkbox input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .perm-label { font-size: 0.74rem; font-family: var(--font-mono); color: var(--text-secondary); }
+
   @media (max-width: 700px) {
     .settings-panel { padding: 18px; }
     .danger-item { flex-direction: column; }
+    .grant-perms { grid-template-columns: 1fr; }
   }
 </style>
