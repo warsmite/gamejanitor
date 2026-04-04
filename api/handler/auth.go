@@ -232,6 +232,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"role":        token.Role,
 		"permissions": effectivePermissions(r),
+		"grants":      token.Grants,
 	}
 
 	// Include quota info for user tokens
