@@ -2,7 +2,6 @@ import { writable, derived } from 'svelte/store';
 
 export const token = writable<string | null>(null);
 export const permissions = writable<string[]>([]);
-export const gameserverIds = writable<string[]>([]); // empty = all access
 
 export const isAdmin = derived(permissions, ($perms) =>
   $perms.length > 0 && $perms.includes('settings.edit')
@@ -15,13 +14,6 @@ export function hasPermission(perm: string): boolean {
   permissions.subscribe(p => perms = p)();
   if (perms.length === 0) return true; // no auth = full access
   return perms.includes(perm);
-}
-
-export function hasGameserverAccess(gsId: string): boolean {
-  let ids: string[] = [];
-  gameserverIds.subscribe(i => ids = i)();
-  if (ids.length === 0) return true; // empty = all access
-  return ids.includes(gsId);
 }
 
 // Load token from cookie on init
@@ -43,5 +35,4 @@ export function clearToken() {
   document.cookie = '_token=; path=/; max-age=0';
   token.set(null);
   permissions.set([]);
-  gameserverIds.set([]);
 }

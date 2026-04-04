@@ -131,10 +131,11 @@ class GameserverStore {
     if (this.initialized) return;
 
     try {
-      const [gsResponse, gameList, clusterStatus] = await Promise.all([
+      const [gameservers, gameList, clusterStatus, meResponse] = await Promise.all([
         api.gameservers.list(),
         api.games.list(),
         api.clusterStatus.get().catch(() => null),
+        api.me.get().catch(() => null),
       ]);
 
       if (clusterStatus?.config?.sftp_port) {
@@ -144,18 +145,18 @@ class GameserverStore {
         this.cluster = clusterStatus.cluster;
       }
 
-      this.permissions = gsResponse.permissions || [];
+      this.permissions = meResponse?.permissions || [];
 
       for (const g of gameList) {
         this.games[g.id] = g;
       }
 
-      for (const gs of gsResponse.gameservers) {
+      for (const gs of gameservers) {
         this.gameservers[gs.id] = this.newState(gs);
       }
 
       // Connect live data for active servers
-      for (const gs of gsResponse.gameservers) {
+      for (const gs of gameservers) {
         if (gs.status !== 'stopped') {
           this.connectLogStream(gs.id);
         }

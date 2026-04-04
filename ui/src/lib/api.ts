@@ -258,9 +258,13 @@ export interface Schedule {
 export interface Token {
   id: string;
   name: string;
-  scope: string;
+  role: string;
   gameserver_ids: string[];
   permissions: string[];
+  max_gameservers?: number;
+  max_memory_mb?: number;
+  max_cpu?: number;
+  max_storage_mb?: number;
   created_at: string;
   last_used_at?: string;
   expires_at?: string;
@@ -467,7 +471,7 @@ export interface UntrackedFile {
 
 export const api = {
   gameservers: {
-    list: () => get<{ gameservers: Gameserver[]; permissions: string[] }>('/api/gameservers'),
+    list: () => get<Gameserver[]>('/api/gameservers'),
     get: (id: string) => get<Gameserver>(`/api/gameservers/${id}`),
     create: (data: any) => post<Gameserver>('/api/gameservers', data),
     update: (id: string, data: any) => patch<Gameserver>(`/api/gameservers/${id}`, data),
@@ -523,6 +527,10 @@ export const api = {
     list: () => get<Game[]>('/api/games'),
     get: (id: string) => get<Game>(`/api/games/${id}`),
     options: (gameId: string, key: string) => get<DynamicOption[]>(`/api/games/${gameId}/options/${key}`),
+  },
+
+  me: {
+    get: () => get<{ role: string; permissions: string[]; quotas?: any }>('/api/me'),
   },
 
   clusterStatus: {

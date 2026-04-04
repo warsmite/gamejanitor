@@ -193,8 +193,8 @@
   async function createToken() {
     creatingToken = true;
     try {
-      const body: any = { name: newTokenName, scope: newTokenScope };
-      if (newTokenScope === 'custom') {
+      const body: any = { name: newTokenName, role: newTokenScope };
+      if (newTokenScope === 'user') {
         body.permissions = newTokenPermissions;
       }
       const result = await api.tokens.create(body);
@@ -573,18 +573,18 @@
                 <input class="input" type="text" placeholder="e.g. ci-deploy" bind:value={newTokenName}>
               </div>
               <div class="field">
-                <label class="label">Scope</label>
+                <label class="label">Role</label>
                 <select class="select" bind:value={newTokenScope} onchange={() => {
-                  if (newTokenScope === 'custom' && newTokenPermissions.length === 0) {
+                  if (newTokenScope === 'user' && newTokenPermissions.length === 0) {
                     newTokenPermissions = [...defaultCustomPermissions];
                   }
                 }}>
                   <option value="admin">Admin (full access)</option>
-                  <option value="custom">Custom (select permissions)</option>
+                  <option value="user">User (select permissions)</option>
                 </select>
               </div>
             </div>
-            {#if newTokenScope === 'custom'}
+            {#if newTokenScope === 'user'}
               <div class="perm-picker">
                 <div class="perm-header">
                   <span class="perm-title">Permissions</span>
@@ -612,7 +612,7 @@
               </div>
             {/if}
             <div class="panel-actions">
-              <button class="btn-solid" onclick={createToken} disabled={creatingToken || !newTokenName || (newTokenScope === 'custom' && newTokenPermissions.length === 0)} style="font-size:0.82rem;">
+              <button class="btn-solid" onclick={createToken} disabled={creatingToken || !newTokenName || (newTokenScope === 'user' && newTokenPermissions.length === 0)} style="font-size:0.82rem;">
                 {creatingToken ? 'Creating...' : 'Create'}
               </button>
               <button class="btn-accent" onclick={() => showCreateToken = false} style="font-size:0.82rem;">Cancel</button>
@@ -629,7 +629,7 @@
                 <div class="list-info">
                   <div class="list-name">{token.name}</div>
                   <div class="list-meta">
-                    <span class="scope-badge">{token.scope}</span>
+                    <span class="scope-badge">{token.role}</span>
                     <span class="meta-sep">·</span>
                     Created {shortDate(token.created_at)}
                     {#if token.last_used_at}
@@ -639,7 +639,7 @@
                   </div>
                 </div>
                 <div class="list-actions">
-                  {#if token.scope === 'custom'}
+                  {#if token.role === 'user'}
                     <button class="act" onclick={() => shareToken(token.id)}>
                       {token.claim_code ? 'Copy Link' : 'Share'}
                     </button>
