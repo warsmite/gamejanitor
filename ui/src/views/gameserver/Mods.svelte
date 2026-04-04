@@ -6,7 +6,7 @@
 
   let { id }: { id: string } = $props();
 
-  const can = (p: string) => gameserverStore.can(p);
+  const can = (p: string) => gameserverStore.canOnGameserver(p, id);
   const canWrite = $derived(can('gameserver.mods.write'));
   const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);

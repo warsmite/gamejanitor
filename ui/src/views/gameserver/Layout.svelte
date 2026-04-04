@@ -25,7 +25,7 @@
     return `${(bytes / 1073741824).toFixed(1)} GB`;
   }
 
-  const can = (p: string) => gameserverStore.can(p);
+  const can = (p: string) => gameserverStore.canOnGameserver(p, id);
   import type { Snippet } from 'svelte';
 
   let { id, children }: { id: string; children: Snippet } = $props();

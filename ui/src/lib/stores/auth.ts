@@ -2,18 +2,10 @@ import { writable, derived } from 'svelte/store';
 
 export const token = writable<string | null>(null);
 export const role = writable<string>('');
-export const permissions = writable<string[]>([]);
 
 export const isAdmin = derived(role, ($role) => $role === 'admin' || $role === '');
 
 export const isAuthenticated = derived(token, ($token) => $token !== null);
-
-export function hasPermission(perm: string): boolean {
-  let perms: string[] = [];
-  permissions.subscribe(p => perms = p)();
-  if (perms.length === 0) return true; // no auth = full access
-  return perms.includes(perm);
-}
 
 // Load token from cookie on init
 export function initAuth() {
@@ -34,5 +26,4 @@ export function clearToken() {
   document.cookie = '_token=; path=/; max-age=0';
   token.set(null);
   role.set('');
-  permissions.set([]);
 }

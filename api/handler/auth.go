@@ -220,18 +220,15 @@ func (h *AuthHandlers) RedeemClaimCode(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	token := auth.TokenFromContext(r.Context())
 	if token == nil {
-		// Auth disabled — return admin-like response
 		respondOK(w, map[string]any{
-			"role":        "admin",
-			"permissions": auth.AllPermissions,
+			"role": "admin",
 		})
 		return
 	}
 
 	resp := map[string]any{
-		"role":        token.Role,
-		"permissions": effectivePermissions(r),
-		"token_id":    token.ID,
+		"role":     token.Role,
+		"token_id": token.ID,
 	}
 
 	// Include quota info for user tokens

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { gameserverStore, toast } from '$lib/stores';
+  import { gameserverStore, toast, isAdmin } from '$lib/stores';
   import { api } from '$lib/api';
   import { HeroPanel } from '$lib/components';
 
-  const can = (p: string) => gameserverStore.can(p);
+  const can = (p: string) => p === 'gameserver.create' ? $isAdmin : false;
   let search = $state('');
 
   const gameservers = $derived(gameserverStore.list);

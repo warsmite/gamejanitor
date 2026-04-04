@@ -8,7 +8,7 @@
 
   let { id }: { id: string } = $props();
 
-  const can = (p: string) => gameserverStore.can(p);
+  const can = (p: string) => gameserverStore.canOnGameserver(p, id);
   const gsState = $derived(gameserverStore.getState(id));
   const gameserver = $derived(gsState?.gameserver ?? null);
   const query = $derived(gsState?.query ?? null);

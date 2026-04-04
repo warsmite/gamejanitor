@@ -154,6 +154,8 @@ export interface Gameserver {
   auto_restart: boolean;
   connection_address?: string;
   desired_state: string;
+  created_by_token_id?: string;
+  grants: Record<string, string[]>;
   created_at: string;
   updated_at: string;
 }
@@ -529,7 +531,7 @@ export const api = {
   },
 
   me: {
-    get: () => get<{ role: string; permissions: string[]; quotas?: any }>('/api/me'),
+    get: () => get<{ role: string; token_id?: string; quotas?: any }>('/api/me'),
   },
 
   clusterStatus: {

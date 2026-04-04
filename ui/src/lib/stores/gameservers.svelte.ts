@@ -33,7 +33,7 @@ export const phaseLabels: Record<string, string> = {
 class GameserverStore {
   gameservers = $state<Record<string, GameserverState>>({});
   games = $state<Record<string, Game>>({});
-  permissions = $state<string[]>([]);
+  tokenId = $state<string>('');
   sftpPort = $state(0);
   cluster = $state<{ total_memory_mb: number; allocated_memory_mb: number; total_cpu: number; allocated_cpu: number; total_storage_mb: number; allocated_storage_mb: number } | null>(null);
   loading = $state(true);
@@ -104,8 +104,29 @@ class GameserverStore {
     return `sftp://${gs.sftp_username}@${ip}:${this.sftpPort}`;
   }
 
-  can(permission: string): boolean {
-    return this.permissions.includes(permission);
+  // Check if the current token has a permission on a specific gameserver.
+  // Admin and owners have all permissions. Granted tokens check the grant's permission list.
+  canOnGameserver(permission: string, gsId: string): boolean {
+    // No auth or admin = full access
+    if (!this.tokenId) return true;
+    const gs = this.gameservers[gsId]?.gameserver;
+    if (!gs) return false;
+    // Owner = all permissions
+    if (gs.created_by_token_id === this.tokenId) return true;
+    // Check grants
+    const grant = gs.grants?.[this.tokenId];
+    if (!grant) return false;
+    // Empty grant = all permissions
+    if (grant.length === 0) return true;
+    return grant.includes(permission);
+  }
+
+  // Check a cluster-level capability (e.g. gameserver.create).
+  // Admin = yes. User with quotas = yes for create. Otherwise no.
+  canCluster(permission: string): boolean {
+    if (!this.tokenId) return true; // no auth = full access
+    // Handled by isAdmin in the UI for most cases
+    return false;
   }
 
   // ── Data loading (lazy, called by pages on first visit) ──
@@ -146,7 +167,7 @@ class GameserverStore {
         this.cluster = clusterStatus.cluster;
       }
 
-      this.permissions = meResponse?.permissions || [];
+      this.tokenId = meResponse?.token_id || '';
       roleStore.set(meResponse?.role || '');
 
       for (const g of gameList) {

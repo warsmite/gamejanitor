@@ -2,7 +2,6 @@ package handler
 
 import (
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -101,13 +100,4 @@ func serviceErrorMessage(err error) string {
 		return svcErr.Error()
 	}
 	return "internal server error"
-}
-
-// effectivePermissions returns the current token's permissions.
-// Admin tokens get all permissions. No token (auth disabled) gets all permissions.
-// effectivePermissions returns the set of all assignable permissions.
-// Per-server enforcement happens via gameserver grants, not this list.
-// This is used by /api/me so the UI knows the full permission vocabulary.
-func effectivePermissions(r *http.Request) []string {
-	return auth.AllPermissions
 }

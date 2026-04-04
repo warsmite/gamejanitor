@@ -9,7 +9,7 @@
   let { id }: { id: string } = $props();
   const gsId = id;
 
-  const can = (p: string) => gameserverStore.can(p);
+  const can = (p: string) => gameserverStore.canOnGameserver(p, id);
   const isRunning = $derived(gameserverStore.isRunning(id));
 
   let gameserver = $state<Gameserver | null>(null);
