@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
@@ -14,14 +15,33 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
+// GameserverVisibility returns the set of gameserver IDs visible to a token.
+type GameserverVisibility interface {
+	ListGameserverIDsByToken(tokenID string) ([]string, error)
+	ListGrantedGameserverIDs(tokenID string) ([]string, error)
+}
+
+// visibleGameserverIDs returns owned + granted gameserver IDs for a token.
+// Returns nil for admin or no-auth (no filtering needed).
+func visibleGameserverIDs(r *http.Request, vis GameserverVisibility) []string {
+	token := auth.TokenFromContext(r.Context())
+	if token == nil || auth.IsAdmin(token) || vis == nil {
+		return nil
+	}
+	owned, _ := vis.ListGameserverIDsByToken(token.ID)
+	granted, _ := vis.ListGrantedGameserverIDs(token.ID)
+	return append(owned, granted...)
+}
+
 type EventHandlers struct {
 	bus        *controller.EventBus
 	historySvc *event.EventHistoryService
+	visibility GameserverVisibility
 	log        *slog.Logger
 }
 
-func NewEventHandlers(bus *controller.EventBus, historySvc *event.EventHistoryService, log *slog.Logger) *EventHandlers {
-	return &EventHandlers{bus: bus, historySvc: historySvc, log: log}
+func NewEventHandlers(bus *controller.EventBus, historySvc *event.EventHistoryService, visibility GameserverVisibility, log *slog.Logger) *EventHandlers {
+	return &EventHandlers{bus: bus, historySvc: historySvc, visibility: visibility, log: log}
 }
 
 func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +58,7 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Token scoping — only send events for gameservers the token can access
-	allowedIDs := []string(nil) // TODO: query granted gameserver IDs from store for event scoping
+	allowedIDs := visibleGameserverIDs(r, h.visibility)
 	var allowedSet map[string]bool
 	if len(allowedIDs) > 0 {
 		allowedSet = make(map[string]bool, len(allowedIDs))
@@ -98,7 +118,7 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 		p.Limit = PaginationDefaultLimit
 	}
 
-	allowedIDs := []string(nil) // TODO: query granted gameserver IDs from store for event scoping
+	allowedIDs := visibleGameserverIDs(r, h.visibility)
 
 	// If a specific gameserver_id is requested, verify it's in the allowed set
 	requestedGSID := r.URL.Query().Get("gameserver_id")

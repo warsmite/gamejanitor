@@ -44,7 +44,8 @@ type RouterOptions struct {
 	EventHistorySvc *event.EventHistoryService
 	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
-	AccessChecker GameserverAccessChecker
+	AccessChecker    GameserverAccessChecker
+	Visibility       handler.GameserverVisibility
 	QuotaQuerier     handler.QuotaQuerier
 	Broadcaster      *controller.EventBus
 	Log             *slog.Logger
@@ -85,7 +86,7 @@ func NewRouter(opts RouterOptions) *Router {
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
 	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Log)
-	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.Log)
+	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.Visibility, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
@@ -96,7 +97,7 @@ func NewRouter(opts RouterOptions) *Router {
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
-	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore)
+	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.Visibility)
 
 	ac := opts.AccessChecker
 	requireAdmin := RequireAdmin(opts.SettingsSvc)

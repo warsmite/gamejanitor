@@ -454,6 +454,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ActivityStore:    db,
 		StatsHistory:     db.GameserverStatsStore,
 		AccessChecker:    db.GameserverStore,
+		Visibility:       db.GameserverStore,
 		QuotaQuerier:     db.GameserverStore,
 		Broadcaster:      svcs.Broadcaster,
 		ModSvc:          svcs.ModSvc,
