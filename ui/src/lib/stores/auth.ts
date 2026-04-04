@@ -3,7 +3,7 @@ import { writable, derived } from 'svelte/store';
 export const token = writable<string | null>(null);
 export const role = writable<string>('');
 
-export const isAdmin = derived(role, ($role) => $role === 'admin' || $role === '');
+export const isAdmin = derived(role, ($role) => $role === 'admin');
 
 export const isAuthenticated = derived(token, ($token) => $token !== null);
 
