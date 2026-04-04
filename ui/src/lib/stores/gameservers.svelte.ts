@@ -34,6 +34,7 @@ class GameserverStore {
   gameservers = $state<Record<string, GameserverState>>({});
   games = $state<Record<string, Game>>({});
   tokenId = $state<string>('');
+  tokenRole = $state<string>('');
   sftpPort = $state(0);
   cluster = $state<{ total_memory_mb: number; allocated_memory_mb: number; total_cpu: number; allocated_cpu: number; total_storage_mb: number; allocated_storage_mb: number } | null>(null);
   loading = $state(true);
@@ -107,8 +108,10 @@ class GameserverStore {
   // Check if the current token has a permission on a specific gameserver.
   // Admin and owners have all permissions. Granted tokens check the grant's permission list.
   canOnGameserver(permission: string, gsId: string): boolean {
-    // No auth or admin = full access
+    // No auth = full access
     if (!this.tokenId) return true;
+    // Admin = full access
+    if (this.tokenRole === 'admin') return true;
     const gs = this.gameservers[gsId]?.gameserver;
     if (!gs) return false;
     // Owner = all permissions
@@ -161,7 +164,8 @@ class GameserverStore {
       }
 
       this.tokenId = meResponse?.token_id || '';
-      roleStore.set(meResponse?.role || '');
+      this.tokenRole = meResponse?.role || '';
+      roleStore.set(this.tokenRole);
 
       for (const g of gameList) {
         this.games[g.id] = g;
