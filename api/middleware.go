@@ -121,23 +121,28 @@ func RequireClusterPermission(settingsSvc *settings.SettingsService, permission 
 	}
 }
 
-// OwnershipChecker looks up who owns a gameserver. Used by permission
-// middleware to grant owners full access without coupling to the full store.
-type OwnershipChecker interface {
+// GameserverAccessChecker looks up ownership and grants for a gameserver.
+// Used by permission middleware without coupling to the full store.
+type GameserverAccessChecker interface {
 	GetGameserverOwner(gameserverID string) (*string, error)
+	GetGameserverGrants(gameserverID string) (model.GrantMap, error)
 }
 
 // tokenCanAccessGameserver checks if a token can access a gameserver via
-// ownership (created_by_token_id) or grants (gameserver_ids on the token).
-func tokenCanAccessGameserver(token *model.Token, gsID string, ownerCheck OwnershipChecker) bool {
-	// Check grants
-	if _, granted := token.Grants[gsID]; granted {
-		return true
+// ownership (created_by_token_id) or grants (on the gameserver).
+func tokenCanAccessGameserver(token *model.Token, gsID string, ac GameserverAccessChecker) bool {
+	if ac == nil {
+		return false
 	}
 	// Check ownership
-	if ownerCheck != nil {
-		owner, err := ownerCheck.GetGameserverOwner(gsID)
-		if err == nil && owner != nil && *owner == token.ID {
+	owner, err := ac.GetGameserverOwner(gsID)
+	if err == nil && owner != nil && *owner == token.ID {
+		return true
+	}
+	// Check grants on the gameserver
+	grants, err := ac.GetGameserverGrants(gsID)
+	if err == nil {
+		if _, granted := grants[token.ID]; granted {
 			return true
 		}
 	}
@@ -148,7 +153,7 @@ func tokenCanAccessGameserver(token *model.Token, gsID string, ownerCheck Owners
 // on the gameserver identified by the {id} URL parameter.
 // Owners get all gameserver-scoped permissions. Granted tokens check the permission list.
 // No-op when auth is disabled or localhost bypass is active.
-func RequirePermission(settingsSvc *settings.SettingsService, ownerCheck OwnershipChecker, permission string) func(http.Handler) http.Handler {
+func RequirePermission(settingsSvc *settings.SettingsService, ac GameserverAccessChecker, permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -161,22 +166,26 @@ func RequirePermission(settingsSvc *settings.SettingsService, ownerCheck Ownersh
 				return
 			}
 			gsID := chi.URLParam(r, "id")
-			if gsID == "" {
+			if gsID == "" || ac == nil {
 				handleForbidden(w, r)
 				return
 			}
 
 			// Check ownership — owners get all gameserver permissions
-			if ownerCheck != nil {
-				owner, err := ownerCheck.GetGameserverOwner(gsID)
-				if err == nil && owner != nil && *owner == token.ID {
-					next.ServeHTTP(w, r)
-					return
-				}
+			owner, err := ac.GetGameserverOwner(gsID)
+			if err == nil && owner != nil && *owner == token.ID {
+				next.ServeHTTP(w, r)
+				return
 			}
 
-			// Fall back to grants + permission check
-			if !auth.HasPermission(token, gsID, permission) {
+			// Check grants on the gameserver
+			grants, err := ac.GetGameserverGrants(gsID)
+			if err != nil || grants == nil {
+				handleForbidden(w, r)
+				return
+			}
+			grantPerms, granted := grants[token.ID]
+			if !granted || !auth.HasGrantPermission(grantPerms, permission) {
 				handleForbidden(w, r)
 				return
 			}
@@ -187,7 +196,7 @@ func RequirePermission(settingsSvc *settings.SettingsService, ownerCheck Ownersh
 
 // RequireGameserverAccess returns 403 if the token doesn't have any access
 // to the gameserver identified by the {id} URL parameter (via ownership or grants).
-func RequireGameserverAccess(settingsSvc *settings.SettingsService, ownerCheck OwnershipChecker) func(http.Handler) http.Handler {
+func RequireGameserverAccess(settingsSvc *settings.SettingsService, ac GameserverAccessChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -204,7 +213,7 @@ func RequireGameserverAccess(settingsSvc *settings.SettingsService, ownerCheck O
 				handleForbidden(w, r)
 				return
 			}
-			if tokenCanAccessGameserver(token, gsID, ownerCheck) {
+			if tokenCanAccessGameserver(token, gsID, ac) {
 				next.ServeHTTP(w, r)
 				return
 			}

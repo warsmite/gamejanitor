@@ -194,17 +194,28 @@ func MustCreateAdminToken(t *testing.T, svc *ServiceBundle) string {
 	return raw
 }
 
-// MustCreateCustomToken creates a user API token with the given permissions and optional gameserver ID grants.
+// MustCreateCustomToken creates a user API token and grants it access to the given gameservers.
 // Each granted gameserver gets the same permission set.
 func MustCreateCustomToken(t *testing.T, svc *ServiceBundle, perms []string, gameserverIDs []string) string {
 	t.Helper()
-	grants := model.GrantMap{}
-	for _, id := range gameserverIDs {
-		grants[id] = perms
-	}
-	raw, _, err := svc.AuthSvc.CreateUserToken("test-custom", grants, nil, nil)
+	raw, token, err := svc.AuthSvc.CreateUserToken("test-custom", nil, nil)
 	if err != nil {
 		t.Fatalf("creating custom token: %v", err)
+	}
+	// Add grants to each gameserver
+	db := store.New(svc.DB)
+	for _, gsID := range gameserverIDs {
+		gs, err := db.GetGameserver(gsID)
+		if err != nil || gs == nil {
+			t.Fatalf("getting gameserver %s for grant: %v", gsID, err)
+		}
+		if gs.Grants == nil {
+			gs.Grants = model.GrantMap{}
+		}
+		gs.Grants[token.ID] = perms
+		if err := db.UpdateGameserver(gs); err != nil {
+			t.Fatalf("updating gameserver %s grants: %v", gsID, err)
+		}
 	}
 	return raw
 }

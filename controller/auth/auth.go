@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"github.com/warsmite/gamejanitor/pkg/validate"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -225,7 +224,6 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleAdmin,
-		Grants: model.GrantMap{},
 		
 	}
 
@@ -245,32 +243,10 @@ type UserTokenQuotas struct {
 	MaxStorageMB   *int
 }
 
-func (s *AuthService) CreateUserToken(name string, grants model.GrantMap, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
+func (s *AuthService) CreateUserToken(name string, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
 	t := &model.Token{Name: name}
 	if err := t.Validate(); err != nil {
 		return "", nil, err
-	}
-
-	// Validate granted gameserver IDs exist
-	for gsID := range grants {
-		gs, err := s.store.GetGameserver(gsID)
-		if err != nil {
-			return "", nil, fmt.Errorf("validating gameserver ID %s: %w", gsID, err)
-		}
-		if gs == nil {
-			return "", nil, fmt.Errorf("gameserver %s not found", gsID)
-		}
-	}
-
-	// Validate permissions in each grant
-	for gsID, perms := range grants {
-		for _, p := range perms {
-			if !isValidPermission(p) {
-				var fe validate.FieldErrors
-				fe.Add("grants", fmt.Sprintf("invalid permission %q for gameserver %s", p, gsID))
-				return "", nil, fe
-			}
-		}
 	}
 
 	rawToken, err := generateSecureToken()
@@ -283,17 +259,12 @@ func (s *AuthService) CreateUserToken(name string, grants model.GrantMap, expire
 		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
-	if grants == nil {
-		grants = model.GrantMap{}
-	}
-
 	token := &model.Token{
 		ID:          uuid.New().String(),
 		Name:        name,
 		HashedToken: string(hashed),
 		TokenPrefix: tokenPrefix(rawToken),
 		Role:        RoleUser,
-		Grants:      grants,
 		ExpiresAt:   expiresAt,
 	}
 	if quotas != nil {
@@ -307,7 +278,7 @@ func (s *AuthService) CreateUserToken(name string, grants model.GrantMap, expire
 		return "", nil, fmt.Errorf("saving user token: %w", err)
 	}
 
-	s.log.Info("user token created", "id", token.ID, "name", name, "grants", len(grants))
+	s.log.Info("user token created", "id", token.ID, "name", name)
 	return rawToken, token, nil
 }
 
@@ -341,7 +312,6 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleWorker,
-		Grants: model.GrantMap{},
 		
 	}
 
@@ -383,7 +353,6 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleAdmin,
-		Grants: model.GrantMap{},
 		
 	}
 
@@ -424,7 +393,6 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Role:         RoleWorker,
-		Grants: model.GrantMap{},
 		
 	}
 
@@ -465,43 +433,18 @@ func IsAdmin(token *model.Token) bool {
 	return token != nil && token.Role == RoleAdmin
 }
 
-// HasPermission checks if a token has a specific permission on a gameserver via grants.
-// Empty permission list in a grant = all permissions on that server.
-// Ownership is checked separately by the middleware/service layer.
-// Admin tokens always have permission.
-func HasPermission(token *model.Token, gameserverID string, permission string) bool {
-	if token == nil {
-		return false
-	}
-	if token.Role == RoleAdmin {
+// HasGrantPermission checks if a grant's permission list includes the given permission.
+// Empty grant list = all permissions. Nil = no grant (should not be called).
+func HasGrantPermission(grantPerms []string, permission string) bool {
+	if len(grantPerms) == 0 {
 		return true
 	}
-
-	perms, granted := token.Grants[gameserverID]
-	if !granted {
-		return false
-	}
-
-	// Empty permission list = all permissions on this server
-	if len(perms) == 0 {
-		return true
-	}
-
-	for _, p := range perms {
+	for _, p := range grantPerms {
 		if p == permission {
 			return true
 		}
 	}
 	return false
-}
-
-// GrantedGameserverIDs returns the gameserver IDs this token has been granted access to.
-// Returns nil if the token is nil or admin.
-func GrantedGameserverIDs(token *model.Token) []string {
-	if token == nil || token.Role == RoleAdmin {
-		return nil
-	}
-	return token.GrantedGameserverIDs()
 }
 
 // intersectIDs returns the intersection of requested and allowed ID sets.

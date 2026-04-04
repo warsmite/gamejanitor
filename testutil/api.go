@@ -53,7 +53,7 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		WebhookSvc:      webhook.NewWebhookEndpointService(db, log),
 		EventHistorySvc: event.NewEventHistoryService(db),
 		ActivityStore:    db,
-		OwnershipChecker: db.GameserverStore,
+		AccessChecker:    db.GameserverStore,
 		QuotaQuerier:     db.GameserverStore,
 		Broadcaster:      svc.Broadcaster,
 		ModSvc:          svc.ModSvc,

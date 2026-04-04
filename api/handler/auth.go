@@ -50,14 +50,13 @@ func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name           string              `json:"name"`
-		Role           string              `json:"role"`
-		Grants         model.GrantMap       `json:"grants"`
-		ExpiresIn      string              `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
-		MaxGameservers *int                `json:"max_gameservers,omitempty"`
-		MaxMemoryMB    *int                `json:"max_memory_mb,omitempty"`
-		MaxCPU         *float64            `json:"max_cpu,omitempty"`
-		MaxStorageMB   *int                `json:"max_storage_mb,omitempty"`
+		Name           string   `json:"name"`
+		Role           string   `json:"role"`
+		ExpiresIn      string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
+		MaxGameservers *int     `json:"max_gameservers,omitempty"`
+		MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
+		MaxCPU         *float64 `json:"max_cpu,omitempty"`
+		MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
@@ -138,7 +137,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 			MaxStorageMB:   req.MaxStorageMB,
 		}
 	}
-	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, req.Grants, expiresAt, quotas)
+	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, expiresAt, quotas)
 	if err != nil {
 		h.log.Error("creating token", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -232,7 +231,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"role":        token.Role,
 		"permissions": effectivePermissions(r),
-		"grants":      token.Grants,
+		"token_id":    token.ID,
 	}
 
 	// Include quota info for user tokens

@@ -18,7 +18,6 @@ func newTestToken(id, name, role string) *model.Token {
 		HashedToken:   "hashed-" + id,
 		TokenPrefix:   "pfx-" + id,
 		Role:          role,
-		Grants: model.GrantMap{},
 	}
 }
 
@@ -143,19 +142,27 @@ func TestToken_WithExpiry(t *testing.T) {
 	assert.WithinDuration(t, expiry, *got.ExpiresAt, time.Second)
 }
 
-func TestToken_GameserverIDsJSON(t *testing.T) {
+func TestToken_QuotaFields(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	tok := newTestToken("tok-gs", "Scoped Token", "user")
-	tok.Grants = model.GrantMap{"gs-1": []string{"console"}, "gs-2": []string{"backup.create"}}
+	maxGS := 5
+	maxMem := 4096
+	tok := newTestToken("tok-quota", "Quota Token", "user")
+	tok.MaxGameservers = &maxGS
+	tok.MaxMemoryMB = &maxMem
 	require.NoError(t, db.CreateToken(tok))
 
-	got, err := db.GetToken("tok-gs")
+	got, err := db.GetToken("tok-quota")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	assert.Equal(t, model.GrantMap{"gs-1": []string{"console"}, "gs-2": []string{"backup.create"}}, got.Grants)
+	require.NotNil(t, got.MaxGameservers)
+	assert.Equal(t, 5, *got.MaxGameservers)
+	require.NotNil(t, got.MaxMemoryMB)
+	assert.Equal(t, 4096, *got.MaxMemoryMB)
+	assert.Nil(t, got.MaxCPU)
+	assert.Nil(t, got.MaxStorageMB)
 }
 
 func TestToken_ExistsByRole_ValidToken(t *testing.T) {

@@ -158,6 +158,7 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
+	db := store.New(svc.DB)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
@@ -169,21 +170,29 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
 	require.NoError(t, err)
 
-	// Create a token scoped to gs1 with start/stop only
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("mc-operator",
-		model.GrantMap{gs1.ID: {auth.PermGameserverStart, auth.PermGameserverStop}},
-		nil, nil)
+	// Need to re-read gs1 to get full state for update
+	gs1, err = db.GetGameserver(gs1.ID)
 	require.NoError(t, err)
 
-	token := svc.AuthSvc.ValidateToken(rawToken)
-	require.NotNil(t, token)
+	// Create a token and grant it access to gs1 with start/stop only
+	rawToken, token, err := svc.AuthSvc.CreateUserToken("mc-operator", nil, nil)
+	require.NoError(t, err)
 
-	// Can start gs1
-	assert.True(t, auth.HasPermission(token, gs1.ID, auth.PermGameserverStart))
-	// Cannot start gs2
-	assert.False(t, auth.HasPermission(token, gs2.ID, auth.PermGameserverStart))
-	// Cannot delete gs1 (wrong permission)
-	assert.False(t, auth.HasPermission(token, gs1.ID, auth.PermGameserverDelete))
+	// Add grant to gs1
+	gs1.Grants = model.GrantMap{token.ID: {auth.PermGameserverStart, auth.PermGameserverStop}}
+	require.NoError(t, db.UpdateGameserver(gs1))
+
+	validated := svc.AuthSvc.ValidateToken(rawToken)
+	require.NotNil(t, validated)
+
+	// Check grants on gs1 — has start, not delete
+	gs1Grants := gs1.Grants[validated.ID]
+	assert.True(t, auth.HasGrantPermission(gs1Grants, auth.PermGameserverStart))
+	assert.False(t, auth.HasGrantPermission(gs1Grants, auth.PermGameserverDelete))
+
+	// gs2 has no grant for this token
+	_, hasGrant := gs2.Grants[validated.ID]
+	assert.False(t, hasGrant)
 }
 
 func TestScenario_PowerUser_BackupAndSchedule(t *testing.T) {

@@ -105,27 +105,9 @@ func serviceErrorMessage(err error) string {
 
 // effectivePermissions returns the current token's permissions.
 // Admin tokens get all permissions. No token (auth disabled) gets all permissions.
-// effectivePermissions returns the unique set of permissions a token has across all grants.
-// Admin or no-auth returns all permissions.
+// effectivePermissions returns the set of all assignable permissions.
+// Per-server enforcement happens via gameserver grants, not this list.
+// This is used by /api/me so the UI knows the full permission vocabulary.
 func effectivePermissions(r *http.Request) []string {
-	token := auth.TokenFromContext(r.Context())
-	if token == nil || auth.IsAdmin(token) {
-		return auth.AllPermissions
-	}
-
-	// Union of all permissions from grants. Empty grant = all permissions.
-	seen := make(map[string]bool)
-	for _, perms := range token.Grants {
-		if len(perms) == 0 {
-			return auth.AllPermissions
-		}
-		for _, p := range perms {
-			seen[p] = true
-		}
-	}
-	result := make([]string, 0, len(seen))
-	for p := range seen {
-		result = append(result, p)
-	}
-	return result
+	return auth.AllPermissions
 }

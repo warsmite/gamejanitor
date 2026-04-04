@@ -8,7 +8,7 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-const tokenColumns = "id, name, hashed_token, token_prefix, role, grants, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, last_used_at, expires_at"
+const tokenColumns = "id, name, hashed_token, token_prefix, role, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, last_used_at, expires_at"
 
 type TokenStore struct {
 	db *sql.DB
@@ -20,7 +20,7 @@ func NewTokenStore(db *sql.DB) *TokenStore {
 
 func scanToken(scan func(dest ...any) error) (model.Token, error) {
 	var t model.Token
-	err := scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Role, &t.Grants, &t.MaxGameservers, &t.MaxMemoryMB, &t.MaxCPU, &t.MaxStorageMB, &t.ClaimCode, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	err := scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Role, &t.MaxGameservers, &t.MaxMemoryMB, &t.MaxCPU, &t.MaxStorageMB, &t.ClaimCode, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
 	return t, err
 }
 
@@ -77,8 +77,8 @@ func (s *TokenStore) GetTokenByPrefix(prefix string) (*model.Token, error) {
 func (s *TokenStore) CreateToken(t *model.Token) error {
 	t.CreatedAt = time.Now()
 	_, err := s.db.Exec(
-		"INSERT INTO tokens (id, name, hashed_token, token_prefix, role, grants, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Role, t.Grants, t.MaxGameservers, t.MaxMemoryMB, t.MaxCPU, t.MaxStorageMB, t.ClaimCode, t.CreatedAt, t.ExpiresAt,
+		"INSERT INTO tokens (id, name, hashed_token, token_prefix, role, max_gameservers, max_memory_mb, max_cpu, max_storage_mb, claim_code, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Role, t.MaxGameservers, t.MaxMemoryMB, t.MaxCPU, t.MaxStorageMB, t.ClaimCode, t.CreatedAt, t.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating token %s: %w", t.ID, err)

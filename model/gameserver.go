@@ -50,6 +50,7 @@ type Gameserver struct {
 	OperationType      *string         `json:"operation_type"`   // current running operation (start, stop, backup, etc.), nil when idle
 	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
 	CreatedByTokenID   *string         `json:"created_by_token_id,omitempty"`
+	Grants             GrantMap        `json:"grants"`
 	RestartRequired    bool            `json:"restart_required"` // derived, not stored
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`

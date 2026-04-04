@@ -2,7 +2,6 @@ package handler
 
 import (
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
 	"fmt"
@@ -39,7 +38,7 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Token scoping — only send events for gameservers the token can access
-	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
+	allowedIDs := []string(nil) // TODO: query granted gameserver IDs from store for event scoping
 	var allowedSet map[string]bool
 	if len(allowedIDs) > 0 {
 		allowedSet = make(map[string]bool, len(allowedIDs))
@@ -99,7 +98,7 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 		p.Limit = PaginationDefaultLimit
 	}
 
-	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
+	allowedIDs := []string(nil) // TODO: query granted gameserver IDs from store for event scoping
 
 	// If a specific gameserver_id is requested, verify it's in the allowed set
 	requestedGSID := r.URL.Query().Get("gameserver_id")

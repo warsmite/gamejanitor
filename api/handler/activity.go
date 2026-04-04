@@ -3,7 +3,6 @@ package handler
 import (
 	"net/http"
 
-	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -40,12 +39,7 @@ func (h *ActivityHandlers) List(w http.ResponseWriter, r *http.Request) {
 		filter.WorkerID = &v
 	}
 
-	// Scope to allowed gameservers for non-admin tokens
-	allowedIDs := auth.GrantedGameserverIDs(auth.TokenFromContext(r.Context()))
-	if len(allowedIDs) > 0 && filter.GameserverID == nil {
-		respondOK(w, []model.Event{})
-		return
-	}
+	// TODO: scope activity to owned + granted gameservers for non-admin tokens
 
 	events, err := h.store.ListEvents(filter)
 	if err != nil {

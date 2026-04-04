@@ -44,7 +44,7 @@ type RouterOptions struct {
 	EventHistorySvc *event.EventHistoryService
 	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
-	OwnershipChecker OwnershipChecker
+	AccessChecker GameserverAccessChecker
 	QuotaQuerier     handler.QuotaQuerier
 	Broadcaster      *controller.EventBus
 	Log             *slog.Logger
@@ -98,33 +98,33 @@ func NewRouter(opts RouterOptions) *Router {
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore)
 
-	oc := opts.OwnershipChecker
+	ac := opts.AccessChecker
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
-	requireAccess := RequireGameserverAccess(opts.SettingsSvc, oc)
-	requireStart := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverStart)
-	requireStop := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverStop)
-	requireRestart := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverRestart)
-	requireUpdateGame := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverUpdateGame)
-	requireReinstall := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverReinstall)
-	requireDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverDelete)
-	requireArchive := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverArchive)
-	requireUnarchive := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverUnarchive)
-	requireRegenSFTP := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverRegenerateSFTP)
-	requireLogs := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverLogs)
-	requireCommands := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverCommand)
-	requireFilesRead := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverFilesRead)
-	requireFilesWrite := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverFilesWrite)
-	requireBackupRead := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupRead)
-	requireBackupCreate := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupCreate)
-	requireBackupDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupDelete)
-	requireBackupRestore := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupRestore)
-	requireBackupDownload := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupDownload)
-	requireScheduleRead := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleRead)
-	requireScheduleCreate := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleCreate)
-	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleUpdate)
-	requireScheduleDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleDelete)
-	requireModsRead := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverModsRead)
-	requireModsWrite := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverModsWrite)
+	requireAccess := RequireGameserverAccess(opts.SettingsSvc, ac)
+	requireStart := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverStart)
+	requireStop := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverStop)
+	requireRestart := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverRestart)
+	requireUpdateGame := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverUpdateGame)
+	requireReinstall := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverReinstall)
+	requireDelete := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverDelete)
+	requireArchive := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverArchive)
+	requireUnarchive := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverUnarchive)
+	requireRegenSFTP := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverRegenerateSFTP)
+	requireLogs := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverLogs)
+	requireCommands := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverCommand)
+	requireFilesRead := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverFilesRead)
+	requireFilesWrite := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverFilesWrite)
+	requireBackupRead := RequirePermission(opts.SettingsSvc, ac, auth.PermBackupRead)
+	requireBackupCreate := RequirePermission(opts.SettingsSvc, ac, auth.PermBackupCreate)
+	requireBackupDelete := RequirePermission(opts.SettingsSvc, ac, auth.PermBackupDelete)
+	requireBackupRestore := RequirePermission(opts.SettingsSvc, ac, auth.PermBackupRestore)
+	requireBackupDownload := RequirePermission(opts.SettingsSvc, ac, auth.PermBackupDownload)
+	requireScheduleRead := RequirePermission(opts.SettingsSvc, ac, auth.PermScheduleRead)
+	requireScheduleCreate := RequirePermission(opts.SettingsSvc, ac, auth.PermScheduleCreate)
+	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, ac, auth.PermScheduleUpdate)
+	requireScheduleDelete := RequirePermission(opts.SettingsSvc, ac, auth.PermScheduleDelete)
+	requireModsRead := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverModsRead)
+	requireModsWrite := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverModsWrite)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)

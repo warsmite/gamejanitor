@@ -13,7 +13,6 @@ type Token struct {
 	HashedToken    string     `json:"-"`
 	TokenPrefix    string     `json:"-"`
 	Role           string     `json:"role"`
-	Grants         GrantMap   `json:"grants"`
 	MaxGameservers *int       `json:"max_gameservers,omitempty"`
 	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
 	MaxCPU         *float64   `json:"max_cpu,omitempty"`
@@ -27,15 +26,6 @@ type Token struct {
 // CanCreate returns true if this token has any quota set, meaning it can create gameservers.
 func (t *Token) CanCreate() bool {
 	return t.MaxGameservers != nil || t.MaxMemoryMB != nil || t.MaxCPU != nil || t.MaxStorageMB != nil
-}
-
-// GrantedGameserverIDs returns the list of gameserver IDs this token has been granted access to.
-func (t *Token) GrantedGameserverIDs() []string {
-	ids := make([]string, 0, len(t.Grants))
-	for id := range t.Grants {
-		ids = append(ids, id)
-	}
-	return ids
 }
 
 // GrantMap maps gameserver IDs to permission lists.

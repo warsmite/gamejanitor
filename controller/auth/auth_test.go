@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -42,90 +41,47 @@ func TestAuth_ValidateToken_ExpiredTokenRejected(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 
 	past := time.Now().Add(-1 * time.Hour)
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", nil, &past, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", &past, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	assert.Nil(t, validated, "expired token should return nil")
 }
 
-func TestAuth_CustomToken_GameserverScoping(t *testing.T) {
+func TestAuth_HasGrantPermission(t *testing.T) {
 	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-	ctx := testutil.TestContext()
 
-	// Create two gameservers
-	gs1 := &model.Gameserver{Name: "Server1", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "a"}}
-	gs2 := &model.Gameserver{Name: "Server2", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "b"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
-	require.NoError(t, err)
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
-	require.NoError(t, err)
+	// Empty grant = all permissions
+	assert.True(t, auth.HasGrantPermission([]string{}, auth.PermGameserverStart))
+	assert.True(t, auth.HasGrantPermission([]string{}, auth.PermGameserverDelete))
 
-	// Token scoped to gs1 only
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("scoped", model.GrantMap{gs1.ID: []string{auth.PermGameserverStart}}, nil, nil)
-	require.NoError(t, err)
-
-	validated := svc.AuthSvc.ValidateToken(rawToken)
-	require.NotNil(t, validated)
-
-	// Check permission for gs1 — should pass
-	assert.True(t, auth.HasPermission(validated, gs1.ID, auth.PermGameserverStart))
-
-	// Check permission for gs2 — should fail (not in scoped list)
-	assert.False(t, auth.HasPermission(validated, gs2.ID, auth.PermGameserverStart))
+	// Specific permissions
+	perms := []string{auth.PermGameserverStart, auth.PermGameserverStop}
+	assert.True(t, auth.HasGrantPermission(perms, auth.PermGameserverStart))
+	assert.True(t, auth.HasGrantPermission(perms, auth.PermGameserverStop))
+	assert.False(t, auth.HasGrantPermission(perms, auth.PermGameserverDelete))
 }
 
-func TestAuth_AdminToken_BypassesAllChecks(t *testing.T) {
+func TestAuth_AdminToken_IsAdmin(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-	ctx := testutil.TestContext()
-
-	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "hello"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
-	require.NoError(t, err)
 
 	rawToken := testutil.MustCreateAdminToken(t, svc)
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
-
-	// Admin should have permission for everything
-	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart))
-	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverDelete))
-	assert.True(t, auth.HasPermission(validated, "nonexistent-id", auth.PermGameserverStart))
 	assert.True(t, auth.IsAdmin(validated))
 }
 
-func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
+func TestAuth_UserToken_IsNotAdmin(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "hello"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("user", nil, nil)
 	require.NoError(t, err)
-
-	// Empty gameserver_ids = no granted access (ownership-based only)
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("no-grants", nil, nil, nil)
-	require.NoError(t, err)
-
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
-
-	assert.False(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart),
-		"empty gameserver_ids should not grant access — ownership is checked separately")
-}
-
-func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-
-	_, _, err := svc.AuthSvc.CreateUserToken("bad-scope", model.GrantMap{"nonexistent-gs": []string{auth.PermGameserverStart}}, nil, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.False(t, auth.IsAdmin(validated))
+	assert.Equal(t, "user", validated.Role)
 }
 
 func TestAuth_CreateWorkerToken_Idempotent(t *testing.T) {
@@ -219,16 +175,9 @@ func TestAuth_CreateWorkerToken_DifferentNames(t *testing.T) {
 	assert.NotEqual(t, rawToken1, rawToken2)
 }
 
-func TestAuth_UserToken_WrongPermission(t *testing.T) {
+func TestAuth_HasGrantPermission_SpecificPerms(t *testing.T) {
 	t.Parallel()
-
-	// Test HasPermission directly — no store needed
-	token := &model.Token{
-		Role:          "user",
-		Grants: model.GrantMap{"gs-1": []string{auth.PermGameserverStart}},
-	}
-
-	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
-	assert.False(t, auth.HasPermission(token, "gs-1", auth.PermGameserverDelete))
-	assert.False(t, auth.HasPermission(token, "gs-2", auth.PermGameserverStart))
+	perms := []string{auth.PermGameserverStart}
+	assert.True(t, auth.HasGrantPermission(perms, auth.PermGameserverStart))
+	assert.False(t, auth.HasGrantPermission(perms, auth.PermGameserverDelete))
 }

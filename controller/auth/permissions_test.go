@@ -9,51 +9,21 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-func TestPermission_HasPermission_NilToken_ReturnsFalse(t *testing.T) {
+func TestPermission_HasGrantPermission_EmptyGrant_AllPermissions(t *testing.T) {
 	t.Parallel()
-	assert.False(t, auth.HasPermission(nil, "any-id", auth.PermGameserverStart))
+	// Empty grant list = all permissions on this server
+	assert.True(t, auth.HasGrantPermission([]string{}, auth.PermGameserverStart))
+	assert.True(t, auth.HasGrantPermission([]string{}, auth.PermGameserverDelete))
+	assert.True(t, auth.HasGrantPermission([]string{}, auth.PermBackupCreate))
 }
 
-func TestPermission_HasPermission_AdminRole_AlwaysTrue(t *testing.T) {
+func TestPermission_HasGrantPermission_SpecificPerms(t *testing.T) {
 	t.Parallel()
-	token := &model.Token{
-		Role:          "admin",
-		Grants: model.GrantMap{},
-	}
-	assert.True(t, auth.HasPermission(token, "any-id", auth.PermGameserverStart))
-	assert.True(t, auth.HasPermission(token, "other-id", auth.PermGameserverDelete))
-	assert.True(t, auth.HasPermission(token, "", auth.PermGameserverCreate))
-}
-
-func TestPermission_HasPermission_UserRole_ChecksGameserverIDs(t *testing.T) {
-	t.Parallel()
-	token := &model.Token{
-		Role:          "user",
-		Grants: model.GrantMap{"gs-1": []string{"gameserver.start"}, "gs-2": []string{"gameserver.start"}},
-	}
-	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
-	assert.True(t, auth.HasPermission(token, "gs-2", auth.PermGameserverStart))
-	assert.False(t, auth.HasPermission(token, "gs-3", auth.PermGameserverStart))
-}
-
-func TestPermission_HasPermission_UserRole_EmptyIDs_NoAccess(t *testing.T) {
-	t.Parallel()
-	token := &model.Token{
-		Role:          "user",
-		Grants: model.GrantMap{},
-	}
-	// Empty gameserver_ids = no granted access (only owns what they created)
-	assert.False(t, auth.HasPermission(token, "any-gs", auth.PermGameserverStart))
-}
-
-func TestPermission_HasPermission_UserRole_MissingPermission(t *testing.T) {
-	t.Parallel()
-	token := &model.Token{
-		Role:          "user",
-		Grants: model.GrantMap{"gs-1": []string{auth.PermGameserverStart}},
-	}
-	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
-	assert.False(t, auth.HasPermission(token, "gs-1", auth.PermGameserverDelete))
+	perms := []string{auth.PermGameserverStart, auth.PermGameserverStop}
+	assert.True(t, auth.HasGrantPermission(perms, auth.PermGameserverStart))
+	assert.True(t, auth.HasGrantPermission(perms, auth.PermGameserverStop))
+	assert.False(t, auth.HasGrantPermission(perms, auth.PermGameserverDelete))
+	assert.False(t, auth.HasGrantPermission(perms, auth.PermBackupCreate))
 }
 
 func TestPermission_IsAdmin(t *testing.T) {

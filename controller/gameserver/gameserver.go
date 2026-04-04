@@ -46,6 +46,7 @@ type Store interface {
 	CountGameserversByToken(tokenID string) (int, error)
 	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
 	ListGameserverIDsByToken(tokenID string) ([]string, error)
+	ListGrantedGameserverIDs(tokenID string) ([]string, error)
 }
 
 // StatusProvider derives the current status for a gameserver from runtime state.
@@ -218,8 +219,12 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 		if err != nil {
 			return nil, fmt.Errorf("listing owned gameservers: %w", err)
 		}
-		// Granted gameservers
-		visibleIDs := append(ownedIDs, token.GrantedGameserverIDs()...)
+		// Granted gameservers (grants live on the gameserver, query by token ID)
+		grantedIDs, err := s.store.ListGrantedGameserverIDs(token.ID)
+		if err != nil {
+			return nil, fmt.Errorf("listing granted gameservers: %w", err)
+		}
+		visibleIDs := append(ownedIDs, grantedIDs...)
 		if len(visibleIDs) == 0 {
 			return []model.Gameserver{}, nil
 		}
@@ -537,25 +542,33 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	oldCPU := existing.CPULimit
 	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
-	// Per-field permission checks — each configure.* permission guards specific fields
+	// Per-field permission checks — each configure.* permission guards specific fields.
+	// Owners have all permissions; granted tokens check their grant's permission list.
 	token := auth.TokenFromContext(ctx)
 	if token != nil && !auth.IsAdmin(token) {
-		type fieldCheck struct {
-			changed bool
-			perm    string
-			field   string
-		}
-		checks := []fieldCheck{
-			{gs.Name != "", auth.PermGameserverConfigureName, "name"},
-			{gs.Env != nil, auth.PermGameserverConfigureEnv, "env"},
-			{gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || !gs.NodeTags.IsEmpty(), auth.PermGameserverConfigureResources, "resources"},
-			{gs.Ports != nil || gs.PortMode != "", auth.PermGameserverConfigurePorts, "ports"},
-			{gs.ConnectionAddress != nil, auth.PermGameserverConfigureConnection, "connection_address"},
-			{gs.AutoRestart != nil, auth.PermGameserverConfigureAutoRestart, "auto_restart"},
-		}
-		for _, c := range checks {
-			if c.changed && !auth.HasPermission(token, gs.ID, c.perm) {
-				return false, controller.ErrBadRequestf("missing permission %s to modify %s", c.perm, c.field)
+		isOwner := existing.CreatedByTokenID != nil && *existing.CreatedByTokenID == token.ID
+		if !isOwner {
+			grantPerms, hasGrant := existing.Grants[token.ID]
+			if !hasGrant {
+				return false, controller.ErrBadRequest("no access to this gameserver")
+			}
+			type fieldCheck struct {
+				changed bool
+				perm    string
+				field   string
+			}
+			checks := []fieldCheck{
+				{gs.Name != "", auth.PermGameserverConfigureName, "name"},
+				{gs.Env != nil, auth.PermGameserverConfigureEnv, "env"},
+				{gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || !gs.NodeTags.IsEmpty(), auth.PermGameserverConfigureResources, "resources"},
+				{gs.Ports != nil || gs.PortMode != "", auth.PermGameserverConfigurePorts, "ports"},
+				{gs.ConnectionAddress != nil, auth.PermGameserverConfigureConnection, "connection_address"},
+				{gs.AutoRestart != nil, auth.PermGameserverConfigureAutoRestart, "auto_restart"},
+			}
+			for _, c := range checks {
+				if c.changed && !auth.HasGrantPermission(grantPerms, c.perm) {
+					return false, controller.ErrBadRequestf("missing permission %s to modify %s", c.perm, c.field)
+				}
 			}
 		}
 	}

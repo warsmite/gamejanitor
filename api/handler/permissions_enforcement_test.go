@@ -75,21 +75,12 @@ func TestPermissions_Me_AdminGetsAllPermissions(t *testing.T) {
 	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
-func TestPermissions_Me_UserTokenGetsOwnPermissions(t *testing.T) {
+func TestPermissions_Me_UserTokenGetsRole(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
-	// Create a gameserver to grant access to
-	gs := testutil.CreateTestGameserver(t, api.Services)
-
-	wantPerms := []string{
-		auth.PermGameserverStart,
-		auth.PermGameserverStop,
-		auth.PermGameserverLogs,
-	}
-	scopedToken := testutil.MustCreateCustomToken(t, api.Services, wantPerms, []string{gs.ID})
+	scopedToken := testutil.MustCreateCustomToken(t, api.Services, nil, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/me", scopedToken, nil)
 	resp, err := http.DefaultClient.Do(req)
@@ -106,7 +97,8 @@ func TestPermissions_Me_UserTokenGetsOwnPermissions(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
 	assert.Equal(t, "user", result.Data.Role)
-	assert.ElementsMatch(t, wantPerms, result.Data.Permissions)
+	// Permissions returns the full vocabulary — per-server enforcement is via gameserver grants
+	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
 func TestPermissions_Me_AuthDisabled_GetsAllPermissions(t *testing.T) {

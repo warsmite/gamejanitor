@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -53,14 +54,22 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Create a non-admin token and put it in context
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("limited", nil, []string{auth.PermGameserverConfigureEnv}, nil, nil)
+	// Create a non-admin token with env-only access (not resources)
+	rawToken, token, err := svc.AuthSvc.CreateUserToken("limited", nil, nil)
 	require.NoError(t, err)
-	token := svc.AuthSvc.ValidateToken(rawToken)
-	require.NotNil(t, token)
-	ctx := auth.SetTokenInContext(testutil.TestContext(), token)
 
-	// Try to change memory — should be blocked
+	// Grant env-only permission on this gameserver
+	db := store.New(svc.DB)
+	full, err := db.GetGameserver(gs.ID)
+	require.NoError(t, err)
+	full.Grants = model.GrantMap{token.ID: {auth.PermGameserverConfigureEnv}}
+	require.NoError(t, db.UpdateGameserver(full))
+
+	validated := svc.AuthSvc.ValidateToken(rawToken)
+	require.NotNil(t, validated)
+	ctx := auth.SetTokenInContext(testutil.TestContext(), validated)
+
+	// Try to change memory — should be blocked (has env perm, not resources)
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)

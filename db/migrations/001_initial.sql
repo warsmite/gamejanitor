@@ -24,6 +24,7 @@ CREATE TABLE gameservers (
     operation TEXT,
     operation_id TEXT,
     created_by_token_id TEXT,
+    grants JSON NOT NULL DEFAULT '{}',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -59,7 +60,6 @@ CREATE TABLE tokens (
     hashed_token TEXT NOT NULL,
     token_prefix TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT 'user',
-    grants JSON NOT NULL DEFAULT '{}',
     max_gameservers INTEGER,
     max_memory_mb INTEGER,
     max_cpu REAL,
