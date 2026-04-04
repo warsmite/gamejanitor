@@ -212,6 +212,15 @@ class GameserverStore {
     this.games = {};
     this.loading = true;
     this.initialized = false;
+    this.authRequired = false;
+    this.tokenId = '';
+    this.tokenRole = '';
+  }
+
+  // Reset and re-initialize after a token change (e.g. invite claim, login).
+  async reinit() {
+    this.destroy();
+    await this.init();
   }
 
   // ── SSE Subscriptions ──

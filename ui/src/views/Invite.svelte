@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { basePath } from '$lib/base';
   import { setToken } from '$lib/stores/auth';
+  import { gameserverStore } from '$lib/stores';
   import { navigate } from '$lib/router';
 
   let { code }: { code: string } = $props();
@@ -25,10 +26,11 @@
         return;
       }
 
-      // Set the token cookie and redirect to dashboard
+      // Set the token cookie, re-initialize the store, and navigate to dashboard
       setToken(json.data.token);
       status = 'success';
 
+      await gameserverStore.reinit();
       setTimeout(() => navigate('/'), 1000);
     } catch (e) {
       status = 'error';
