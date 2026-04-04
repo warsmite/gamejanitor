@@ -226,16 +226,11 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
 
-	// Set up network namespace before starting bwrap.
-	// Failure is fatal — running on the host network causes port conflicts
-	// and bypasses isolation, so we refuse to start instead.
-	var slirpInst *slirpInstance
-	if w.paths.hasNetworkIsolation() {
-		si, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.paths, w.log)
-		if err != nil {
-			return fmt.Errorf("network isolation setup failed: %w", err)
-		}
-		slirpInst = si
+	// Set up network namespace — required for port isolation.
+	// hasNetworkIsolation() is guaranteed true (validated at startup).
+	slirpInst, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.paths, w.log)
+	if err != nil {
+		return fmt.Errorf("network isolation setup failed: %w", err)
 	}
 
 	// Wrap in systemd-run for lifecycle + cgroups.
