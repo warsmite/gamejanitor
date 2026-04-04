@@ -50,15 +50,14 @@ func decodeErrorBody(t *testing.T, resp *http.Response) string {
 // Test 1: Permissions in list response
 // ---------------------------------------------------------------------------
 
-func TestPermissions_ListResponse_AdminGetsAllPermissions(t *testing.T) {
+func TestPermissions_Me_AdminGetsAllPermissions(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
 	adminToken := testutil.MustCreateAdminToken(t, api.Services)
 
-	req := authRequest("GET", api.Server.URL+"/api/gameservers", adminToken, nil)
+	req := authRequest("GET", api.Server.URL+"/api/me", adminToken, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -66,20 +65,20 @@ func TestPermissions_ListResponse_AdminGetsAllPermissions(t *testing.T) {
 
 	var result struct {
 		Data struct {
+			Role        string   `json:"role"`
 			Permissions []string `json:"permissions"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
-	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions,
-		"admin token should receive all permissions in list response")
+	assert.Equal(t, "admin", result.Data.Role)
+	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
-func TestPermissions_ListResponse_ScopedTokenGetsOwnPermissions(t *testing.T) {
+func TestPermissions_Me_UserTokenGetsOwnPermissions(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
 	wantPerms := []string{
 		auth.PermGameserverStart,
@@ -88,7 +87,7 @@ func TestPermissions_ListResponse_ScopedTokenGetsOwnPermissions(t *testing.T) {
 	}
 	scopedToken := testutil.MustCreateCustomToken(t, api.Services, wantPerms, nil)
 
-	req := authRequest("GET", api.Server.URL+"/api/gameservers", scopedToken, nil)
+	req := authRequest("GET", api.Server.URL+"/api/me", scopedToken, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -96,34 +95,35 @@ func TestPermissions_ListResponse_ScopedTokenGetsOwnPermissions(t *testing.T) {
 
 	var result struct {
 		Data struct {
+			Role        string   `json:"role"`
 			Permissions []string `json:"permissions"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
-	assert.ElementsMatch(t, wantPerms, result.Data.Permissions,
-		"scoped token should receive exactly its own permissions")
+	assert.Equal(t, "user", result.Data.Role)
+	assert.ElementsMatch(t, wantPerms, result.Data.Permissions)
 }
 
-func TestPermissions_ListResponse_AuthDisabled_GetsAllPermissions(t *testing.T) {
+func TestPermissions_Me_AuthDisabled_GetsAllPermissions(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
-	// Auth disabled by default — do not call enableAuth
 
-	resp, err := http.Get(api.Server.URL + "/api/gameservers")
+	resp, err := http.Get(api.Server.URL + "/api/me")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
 		Data struct {
+			Role        string   `json:"role"`
 			Permissions []string `json:"permissions"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
-	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions,
-		"unauthenticated request with auth disabled should receive all permissions")
+	assert.Equal(t, "admin", result.Data.Role)
+	assert.ElementsMatch(t, auth.AllPermissions, result.Data.Permissions)
 }
 
 // ---------------------------------------------------------------------------

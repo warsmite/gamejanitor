@@ -43,6 +43,9 @@ type Store interface {
 	AllocatedCPUByNodeExcluding(nodeID, excludeID string) (float64, error)
 	AllocatedStorageByNodeExcluding(nodeID, excludeID string) (int, error)
 	ListBackups(filter model.BackupFilter) ([]model.Backup, error)
+	CountGameserversByToken(tokenID string) (int, error)
+	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
+	ListGameserverIDsByToken(tokenID string) ([]string, error)
 }
 
 // StatusProvider derives the current status for a gameserver from runtime state.
@@ -208,15 +211,21 @@ func (s *GameserverService) SetBackupStore(store BackupStore) {
 }
 
 func (s *GameserverService) ListGameservers(ctx context.Context, filter model.GameserverFilter) ([]model.Gameserver, error) {
-	// Apply token scoping — intersect requested IDs with token's allowed IDs
+	// Apply token scoping: visible = owned + granted. Admin sees all.
 	if token := auth.TokenFromContext(ctx); token != nil && !auth.IsAdmin(token) {
-		tokenIDs := auth.AllowedGameserverIDs(token)
-		if len(tokenIDs) > 0 {
-			filter.IDs = auth.IntersectIDs(filter.IDs, tokenIDs)
-			// Empty intersection means the token has no access to the requested IDs
-			if len(filter.IDs) == 0 {
-				return []model.Gameserver{}, nil
-			}
+		// Owned gameservers
+		ownedIDs, err := s.store.ListGameserverIDsByToken(token.ID)
+		if err != nil {
+			return nil, fmt.Errorf("listing owned gameservers: %w", err)
+		}
+		// Granted gameservers
+		visibleIDs := append(ownedIDs, []string(token.GameserverIDs)...)
+		if len(visibleIDs) == 0 {
+			return []model.Gameserver{}, nil
+		}
+		filter.IDs = auth.IntersectIDs(filter.IDs, visibleIDs)
+		if len(filter.IDs) == 0 {
+			return []model.Gameserver{}, nil
 		}
 	}
 
@@ -261,6 +270,18 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
 	gs.DesiredState = "stopped"
+
+	// Set ownership from the creating token
+	if token := auth.TokenFromContext(ctx); token != nil {
+		gs.CreatedByTokenID = &token.ID
+
+		// Enforce quotas for user tokens
+		if token.Role == auth.RoleUser {
+			if err := s.enforceQuotas(token, gs); err != nil {
+				return "", err
+			}
+		}
+	}
 	if gs.PortMode == "" {
 		gs.PortMode = "auto"
 	}
@@ -369,6 +390,42 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	s.recordInstant(&gs.ID, controller.EventGameserverCreate, actorJSON, dataJSON)
 
 	return rawPassword, nil
+}
+
+// enforceQuotas checks a user token's resource quotas before creating or updating a gameserver.
+func (s *GameserverService) enforceQuotas(token *model.Token, gs *model.Gameserver) error {
+	if token.MaxGameservers != nil {
+		count, err := s.store.CountGameserversByToken(token.ID)
+		if err != nil {
+			return fmt.Errorf("checking gameserver quota: %w", err)
+		}
+		if count >= *token.MaxGameservers {
+			return controller.ErrBadRequestf("quota exceeded: maximum %d gameservers allowed", *token.MaxGameservers)
+		}
+	}
+
+	memUsed, cpuUsed, storageUsed, err := s.store.SumResourcesByToken(token.ID)
+	if err != nil {
+		return fmt.Errorf("checking resource quota: %w", err)
+	}
+
+	if token.MaxMemoryMB != nil && memUsed+gs.MemoryLimitMB > *token.MaxMemoryMB {
+		return controller.ErrBadRequestf("quota exceeded: %d/%d MB memory used", memUsed+gs.MemoryLimitMB, *token.MaxMemoryMB)
+	}
+	if token.MaxCPU != nil && cpuUsed+gs.CPULimit > *token.MaxCPU {
+		return controller.ErrBadRequestf("quota exceeded: %.1f/%.1f CPU used", cpuUsed+gs.CPULimit, *token.MaxCPU)
+	}
+	if token.MaxStorageMB != nil {
+		storageMB := 0
+		if gs.StorageLimitMB != nil {
+			storageMB = *gs.StorageLimitMB
+		}
+		if storageUsed+storageMB > *token.MaxStorageMB {
+			return controller.ErrBadRequestf("quota exceeded: %d/%d MB storage used", storageUsed+storageMB, *token.MaxStorageMB)
+		}
+	}
+
+	return nil
 }
 
 func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserverID string) (string, error) {

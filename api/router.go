@@ -42,9 +42,11 @@ type RouterOptions struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	WebhookSvc      *webhook.WebhookEndpointService
 	EventHistorySvc *event.EventHistoryService
-	ActivityStore   handler.EventStore
-	StatsHistory    handler.StatsHistoryQuerier
-	Broadcaster     *controller.EventBus
+	ActivityStore    handler.EventStore
+	StatsHistory     handler.StatsHistoryQuerier
+	OwnershipChecker OwnershipChecker
+	QuotaQuerier     handler.QuotaQuerier
+	Broadcaster      *controller.EventBus
 	Log             *slog.Logger
 	WebUI           fs.FS // embedded UI static files (nil to disable)
 }
@@ -88,7 +90,7 @@ func NewRouter(opts RouterOptions) *Router {
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
 	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
-	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.Log)
+	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.QuotaQuerier, opts.Log)
 	workerHandlers := handler.NewWorkerHandlers(opts.WorkerNodeSvc, opts.Log)
 	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.WorkerNodeSvc, opts.Config, opts.Log)
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
@@ -96,32 +98,33 @@ func NewRouter(opts RouterOptions) *Router {
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore)
 
+	oc := opts.OwnershipChecker
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
-	requireAccess := RequireGameserverAccess(opts.SettingsSvc)
-	requireStart := RequirePermission(opts.SettingsSvc, auth.PermGameserverStart)
-	requireStop := RequirePermission(opts.SettingsSvc, auth.PermGameserverStop)
-	requireRestart := RequirePermission(opts.SettingsSvc, auth.PermGameserverRestart)
-	requireUpdateGame := RequirePermission(opts.SettingsSvc, auth.PermGameserverUpdateGame)
-	requireReinstall := RequirePermission(opts.SettingsSvc, auth.PermGameserverReinstall)
-	requireDelete := RequirePermission(opts.SettingsSvc, auth.PermGameserverDelete)
-	requireArchive := RequirePermission(opts.SettingsSvc, auth.PermGameserverArchive)
-	requireUnarchive := RequirePermission(opts.SettingsSvc, auth.PermGameserverUnarchive)
-	requireRegenSFTP := RequirePermission(opts.SettingsSvc, auth.PermGameserverRegenerateSFTP)
-	requireLogs := RequirePermission(opts.SettingsSvc, auth.PermGameserverLogs)
-	requireCommands := RequirePermission(opts.SettingsSvc, auth.PermGameserverCommand)
-	requireFilesRead := RequirePermission(opts.SettingsSvc, auth.PermGameserverFilesRead)
-	requireFilesWrite := RequirePermission(opts.SettingsSvc, auth.PermGameserverFilesWrite)
-	requireBackupRead := RequirePermission(opts.SettingsSvc, auth.PermBackupRead)
-	requireBackupCreate := RequirePermission(opts.SettingsSvc, auth.PermBackupCreate)
-	requireBackupDelete := RequirePermission(opts.SettingsSvc, auth.PermBackupDelete)
-	requireBackupRestore := RequirePermission(opts.SettingsSvc, auth.PermBackupRestore)
-	requireBackupDownload := RequirePermission(opts.SettingsSvc, auth.PermBackupDownload)
-	requireScheduleRead := RequirePermission(opts.SettingsSvc, auth.PermScheduleRead)
-	requireScheduleCreate := RequirePermission(opts.SettingsSvc, auth.PermScheduleCreate)
-	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, auth.PermScheduleUpdate)
-	requireScheduleDelete := RequirePermission(opts.SettingsSvc, auth.PermScheduleDelete)
-	requireModsRead := RequirePermission(opts.SettingsSvc, auth.PermGameserverModsRead)
-	requireModsWrite := RequirePermission(opts.SettingsSvc, auth.PermGameserverModsWrite)
+	requireAccess := RequireGameserverAccess(opts.SettingsSvc, oc)
+	requireStart := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverStart)
+	requireStop := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverStop)
+	requireRestart := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverRestart)
+	requireUpdateGame := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverUpdateGame)
+	requireReinstall := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverReinstall)
+	requireDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverDelete)
+	requireArchive := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverArchive)
+	requireUnarchive := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverUnarchive)
+	requireRegenSFTP := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverRegenerateSFTP)
+	requireLogs := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverLogs)
+	requireCommands := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverCommand)
+	requireFilesRead := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverFilesRead)
+	requireFilesWrite := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverFilesWrite)
+	requireBackupRead := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupRead)
+	requireBackupCreate := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupCreate)
+	requireBackupDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupDelete)
+	requireBackupRestore := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupRestore)
+	requireBackupDownload := RequirePermission(opts.SettingsSvc, oc, auth.PermBackupDownload)
+	requireScheduleRead := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleRead)
+	requireScheduleCreate := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleCreate)
+	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleUpdate)
+	requireScheduleDelete := RequirePermission(opts.SettingsSvc, oc, auth.PermScheduleDelete)
+	requireModsRead := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverModsRead)
+	requireModsWrite := RequirePermission(opts.SettingsSvc, oc, auth.PermGameserverModsWrite)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -129,6 +132,7 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Use(rateLimitStore.PerTokenMiddleware())
 
 		r.Get("/status", statusHandlers.Get)
+		r.Get("/me", authHandlers.Me)
 
 		r.Route("/games", func(r chi.Router) {
 			r.Get("/", gameHandlers.List)
@@ -138,7 +142,7 @@ func NewRouter(opts RouterOptions) *Router {
 
 		r.Route("/gameservers", func(r chi.Router) {
 			r.Get("/", gameserverHandlers.List)
-			r.With(requireAdmin).Post("/", gameserverHandlers.Create)
+			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermGameserverCreate)).Post("/", gameserverHandlers.Create)
 			r.With(requireAdmin).Post("/bulk", gameserverHandlers.BulkAction)
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)

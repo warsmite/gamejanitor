@@ -1,8 +1,9 @@
 package api
 
 import (
-	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
+	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/model"
 	"net"
 	"net/http"
 	"strings"
@@ -121,34 +122,36 @@ func RequireClusterPermission(settingsSvc *settings.SettingsService, permission 
 	}
 }
 
-// RequirePermission returns 403 if the token doesn't have the given permission
-// on the gameserver identified by the {id} URL parameter.
-// No-op when auth is disabled or localhost bypass is active.
-func RequirePermission(settingsSvc *settings.SettingsService, permission string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := TokenFromContext(r.Context())
-			if token == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-			if auth.IsAdmin(token) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			gsID := chi.URLParam(r, "id")
-			if gsID == "" || !auth.HasPermission(token, gsID, permission) {
-				handleForbidden(w, r)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+// OwnershipChecker looks up who owns a gameserver. Used by permission
+// middleware to grant owners full access without coupling to the full store.
+type OwnershipChecker interface {
+	GetGameserverOwner(gameserverID string) (*string, error)
 }
 
-// RequireGameserverAccess returns 403 if the token doesn't have any permission
-// on the gameserver identified by the {id} URL parameter. Used for view-only routes.
-func RequireGameserverAccess(settingsSvc *settings.SettingsService) func(http.Handler) http.Handler {
+// tokenCanAccessGameserver checks if a token can access a gameserver via
+// ownership (created_by_token_id) or grants (gameserver_ids on the token).
+func tokenCanAccessGameserver(token *model.Token, gsID string, ownerCheck OwnershipChecker) bool {
+	// Check grants list
+	for _, id := range token.GameserverIDs {
+		if id == gsID {
+			return true
+		}
+	}
+	// Check ownership
+	if ownerCheck != nil {
+		owner, err := ownerCheck.GetGameserverOwner(gsID)
+		if err == nil && owner != nil && *owner == token.ID {
+			return true
+		}
+	}
+	return false
+}
+
+// RequirePermission returns 403 if the token doesn't have the given permission
+// on the gameserver identified by the {id} URL parameter.
+// Owners get all gameserver-scoped permissions. Granted tokens check the permission list.
+// No-op when auth is disabled or localhost bypass is active.
+func RequirePermission(settingsSvc *settings.SettingsService, ownerCheck OwnershipChecker, permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -165,16 +168,48 @@ func RequireGameserverAccess(settingsSvc *settings.SettingsService) func(http.Ha
 				handleForbidden(w, r)
 				return
 			}
-			// Empty list means all-access
-			if len(token.GameserverIDs) == 0 {
-				next.ServeHTTP(w, r)
-				return
-			}
-			for _, id := range token.GameserverIDs {
-				if id == gsID {
+
+			// Check ownership — owners get all gameserver permissions
+			if ownerCheck != nil {
+				owner, err := ownerCheck.GetGameserverOwner(gsID)
+				if err == nil && owner != nil && *owner == token.ID {
 					next.ServeHTTP(w, r)
 					return
 				}
+			}
+
+			// Fall back to grants + permission check
+			if !auth.HasPermission(token, gsID, permission) {
+				handleForbidden(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireGameserverAccess returns 403 if the token doesn't have any access
+// to the gameserver identified by the {id} URL parameter (via ownership or grants).
+func RequireGameserverAccess(settingsSvc *settings.SettingsService, ownerCheck OwnershipChecker) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := TokenFromContext(r.Context())
+			if token == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if auth.IsAdmin(token) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			gsID := chi.URLParam(r, "id")
+			if gsID == "" {
+				handleForbidden(w, r)
+				return
+			}
+			if tokenCanAccessGameserver(token, gsID, ownerCheck) {
+				next.ServeHTTP(w, r)
+				return
 			}
 			handleForbidden(w, r)
 		})

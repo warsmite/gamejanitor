@@ -11,13 +11,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type AuthHandlers struct {
-	authSvc *auth.AuthService
-	log     *slog.Logger
+// QuotaQuerier provides resource usage data for quota display.
+type QuotaQuerier interface {
+	CountGameserversByToken(tokenID string) (int, error)
+	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
 }
 
-func NewAuthHandlers(authSvc *auth.AuthService, log *slog.Logger) *AuthHandlers {
-	return &AuthHandlers{authSvc: authSvc, log: log}
+type AuthHandlers struct {
+	authSvc      *auth.AuthService
+	quotaQuerier QuotaQuerier
+	log          *slog.Logger
+}
+
+func NewAuthHandlers(authSvc *auth.AuthService, quotaQuerier QuotaQuerier, log *slog.Logger) *AuthHandlers {
+	return &AuthHandlers{authSvc: authSvc, quotaQuerier: quotaQuerier, log: log}
 }
 
 func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
@@ -209,4 +216,40 @@ func (h *AuthHandlers) RedeemClaimCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondOK(w, map[string]string{"token": rawToken})
+}
+
+// Me returns the calling token's role, permissions, and quota usage.
+func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
+	token := auth.TokenFromContext(r.Context())
+	if token == nil {
+		// Auth disabled — return admin-like response
+		respondOK(w, map[string]any{
+			"role":        "admin",
+			"permissions": auth.AllPermissions,
+		})
+		return
+	}
+
+	resp := map[string]any{
+		"role":        token.Role,
+		"permissions": effectivePermissions(r),
+	}
+
+	// Include quota info for user tokens
+	if token.Role == auth.RoleUser && h.quotaQuerier != nil {
+		count, _ := h.quotaQuerier.CountGameserversByToken(token.ID)
+		memUsed, cpuUsed, storageUsed, _ := h.quotaQuerier.SumResourcesByToken(token.ID)
+		resp["quotas"] = map[string]any{
+			"max_gameservers":  token.MaxGameservers,
+			"max_memory_mb":    token.MaxMemoryMB,
+			"max_cpu":          token.MaxCPU,
+			"max_storage_mb":   token.MaxStorageMB,
+			"used_gameservers": count,
+			"used_memory_mb":   memUsed,
+			"used_cpu":         cpuUsed,
+			"used_storage_mb":  storageUsed,
+		}
+	}
+
+	respondOK(w, resp)
 }
