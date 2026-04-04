@@ -153,7 +153,18 @@
       const result = await api.tokens.generateClaimCode(id);
       const link = `${window.location.origin}/invite/${result.claim_code}`;
 
-      await navigator.clipboard.writeText(link);
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       toast('Invite link copied to clipboard', 'success');
 
       // Update the token in the list to show it has a claim code
