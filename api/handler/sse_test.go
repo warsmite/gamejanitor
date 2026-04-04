@@ -59,7 +59,7 @@ func TestSSE_ScopedToken_OnlyReceivesOwnEvents(t *testing.T) {
 	gsA := createGameserverWithToken(t, api, adminToken, "Server A")
 	gsB := createGameserverWithToken(t, api, adminToken, "Server B")
 
-	scopedToken := testutil.MustCreateCustomToken(t, api.Services,
+	scopedToken := testutil.MustCreateUserToken(t, api.Services,
 		auth.AllPermissions, []string{gsA})
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events", scopedToken, func() {

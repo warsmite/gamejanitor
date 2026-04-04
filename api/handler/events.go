@@ -15,15 +15,20 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// GameserverVisibility returns the set of gameserver IDs visible to a token.
-type GameserverVisibility interface {
+// GameserverQuerier provides all gameserver lookups needed by middleware and handlers.
+// Implemented by the gameserver store.
+type GameserverQuerier interface {
+	GetGameserverOwner(gameserverID string) (*string, error)
+	GetGameserverGrants(gameserverID string) (model.GrantMap, error)
 	ListGameserverIDsByToken(tokenID string) ([]string, error)
 	ListGrantedGameserverIDs(tokenID string) ([]string, error)
+	CountGameserversByToken(tokenID string) (int, error)
+	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
 }
 
 // visibleGameserverIDs returns owned + granted gameserver IDs for a token.
 // Returns nil for admin or no-auth (no filtering needed).
-func visibleGameserverIDs(r *http.Request, vis GameserverVisibility) []string {
+func visibleGameserverIDs(r *http.Request, vis GameserverQuerier) []string {
 	token := auth.TokenFromContext(r.Context())
 	if token == nil || auth.IsAdmin(token) || vis == nil {
 		return nil
@@ -36,11 +41,11 @@ func visibleGameserverIDs(r *http.Request, vis GameserverVisibility) []string {
 type EventHandlers struct {
 	bus        *controller.EventBus
 	historySvc *event.EventHistoryService
-	visibility GameserverVisibility
+	visibility GameserverQuerier
 	log        *slog.Logger
 }
 
-func NewEventHandlers(bus *controller.EventBus, historySvc *event.EventHistoryService, visibility GameserverVisibility, log *slog.Logger) *EventHandlers {
+func NewEventHandlers(bus *controller.EventBus, historySvc *event.EventHistoryService, visibility GameserverQuerier, log *slog.Logger) *EventHandlers {
 	return &EventHandlers{bus: bus, historySvc: historySvc, visibility: visibility, log: log}
 }
 

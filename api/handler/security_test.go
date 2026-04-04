@@ -78,7 +78,7 @@ func TestSecurity_TokenScopedToGameserver_CannotListOthers(t *testing.T) {
 	}
 
 	// Token scoped to first gameserver only
-	scopedToken := testutil.MustCreateCustomToken(t, api.Services,
+	scopedToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverFilesRead}, []string{gsIDs[0]})
 
 	// List gameservers — should only see the scoped one
@@ -133,7 +133,7 @@ func TestSecurity_StartEndpoint_RequiresCorrectPermission(t *testing.T) {
 	gsID := createResult.Data.ID
 
 	// Token with files.read but NOT gameserver.start
-	wrongPermToken := testutil.MustCreateCustomToken(t, api.Services,
+	wrongPermToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverFilesRead}, nil)
 
 	// Try to start — should be forbidden
@@ -165,7 +165,7 @@ func TestSecurity_DeleteEndpoint_RequiresDeletePermission(t *testing.T) {
 	gsID := createResult.Data.ID
 
 	// Token with start but NOT delete
-	startOnlyToken := testutil.MustCreateCustomToken(t, api.Services,
+	startOnlyToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
 	req = authRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, startOnlyToken, nil)

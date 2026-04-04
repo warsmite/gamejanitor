@@ -38,7 +38,7 @@ func TestAPI_AdminRequired_CreateGameserver_RejectsCustomToken(t *testing.T) {
 	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
 	// Custom token with gameserver.start but NOT admin
-	customToken := testutil.MustCreateCustomToken(t, api.Services,
+	customToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
 	body, _ := json.Marshal(map[string]any{
@@ -99,7 +99,7 @@ func TestAPI_GameserverScoping_CustomTokenCannotAccessOtherGameserver(t *testing
 	}
 
 	// Custom token scoped to gs A only, with access permission
-	scopedToken := testutil.MustCreateCustomToken(t, api.Services,
+	scopedToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverFilesRead}, []string{gsIDs[0]})
 
 	// Access gs A — should work
@@ -123,7 +123,7 @@ func TestAPI_TokensEndpoint_RequiresTokensManage(t *testing.T) {
 	enableAuth(api)
 
 	// Custom token without tokens.manage
-	customToken := testutil.MustCreateCustomToken(t, api.Services,
+	customToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/tokens", customToken, nil)
@@ -139,7 +139,7 @@ func TestAPI_SettingsEndpoint_RequiresSettingsView(t *testing.T) {
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
 
-	customToken := testutil.MustCreateCustomToken(t, api.Services,
+	customToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/settings", customToken, nil)
@@ -155,7 +155,7 @@ func TestAPI_WorkersEndpoint_RequiresNodesManage(t *testing.T) {
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
 
-	customToken := testutil.MustCreateCustomToken(t, api.Services,
+	customToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/workers", customToken, nil)

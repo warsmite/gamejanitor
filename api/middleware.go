@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/api/handler"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
@@ -121,16 +122,10 @@ func RequireClusterPermission(settingsSvc *settings.SettingsService, permission 
 	}
 }
 
-// GameserverAccessChecker looks up ownership and grants for a gameserver.
-// Used by permission middleware without coupling to the full store.
-type GameserverAccessChecker interface {
-	GetGameserverOwner(gameserverID string) (*string, error)
-	GetGameserverGrants(gameserverID string) (model.GrantMap, error)
-}
 
 // tokenCanAccessGameserver checks if a token can access a gameserver via
 // ownership (created_by_token_id) or grants (on the gameserver).
-func tokenCanAccessGameserver(token *model.Token, gsID string, ac GameserverAccessChecker) bool {
+func tokenCanAccessGameserver(token *model.Token, gsID string, ac handler.GameserverQuerier) bool {
 	if ac == nil {
 		return false
 	}
@@ -153,7 +148,7 @@ func tokenCanAccessGameserver(token *model.Token, gsID string, ac GameserverAcce
 // on the gameserver identified by the {id} URL parameter.
 // Owners get all gameserver-scoped permissions. Granted tokens check the permission list.
 // No-op when auth is disabled or localhost bypass is active.
-func RequirePermission(settingsSvc *settings.SettingsService, ac GameserverAccessChecker, permission string) func(http.Handler) http.Handler {
+func RequirePermission(settingsSvc *settings.SettingsService, ac handler.GameserverQuerier, permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -196,7 +191,7 @@ func RequirePermission(settingsSvc *settings.SettingsService, ac GameserverAcces
 
 // RequireGameserverAccess returns 403 if the token doesn't have any access
 // to the gameserver identified by the {id} URL parameter (via ownership or grants).
-func RequireGameserverAccess(settingsSvc *settings.SettingsService, ac GameserverAccessChecker) func(http.Handler) http.Handler {
+func RequireGameserverAccess(settingsSvc *settings.SettingsService, ac handler.GameserverQuerier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())

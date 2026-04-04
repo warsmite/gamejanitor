@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/warsmite/gamejanitor/controller/auth"
@@ -18,9 +17,11 @@ var tokensCmd = &cobra.Command{
 func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensCreateCmd.Flags().String("role", "user", "Token role: admin, user, or worker")
-	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Grant access to gameserver (repeatable, name or ID)")
-	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable). Examples: gameserver.start, gameserver.stop, gameserver.configure.name, backup.read, schedule.read. Run 'gamejanitor tokens permissions' to list all.")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
+	tokensCreateCmd.Flags().Int("max-gameservers", 0, "Max gameservers this token can create (0 = cannot create)")
+	tokensCreateCmd.Flags().Int("max-memory-mb", 0, "Max total memory (MB) across all owned gameservers")
+	tokensCreateCmd.Flags().Float64("max-cpu", 0, "Max total CPU across all owned gameservers")
+	tokensCreateCmd.Flags().Int("max-storage-mb", 0, "Max total storage (MB) across all owned gameservers")
 
 	tokensListCmd.Flags().String("role", "", "Filter by role: admin, user, or worker")
 
@@ -73,7 +74,7 @@ var tokensCreateCmd = &cobra.Command{
 	Short: "Create a token",
 	Example: `  gamejanitor tokens create --name admin-key --role admin
   gamejanitor tokens create --name worker-1 --role worker
-  gamejanitor tokens create --name panel --role user --gameserver "My Server" --permission start,stop,logs`,
+  gamejanitor tokens create --name friend --role user --max-gameservers 3 --max-memory-mb 4096`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		if name == "" {
@@ -104,33 +105,28 @@ var tokensCreateCmd = &cobra.Command{
 			return nil
 		}
 
-		gameserverNames, _ := cmd.Flags().GetStringSlice("gameserver")
-		permissions, _ := cmd.Flags().GetStringSlice("permission")
 		expiresIn, _ := cmd.Flags().GetString("expires-in")
 
-		// Resolve gameserver names to IDs
-		var gameserverIDs []string
-		for _, gs := range gameserverNames {
-			id, err := resolveGameserverID(gs)
-			if err != nil {
-				return exitError(fmt.Errorf("resolving gameserver %q: %w", gs, err))
-			}
-			gameserverIDs = append(gameserverIDs, id)
-		}
-
-		// Build grants map: each gameserver gets the same permissions
-		grants := make(map[string][]string)
-		for _, id := range gameserverIDs {
-			grants[id] = permissions
-		}
-
 		req := &gamejanitor.CreateTokenRequest{
-			Name:   name,
-			Role:   role,
-			Grants: grants,
+			Name: name,
+			Role: role,
 		}
 		if expiresIn != "" {
 			req.ExpiresIn = expiresIn
+		}
+
+		// Quota flags — only set if non-zero (zero means don't set the limit)
+		if v, _ := cmd.Flags().GetInt("max-gameservers"); v > 0 {
+			req.MaxGameservers = &v
+		}
+		if v, _ := cmd.Flags().GetInt("max-memory-mb"); v > 0 {
+			req.MaxMemoryMB = &v
+		}
+		if v, _ := cmd.Flags().GetFloat64("max-cpu"); v > 0 {
+			req.MaxCPU = &v
+		}
+		if v, _ := cmd.Flags().GetInt("max-storage-mb"); v > 0 {
+			req.MaxStorageMB = &v
 		}
 
 		result, err := getClient().Tokens.Create(ctx(), req)
@@ -144,9 +140,6 @@ var tokensCreateCmd = &cobra.Command{
 		}
 
 		fmt.Fprintf(os.Stderr, "Token %q created (id: %s)\n", result.Name, result.TokenID)
-		if len(gameserverIDs) > 0 {
-			fmt.Fprintf(os.Stderr, "Granted access to %d gameserver(s), permissions: %s\n", len(gameserverIDs), strings.Join(permissions, ", "))
-		}
 		fmt.Fprintf(os.Stderr, "Store this token — it cannot be retrieved later.\n")
 		// Raw token to stdout for piping
 		fmt.Println(result.Token)

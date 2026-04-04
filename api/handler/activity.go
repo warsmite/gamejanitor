@@ -12,12 +12,12 @@ type EventStore interface {
 }
 
 type ActivityHandlers struct {
-	store      EventStore
-	visibility GameserverVisibility
+	store   EventStore
+	gsQuery GameserverQuerier
 }
 
-func NewActivityHandlers(store EventStore, visibility GameserverVisibility) *ActivityHandlers {
-	return &ActivityHandlers{store: store, visibility: visibility}
+func NewActivityHandlers(store EventStore, gsQuery GameserverQuerier) *ActivityHandlers {
+	return &ActivityHandlers{store: store, gsQuery: gsQuery}
 }
 
 // List returns events, optionally filtered by gameserver_id, type, or worker_id.
@@ -42,7 +42,7 @@ func (h *ActivityHandlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Scope to visible gameservers for non-admin tokens
-	allowedIDs := visibleGameserverIDs(r, h.visibility)
+	allowedIDs := visibleGameserverIDs(r, h.gsQuery)
 	if allowedIDs != nil && filter.GameserverID == nil {
 		// Non-admin with no specific gameserver filter — return empty
 		// (activity is per-gameserver, listing all for scoped tokens is not supported)

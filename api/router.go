@@ -44,9 +44,7 @@ type RouterOptions struct {
 	EventHistorySvc *event.EventHistoryService
 	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
-	AccessChecker    GameserverAccessChecker
-	Visibility       handler.GameserverVisibility
-	QuotaQuerier     handler.QuotaQuerier
+	GameserverQuerier handler.GameserverQuerier
 	Broadcaster      *controller.EventBus
 	Log             *slog.Logger
 	WebUI           fs.FS // embedded UI static files (nil to disable)
@@ -86,20 +84,20 @@ func NewRouter(opts RouterOptions) *Router {
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
 	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Log)
-	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.Visibility, opts.Log)
+	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.GameserverQuerier, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
 	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
-	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.QuotaQuerier, opts.Log)
+	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.GameserverQuerier, opts.Log)
 	workerHandlers := handler.NewWorkerHandlers(opts.WorkerNodeSvc, opts.Log)
 	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.WorkerNodeSvc, opts.Config, opts.Log)
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
-	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.Visibility)
+	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.GameserverQuerier)
 
-	ac := opts.AccessChecker
+	ac := opts.GameserverQuerier
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
 	requireAccess := RequireGameserverAccess(opts.SettingsSvc, ac)
 	requireStart := RequirePermission(opts.SettingsSvc, ac, auth.PermGameserverStart)

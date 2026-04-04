@@ -11,20 +11,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// QuotaQuerier provides resource usage data for quota display.
-type QuotaQuerier interface {
-	CountGameserversByToken(tokenID string) (int, error)
-	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
-}
-
 type AuthHandlers struct {
-	authSvc      *auth.AuthService
-	quotaQuerier QuotaQuerier
-	log          *slog.Logger
+	authSvc *auth.AuthService
+	gsQuery GameserverQuerier
+	log     *slog.Logger
 }
 
-func NewAuthHandlers(authSvc *auth.AuthService, quotaQuerier QuotaQuerier, log *slog.Logger) *AuthHandlers {
-	return &AuthHandlers{authSvc: authSvc, quotaQuerier: quotaQuerier, log: log}
+func NewAuthHandlers(authSvc *auth.AuthService, gsQuery GameserverQuerier, log *slog.Logger) *AuthHandlers {
+	return &AuthHandlers{authSvc: authSvc, gsQuery: gsQuery, log: log}
 }
 
 func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
@@ -232,9 +226,9 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Include quota info for user tokens
-	if token.Role == auth.RoleUser && h.quotaQuerier != nil {
-		count, _ := h.quotaQuerier.CountGameserversByToken(token.ID)
-		memUsed, cpuUsed, storageUsed, _ := h.quotaQuerier.SumResourcesByToken(token.ID)
+	if token.Role == auth.RoleUser && h.gsQuery != nil {
+		count, _ := h.gsQuery.CountGameserversByToken(token.ID)
+		memUsed, cpuUsed, storageUsed, _ := h.gsQuery.SumResourcesByToken(token.ID)
 		resp["quotas"] = map[string]any{
 			"max_gameservers":  token.MaxGameservers,
 			"max_memory_mb":    token.MaxMemoryMB,

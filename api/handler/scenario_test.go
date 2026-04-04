@@ -150,7 +150,7 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 	gsID := createResult.Data.ID
 
 	// 5. Create a limited operator token with access to the created gameserver
-	operatorToken := testutil.MustCreateCustomToken(t, api.Services,
+	operatorToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart, auth.PermGameserverStop}, []string{gsID})
 
 	// 6. Operator can start

@@ -15,7 +15,7 @@ import (
 // scopedContext creates a context with a custom token scoped to the given gameserver IDs.
 func scopedContext(t *testing.T, svc *testutil.ServiceBundle, perms []string, gsIDs []string) context.Context {
 	t.Helper()
-	rawToken := testutil.MustCreateCustomToken(t, svc, perms, gsIDs)
+	rawToken := testutil.MustCreateUserToken(t, svc, perms, gsIDs)
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, token)
 	return auth.SetTokenInContext(testutil.TestContext(), token)

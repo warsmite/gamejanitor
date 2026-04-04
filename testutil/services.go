@@ -194,9 +194,9 @@ func MustCreateAdminToken(t *testing.T, svc *ServiceBundle) string {
 	return raw
 }
 
-// MustCreateCustomToken creates a user API token and grants it access to the given gameservers.
+// MustCreateUserToken creates a user API token and grants it access to the given gameservers.
 // Each granted gameserver gets the same permission set.
-func MustCreateCustomToken(t *testing.T, svc *ServiceBundle, perms []string, gameserverIDs []string) string {
+func MustCreateUserToken(t *testing.T, svc *ServiceBundle, perms []string, gameserverIDs []string) string {
 	t.Helper()
 	raw, token, err := svc.AuthSvc.CreateUserToken("test-custom", nil, nil)
 	if err != nil {
