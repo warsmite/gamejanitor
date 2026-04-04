@@ -198,7 +198,7 @@ func MustCreateAdminToken(t *testing.T, svc *ServiceBundle) string {
 // Each granted gameserver gets the same permission set.
 func MustCreateUserToken(t *testing.T, svc *ServiceBundle, perms []string, gameserverIDs []string) string {
 	t.Helper()
-	raw, token, err := svc.AuthSvc.CreateUserToken("test-custom", nil, nil)
+	raw, token, err := svc.AuthSvc.CreateUserToken("test-custom", false, nil, nil)
 	if err != nil {
 		t.Fatalf("creating custom token: %v", err)
 	}

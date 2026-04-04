@@ -55,7 +55,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Create a non-admin token with env-only access (not resources)
-	rawToken, token, err := svc.AuthSvc.CreateUserToken("limited", nil, nil)
+	rawToken, token, err := svc.AuthSvc.CreateUserToken("limited", false, nil, nil)
 	require.NoError(t, err)
 
 	// Grant env-only permission on this gameserver

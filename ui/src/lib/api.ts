@@ -261,6 +261,7 @@ export interface Token {
   id: string;
   name: string;
   role: string;
+  can_create: boolean;
   grants: Record<string, string[]>;
   max_gameservers?: number;
   max_memory_mb?: number;

@@ -13,6 +13,7 @@ type Token struct {
 	HashedToken    string     `json:"-"`
 	TokenPrefix    string     `json:"-"`
 	Role           string     `json:"role"`
+	CanCreateGS    bool       `json:"can_create"`
 	MaxGameservers *int       `json:"max_gameservers,omitempty"`
 	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
 	MaxCPU         *float64   `json:"max_cpu,omitempty"`
@@ -23,9 +24,9 @@ type Token struct {
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 }
 
-// CanCreate returns true if this token has any quota set, meaning it can create gameservers.
+// CanCreate returns true if this token is allowed to create gameservers.
 func (t *Token) CanCreate() bool {
-	return t.MaxGameservers != nil || t.MaxMemoryMB != nil || t.MaxCPU != nil || t.MaxStorageMB != nil
+	return t.CanCreateGS
 }
 
 // GrantMap maps gameserver IDs to permission lists.

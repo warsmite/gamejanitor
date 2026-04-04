@@ -41,7 +41,7 @@ func TestAuth_ValidateToken_ExpiredTokenRejected(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 
 	past := time.Now().Add(-1 * time.Hour)
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", &past, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("expired", false, &past, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
@@ -76,7 +76,7 @@ func TestAuth_UserToken_IsNotAdmin(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	rawToken, _, err := svc.AuthSvc.CreateUserToken("user", nil, nil)
+	rawToken, _, err := svc.AuthSvc.CreateUserToken("user", false, nil, nil)
 	require.NoError(t, err)
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)

@@ -275,6 +275,7 @@ type Token struct {
 	ID             string     `json:"id"`
 	Name           string     `json:"name"`
 	Role           string     `json:"role"`
+	CanCreate      bool       `json:"can_create"`
 	MaxGameservers *int       `json:"max_gameservers,omitempty"`
 	MaxMemoryMB    *int       `json:"max_memory_mb,omitempty"`
 	MaxCPU         *float64   `json:"max_cpu,omitempty"`
@@ -288,6 +289,7 @@ type Token struct {
 type CreateTokenRequest struct {
 	Name           string   `json:"name"`
 	Role           string   `json:"role"` // "admin", "user", or "worker"
+	CanCreate      bool     `json:"can_create,omitempty"`
 	ExpiresIn      string   `json:"expires_in,omitempty"` // Go duration string, e.g. "720h"
 	MaxGameservers *int     `json:"max_gameservers,omitempty"`
 	MaxMemoryMB    *int                `json:"max_memory_mb,omitempty"`

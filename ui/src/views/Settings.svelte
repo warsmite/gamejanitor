@@ -25,6 +25,7 @@
   let showCreateToken = $state(false);
   let newTokenName = $state('');
   let newTokenRole = $state('admin');
+  let newTokenCanCreate = $state(false);
   let newTokenMaxGs = $state('');
   let newTokenMaxMem = $state('');
   let newTokenMaxCpu = $state('');
@@ -124,6 +125,7 @@
     try {
       const body: any = { name: newTokenName, role: newTokenRole };
       if (newTokenRole === 'user') {
+        body.can_create = newTokenCanCreate;
         if (newTokenMaxGs) body.max_gameservers = parseInt(newTokenMaxGs);
         if (newTokenMaxMem) body.max_memory_mb = parseInt(newTokenMaxMem);
         if (newTokenMaxCpu) body.max_cpu = parseFloat(newTokenMaxCpu);
@@ -517,27 +519,34 @@
             </div>
             {#if newTokenRole === 'user'}
               <div class="field-hint" style="margin: 4px 0 10px;">
-                User tokens see only servers they create or are granted access to. Set quotas to allow creating servers.
+                User tokens see only servers they create or are granted access to.
               </div>
-              <div class="s-title" style="font-size:0.78rem; margin-top:8px;">Resource Quotas</div>
-              <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
-                <div class="field">
-                  <label class="label">Max Gameservers</label>
-                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxGs}>
-                </div>
-                <div class="field">
-                  <label class="label">Max Memory (MB)</label>
-                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxMem}>
-                </div>
-                <div class="field">
-                  <label class="label">Max CPU</label>
-                  <input class="input" type="number" min="0" step="0.5" placeholder="No limit" bind:value={newTokenMaxCpu}>
-                </div>
-                <div class="field">
-                  <label class="label">Max Storage (MB)</label>
-                  <input class="input" type="number" min="0" placeholder="No limit" bind:value={newTokenMaxStorage}>
-                </div>
+              <div class="toggle-row" style="margin: 10px 0;">
+                <button class="toggle" class:on={newTokenCanCreate} onclick={() => newTokenCanCreate = !newTokenCanCreate}></button>
+                <span class="toggle-label">Can create gameservers</span>
               </div>
+              {#if newTokenCanCreate}
+                <div class="s-title" style="font-size:0.78rem; margin-top:8px;">Resource Quotas</div>
+                <div class="field-hint" style="margin: 2px 0 8px;">Leave empty for unlimited.</div>
+                <div class="field-grid" style="grid-template-columns: 1fr 1fr;">
+                  <div class="field">
+                    <label class="label">Max Gameservers</label>
+                    <input class="input" type="number" min="1" placeholder="Unlimited" bind:value={newTokenMaxGs}>
+                  </div>
+                  <div class="field">
+                    <label class="label">Max Memory (MB)</label>
+                    <input class="input" type="number" min="1" placeholder="Unlimited" bind:value={newTokenMaxMem}>
+                  </div>
+                  <div class="field">
+                    <label class="label">Max CPU</label>
+                    <input class="input" type="number" min="0.5" step="0.5" placeholder="Unlimited" bind:value={newTokenMaxCpu}>
+                  </div>
+                  <div class="field">
+                    <label class="label">Max Storage (MB)</label>
+                    <input class="input" type="number" min="1" placeholder="Unlimited" bind:value={newTokenMaxStorage}>
+                  </div>
+                </div>
+              {/if}
             {/if}
             <div class="panel-actions">
               <button class="btn-solid" onclick={createToken} disabled={creatingToken || !newTokenName} style="font-size:0.82rem;">
@@ -558,14 +567,16 @@
                   <div class="list-name">{token.name}</div>
                   <div class="list-meta">
                     <span class="scope-badge">{token.role}</span>
-                    {#if token.role === 'user' && (token.max_gameservers || token.max_memory_mb)}
+                    {#if token.role === 'user'}
                       <span class="meta-sep">·</span>
-                      {#if token.max_gameservers}<span class="quota-tag">{token.max_gameservers} servers</span>{/if}
-                      {#if token.max_memory_mb}<span class="quota-tag">{token.max_memory_mb} MB</span>{/if}
-                      {#if token.max_cpu}<span class="quota-tag">{token.max_cpu} CPU</span>{/if}
-                    {:else if token.role === 'user'}
-                      <span class="meta-sep">·</span>
-                      <span class="quota-tag dim">No quotas (view only)</span>
+                      {#if token.can_create}
+                        <span class="quota-tag">can create</span>
+                        {#if token.max_gameservers}<span class="quota-tag">{token.max_gameservers} servers</span>{/if}
+                        {#if token.max_memory_mb}<span class="quota-tag">{token.max_memory_mb} MB</span>{/if}
+                        {#if token.max_cpu}<span class="quota-tag">{token.max_cpu} CPU</span>{/if}
+                      {:else}
+                        <span class="quota-tag dim">access only</span>
+                      {/if}
                     {/if}
                     <span class="meta-sep">·</span>
                     Created {shortDate(token.created_at)}

@@ -175,7 +175,7 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a token and grant it access to gs1 with start/stop only
-	rawToken, token, err := svc.AuthSvc.CreateUserToken("mc-operator", nil, nil)
+	rawToken, token, err := svc.AuthSvc.CreateUserToken("mc-operator", false, nil, nil)
 	require.NoError(t, err)
 
 	// Add grant to gs1

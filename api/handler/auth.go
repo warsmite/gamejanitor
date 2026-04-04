@@ -46,6 +46,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name           string   `json:"name"`
 		Role           string   `json:"role"`
+		CanCreate      bool     `json:"can_create"`
 		ExpiresIn      string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
 		MaxGameservers *int     `json:"max_gameservers,omitempty"`
 		MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
@@ -131,7 +132,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 			MaxStorageMB:   req.MaxStorageMB,
 		}
 	}
-	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, expiresAt, quotas)
+	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, req.CanCreate, expiresAt, quotas)
 	if err != nil {
 		h.log.Error("creating token", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

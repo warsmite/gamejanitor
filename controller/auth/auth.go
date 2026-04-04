@@ -243,7 +243,7 @@ type UserTokenQuotas struct {
 	MaxStorageMB   *int
 }
 
-func (s *AuthService) CreateUserToken(name string, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
+func (s *AuthService) CreateUserToken(name string, canCreate bool, expiresAt *time.Time, quotas *UserTokenQuotas) (string, *model.Token, error) {
 	t := &model.Token{Name: name}
 	if err := t.Validate(); err != nil {
 		return "", nil, err
@@ -265,6 +265,7 @@ func (s *AuthService) CreateUserToken(name string, expiresAt *time.Time, quotas 
 		HashedToken: string(hashed),
 		TokenPrefix: tokenPrefix(rawToken),
 		Role:        RoleUser,
+		CanCreateGS: canCreate,
 		ExpiresAt:   expiresAt,
 	}
 	if quotas != nil {

@@ -17,11 +17,12 @@ var tokensCmd = &cobra.Command{
 func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensCreateCmd.Flags().String("role", "user", "Token role: admin, user, or worker")
+	tokensCreateCmd.Flags().Bool("can-create", false, "Allow this token to create gameservers")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
-	tokensCreateCmd.Flags().Int("max-gameservers", 0, "Max gameservers this token can create (0 = cannot create)")
-	tokensCreateCmd.Flags().Int("max-memory-mb", 0, "Max total memory (MB) across all owned gameservers")
-	tokensCreateCmd.Flags().Float64("max-cpu", 0, "Max total CPU across all owned gameservers")
-	tokensCreateCmd.Flags().Int("max-storage-mb", 0, "Max total storage (MB) across all owned gameservers")
+	tokensCreateCmd.Flags().Int("max-gameservers", 0, "Max gameservers (0 = unlimited)")
+	tokensCreateCmd.Flags().Int("max-memory-mb", 0, "Max total memory in MB (0 = unlimited)")
+	tokensCreateCmd.Flags().Float64("max-cpu", 0, "Max total CPU (0 = unlimited)")
+	tokensCreateCmd.Flags().Int("max-storage-mb", 0, "Max total storage in MB (0 = unlimited)")
 
 	tokensListCmd.Flags().String("role", "", "Filter by role: admin, user, or worker")
 
@@ -74,7 +75,7 @@ var tokensCreateCmd = &cobra.Command{
 	Short: "Create a token",
 	Example: `  gamejanitor tokens create --name admin-key --role admin
   gamejanitor tokens create --name worker-1 --role worker
-  gamejanitor tokens create --name friend --role user --max-gameservers 3 --max-memory-mb 4096`,
+  gamejanitor tokens create --name friend --role user --can-create --max-gameservers 3 --max-memory-mb 4096`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		if name == "" {
@@ -105,11 +106,13 @@ var tokensCreateCmd = &cobra.Command{
 			return nil
 		}
 
+		canCreate, _ := cmd.Flags().GetBool("can-create")
 		expiresIn, _ := cmd.Flags().GetString("expires-in")
 
 		req := &gamejanitor.CreateTokenRequest{
-			Name: name,
-			Role: role,
+			Name:      name,
+			Role:      role,
+			CanCreate: canCreate,
 		}
 		if expiresIn != "" {
 			req.ExpiresIn = expiresIn

@@ -60,6 +60,7 @@ CREATE TABLE tokens (
     hashed_token TEXT NOT NULL,
     token_prefix TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT 'user',
+    can_create BOOLEAN NOT NULL DEFAULT 0,
     max_gameservers INTEGER,
     max_memory_mb INTEGER,
     max_cpu REAL,
