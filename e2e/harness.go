@@ -163,6 +163,28 @@ func warmImage(t *testing.T) {
 	t.Logf("warmImage: image cached for %s", gameID)
 }
 
+// startSerial returns a harness without calling t.Parallel(). Use this for
+// tests that mutate global state (e.g. auth settings) and must not overlap
+// with other tests. Go runs non-parallel tests after all parallel tests in
+// the same package have finished.
+func startSerial(t *testing.T) *Harness {
+	t.Helper()
+
+	url := os.Getenv("GAMEJANITOR_API_URL")
+	if url == "" {
+		localOnce.Do(func() {
+			startLocalInstance(t)
+			warmImage(t)
+		})
+		url = localURL
+	}
+
+	h := &Harness{BaseURL: url, t: t}
+	h.waitForReady(t)
+	h.waitForWorker(t)
+	return h
+}
+
 // --- Game config ---
 
 // GameID returns the game to test. Defaults to test-game.

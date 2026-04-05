@@ -23,8 +23,11 @@ import (
 // 7. Admin creates a user token with can_create=true
 // 8. Creator token creates its own gameserver and can see it (ownership)
 // 9. Creator token cannot see admin's gameserver (no grant)
+// This test mutates global auth settings (enables auth, disables localhost
+// bypass), so it must NOT run in parallel with other tests. We avoid Start(t)
+// which calls t.Parallel(), and set up the harness manually instead.
 func TestE2E_Permissions_FullFlow(t *testing.T) {
-	h := Start(t)
+	h := startSerial(t)
 
 	// 1. Create admin token BEFORE enabling auth (localhost bypass lets us through)
 	tokenName := fmt.Sprintf("e2e-admin-%d", time.Now().UnixNano())
