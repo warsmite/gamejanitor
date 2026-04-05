@@ -167,33 +167,44 @@ func (s *GameserverStore) ClearStaleOperations() (int, error) {
 }
 
 // AllocatedMemoryByNode returns the total memory_limit_mb allocated to gameservers on a node.
-func (s *GameserverStore) AllocatedMemoryByNode(nodeID string) (int, error) {
+func (s *GameserverStore) allocatedIntByNode(column, nodeID, excludeID string) (int, error) {
+	query := "SELECT COALESCE(SUM(" + column + "), 0) FROM gameservers WHERE node_id = ?"
+	args := []any{nodeID}
+	if excludeID != "" {
+		query += " AND id != ?"
+		args = append(args, excludeID)
+	}
 	var total int
-	err := s.db.QueryRow("SELECT COALESCE(SUM(memory_limit_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated memory for node %s: %w", nodeID, err)
+	if err := s.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("querying allocated %s for node %s: %w", column, nodeID, err)
 	}
 	return total, nil
 }
 
-// AllocatedCPUByNode returns the total cpu_limit allocated to gameservers on a node.
-func (s *GameserverStore) AllocatedCPUByNode(nodeID string) (float64, error) {
+func (s *GameserverStore) allocatedFloatByNode(column, nodeID, excludeID string) (float64, error) {
+	query := "SELECT COALESCE(SUM(" + column + "), 0) FROM gameservers WHERE node_id = ?"
+	args := []any{nodeID}
+	if excludeID != "" {
+		query += " AND id != ?"
+		args = append(args, excludeID)
+	}
 	var total float64
-	err := s.db.QueryRow("SELECT COALESCE(SUM(cpu_limit), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated CPU for node %s: %w", nodeID, err)
+	if err := s.db.QueryRow(query, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("querying allocated %s for node %s: %w", column, nodeID, err)
 	}
 	return total, nil
 }
 
-// AllocatedStorageByNode returns the total storage_limit_mb allocated to gameservers on a node.
+func (s *GameserverStore) AllocatedMemoryByNode(nodeID string) (int, error) {
+	return s.allocatedIntByNode("memory_limit_mb", nodeID, "")
+}
+
+func (s *GameserverStore) AllocatedCPUByNode(nodeID string) (float64, error) {
+	return s.allocatedFloatByNode("cpu_limit", nodeID, "")
+}
+
 func (s *GameserverStore) AllocatedStorageByNode(nodeID string) (int, error) {
-	var total int
-	err := s.db.QueryRow("SELECT COALESCE(SUM(storage_limit_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated storage for node %s: %w", nodeID, err)
-	}
-	return total, nil
+	return s.allocatedIntByNode("storage_limit_mb", nodeID, "")
 }
 
 // GameserverCountByNode returns the number of non-archived gameservers on a node.
@@ -209,30 +220,15 @@ func (s *GameserverStore) GameserverCountByNode(nodeID string) (int, error) {
 // Excluding variants — used by auto-migration to check capacity without counting the gameserver being updated.
 
 func (s *GameserverStore) AllocatedMemoryByNodeExcluding(nodeID, excludeID string) (int, error) {
-	var total int
-	err := s.db.QueryRow("SELECT COALESCE(SUM(memory_limit_mb), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated memory for node %s excluding %s: %w", nodeID, excludeID, err)
-	}
-	return total, nil
+	return s.allocatedIntByNode("memory_limit_mb", nodeID, excludeID)
 }
 
 func (s *GameserverStore) AllocatedCPUByNodeExcluding(nodeID, excludeID string) (float64, error) {
-	var total float64
-	err := s.db.QueryRow("SELECT COALESCE(SUM(cpu_limit), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated CPU for node %s excluding %s: %w", nodeID, excludeID, err)
-	}
-	return total, nil
+	return s.allocatedFloatByNode("cpu_limit", nodeID, excludeID)
 }
 
 func (s *GameserverStore) AllocatedStorageByNodeExcluding(nodeID, excludeID string) (int, error) {
-	var total int
-	err := s.db.QueryRow("SELECT COALESCE(SUM(storage_limit_mb), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("querying allocated storage for node %s excluding %s: %w", nodeID, excludeID, err)
-	}
-	return total, nil
+	return s.allocatedIntByNode("storage_limit_mb", nodeID, excludeID)
 }
 
 // PopulateNode resolves the node data from the worker_nodes table.

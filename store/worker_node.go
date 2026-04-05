@@ -86,13 +86,13 @@ func (s *WorkerNodeStore) ListWorkerNodes() ([]model.WorkerNode, error) {
 	return nodes, rows.Err()
 }
 
-func (s *WorkerNodeStore) SetWorkerNodeStatus(id string, status string) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET status = ?, updated_at = ? WHERE id = ?",
-		status, time.Now(), id,
-	)
+// updateWorkerNode updates columns on a worker node by ID.
+// Returns an error if the node doesn't exist.
+func (s *WorkerNodeStore) updateWorkerNode(id, query string, args ...any) error {
+	args = append(args, time.Now(), id)
+	result, err := s.db.Exec(query, args...)
 	if err != nil {
-		return fmt.Errorf("setting status for worker node %s: %w", id, err)
+		return fmt.Errorf("updating worker node %s: %w", id, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
@@ -102,6 +102,10 @@ func (s *WorkerNodeStore) SetWorkerNodeStatus(id string, status string) error {
 		return fmt.Errorf("worker node %s not found", id)
 	}
 	return nil
+}
+
+func (s *WorkerNodeStore) SetWorkerNodeStatus(id string, status string) error {
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET status = ?, updated_at = ? WHERE id = ?", status)
 }
 
 // ResetAllWorkerStatus sets all worker nodes to the given status.
@@ -115,109 +119,25 @@ func (s *WorkerNodeStore) ResetAllWorkerStatus(status string) error {
 }
 
 func (s *WorkerNodeStore) SetWorkerNodeName(id string, name string) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET name = ?, updated_at = ? WHERE id = ?",
-		name, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting name for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET name = ?, updated_at = ? WHERE id = ?", name)
 }
 
 func (s *WorkerNodeStore) SetWorkerNodeSFTPPort(id string, sftpPort int) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET sftp_port = ?, updated_at = ? WHERE id = ?",
-		sftpPort, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting sftp port for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET sftp_port = ?, updated_at = ? WHERE id = ?", sftpPort)
 }
 
 func (s *WorkerNodeStore) SetWorkerNodeCordoned(id string, cordoned bool) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET cordoned = ?, updated_at = ? WHERE id = ?",
-		cordoned, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting cordoned for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET cordoned = ?, updated_at = ? WHERE id = ?", cordoned)
 }
 
 func (s *WorkerNodeStore) SetWorkerNodeTags(id string, tags model.Labels) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET tags = ?, updated_at = ? WHERE id = ?",
-		tags, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting tags for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET tags = ?, updated_at = ? WHERE id = ?", tags)
 }
 
 func (s *WorkerNodeStore) SetWorkerNodePortRange(id string, start *int, end *int) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET port_range_start = ?, port_range_end = ?, updated_at = ? WHERE id = ?",
-		start, end, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting port range for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET port_range_start = ?, port_range_end = ?, updated_at = ? WHERE id = ?", start, end)
 }
 
 func (s *WorkerNodeStore) SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
-	result, err := s.db.Exec(
-		"UPDATE worker_nodes SET max_memory_mb = ?, max_cpu = ?, max_storage_mb = ?, updated_at = ? WHERE id = ?",
-		maxMemoryMB, maxCPU, maxStorageMB, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting limits for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
+	return s.updateWorkerNode(id, "UPDATE worker_nodes SET max_memory_mb = ?, max_cpu = ?, max_storage_mb = ?, updated_at = ? WHERE id = ?", maxMemoryMB, maxCPU, maxStorageMB)
 }
