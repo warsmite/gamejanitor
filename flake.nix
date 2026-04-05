@@ -38,15 +38,13 @@
               "games"
             ];
 
-            # e2e tests need a built binary + runtime; netutil DNS tests need network.
-            # worker/docker tests need Docker. Skip all in the Nix sandbox.
+            # e2e tests need a running instance; netutil DNS tests need network.
             checkFlags = [
               "-skip"
               "^TestValidateExternalURL"
             ];
             preCheck = ''
               rm -rf e2e
-              rm -rf worker/docker/*_test.go
             '';
 
             preBuild = ''
@@ -128,7 +126,6 @@
                           sudo systemctl stop gamejanitor-dev 2>/dev/null || true
                           sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
                           sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                            --property=SupplementaryGroups=docker \
                             /run/gamejanitor-dev serve \
                               --config /var/lib/gamejanitor/dev-config.yaml \
                               --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
@@ -164,7 +161,6 @@
                             sudo systemctl stop gamejanitor-dev 2>/dev/null || true
                             sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
                             sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                              --property=SupplementaryGroups=docker \
                               /run/gamejanitor-dev serve \
                                 --worker --controller=false \
                                 --bind 0.0.0.0 --sftp-port 2222 \
@@ -199,7 +195,7 @@
 
             echo "This will DELETE all gamejanitor data on: ''${TARGETS[*]}"
             echo "  - Database"
-            echo "  - Docker containers/volumes and sandbox instances"
+            echo "  - Sandbox instances and volumes"
             echo "  - Backups, game data, everything"
             read -p "Are you sure? (y/N) " -n 1 -r
             echo
@@ -215,8 +211,6 @@
                   sudo systemctl kill --signal=SIGKILL \"\$scope\" 2>/dev/null || true
                   sudo systemctl stop \"\$scope\" 2>/dev/null || true
                 done
-                sudo docker ps -a --filter name=gamejanitor- --format '{{.ID}}' | xargs -r sudo docker rm -f 2>/dev/null || true
-                sudo docker volume ls --filter name=gamejanitor- --format '{{.Name}}' | xargs -r sudo docker volume rm -f 2>/dev/null || true
                 grep -o '/var/lib/gamejanitor/[^ ]*' /proc/mounts | sort -r | xargs -r -n1 sudo umount 2>/dev/null || true
                 sudo rm -rf /var/lib/gamejanitor/*
                 sudo rm -f /run/gamejanitor-dev
@@ -468,20 +462,6 @@
           '';
 
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
-            if command -v docker &>/dev/null; then
-              if docker info &>/dev/null; then
-                echo "Cleaning up docker containers..."
-                docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
-                echo "Cleaning up docker volumes..."
-                docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r docker volume rm -f
-              fi
-              if sudo -n true 2>/dev/null && sudo docker info &>/dev/null; then
-                echo "Cleaning up docker containers (rootful)..."
-                sudo docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r sudo docker rm -f
-                echo "Cleaning up docker volumes (rootful)..."
-                sudo docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r sudo docker volume rm -f
-              fi
-            fi
             echo "Removing /tmp/gamejanitor-*..."
             sudo rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-* /tmp/gamejanitor-multi-*
             echo "Cleanup complete."
@@ -490,7 +470,6 @@
         pkgs.mkShell {
           buildInputs = [
             pkgs.go
-            pkgs.docker-client
             pkgs.protobuf
             pkgs.protoc-gen-go
             pkgs.protoc-gen-go-grpc

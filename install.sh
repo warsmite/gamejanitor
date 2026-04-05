@@ -54,14 +54,6 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 1
 fi
 
-# Detect runtime
-RUNTIME_FLAG=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    echo "Docker detected. Gamejanitor will auto-select the sandbox runtime."
-    echo "  To use Docker instead: gamejanitor serve --runtime docker"
-else
-    echo "Using sandbox runtime (no Docker needed)."
-fi
 
 # Install systemd service
 echo "Setting up systemd service..."

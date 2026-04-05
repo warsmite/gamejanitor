@@ -6,14 +6,14 @@ Host game servers without the headache. One binary, zero config.
 
 ## Why GameJanitor?
 
-- **Single binary** — no runtime dependencies, no databases to install, no PHP, no Redis. Just the binary and Docker.
+- **Single binary** — no runtime dependencies, no databases to install, no PHP, no Redis. Just the binary.
 - **Works immediately** — download, run, open the UI. Sane defaults mean you don't need to configure anything to get started.
 - **Built for multi-node** — distribute servers across machines with automatic placement, live migration, and a built-in game traffic proxy. Most panels treat multi-node as an afterthought.
 - **Web UI and CLI** — full-featured web panel for day-to-day management, CLI with near-complete feature parity for automation and scripting.
 
 ## Quick Start
 
-Requires Linux (x86_64) and Docker.
+Requires Linux (x86_64).
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/warsmite/gamejanitor/master/install.sh | sudo sh
@@ -63,7 +63,7 @@ Cron-based scheduling for restarts, backups, commands, and game updates. Visual 
 Browse, edit, upload, and download server files from the web UI. SFTP access for bulk transfers.
 
 ### Resource Limits
-Set memory and CPU limits per gameserver, enforced by Docker. Storage limits are tracked for placement decisions and warnings but not hard-enforced. Auto-restart on crash is enabled by default.
+Set memory and CPU limits per gameserver, enforced via cgroups. Storage limits are tracked for placement decisions and warnings but not hard-enforced. Auto-restart on crash is enabled by default.
 
 ### Webhooks
 HTTP webhooks for gameserver events — server started, stopped, crashed, backup completed, player counts, etc. Point them at Discord, Slack, or any HTTP endpoint.
@@ -117,7 +117,7 @@ curl -Lo gamejanitor https://github.com/warsmite/gamejanitor/releases/latest/dow
 chmod +x gamejanitor
 sudo mv gamejanitor /usr/local/bin/
 
-# Run in the foreground (needs Docker access — use sudo or add yourself to the docker group)
+# Run in the foreground
 sudo gamejanitor serve
 
 # Or install the service later

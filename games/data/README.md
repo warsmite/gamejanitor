@@ -4,7 +4,7 @@ Game definitions are the single source of truth for game data across all gamejan
 
 ## Types of Games
 
-- **Container games** — Have a `container:` section with Docker image, env vars, etc. These are games gamejanitor can host.
+- **Container games** — Have a `container:` section with OCI image, env vars, etc. These are games gamejanitor can host.
 - **Query-only games** — Have a `query:` section but no `container:`. Used by gjq for server querying.
 
 ## Structure
@@ -125,7 +125,7 @@ assets:
 
 ## Script Interface
 
-Scripts run inside a Docker container with the game's base image. They are bind-mounted at `/scripts/` (read-only). Game data lives on a Docker volume at `/data/`.
+Scripts run inside the game's OCI image. They are bind-mounted at `/scripts/` (read-only). Game data lives on a volume at `/data/`.
 
 | Script | When it runs | Purpose |
 |--------|-------------|---------|
@@ -179,7 +179,7 @@ echo "[start-server] ERROR: <what went wrong>"
 **stop-server must:**
 1. Announce shutdown to players via RCON/chat (if available)
 2. Trigger a world save (if available)
-3. Exit — Docker sends SIGTERM after this script completes
+3. Exit — the runtime sends SIGTERM after this script completes
 
 **install-server must:**
 1. Download the game server binary/files
