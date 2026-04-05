@@ -19,12 +19,10 @@ var installCmd = &cobra.Command{
 }
 
 func init() {
-	installCmd.Flags().String("runtime", "auto", "Runtime: sandbox (default), docker, auto")
 	installCmd.Flags().String("data-dir", "", "Data directory (default: /var/lib/gamejanitor on Linux, ~/Library/Application Support/gamejanitor on macOS)")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	runtimeFlag, _ := cmd.Flags().GetString("runtime")
 	dataDir, _ := cmd.Flags().GetString("data-dir")
 
 	if runtime.GOOS == "darwin" {
@@ -50,25 +48,17 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		dataDir = "/var/lib/gamejanitor"
 	}
 
-	return installSystemd(runtimeFlag, dataDir)
+	return installSystemd(dataDir)
 }
 
-func installSystemd(runtimeFlag, dataDir string) error {
+func installSystemd(dataDir string) error {
 	binPath, err := resolveExecutable()
 	if err != nil {
 		return err
 	}
 
 	execStart := fmt.Sprintf("%s serve -d %s", binPath, dataDir)
-	if runtimeFlag != "" && runtimeFlag != "auto" {
-		execStart += " --runtime " + runtimeFlag
-	}
-
-	// Only depend on Docker if explicitly using docker runtime
 	afterUnits := "network-online.target"
-	if runtimeFlag == "docker" {
-		afterUnits += " docker.service"
-	}
 
 	unitContent := fmt.Sprintf(`[Unit]
 Description=Gamejanitor - Game Server Manager

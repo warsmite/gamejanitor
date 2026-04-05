@@ -53,7 +53,6 @@ func init() {
 	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
-	serveCmd.Flags().String("runtime", "", "Runtime: sandbox (default), docker, auto")
 	serveCmd.Flags().Bool("proxy", false, "Enable game traffic proxy (forward game ports to worker nodes)")
 }
 
@@ -103,9 +102,6 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 	}
 	if cmd.Flags().Changed("worker-token") {
 		cfg.WorkerToken, _ = cmd.Flags().GetString("worker-token")
-	}
-	if cmd.Flags().Changed("runtime") {
-		cfg.Runtime, _ = cmd.Flags().GetString("runtime")
 	}
 	if cmd.Flags().Changed("proxy") {
 		v, _ := cmd.Flags().GetBool("proxy")
@@ -387,8 +383,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 			SFTPPort:          0,
 			ControllerAddress: fmt.Sprintf("127.0.0.1:%d", cfg.GRPCPort),
 			WorkerToken:       rawToken,
-			Runtime:  cfg.Runtime,
-			RuntimeSocket:   cfg.RuntimeSocket,
 			AdvertiseAddress:  fmt.Sprintf("%s:%d", advertiseHost, cfg.WorkerGRPCPort),
 		}
 		go func() {
@@ -497,7 +491,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	)
 
 	// Newbies running from a terminal may not realize that closing it kills gamejanitor,
-	// even though their gameservers keep running in Docker.
+	// even though their gameservers keep running.
 	if os.Getenv("INVOCATION_ID") == "" {
 		logger.Warn("running in foreground — closing this terminal will stop scheduled backups, restarts, and status monitoring. Your gameservers will keep running, but gamejanitor won't be managing them. Run as a systemd service to keep it running in the background.")
 	}

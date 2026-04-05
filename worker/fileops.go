@@ -19,7 +19,6 @@ import (
 )
 
 // VolumeResolver maps a volume name to its host filesystem path.
-// Docker-based workers resolve via VolumeMountpoint; process workers use plain directories.
 type VolumeResolver func(ctx context.Context, volumeName string) (string, error)
 
 func ResolveVolumePath(resolve VolumeResolver, ctx context.Context, volumeName string, relPath string) (string, error) {

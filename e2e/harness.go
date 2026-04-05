@@ -476,10 +476,6 @@ func cleanupSandboxState() {
 		}
 	}
 
-	// Docker cleanup
-	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "name=gamejanitor-").Output(); len(out) > 0 {
-		exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter name=gamejanitor-)").Run()
-	}
 
 	time.Sleep(300 * time.Millisecond)
 }

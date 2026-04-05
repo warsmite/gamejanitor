@@ -27,7 +27,7 @@ type imageConfig struct {
 	Cmd        []string
 	Env        []string
 	WorkingDir string
-	User       string // "uid:gid", "uid", or "username" from Dockerfile USER directive
+	User       string // "uid:gid", "uid", or "username" from OCI image USER directive
 }
 
 // pullAndExtractOCIImage pulls an instance image and extracts its filesystem to destDir.

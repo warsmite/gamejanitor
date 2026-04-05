@@ -22,7 +22,7 @@ import (
 )
 
 // SandboxWorker implements Worker using bwrap for isolation, systemd for lifecycle,
-// and slirp4netns for network isolation. No Docker daemon required.
+// and slirp4netns for network isolation. No external daemon required.
 type SandboxWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore

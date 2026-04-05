@@ -11,7 +11,7 @@ import (
 )
 
 // InstanceTracker maintains authoritative instance state on the worker side.
-// Both sandbox and Docker runtimes embed this to get consistent state management,
+// The runtime embeds this for consistent state management,
 // ready pattern detection, and state streaming.
 type InstanceTracker struct {
 	mu        sync.Mutex

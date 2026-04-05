@@ -1,13 +1,9 @@
 package config
 
 import (
-	"context"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -43,9 +39,8 @@ type Config struct {
 	// TLS for gRPC
 	TLS *TLSConfig `yaml:"tls"`
 
-	// Runtime
-	Runtime string `yaml:"runtime"` // "sandbox" (default), "docker", or "auto"
-	RuntimeSocket  string `yaml:"runtime_socket"`  // explicit socket path; auto-detected if empty
+	// Runtime (reserved for future alternative runtimes)
+	Runtime string `yaml:"runtime"`
 
 	// Backup storage
 	BackupStore *BackupStoreConfig `yaml:"backup_store"`
@@ -182,37 +177,3 @@ func (c *Config) WorkerOnly() bool {
 	return c.Worker && !c.Controller
 }
 
-// ResolveRuntimeSocket returns the Docker socket path.
-// Only relevant when using the docker runtime.
-func (c *Config) ResolveRuntimeSocket() string {
-	if c.RuntimeSocket != "" {
-		return c.RuntimeSocket
-	}
-	if _, err := os.Stat("/var/run/docker.sock"); err == nil {
-		return "/var/run/docker.sock"
-	}
-	return ""
-}
-
-// isSocketAccessible checks that a unix socket has a healthy daemon behind it.
-// Stale sockets and socket-activated endpoints that accept connections but have
-// no running daemon are detected by sending an HTTP ping.
-func isSocketAccessible(path string) bool {
-	if _, err := os.Stat(path); err != nil {
-		return false
-	}
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.DialTimeout("unix", path, 2*time.Second)
-			},
-		},
-	}
-	resp, err := client.Get("http://localhost/_ping")
-	if err != nil {
-		return false
-	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
-}

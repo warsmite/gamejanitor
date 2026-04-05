@@ -38,7 +38,7 @@ func CopyDepotToVolume(depotDir string, volumeMountpoint string) error {
 	}
 
 	// Files stay owned by the caller (root). The runtime handles UID mapping:
-	// sandbox uses --uid 1001, Docker uses --user at launch time.
+	// The runtime handles UID mapping.
 
 	return nil
 }

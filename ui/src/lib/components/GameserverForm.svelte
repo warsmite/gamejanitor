@@ -184,7 +184,7 @@
             <label class="label">Enforce CPU Limit</label>
             <div class="toggle-row">
               <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
-              <span class="toggle-label">{cpuEnforced ? 'Hard limit (Docker enforced)' : 'Soft limit (scheduling only)'}</span>
+              <span class="toggle-label">{cpuEnforced ? 'Hard limit (enforced)' : 'Soft limit (scheduling only)'}</span>
             </div>
           </div>
         </div>

@@ -399,7 +399,7 @@ func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	// Serve from poller cache if available (instant, no Docker call)
+	// Serve from poller cache if available (instant, no runtime query)
 	if cached := h.statsPoller.GetCachedStats(id); cached != nil {
 		resp := map[string]any{
 			"cpu_percent":       cached.CPUPercent,

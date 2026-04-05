@@ -7,7 +7,7 @@ import (
 )
 
 // Worker abstracts all instance and host operations.
-// LocalWorker implements this via Docker, RemoteWorker via gRPC to a worker agent.
+// SandboxWorker implements this locally, RemoteWorker via gRPC to a worker agent.
 type Worker interface {
 	// Instance lifecycle
 	PullImage(ctx context.Context, image string) error

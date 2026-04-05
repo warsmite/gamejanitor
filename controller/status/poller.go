@@ -21,7 +21,7 @@ type StatsHistoryWriter interface {
 
 // StatsPoller polls instance stats for running gameservers and publishes
 // controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
-// the GET /stats endpoint can serve them instantly without hitting Docker.
+// the GET /stats endpoint can serve them instantly without querying the runtime.
 type StatsPoller struct {
 	store       Store
 	dispatcher  *orchestrator.Dispatcher

@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,14 +22,13 @@ import (
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/agent"
-	wdocker "github.com/warsmite/gamejanitor/worker/docker"
 	"github.com/warsmite/gamejanitor/worker/pb"
 	"github.com/warsmite/gamejanitor/worker/sandbox"
 	"google.golang.org/grpc"
 	grpcCredentials "google.golang.org/grpc/credentials"
 )
 
-// runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.
+// runWorkerAgent starts a worker-only node: gRPC agent wrapping a local sandbox worker.
 // No database, no web UI, no scheduler.
 func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	grpcPort := cfg.GRPCPort
@@ -43,19 +41,7 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	var localWorker worker.Worker
-	runtime := resolveRuntime(cfg, logger)
-	switch runtime {
-	case "docker":
-		dockerClient, err := wdocker.New(logger, cfg.ResolveRuntimeSocket())
-		if err != nil {
-			return fmt.Errorf("docker is not available: %w", err)
-		}
-		defer dockerClient.Close()
-		localWorker = wdocker.NewWorker(dockerClient, gameStore, cfg.DataDir, logger)
-	default:
-		localWorker = sandbox.New(gameStore, cfg.DataDir, logger)
-	}
+	localWorker := sandbox.New(gameStore, cfg.DataDir, logger)
 
 	// Load worker TLS config from config file or auto-discovery
 	workerTLSConfig := loadWorkerTLS(cfg, logger)
@@ -353,31 +339,6 @@ func loadOrGenerateWorkerID(dataDir string, logger *slog.Logger) string {
 }
 
 // generateShortID produces a short random hex string for worker IDs.
-// resolveRuntime determines which runtime to use.
-// "sandbox" (default), "docker" (explicit opt-in), or "auto" (sandbox if systemd available, else docker).
-func resolveRuntime(cfg config.Config, log *slog.Logger) string {
-	switch cfg.Runtime {
-	case "sandbox", "process":
-		log.Info("using sandbox runtime")
-		return "sandbox"
-	case "docker":
-		log.Info("using docker runtime")
-		return "docker"
-	default:
-		// Auto: prefer sandbox when systemd is available
-		if hasSystemdRun() {
-			log.Info("auto-detected sandbox runtime (systemd available)")
-			return "sandbox"
-		}
-		log.Info("auto-detected docker runtime (no systemd)")
-		return "docker"
-	}
-}
-
-func hasSystemdRun() bool {
-	_, err := exec.LookPath("systemd-run")
-	return err == nil
-}
 
 // Not a full UUID — readable enough for CLI/UI use.
 func generateShortID() string {

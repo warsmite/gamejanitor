@@ -18,7 +18,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// userFriendlyError translates Docker errors into messages a user can act on.
+// userFriendlyError translates runtime errors into messages a user can act on.
 func userFriendlyError(prefix string, err error) string {
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "address already in use") || strings.Contains(msg, "port is already allocated") {
@@ -328,7 +328,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 	}
 
 	// Remove old instance if exists (stale from prior run/crash).
-	// Clear InstanceID first so late Docker "die" events from the old instance
+	// Clear InstanceID first so late "die" events from the old instance
 	// are recognized as stale by the StatusManager.
 	instanceName := naming.InstanceName(id)
 	if gs.InstanceID != nil {

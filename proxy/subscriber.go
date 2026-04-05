@@ -27,7 +27,7 @@ type Subscriber struct {
 
 // NewSubscriber creates a proxy subscriber that syncs routes from events.
 // localNodeID is the controller's own worker ID (empty if controller-only, no local worker).
-// Gameservers on the local node are served directly by Docker — no proxy needed.
+// Gameservers on the local node are served directly by the runtime — no proxy needed.
 func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.EventBus, localNodeID string, log *slog.Logger) *Subscriber {
 	s := &Subscriber{
 		manager:     manager,
@@ -60,7 +60,7 @@ func (s *Subscriber) addRoutes(gsID string) {
 		return
 	}
 
-	// Skip local gameservers — Docker binds the ports directly
+	// Skip local gameservers — the runtime binds the ports directly
 	if s.localNodeID != "" && gs.NodeID != nil && *gs.NodeID == s.localNodeID {
 		return
 	}

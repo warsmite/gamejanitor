@@ -113,7 +113,7 @@ func (m *StatusManager) Stop() {
 	m.log.Info("status manager stopped")
 }
 
-// RecoverOnStartup reconciles DB status with Docker reality.
+// RecoverOnStartup reconciles DB status with runtime state.
 // Any gameserver not in a terminal state (stopped/error) is checked against
 // the actual instance and corrected.
 func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
@@ -357,7 +357,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 }
 
 // recoverWorkerGameservers recovers gameservers assigned to a specific worker node
-// and detects orphan instances (running on Docker but not tracked in DB).
+// and detects orphan instances (running on the worker but not tracked in DB).
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
@@ -365,7 +365,7 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		return
 	}
 
-	// Forward check: DB → Docker (existing recovery)
+	// Forward check: DB → runtime (existing recovery)
 	knownIDs := make(map[string]bool)
 	for _, gs := range gameservers {
 		if gs.NodeID == nil || *gs.NodeID != nodeID {
@@ -379,7 +379,7 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		m.recoverGameserver(ctx, &gs, w)
 	}
 
-	// Reverse check: Docker → DB (orphan detection)
+	// Reverse check: runtime → DB (orphan detection)
 	m.detectOrphanInstances(ctx, nodeID, w, knownIDs)
 }
 
