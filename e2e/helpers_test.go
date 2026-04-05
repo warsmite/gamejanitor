@@ -215,6 +215,24 @@ func testGameEnv(h *Harness, overrides map[string]string) map[string]string {
 	return env
 }
 
+// waitForNoOperation polls until the gameserver has no active operation.
+func waitForNoOperation(t *testing.T, h *Harness, gsID string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		resp, err := h.Get("/api/gameservers/" + gsID)
+		if err != nil {
+			return false
+		}
+		var gs struct {
+			OperationType *string `json:"operation_type"`
+		}
+		if err := DecodeData(resp, &gs); err != nil {
+			return false
+		}
+		return gs.OperationType == nil
+	}, time.Minute, 500*time.Millisecond, "operation should complete")
+}
+
 // skipIfNotTestGame skips the test when running against a real game
 // that doesn't support TEST_BEHAVIOR injection.
 func skipIfNotTestGame(t *testing.T, h *Harness) {

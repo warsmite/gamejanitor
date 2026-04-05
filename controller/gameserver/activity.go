@@ -45,7 +45,7 @@ func NewActivityTracker(store EventRecorder, log *slog.Logger) *ActivityTracker 
 }
 
 // Start records a new operation. Sets gameservers.operation to block concurrent ops.
-// Returns the event ID. Stop is always allowed (no mutex check).
+// Returns the event ID. Stop and delete are always allowed (no mutex check).
 func (t *ActivityTracker) Start(gameserverID, workerID, opType string, actor json.RawMessage, data json.RawMessage) (string, error) {
 	gs, err := t.store.GetGameserver(gameserverID)
 	if err != nil {
@@ -55,7 +55,7 @@ func (t *ActivityTracker) Start(gameserverID, workerID, opType string, actor jso
 		return "", fmt.Errorf("gameserver %s not found", gameserverID)
 	}
 
-	if opType != model.OpStop && gs.OperationType != nil {
+	if opType != model.OpStop && opType != model.OpDelete && gs.OperationType != nil {
 		return "", fmt.Errorf("gameserver %s already has an operation in progress (%s)", gameserverID, *gs.OperationType)
 	}
 
