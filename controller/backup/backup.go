@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,19 +34,6 @@ type GameserverLifecycle interface {
 	Stop(ctx context.Context, id string) error
 	Start(ctx context.Context, id string) error
 	GetGameserver(id string) (*model.Gameserver, error)
-}
-
-// backupOperationFailedReason builds a user-facing error reason for failed backup operations.
-func backupOperationFailedReason(prefix string, err error) string {
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "pulling image") || strings.Contains(msg, "pull"):
-		return prefix + ". Check your internet connection."
-	case strings.Contains(msg, "volume") || strings.Contains(msg, "disk") || strings.Contains(msg, "no space"):
-		return prefix + ". There may be a storage issue."
-	default:
-		return prefix + "."
-	}
 }
 
 // ActivityTracker records the lifecycle of long-running activities.
@@ -483,7 +469,7 @@ func (s *BackupService) failRestore(gameserverID, backupID, backupName string, a
 		Backup:       failedRestoreBackup,
 		Error:        reason,
 	})
-	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: backupOperationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
 }
 
 func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID string) error {

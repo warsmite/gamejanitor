@@ -27,20 +27,6 @@ func userFriendlyError(prefix string, err error) string {
 	return prefix + "."
 }
 
-// operationFailedReason builds a user-facing error reason for failed multi-step
-// operations (update, reinstall, migrate, restore).
-func operationFailedReason(prefix string, err error) string {
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "pulling image") || strings.Contains(msg, "pull"):
-		return prefix + ". Check your internet connection."
-	case strings.Contains(msg, "volume") || strings.Contains(msg, "disk") || strings.Contains(msg, "no space"):
-		return prefix + ". There may be a storage issue."
-	default:
-		return prefix + "."
-	}
-}
-
 // getGameserverWithStatus reads a gameserver from the store and applies derived status.
 func (s *GameserverService) getGameserverWithStatus(id string) (*model.Gameserver, error) {
 	gs, err := s.store.GetGameserver(id)
@@ -674,14 +660,14 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, id); err != nil {
-			s.setError(id, operationFailedReason("Game update failed", err))
+			s.setError(id, controller.OperationFailedReason("Game update failed", err))
 			return fmt.Errorf("stopping gameserver for update: %w", err)
 		}
 	}
 
 	w := s.dispatcher.WorkerFor(id)
 	if w == nil {
-		s.setError(id, operationFailedReason("Game update failed", fmt.Errorf("worker unavailable")))
+		s.setError(id, controller.OperationFailedReason("Game update failed", fmt.Errorf("worker unavailable")))
 		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
@@ -693,14 +679,14 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 
 	// Pull latest image
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), nil); err != nil {
-		s.setError(id, operationFailedReason("Game update failed", err))
+		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
 	// Prepare scripts on the target worker for update instance
 	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
-		s.setError(id, operationFailedReason("Game update failed", err))
+		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("preparing scripts for update: %w", err)
 	}
 	updateBinds := []string{scriptDir + ":/scripts:ro"}
@@ -708,7 +694,7 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 	// Merge env vars so the update script has access to config (VERSION, EULA, etc.)
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		s.setError(id, operationFailedReason("Game update failed", err))
+		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("merging env for update: %w", err)
 	}
 
@@ -723,24 +709,24 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 		Entrypoint: []string{"/bin/sh", "-c", "/scripts/update-server"},
 	})
 	if err != nil {
-		s.setError(id, operationFailedReason("Game update failed", err))
+		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("creating temp instance for update: %w", err)
 	}
 	defer w.RemoveInstance(ctx, tempID)
 
 	if err := w.StartInstance(ctx, tempID, ""); err != nil {
-		s.setError(id, operationFailedReason("Game update failed", err))
+		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("starting temp instance for update: %w", err)
 	}
 
 	exitCode, waitErr := s.waitForInstanceExit(ctx, w, tempID)
 	if waitErr != nil {
-		s.setError(id, operationFailedReason("Game update failed", waitErr))
+		s.setError(id, controller.OperationFailedReason("Game update failed", waitErr))
 		return fmt.Errorf("waiting for update-server: %w", waitErr)
 	}
 	if exitCode != 0 {
 		s.log.Error("update-server failed", "gameserver", id, "exit_code", exitCode)
-		s.setError(id, operationFailedReason("Game update failed", fmt.Errorf("exit code %d", exitCode)))
+		s.setError(id, controller.OperationFailedReason("Game update failed", fmt.Errorf("exit code %d", exitCode)))
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
@@ -789,14 +775,14 @@ func (s *GameserverService) doReinstall(ctx context.Context, id string) error {
 		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, id); err != nil {
-			s.setError(id, operationFailedReason("Reinstall failed", err))
+			s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
 			return fmt.Errorf("stopping gameserver for reinstall: %w", err)
 		}
 	}
 
 	w := s.dispatcher.WorkerFor(id)
 	if w == nil {
-		s.setError(id, operationFailedReason("Reinstall failed", fmt.Errorf("worker unavailable")))
+		s.setError(id, controller.OperationFailedReason("Reinstall failed", fmt.Errorf("worker unavailable")))
 		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
@@ -808,17 +794,17 @@ func (s *GameserverService) doReinstall(ctx context.Context, id string) error {
 
 	gs.Installed = false
 	if err := s.store.UpdateGameserver(gs); err != nil {
-		s.setError(id, operationFailedReason("Reinstall failed", fmt.Errorf("clearing installed flag")))
+		s.setError(id, controller.OperationFailedReason("Reinstall failed", fmt.Errorf("clearing installed flag")))
 		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
 	}
 
 	// Wipe all data by removing and recreating the volume
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-		s.setError(id, operationFailedReason("Reinstall failed", err))
+		s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
 		return fmt.Errorf("removing volume for reinstall: %w", err)
 	}
 	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
-		s.setError(id, operationFailedReason("Reinstall failed", err))
+		s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
 		return fmt.Errorf("recreating volume for reinstall: %w", err)
 	}
 

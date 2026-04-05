@@ -97,7 +97,7 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: gameserverID, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, gameserverID); err != nil {
-			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 			return fmt.Errorf("stopping gameserver for migration: %w", err)
 		}
 	}
@@ -105,13 +105,13 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 	// Re-fetch source worker — may have gone offline during stop
 	sourceWorker := s.dispatcher.WorkerFor(gameserverID)
 	if sourceWorker == nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", fmt.Errorf("source worker offline")), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", fmt.Errorf("source worker offline")), Timestamp: time.Now()})
 		return fmt.Errorf("source worker went offline during migration")
 	}
 
 	targetWorker, err := s.dispatcher.SelectWorkerByNodeID(targetNodeID)
 	if err != nil || targetWorker == nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", fmt.Errorf("target worker offline")), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", fmt.Errorf("target worker offline")), Timestamp: time.Now()})
 		return fmt.Errorf("target worker went offline during migration")
 	}
 
@@ -122,7 +122,7 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 	// Tar + gzip from source -> store
 	tarReader, err := sourceWorker.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("reading volume from source worker: %w", err)
 	}
 	pr, pw := io.Pipe()
@@ -146,30 +146,30 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 	}()
 
 	if err := s.backupStore.Save(ctx, "migrations", migrationID, pr); err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("saving migration data to store: %w", err)
 	}
 	if compressErr != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", compressErr), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", compressErr), Timestamp: time.Now()})
 		return fmt.Errorf("compressing volume data: %w", compressErr)
 	}
 	s.log.Info("migration data stored", "gameserver", gameserverID, "migration", migrationID)
 
 	// Store -> restore on target
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("creating volume on target worker: %w", err)
 	}
 
 	reader, err := s.backupStore.Load(ctx, "migrations", migrationID)
 	if err != nil {
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("loading migration data from store: %w", err)
 	}
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
 		reader.Close()
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("decompressing migration data: %w", err)
 	}
 
@@ -180,7 +180,7 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 			s.log.Error("failed to clean up target volume after failed restore", "volume", gs.VolumeName, "error", rmErr)
 		}
 		s.log.Error("migration restore failed, data preserved in store", "migration", migrationID)
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("restoring volume on target worker: %w", err)
 	}
 	gzReader.Close()
@@ -192,13 +192,13 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 	targetSize, err := targetWorker.VolumeSize(ctx, gs.VolumeName)
 	if err != nil {
 		s.log.Error("migration: failed to verify target volume, aborting — source volume preserved", "migration", migrationID, "error", err)
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		return fmt.Errorf("verifying target volume after restore: %w", err)
 	}
 	if targetSize == 0 {
 		s.log.Error("migration: target volume is empty after restore, aborting — source volume preserved", "migration", migrationID, "volume", gs.VolumeName)
 		emptyErr := fmt.Errorf("target volume is empty after restore — data may not have transferred. Source volume preserved on %s, migration data preserved in store as %s", currentNodeID, migrationID)
-		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", emptyErr), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Migration failed", emptyErr), Timestamp: time.Now()})
 		return emptyErr
 	}
 	s.log.Info("migration restore verified", "gameserver", gameserverID, "target_volume_bytes", targetSize)

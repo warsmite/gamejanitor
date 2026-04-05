@@ -240,11 +240,6 @@ func (s *FileService) DownloadWorkshopItem(ctx context.Context, gameserverID str
 	return w.DownloadWorkshopItem(ctx, gs.VolumeName, appID, hcontentFile, installPath)
 }
 
-// UploadFile writes an uploaded file to the gameserver volume.
-func (s *FileService) UploadFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
-	return s.WriteFile(ctx, gameserverID, filePath, content)
-}
-
 func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
