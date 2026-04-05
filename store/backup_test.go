@@ -79,28 +79,6 @@ func TestBackup_ListByGameserver_Empty(t *testing.T) {
 	assert.Empty(t, list)
 }
 
-func TestBackup_UpdateSize(t *testing.T) {
-	t.Parallel()
-	db := store.New(testutil.NewTestDB(t))
-
-	gs := newGameserver("gs-upd", "Update Host", "minecraft-java", nil)
-	require.NoError(t, db.CreateGameserver(gs))
-
-	b := &model.Backup{
-		ID:           "bak-upd",
-		GameserverID: "gs-upd",
-		Name:         "updating-backup",
-	}
-	require.NoError(t, db.CreateBackup(b))
-
-	require.NoError(t, db.UpdateBackupSize("bak-upd", 2097152))
-
-	got, err := db.GetBackup("bak-upd")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, int64(2097152), got.SizeBytes)
-}
-
 func TestBackup_PopulateStatusFromActivity(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))

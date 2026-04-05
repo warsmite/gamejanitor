@@ -23,7 +23,6 @@ type Store interface {
 	ListBackups(filter model.BackupFilter) ([]model.Backup, error)
 	GetBackup(id string) (*model.Backup, error)
 	CreateBackup(b *model.Backup) error
-	UpdateBackupSize(id string, sizeBytes int64) error
 	UpdateBackup(b *model.Backup) error
 	DeleteBackup(id string) error
 	DeleteBackupsByGameserver(gameserverID string) error
@@ -365,6 +364,15 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 	actor := controller.ActorFromContext(ctx)
 	wasRunning := gs.InstanceID != nil
 
+	// Register the operation before launching the goroutine so it's
+	// immediately visible via the API (callers can poll operation_type).
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	restoreMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
+	s.startActivity(gs.ID, workerID, model.OpRestore, restoreMetaJSON)
+
 	s.log.Info("restore initiated", "backup", backupID, "gameserver", gs.ID, "was_running", wasRunning)
 
 	s.broadcaster.Publish(controller.BackupActionEvent{
@@ -396,18 +404,6 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	}
 	queueCancel()
 
-	gs, err := s.store.GetGameserver(gameserverID)
-	if err != nil || gs == nil {
-		s.failRestore(gameserverID, backupID, backupName, actor, "gameserver not found")
-		return
-	}
-
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-	restoreMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
-	s.startActivity(gameserverID, workerID, model.OpRestore, restoreMetaJSON)
 	opSucceeded := false
 	defer func() {
 		if opSucceeded {
@@ -417,7 +413,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 		}
 	}()
 
-	if gs.InstanceID != nil {
+	if wasRunning {
 		if err := s.gameserverSvc.Stop(ctx, gameserverID); err != nil {
 			s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("stopping gameserver: %v", err))
 			return

@@ -236,11 +236,6 @@ func (s *Service) DownloadWorkshopItem(ctx context.Context, appID uint32, hconte
 	return downloader.DownloadUGCItem(ctx, appID, workshopDepotID, hcontentFile, destDir)
 }
 
-// CacheDir returns the path to cached files for an app's first depot.
-func (s *Service) CacheDir(appID, depotID uint32) string {
-	return s.cache.FilesDir(appID, depotID)
-}
-
 func (s *Service) getOrConnect(ctx context.Context) (*Client, *DepotDownloader, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

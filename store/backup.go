@@ -72,14 +72,6 @@ func (s *BackupStore) CreateBackup(b *model.Backup) error {
 	return nil
 }
 
-func (s *BackupStore) UpdateBackupSize(id string, sizeBytes int64) error {
-	_, err := s.db.Exec("UPDATE backups SET size_bytes = ? WHERE id = ?", sizeBytes, id)
-	if err != nil {
-		return fmt.Errorf("updating backup %s size: %w", id, err)
-	}
-	return nil
-}
-
 func (s *BackupStore) UpdateBackup(b *model.Backup) error {
 	_, err := s.db.Exec("UPDATE backups SET status = ?, size_bytes = ? WHERE id = ?", b.Status, b.SizeBytes, b.ID)
 	if err != nil {

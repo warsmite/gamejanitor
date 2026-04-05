@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"strings"
 )
 
 // ValidateExternalURL checks that a URL is safe to fetch from a multi-tenant
@@ -148,12 +147,4 @@ func SanitizeURLForLog(rawURL string) string {
 		return result[:200] + "..."
 	}
 	return result
-}
-
-// looksLikePrivateHostname is a simple heuristic — not used for enforcement,
-// just for the DNS resolution path.
-func looksLikePrivateHostname(hostname string) bool {
-	return strings.HasSuffix(hostname, ".local") ||
-		strings.HasSuffix(hostname, ".internal") ||
-		hostname == "localhost"
 }

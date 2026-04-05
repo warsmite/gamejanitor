@@ -121,48 +121,6 @@ func (c *DepotCache) GetManifest(appID, depotID uint32, depotKey []byte) *Manife
 	return manifest
 }
 
-// SaveManifest stores the raw manifest data for future delta updates.
-func (c *DepotCache) SaveManifest(appID, depotID uint32, manifestData []byte) error {
-	dir := c.DepotDir(appID, depotID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, "manifest.bin"), manifestData, 0o644)
-}
-
-// RemoveDepot deletes all cached data for a depot.
-func (c *DepotCache) RemoveDepot(appID, depotID uint32) error {
-	return os.RemoveAll(c.DepotDir(appID, depotID))
-}
-
-// RemoveApp deletes all cached data for an app.
-func (c *DepotCache) RemoveApp(appID uint32) error {
-	return os.RemoveAll(filepath.Join(c.root, fmt.Sprintf("%d", appID)))
-}
-
-// ListCachedApps returns app IDs that have cached depots.
-func (c *DepotCache) ListCachedApps() ([]uint32, error) {
-	entries, err := os.ReadDir(c.root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var appIDs []uint32
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		var id uint32
-		if _, err := fmt.Sscanf(e.Name(), "%d", &id); err == nil {
-			appIDs = append(appIDs, id)
-		}
-	}
-	return appIDs, nil
-}
-
 // parseManifestFromCache reconstructs a Manifest from the stored binary payload.
 // The cached format is the raw ContentManifestPayload protobuf (not the ZIP+sections format from CDN).
 func parseManifestFromCache(data []byte, depotID uint32, manifestID uint64, depotKey []byte) (*Manifest, error) {

@@ -286,16 +286,6 @@ func RestoreVolumeDirect(resolve VolumeResolver, ctx context.Context, volumeName
 		}
 	}
 
-	// Ensure all restored files are owned by the gameserver user (UID/GID 1001).
-	// The tar may preserve ownership from the source node which differs from the
-	// target. Without this, the instance process can't read/write restored files.
-	filepath.Walk(mountpoint, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		return nil
-	})
-
 	return nil
 }
 
@@ -410,44 +400,6 @@ func downloadToFile(ctx context.Context, url string, hostPath string, expectedHa
 		}
 	}
 	return true, nil
-}
-
-// DownloadToMemory downloads a URL to []byte with hash verification.
-// Used as a fallback when direct filesystem access is unavailable (sidecar mode).
-// Has a 500MB memory safety limit since this buffers into RAM.
-func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]byte, error) {
-	const memoryLimit int64 = 500 * 1024 * 1024
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating download request: %w", err)
-	}
-	req.Header.Set("User-Agent", "gamejanitor")
-
-	resp, err := downloadClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, memoryLimit))
-	if err != nil {
-		return nil, fmt.Errorf("reading download: %w", err)
-	}
-
-	if expectedHash != "" {
-		h := sha512.Sum512(data)
-		actual := hex.EncodeToString(h[:])
-		if actual != expectedHash {
-			slog.Warn("download hash mismatch, keeping data", "expected", expectedHash, "actual", actual)
-		}
-	}
-
-	return data, nil
 }
 
 

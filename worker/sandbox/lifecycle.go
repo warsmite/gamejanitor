@@ -55,14 +55,6 @@ func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArg
 	return exec.Command(systemdRunPath, sdArgs...)
 }
 
-// buildExecCommand builds a bwrap command for exec (no systemd wrapping needed).
-func buildExecCommand(bwrapArgs []string, bwrapPath string) *exec.Cmd {
-	if bwrapPath == "" {
-		bwrapPath = "bwrap"
-	}
-	return exec.Command(bwrapPath, bwrapArgs...)
-}
-
 // stopSystemdUnit stops a systemd transient unit and cleans up its state.
 func stopSystemdUnit(unitName string, paths *systemPaths, log *slog.Logger) {
 	if !paths.hasSystemd() {
@@ -134,7 +126,7 @@ func killCgroupProcesses(unitName string, sig syscall.Signal, paths *systemPaths
 	}
 
 	procsPath := "/sys/fs/cgroup" + cgPath + "/cgroup.procs"
-	data, err := readFileQuiet(procsPath)
+	data, err := os.ReadFile(procsPath)
 	if err != nil {
 		return
 	}
@@ -146,9 +138,4 @@ func killCgroupProcesses(unitName string, sig syscall.Signal, paths *systemPaths
 		}
 		syscall.Kill(pid, sig)
 	}
-}
-
-func readFileQuiet(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	return data, err
 }

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,24 +16,6 @@ import (
 	"syscall"
 	"time"
 )
-
-// readBwrapChildPID reads the child PID from bwrap's --info-fd JSON output.
-// Retries briefly since bwrap writes this asynchronously after startup.
-func readBwrapChildPID(infoPath string) int {
-	for i := 0; i < 20; i++ {
-		data, err := os.ReadFile(infoPath)
-		if err == nil && len(data) > 0 {
-			var info struct {
-				ChildPID int `json:"child-pid"`
-			}
-			if json.Unmarshal(data, &info) == nil && info.ChildPID > 0 {
-				return info.ChildPID
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return 0
-}
 
 // cleanupOrphanState kills leftover namespace holders, resets failed systemd scopes,
 // and unmounts stale overlayfs mounts from a previous gamejanitor crash.
@@ -210,53 +191,6 @@ func tailFile(f *os.File, n int) ([]string, error) {
 // shouldn't be shown as game server logs.
 func isSystemdPreamble(line string) bool {
 	return strings.HasPrefix(line, "Running as unit: ")
-}
-
-// preambleFilterWriter wraps an io.Writer and filters out systemd-run preamble.
-// Only filters complete lines at the start of output; passes through everything
-// once a non-preamble line is seen.
-type preambleFilterWriter struct {
-	w           io.Writer
-	buf         []byte
-	passthrough bool
-}
-
-func newPreambleFilterWriter(w io.Writer) *preambleFilterWriter {
-	return &preambleFilterWriter{w: w}
-}
-
-func (f *preambleFilterWriter) Write(p []byte) (int, error) {
-	if f.passthrough {
-		return f.w.Write(p)
-	}
-
-	f.buf = append(f.buf, p...)
-	for {
-		idx := bytes.IndexByte(f.buf, '\n')
-		if idx < 0 {
-			break
-		}
-		line := string(f.buf[:idx])
-		f.buf = f.buf[idx+1:]
-
-		if isSystemdPreamble(line) {
-			continue
-		}
-
-		// First non-preamble line — flush it and switch to passthrough
-		f.passthrough = true
-		n, err := f.w.Write([]byte(line + "\n"))
-		if err != nil {
-			return n, err
-		}
-		// Write any remaining buffered data
-		if len(f.buf) > 0 {
-			f.w.Write(f.buf)
-			f.buf = nil
-		}
-		break
-	}
-	return len(p), nil
 }
 
 const (
