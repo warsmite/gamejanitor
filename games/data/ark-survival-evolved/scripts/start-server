@@ -28,7 +28,7 @@ echo "[start-server] config: session=${SESSION_NAME} map=${MAP} maxplayers=${MAX
 echo "[start-server] config: game_port=${GAME_PORT} query_port=${QUERY_PORT} rcon_port=${RCON_PORT}"
 
 # ARK saves and config live under ShooterGame/Saved/
-# Symlink to /data/saves so everything persists on the Docker volume
+# Symlink to /data/saves so everything persists on the instance volume
 SAVE_DIR="/data/server/ShooterGame/Saved"
 mkdir -p /data/saves
 mkdir -p "$(dirname "$SAVE_DIR")"
