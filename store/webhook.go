@@ -19,8 +19,14 @@ func NewWebhookStore(db *sql.DB) *WebhookStore {
 
 // --- Endpoints ---
 
-func (s *WebhookStore) ListWebhookEndpoints() ([]model.WebhookEndpoint, error) {
-	rows, err := s.db.Query(`SELECT id, description, url, secret, events, enabled, created_at, updated_at FROM webhook_endpoints ORDER BY created_at DESC`)
+func (s *WebhookStore) listEndpoints(enabledOnly bool) ([]model.WebhookEndpoint, error) {
+	query := `SELECT id, description, url, secret, events, enabled, created_at, updated_at FROM webhook_endpoints`
+	if enabledOnly {
+		query += ` WHERE enabled = 1`
+	} else {
+		query += ` ORDER BY created_at DESC`
+	}
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -37,22 +43,12 @@ func (s *WebhookStore) ListWebhookEndpoints() ([]model.WebhookEndpoint, error) {
 	return endpoints, rows.Err()
 }
 
-func (s *WebhookStore) ListEnabledWebhookEndpoints() ([]model.WebhookEndpoint, error) {
-	rows, err := s.db.Query(`SELECT id, description, url, secret, events, enabled, created_at, updated_at FROM webhook_endpoints WHERE enabled = 1`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+func (s *WebhookStore) ListWebhookEndpoints() ([]model.WebhookEndpoint, error) {
+	return s.listEndpoints(false)
+}
 
-	var endpoints []model.WebhookEndpoint
-	for rows.Next() {
-		var e model.WebhookEndpoint
-		if err := rows.Scan(&e.ID, &e.Description, &e.URL, &e.Secret, &e.Events, &e.Enabled, &e.CreatedAt, &e.UpdatedAt); err != nil {
-			return nil, err
-		}
-		endpoints = append(endpoints, e)
-	}
-	return endpoints, rows.Err()
+func (s *WebhookStore) ListEnabledWebhookEndpoints() ([]model.WebhookEndpoint, error) {
+	return s.listEndpoints(true)
 }
 
 func (s *WebhookStore) GetWebhookEndpoint(id string) (*model.WebhookEndpoint, error) {

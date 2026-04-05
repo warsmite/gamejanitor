@@ -82,10 +82,13 @@ func (t *ActivityTracker) Complete(gameserverID string) {
 	t.clearOperation(gameserverID)
 }
 
-// Fail clears the active operation on the gameserver.
+// Fail logs the error and clears the active operation on the gameserver.
 func (t *ActivityTracker) Fail(gameserverID string, reason error) {
 	if gameserverID == "" {
 		return
+	}
+	if reason != nil {
+		t.log.Warn("operation failed", "gameserver", gameserverID, "error", reason)
 	}
 	t.clearOperation(gameserverID)
 }

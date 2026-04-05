@@ -724,6 +724,12 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 
 func (s *ModService) Update(ctx context.Context, gameserverID, modID string) (*model.InstalledMod, error) {
 	defer s.lockGameserver(gameserverID)()
+	return s.doUpdate(ctx, gameserverID, modID)
+}
+
+// doUpdate performs a mod update without acquiring the per-gameserver lock.
+// Callers must hold the lock.
+func (s *ModService) doUpdate(ctx context.Context, gameserverID, modID string) (*model.InstalledMod, error) {
 	mod, err := s.store.GetInstalledMod(modID)
 	if err != nil || mod == nil {
 		return nil, controller.ErrNotFound("mod not found")
@@ -801,7 +807,7 @@ func (s *ModService) UpdateAll(ctx context.Context, gameserverID string) ([]ModU
 
 	var applied []ModUpdate
 	for _, u := range updates {
-		if _, err := s.Update(ctx, gameserverID, u.ModID); err != nil {
+		if _, err := s.doUpdate(ctx, gameserverID, u.ModID); err != nil {
 			s.log.Warn("failed to update mod", "mod", u.ModID, "error", err)
 			continue
 		}

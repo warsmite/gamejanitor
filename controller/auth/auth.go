@@ -192,6 +192,26 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 	return rawToken, nil
 }
 
+// newToken generates a secure random token, hashes it, and builds the model.Token.
+func (s *AuthService) newToken(name, role string) (rawToken string, token *model.Token, err error) {
+	rawToken, err = generateSecureToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("generating token: %w", err)
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", nil, fmt.Errorf("hashing token: %w", err)
+	}
+	token = &model.Token{
+		ID:          uuid.New().String(),
+		Name:        name,
+		HashedToken: string(hashed),
+		TokenPrefix: tokenPrefix(rawToken),
+		Role:        role,
+	}
+	return rawToken, token, nil
+}
+
 func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error) {
 	t := &model.Token{Name: name}
 	if err := t.Validate(); err != nil {
@@ -207,26 +227,10 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		return "", existing, nil
 	}
 
-	rawToken, err := generateSecureToken()
+	rawToken, token, err := s.newToken(name, RoleAdmin)
 	if err != nil {
-		return "", nil, fmt.Errorf("generating token: %w", err)
+		return "", nil, err
 	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
-	if err != nil {
-		return "", nil, fmt.Errorf("hashing token: %w", err)
-	}
-
-	// Admin tokens store all permissions for consistency
-	token := &model.Token{
-		ID:            uuid.New().String(),
-		Name:          name,
-		HashedToken:   string(hashed),
-		TokenPrefix:   tokenPrefix(rawToken),
-		Role:         RoleAdmin,
-		
-	}
-
 	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving admin token: %w", err)
 	}
@@ -249,25 +253,12 @@ func (s *AuthService) CreateUserToken(name string, canCreate bool, expiresAt *ti
 		return "", nil, err
 	}
 
-	rawToken, err := generateSecureToken()
+	rawToken, token, err := s.newToken(name, RoleUser)
 	if err != nil {
-		return "", nil, fmt.Errorf("generating token: %w", err)
+		return "", nil, err
 	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
-	if err != nil {
-		return "", nil, fmt.Errorf("hashing token: %w", err)
-	}
-
-	token := &model.Token{
-		ID:          uuid.New().String(),
-		Name:        name,
-		HashedToken: string(hashed),
-		TokenPrefix: tokenPrefix(rawToken),
-		Role:        RoleUser,
-		CanCreateGS: canCreate,
-		ExpiresAt:   expiresAt,
-	}
+	token.CanCreateGS = canCreate
+	token.ExpiresAt = expiresAt
 	if quotas != nil {
 		token.MaxGameservers = quotas.MaxGameservers
 		token.MaxMemoryMB = quotas.MaxMemoryMB
@@ -297,25 +288,10 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		return "", existing, nil
 	}
 
-	rawToken, err := generateSecureToken()
+	rawToken, token, err := s.newToken(name, RoleWorker)
 	if err != nil {
-		return "", nil, fmt.Errorf("generating token: %w", err)
+		return "", nil, err
 	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
-	if err != nil {
-		return "", nil, fmt.Errorf("hashing token: %w", err)
-	}
-
-	token := &model.Token{
-		ID:            uuid.New().String(),
-		Name:          name,
-		HashedToken:   string(hashed),
-		TokenPrefix:   tokenPrefix(rawToken),
-		Role:         RoleWorker,
-		
-	}
-
 	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving worker token: %w", err)
 	}
@@ -338,25 +314,10 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		s.log.Info("rotated out old admin token", "name", name)
 	}
 
-	rawToken, err := generateSecureToken()
+	rawToken, token, err := s.newToken(name, RoleAdmin)
 	if err != nil {
-		return "", nil, fmt.Errorf("generating token: %w", err)
+		return "", nil, err
 	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
-	if err != nil {
-		return "", nil, fmt.Errorf("hashing token: %w", err)
-	}
-
-	token := &model.Token{
-		ID:            uuid.New().String(),
-		Name:          name,
-		HashedToken:   string(hashed),
-		TokenPrefix:   tokenPrefix(rawToken),
-		Role:         RoleAdmin,
-		
-	}
-
 	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving admin token: %w", err)
 	}
@@ -378,25 +339,10 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		s.log.Info("rotated out old worker token", "name", name)
 	}
 
-	rawToken, err := generateSecureToken()
+	rawToken, token, err := s.newToken(name, RoleWorker)
 	if err != nil {
-		return "", nil, fmt.Errorf("generating token: %w", err)
+		return "", nil, err
 	}
-
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawToken), bcrypt.DefaultCost)
-	if err != nil {
-		return "", nil, fmt.Errorf("hashing token: %w", err)
-	}
-
-	token := &model.Token{
-		ID:            uuid.New().String(),
-		Name:          name,
-		HashedToken:   string(hashed),
-		TokenPrefix:   tokenPrefix(rawToken),
-		Role:         RoleWorker,
-		
-	}
-
 	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving worker token: %w", err)
 	}
