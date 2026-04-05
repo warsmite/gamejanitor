@@ -148,20 +148,8 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 	case controller.ModActionEvent:
 		payloadData = ev
 
-	// Lifecycle events -- lightweight, just IDs
-	case controller.ImagePullingEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.InstanceCreatingEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.InstanceStartedEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.GameserverReadyEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.InstanceStoppingEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.InstanceStoppedEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.InstanceExitedEvent:
+	// Lifecycle events — lightweight, just IDs
+	case controller.LifecycleEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
 	case controller.GameserverErrorEvent:
 		payloadData = map[string]any{"gameserver_id": ev.GameserverID, "reason": ev.Reason}

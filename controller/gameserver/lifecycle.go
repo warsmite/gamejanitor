@@ -270,7 +270,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhasePullingImage)
 	}
-	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
 		if s.operations != nil && p.TotalBytes > 0 {
 			s.operations.UpdateProgress(id, model.OperationProgress{
@@ -283,7 +283,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 		s.setError(id, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
-	s.broadcaster.Publish(controller.ImagePulledEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulled, GameserverID: id, Timestamp: time.Now()})
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
@@ -458,7 +458,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 		w.RemoveInstance(ctx, instanceID)
 		return err
 	}
-	s.broadcaster.Publish(controller.InstanceCreatingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceCreating, GameserverID: id, Timestamp: time.Now()})
 
 	// Start instance — worker handles ready detection via the ready pattern
 	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
@@ -469,7 +469,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 	if s.statusProvider != nil {
 		s.statusProvider.SetRunning(id)
 	}
-	s.broadcaster.Publish(controller.InstanceStartedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStarted, GameserverID: id, Timestamp: time.Now()})
 
 	s.log.Info("gameserver started", "gameserver", id, "instance_id", instanceID[:12])
 	return nil
@@ -496,7 +496,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	if s.statusProvider != nil {
 		s.statusProvider.SetStopped(id)
 	}
-	s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -572,7 +572,7 @@ func (s *GameserverService) doStop(ctx context.Context, id string) error {
 		s.statusProvider.SetStopped(id)
 	}
 
-	s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopped, GameserverID: id, Timestamp: time.Now()})
 	s.log.Info("gameserver stopped", "gameserver", id)
 	return nil
 }
@@ -612,7 +612,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 			if s.statusProvider != nil {
 				s.statusProvider.SetStopped(id)
 			}
-			s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 			if err := s.doStop(ctx, id); err != nil {
 				return fmt.Errorf("stopping gameserver for restart: %w", err)
@@ -665,13 +665,13 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 		return fmt.Errorf("game %s not found", gs.GameID)
 	}
 
-	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: id, Timestamp: time.Now()})
 
 	if gs.Status != controller.StatusStopped {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, id); err != nil {
 			s.setError(id, operationFailedReason("Game update failed", err))
@@ -780,13 +780,13 @@ func (s *GameserverService) doReinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: id, Timestamp: time.Now()})
 
 	if gs.Status != controller.StatusStopped {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, id); err != nil {
 			s.setError(id, operationFailedReason("Reinstall failed", err))

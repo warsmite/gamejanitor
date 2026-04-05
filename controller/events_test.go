@@ -17,7 +17,7 @@ func TestEventBus_PublishSubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	evt := controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()}
+	evt := controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()}
 	bus.Publish(evt)
 
 	select {
@@ -37,7 +37,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	ch2, unsub2 := bus.Subscribe()
 	defer unsub2()
 
-	bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
 
 	select {
 	case <-ch1:
@@ -58,7 +58,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	unsub()
 
-	bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
 
 	select {
 	case _, ok := <-ch:
@@ -79,7 +79,7 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 
 	// Fill the 4096-element buffer and then some
 	for i := 0; i < 4100; i++ {
-		bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+		bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
 	}
 
 	// Should have at most 4096 events (buffer size)

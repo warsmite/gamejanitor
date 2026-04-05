@@ -56,7 +56,7 @@ func (s *GameserverService) doArchive(ctx context.Context, id string) error {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before archive: %w", err)

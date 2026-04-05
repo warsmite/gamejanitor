@@ -468,7 +468,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
 		}
 	} else {
-		s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopped, GameserverID: gameserverID, Timestamp: time.Now()})
 	}
 }
 

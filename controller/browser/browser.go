@@ -88,7 +88,7 @@ func (c *ReachabilityChecker) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				if _, ok := event.(controller.GameserverReadyEvent); ok {
+				if le, ok := event.(controller.LifecycleEvent); ok && le.Type_ == controller.EventGameserverReady {
 					gsID := event.EventGameserverID()
 					go c.check(ctx, gsID)
 				}

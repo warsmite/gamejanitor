@@ -94,7 +94,7 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(gameserverID)
 		}
-		s.broadcaster.Publish(controller.InstanceStoppingEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: gameserverID, Timestamp: time.Now()})
 
 		if err := s.doStop(ctx, gameserverID); err != nil {
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
@@ -239,10 +239,10 @@ func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, 
 		if err := s.doStart(ctx, gameserverID); err != nil {
 			s.log.Error("failed to restart gameserver after migration", "gameserver", gameserverID, "error", err)
 			// Migration succeeded but restart failed — don't return error, data is safe
-			s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopped, GameserverID: gameserverID, Timestamp: time.Now()})
 		}
 	} else {
-		s.broadcaster.Publish(controller.InstanceStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopped, GameserverID: gameserverID, Timestamp: time.Now()})
 	}
 
 	return nil

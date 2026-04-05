@@ -273,7 +273,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	switch update.State {
 	case worker.StateRunning:
 		m.log.Info("instance ready", "gameserver", gsID)
-		m.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gsID, Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady, GameserverID: gsID, Timestamp: time.Now()})
 		m.startPolling(gsID)
 
 		// Clear error state on successful start
@@ -297,7 +297,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		if wasRunning {
 			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), m.statsPoller.GetCachedStats(gsID))
 			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode, "reason", reason)
-			m.broadcaster.Publish(controller.InstanceExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
+			m.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceExited, GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs, reason)
 		} else {
 			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
