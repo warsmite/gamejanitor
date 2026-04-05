@@ -36,8 +36,8 @@ var virtualPrefixes = []string{
 	"wg",              // WireGuard
 	"mullvad",         // Mullvad VPN
 	"tailscale", "ts", // Tailscale
-	"docker", "br-",   // Docker
-	"veth",            // Docker/container veth pairs
+	"docker", "br-",   // Docker (may be installed on host for other purposes)
+	"veth",            // container veth pairs
 	"virbr",           // libvirt
 	"lo",              // loopback
 }
@@ -90,8 +90,8 @@ func detectLANIP(log *slog.Logger) string {
 
 			// Prefer 192.168.x.x and 172.16-31.x.x (with /24 or smaller subnets)
 			// over 10.x.x.x, since 10.x.x.x is commonly used by VPNs.
-			// Docker uses large subnets (/16, /20) in the 172.x range,
-			// so we filter those out by checking the subnet mask.
+			// Container runtimes (Docker, podman) use large subnets (/16, /20)
+			// in the 172.x range — filter them out by checking the subnet mask.
 			if ip[0] == 192 {
 				return ip.String()
 			}
@@ -100,7 +100,7 @@ func detectLANIP(log *slog.Logger) string {
 				if ones >= 24 {
 					return ip.String()
 				}
-				log.Debug("skipping large subnet in 172.x range (likely Docker/container network)", "interface", iface.Name, "ip", ip.String(), "mask", ones)
+				log.Debug("skipping large subnet in 172.x range (likely container network)", "interface", iface.Name, "ip", ip.String(), "mask", ones)
 			}
 			if fallback == "" {
 				fallback = ip.String()

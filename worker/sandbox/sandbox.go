@@ -674,7 +674,7 @@ func (w *SandboxWorker) InstanceLogs(ctx context.Context, instanceID string, tai
 	}
 
 	// For follow mode, start from the beginning so we catch startup logs.
-	// Docker streams from the start too — the worker-side ready watcher needs to see
+	// Streams from the start — the worker-side ready watcher needs to see
 	// the full output to detect the ready pattern.
 	return newFollowReader(ctx, f, instanceID, w), nil
 }

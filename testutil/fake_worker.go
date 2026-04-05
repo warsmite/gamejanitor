@@ -204,7 +204,7 @@ func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds
 	c.state = "stopped"
 	w.mu.Unlock()
 
-	// No "die" event here. In real Docker, "die" is emitted for ALL container
+	// No "die" event here. In a real runtime, exit events are emitted for all container
 	// exits (expected and unexpected). StatusManager distinguishes them by checking
 	// if the gameserver is in "stopping" state. But because the lifecycle publishes
 	// InstanceStoppingEvent and the StatusSubscriber processes it asynchronously,

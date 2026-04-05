@@ -157,7 +157,7 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", allPorts[0]), 5*time.Second)
 		if err == nil {
 			conn.Close()
-			// Port is actually bound — this confirms real Docker port mapping works
+			// Port is actually bound — confirms real port mapping works
 		}
 		// Note: if socat isn't in the base image, the game script falls back to sleep
 		// and the port won't actually be bound. That's OK — we still verified allocation.

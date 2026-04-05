@@ -1,3 +1,7 @@
+// Package logparse handles parsing of instance log streams.
+// Retains Docker multiplexed log format detection for compatibility —
+// log streams from external sources or older setups may still use this format.
+// The auto-detection is harmless: non-Docker streams fall through to raw text parsing.
 package logparse
 
 import (
