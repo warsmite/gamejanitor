@@ -449,6 +449,11 @@
           # Run e2e against homelab. Same tests, pointed at the cluster.
           # Usage: test-homelab | E2E_GAME_ID=test-game test-homelab
           test-homelab = pkgs.writeShellScriptBin "test-homelab" ''
+            echo "Cleaning and deploying to homelab..."
+            deploy-clean
+            deploy
+            echo "Waiting for workers to connect..."
+            sleep 3
             export GAMEJANITOR_API_URL="http://sleepy:8080"
             export E2E_GAME_ID="''${E2E_GAME_ID:-minecraft-java}"
             echo "Running e2e against homelab (game=$E2E_GAME_ID)..."

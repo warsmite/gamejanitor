@@ -5,5 +5,6 @@ vendor/
 .envrc
 result
 /.claude
+CLAUDE.md
 ui/dist
 TODO.md
