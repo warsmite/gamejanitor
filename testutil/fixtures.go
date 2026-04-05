@@ -136,6 +136,22 @@ func WaitForEvent(t *testing.T, bus *controller.EventBus, eventType string, time
 	}
 }
 
+// WaitForBackupCompletion polls the backup record until it leaves in_progress state.
+// CreateBackup spawns a goroutine; we must wait for it to finish before the test
+// returns and t.Cleanup closes the DB, otherwise the goroutine panics.
+func WaitForBackupCompletion(t *testing.T, svc *ServiceBundle, backupID string) {
+	t.Helper()
+	s := store.New(svc.DB)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		b, err := s.GetBackup(backupID)
+		if err == nil && b != nil && b.Status != "in_progress" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // CollectEvents subscribes to the event bus and collects all events for the given duration.
 func CollectEvents(bus *controller.EventBus, duration time.Duration) []controller.WebhookEvent {
 	ch, unsub := bus.Subscribe()

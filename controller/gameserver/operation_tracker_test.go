@@ -175,15 +175,15 @@ func TestOperationTracker_WatchDropsOldValues(t *testing.T) {
 
 	// Should get the latest value, not all 100
 	var lastOp *model.Operation
+drain:
 	for {
 		select {
 		case op := <-ch:
 			lastOp = op
 		default:
-			goto done
+			break drain
 		}
 	}
-done:
 	require.NotNil(t, lastOp)
 	// Should be close to the end, not the beginning
 	assert.Greater(t, lastOp.Progress.Percent, float64(50))

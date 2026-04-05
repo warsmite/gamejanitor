@@ -103,11 +103,11 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 	}
 	require.NoError(t, db.CreateWebhookDelivery(delivery))
 
-	// Start webhook worker, poll until the delivery is processed instead of
-	// sleeping a fixed duration (previous 6s sleep was flaky).
+	// Start webhook worker with a fast poll interval for tests.
 	whStore := store.NewWebhookStore(svc.DB)
 	gsLookup := &testWebhookLookup{gs: store.NewGameserverStore(svc.DB), wn: store.NewWorkerNodeStore(svc.DB)}
 	ww := webhook.NewWebhookWorker(whStore, gsLookup, svc.Broadcaster, testutil.TestLogger())
+	ww.PollInterval = 50 * time.Millisecond
 	ctx := testutil.TestContext()
 	ww.Start(ctx)
 
@@ -115,7 +115,7 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return receivedSig != ""
-	}, 15*time.Second, 100*time.Millisecond, "webhook delivery should be processed")
+	}, 3*time.Second, 50*time.Millisecond, "webhook delivery should be processed")
 	ww.Stop()
 
 	mu.Lock()

@@ -148,6 +148,7 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 	// CreateGameserver publishes synchronously, so the event is already in the channel.
 	// Drain buffered events — break on first empty read since Publish is non-blocking.
 	found := false
+drain:
 	for {
 		select {
 		case evt := <-ch:
@@ -160,9 +161,8 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 				assert.Equal(t, testutil.TestGameID, gsEvt.Gameserver.GameID)
 			}
 		default:
-			goto done
+			break drain
 		}
 	}
-done:
 	assert.True(t, found, "expected gameserver.create event to be published")
 }

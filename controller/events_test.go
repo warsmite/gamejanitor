@@ -84,15 +84,15 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 
 	// Should have at most 4096 events (buffer size)
 	count := 0
+drain:
 	for {
 		select {
 		case <-ch:
 			count++
 		default:
-			goto done
+			break drain
 		}
 	}
-done:
 	assert.LessOrEqual(t, count, 4096, "buffer should cap at 4096 events")
 	assert.Greater(t, count, 0, "should have received some events")
 }

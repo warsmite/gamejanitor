@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,12 +43,16 @@ func TestAPI_Backups_Create(t *testing.T) {
 	// CreateBackup returns 202 Accepted (async)
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 
-	var result apiResponse
+	var result struct {
+		Status string `json:"status"`
+		Data   struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.Equal(t, "ok", result.Status)
 
-	// Wait for async backup goroutine
-	time.Sleep(1 * time.Second)
+	testutil.WaitForBackupCompletion(t, api.Services, result.Data.ID)
 }
 
 func TestAPI_Backups_List(t *testing.T) {

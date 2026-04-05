@@ -115,372 +115,138 @@ func TestPermissions_Me_AuthDisabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: PATCH per-field enforcement
+// Test 2–4: PATCH enforcement, action enforcement, read access scoping
 // ---------------------------------------------------------------------------
 
-func TestPermissions_Patch_ConfigureName_Allowed(t *testing.T) {
+func TestPermissions_Enforcement(t *testing.T) {
 	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch Name")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverConfigureName}, []string{gsID})
-
-	body, _ := json.Marshal(map[string]any{"name": "Renamed"})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
-		"token with configure.name should be able to rename")
-}
-
-func TestPermissions_Patch_ConfigureName_BlocksResources(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch Block Resources")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverConfigureName}, []string{gsID})
-
-	body, _ := json.Marshal(map[string]any{"memory_limit_mb": 4096})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	errMsg := decodeErrorBody(t, resp)
-	assert.Contains(t, errMsg, "missing permission",
-		"should report missing permission for resource field")
-}
-
-func TestPermissions_Patch_ConfigureResources_Allowed(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch Resources")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverConfigureResources}, []string{gsID})
-
-	body, _ := json.Marshal(map[string]any{"memory_limit_mb": 4096})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
-		"token with configure.resources should be able to set memory_limit_mb")
-}
-
-func TestPermissions_Patch_ConfigureEnv_Allowed(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch Env")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverConfigureEnv}, []string{gsID})
-
-	body, _ := json.Marshal(map[string]any{
-		"env": map[string]string{"REQUIRED_VAR": "new-value", "KEY": "val"},
-	})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
-		"token with configure.env should be able to set env vars")
-}
-
-func TestPermissions_Patch_ConfigureEnv_BlocksPorts(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch Env Blocks Ports")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverConfigureEnv}, []string{gsID})
-
-	body, _ := json.Marshal(map[string]any{
-		"ports": []map[string]any{
-			{"host": 27015, "instance": 27015, "protocol": "udp"},
+	cases := []struct {
+		name       string
+		permission string
+		method     string
+		pathSuffix string // appended to /api/gameservers/{id}
+		body       any    // if non-nil, marshalled as JSON request body
+		wantStatus int
+		wantError  string // if non-empty, check error body contains this
+	}{
+		// PATCH per-field enforcement
+		{
+			name:       "ConfigureName_Allowed",
+			permission: auth.PermGameserverConfigureName,
+			method:     "PATCH", pathSuffix: "",
+			body: map[string]any{"name": "Renamed"}, wantStatus: http.StatusOK,
 		},
-	})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+		{
+			name:       "ConfigureName_BlocksResources",
+			permission: auth.PermGameserverConfigureName,
+			method:     "PATCH", pathSuffix: "",
+			body: map[string]any{"memory_limit_mb": 4096}, wantStatus: http.StatusBadRequest,
+			wantError: "missing permission",
+		},
+		{
+			name:       "ConfigureResources_Allowed",
+			permission: auth.PermGameserverConfigureResources,
+			method:     "PATCH", pathSuffix: "",
+			body: map[string]any{"memory_limit_mb": 4096}, wantStatus: http.StatusOK,
+		},
+		{
+			name:       "ConfigureEnv_Allowed",
+			permission: auth.PermGameserverConfigureEnv,
+			method:     "PATCH", pathSuffix: "",
+			body:       map[string]any{"env": map[string]string{"REQUIRED_VAR": "new-value", "KEY": "val"}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "ConfigureEnv_BlocksPorts",
+			permission: auth.PermGameserverConfigureEnv,
+			method:     "PATCH", pathSuffix: "",
+			body:       map[string]any{"ports": []map[string]any{{"host": 27015, "instance": 27015, "protocol": "udp"}}},
+			wantStatus: http.StatusBadRequest, wantError: "missing permission",
+		},
+		{
+			name:       "NoConfigurePermission_BlocksAll",
+			permission: auth.PermGameserverStart,
+			method:     "PATCH", pathSuffix: "",
+			body: map[string]any{"name": "new"}, wantStatus: http.StatusBadRequest,
+			wantError: "missing permission",
+		},
 
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	errMsg := decodeErrorBody(t, resp)
-	assert.Contains(t, errMsg, "missing permission",
-		"configure.env token should not be able to modify ports")
-}
+		// Action permission enforcement
+		{
+			name: "Start_Allowed", permission: auth.PermGameserverStart,
+			method: "POST", pathSuffix: "/start", wantStatus: http.StatusOK,
+		},
+		{
+			name: "Start_Denied", permission: auth.PermGameserverStop,
+			method: "POST", pathSuffix: "/start", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "UpdateGame_Allowed", permission: auth.PermGameserverUpdateGame,
+			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusOK,
+		},
+		{
+			name: "UpdateGame_Denied", permission: auth.PermGameserverStart,
+			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "Reinstall_Denied", permission: auth.PermGameserverStart,
+			method: "POST", pathSuffix: "/reinstall", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "Delete_Denied", permission: auth.PermGameserverStart,
+			method: "DELETE", pathSuffix: "", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "RegenerateSFTP_Denied", permission: auth.PermGameserverStart,
+			method: "POST", pathSuffix: "/regenerate-sftp-password", wantStatus: http.StatusForbidden,
+		},
 
-func TestPermissions_Patch_NoConfigurePermission_BlocksAll(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
+		// Read access scoping
+		{
+			name: "Console_Denied", permission: auth.PermGameserverStart,
+			method: "GET", pathSuffix: "/logs", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "Files_Denied", permission: auth.PermGameserverStart,
+			method: "GET", pathSuffix: "/files/", wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "Backups_Denied", permission: auth.PermGameserverStart,
+			method: "GET", pathSuffix: "/backups/", wantStatus: http.StatusForbidden,
+		},
+	}
 
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Patch No Configure")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			api := testutil.NewTestAPI(t)
+			enableAuth(api)
+			testutil.RegisterFakeWorker(t, api.Services, "worker-1")
 
-	// Token with only start — no configure.* permissions
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
+			adminToken := testutil.MustCreateAdminToken(t, api.Services)
+			gsID := createGameserverWithToken(t, api, adminToken, tc.name)
 
-	body, _ := json.Marshal(map[string]any{"name": "new"})
-	req := authRequest("PATCH", api.Server.URL+"/api/gameservers/"+gsID, token, body)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+			token := testutil.MustCreateUserToken(t, api.Services,
+				[]string{tc.permission}, []string{gsID})
 
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
-		"token without any configure permission should be denied a PATCH")
-	errMsg := decodeErrorBody(t, resp)
-	assert.Contains(t, errMsg, "missing permission")
-}
+			var bodyBytes []byte
+			if tc.body != nil {
+				bodyBytes, _ = json.Marshal(tc.body)
+			}
 
-// ---------------------------------------------------------------------------
-// Test 3: Action permission enforcement
-// ---------------------------------------------------------------------------
+			url := api.Server.URL + "/api/gameservers/" + gsID + tc.pathSuffix
+			req := authRequest(tc.method, url, token, bodyBytes)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 
-func TestPermissions_Start_Allowed(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
+			assert.Equal(t, tc.wantStatus, resp.StatusCode)
 
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Start Allowed")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
-		"token with gameserver.start should be allowed to start")
-}
-
-func TestPermissions_Start_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Start Denied")
-
-	// Token with stop but NOT start
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStop}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.start should be forbidden")
-}
-
-func TestPermissions_UpdateGame_Allowed(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "UpdateGame Allowed")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverUpdateGame}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/update-game", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
-		"token with gameserver.update-game should be allowed")
-}
-
-func TestPermissions_UpdateGame_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "UpdateGame Denied")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/update-game", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.update-game should be forbidden")
-}
-
-func TestPermissions_Reinstall_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Reinstall Denied")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/reinstall", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.reinstall should be forbidden")
-}
-
-func TestPermissions_Delete_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Delete Denied")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.delete should be forbidden")
-}
-
-func TestPermissions_RegenerateSFTP_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "RegenSFTP Denied")
-
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/regenerate-sftp-password", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.regenerate-sftp should be forbidden")
-}
-
-// ---------------------------------------------------------------------------
-// Test 4: Read access scoping
-// ---------------------------------------------------------------------------
-
-func TestPermissions_Console_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Console Denied")
-
-	// Token without gameserver.logs
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("GET", api.Server.URL+"/api/gameservers/"+gsID+"/logs", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.logs should be forbidden from /logs")
-}
-
-func TestPermissions_Files_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Files Denied")
-
-	// Token without gameserver.files.read
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("GET", api.Server.URL+"/api/gameservers/"+gsID+"/files/", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without gameserver.files.read should be forbidden from /files")
-}
-
-func TestPermissions_Backups_Denied(t *testing.T) {
-	t.Parallel()
-	api := testutil.NewTestAPI(t)
-	enableAuth(api)
-	testutil.RegisterFakeWorker(t, api.Services, "worker-1")
-
-	adminToken := testutil.MustCreateAdminToken(t, api.Services)
-	gsID := createGameserverWithToken(t, api, adminToken, "Backups Denied")
-
-	// Token without backup.read
-	token := testutil.MustCreateUserToken(t, api.Services,
-		[]string{auth.PermGameserverStart}, []string{gsID})
-
-	req := authRequest("GET", api.Server.URL+"/api/gameservers/"+gsID+"/backups/", token, nil)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
-		"token without backup.read should be forbidden from /backups")
+			if tc.wantError != "" {
+				errMsg := decodeErrorBody(t, resp)
+				assert.Contains(t, errMsg, tc.wantError)
+			}
+		})
+	}
 }

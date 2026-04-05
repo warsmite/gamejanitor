@@ -67,6 +67,9 @@ type WebhookWorker struct {
 	// ValidateURL is called before each webhook delivery. Returns an error if the
 	// URL is not allowed (e.g., private IP in restricted mode). Nil means no validation.
 	ValidateURL func(string) error
+
+	// PollInterval overrides the default delivery poll interval. Zero uses the default (5s).
+	PollInterval time.Duration
 }
 
 func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
@@ -233,7 +236,11 @@ const (
 func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 	defer w.wg.Done()
 
-	ticker := time.NewTicker(deliveryPollInterval)
+	interval := w.PollInterval
+	if interval == 0 {
+		interval = deliveryPollInterval
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	lastCleanup := time.Now()

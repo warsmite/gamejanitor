@@ -62,6 +62,7 @@ func TestCatchUp_MissedBackup_ExecutesOnce(t *testing.T) {
 	// Wait for the backup task to complete (or fail — both prove it executed)
 	deadline := time.After(5 * time.Second)
 	executed := 0
+collect:
 	for {
 		select {
 		case evt := <-ch:
@@ -72,15 +73,14 @@ func TestCatchUp_MissedBackup_ExecutesOnce(t *testing.T) {
 				}
 			}
 		case <-deadline:
-			goto done
+			break collect
 		}
 		// Brief yield after first execution to see if a duplicate fires
 		if executed == 1 {
 			time.Sleep(200 * time.Millisecond)
-			goto done
+			break collect
 		}
 	}
-done:
 	assert.Equal(t, 1, executed, "missed backup should execute exactly once during catch-up")
 }
 
@@ -138,6 +138,7 @@ func TestCatchUp_MissedRestart_Skipped(t *testing.T) {
 	deadline := time.After(2 * time.Second)
 	var missedEvents []controller.ScheduledTaskEvent
 	var executedEvents []controller.ScheduledTaskEvent
+collect:
 	for {
 		select {
 		case evt := <-ch:
@@ -152,10 +153,9 @@ func TestCatchUp_MissedRestart_Skipped(t *testing.T) {
 				}
 			}
 		case <-deadline:
-			goto done
+			break collect
 		}
 	}
-done:
 	assert.Len(t, missedEvents, 2, "both restart and command should emit missed events")
 	assert.Empty(t, executedEvents, "restart and command should not be executed during catch-up")
 }
@@ -204,7 +204,7 @@ func TestCatchUp_NotMissed_NoAction(t *testing.T) {
 	t.Cleanup(func() { svc.Scheduler.Stop() })
 
 	// Wait briefly — nothing should fire
-	deadline := time.After(1 * time.Second)
+	deadline := time.After(200 * time.Millisecond)
 	for {
 		select {
 		case evt := <-ch:

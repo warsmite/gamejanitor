@@ -2,31 +2,13 @@ package backup_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
-
-// waitForBackupCompletion polls the backup record until it leaves in_progress state.
-// CreateBackup spawns a goroutine; we must wait for it to finish before the test
-// returns and t.Cleanup closes the DB, otherwise the goroutine panics.
-func waitForBackupCompletion(t *testing.T, svc *testutil.ServiceBundle, backupID string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		b, err := store.New(svc.DB).GetBackup(backupID)
-		if err == nil && b != nil && b.Status != "in_progress" {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	// Goroutine may have finished with error or just be slow — either way, it ran
-}
 
 func TestBackup_Create_ReturnsInProgressRecord(t *testing.T) {
 	t.Parallel()
@@ -45,7 +27,7 @@ func TestBackup_Create_ReturnsInProgressRecord(t *testing.T) {
 	assert.Equal(t, gs.ID, backup.GameserverID)
 	assert.Equal(t, "test-backup", backup.Name)
 	assert.Equal(t, "in_progress", backup.Status)
-	waitForBackupCompletion(t, svc, backup.ID)
+	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 }
 
 func TestBackup_Create_GameserverNotFound(t *testing.T) {
@@ -72,8 +54,8 @@ func TestBackup_List_ByGameserver(t *testing.T) {
 	b2, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "backup-2")
 	require.NoError(t, err)
 
-	waitForBackupCompletion(t, svc, b1.ID)
-	waitForBackupCompletion(t, svc, b2.ID)
+	testutil.WaitForBackupCompletion(t, svc, b1.ID)
+	testutil.WaitForBackupCompletion(t, svc, b2.ID)
 
 	list, err := svc.BackupSvc.ListBackups(model.BackupFilter{GameserverID: gs.ID})
 	require.NoError(t, err)
@@ -92,7 +74,7 @@ func TestBackup_Delete_HappyPath(t *testing.T) {
 
 	backup, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "to-delete")
 	require.NoError(t, err)
-	waitForBackupCompletion(t, svc, backup.ID)
+	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 
 	err = svc.BackupSvc.DeleteBackup(ctx, gs.ID, backup.ID)
 	require.NoError(t, err)

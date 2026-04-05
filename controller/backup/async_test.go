@@ -2,7 +2,6 @@ package backup_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestBackup_DeleteDuringBackup_NoPanic(t *testing.T) {
 	require.Equal(t, model.BackupStatusInProgress, backup.Status)
 
 	// Wait for the backup to finish — delete is blocked while an operation is in progress
-	waitForBackupDone(t, svc, backup.ID)
+	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 
 	// Now delete the gameserver — backup goroutine is done, no operation guard conflict
 	err = svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
@@ -72,11 +71,8 @@ func TestBackup_TwoSimultaneous_BothComplete(t *testing.T) {
 	b2, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "backup-2")
 	require.NoError(t, err)
 
-	// Wait for both to leave in_progress, plus a short settle for
-	// post-status DB writes (size update, activity completion)
-	waitForBackupDone(t, svc, b1.ID)
-	waitForBackupDone(t, svc, b2.ID)
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForBackupCompletion(t, svc, b1.ID)
+	testutil.WaitForBackupCompletion(t, svc, b2.ID)
 
 	// Both should have valid terminal states
 	s := store.New(svc.DB)
@@ -95,16 +91,3 @@ func TestBackup_TwoSimultaneous_BothComplete(t *testing.T) {
 	assert.True(t, atLeastOneCompleted, "at least one of two simultaneous backups should complete")
 }
 
-// waitForBackupDone polls until a backup leaves in_progress or 5s elapses.
-func waitForBackupDone(t *testing.T, svc *testutil.ServiceBundle, backupID string) {
-	t.Helper()
-	s := store.New(svc.DB)
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		b, err := s.GetBackup(backupID)
-		if err == nil && b != nil && b.Status != model.BackupStatusInProgress {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}

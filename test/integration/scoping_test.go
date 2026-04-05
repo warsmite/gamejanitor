@@ -40,8 +40,7 @@ func TestScoping_Backup_CrossAccess_Blocked(t *testing.T) {
 	backup, err := svc.BackupSvc.CreateBackup(ctx, gsA.ID, "test-backup")
 	require.NoError(t, err)
 
-	// Wait for backup to complete (async goroutine)
-	waitForBackupCompletion(t, svc, backup.ID)
+	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 
 	// GetBackup with correct gameserver succeeds
 	got, err := svc.BackupSvc.GetBackup(gsA.ID, backup.ID)

@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,15 +22,7 @@ func TestDelete_CleansUpBackupStoreFiles(t *testing.T) {
 	backup, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "pre-delete-backup")
 	require.NoError(t, err)
 
-	// Wait for async backup to complete
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		b, _ := svc.BackupSvc.GetBackup(gs.ID, backup.ID)
-		if b != nil && b.Status != "in_progress" {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 
 	// Delete the gameserver — should clean up backup store files
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
