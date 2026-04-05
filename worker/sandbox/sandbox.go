@@ -503,27 +503,9 @@ func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []strin
 
 // findChildPID returns the first child PID of the given process, or 0 if none found.
 func findChildPID(parentPID int) int {
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return 0
-	}
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil || pid <= 0 {
-			continue
-		}
-		stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-		if err != nil {
-			continue
-		}
-		// stat format: pid (comm) state ppid ...
-		fields := strings.Fields(string(stat))
-		if len(fields) > 3 {
-			ppid, _ := strconv.Atoi(fields[3])
-			if ppid == parentPID {
-				return pid
-			}
-		}
+	pids := childPIDs(parentPID)
+	if len(pids) > 0 {
+		return pids[0]
 	}
 	return 0
 }
