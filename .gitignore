@@ -6,3 +6,4 @@ vendor/
 result
 /.claude
 ui/dist
+TODO.md
