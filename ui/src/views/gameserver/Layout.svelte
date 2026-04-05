@@ -3,7 +3,7 @@
   import { api } from '$lib/api';
   import { gameserverStore, formatUptime, phaseLabels, toast } from '$lib/stores';
   import { GameIcon, StatusPill } from '$lib/components';
-  import { getRoute, navigate, isActive } from '$lib/router';
+  import { getRoute, navigate } from '$lib/router';
   import { embedded, basePath } from '$lib/base';
   import { parseLine } from '$lib/logparse';
 

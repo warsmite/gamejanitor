@@ -21,7 +21,6 @@
 
   // Tokens state
   let tokens = $state<Token[]>([]);
-  let workerTokens = $state<Token[]>([]);
   let showCreateToken = $state(false);
   let newTokenName = $state('');
   let newTokenRole = $state('admin');
@@ -103,10 +102,7 @@
 
     try {
       if (id === 'tokens') {
-        [tokens, workerTokens] = await Promise.all([
-          api.tokens.list(),
-          api.tokens.list(), // worker tokens use same endpoint for now
-        ]);
+        tokens = await api.tokens.list();
       } else if (id === 'webhooks') {
         webhooks = await api.webhooks.list();
       } else if (id === 'workers') {

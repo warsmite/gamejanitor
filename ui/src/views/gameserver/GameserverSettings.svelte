@@ -186,7 +186,6 @@
       gameserver = await api.gameservers.get(gsId);
       if (andRestart && isRunning) {
         await api.gameservers.restart(gsId);
-        restartRequired = false;
         toast('Settings saved, restarting...', 'success');
       } else {
         toast('Settings saved', 'success');

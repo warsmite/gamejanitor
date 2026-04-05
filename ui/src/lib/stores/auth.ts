@@ -5,8 +5,6 @@ export const role = writable<string>('');
 
 export const isAdmin = derived(role, ($role) => $role === 'admin');
 
-export const isAuthenticated = derived(token, ($token) => $token !== null);
-
 // Load token from cookie on init
 export function initAuth() {
   const match = document.cookie.match(/(?:^|; )_token=([^;]*)/);

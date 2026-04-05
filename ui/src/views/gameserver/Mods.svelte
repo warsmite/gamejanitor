@@ -62,9 +62,6 @@
   // Upload state
   let uploadInput: HTMLInputElement | null = null;
 
-  // All installed mods — shown regardless of which browse category is selected
-  const categoryMods = $derived(installedMods);
-
   // Derived: group installed into packs + standalone
   // Pack headers may be in a different category (e.g., "Modpacks") than their children ("Mods"),
   // so we look up pack headers from all installed mods, not just the active category.
@@ -80,7 +77,7 @@
       }
     }
 
-    for (const mod of categoryMods) {
+    for (const mod of installedMods) {
       if (mod.delivery === 'pack' && !mod.pack_id) {
         // Pack header in this category
         if (!packs.has(mod.id)) {
@@ -662,7 +659,7 @@
 
     <!-- Installed Section -->
     <div class="section-header">
-      <span class="section-label">Installed ({categoryMods.length})</span>
+      <span class="section-label">Installed ({installedMods.length})</span>
       <div class="section-actions">
         <button class="btn-scan" onclick={runScan} disabled={scanning}>
           {scanning ? 'Scanning...' : 'Scan for local mods'}
@@ -730,7 +727,7 @@
       </div>
     {/if}
 
-    {#if categoryMods.length > 0}
+    {#if installedMods.length > 0}
       <div class="mods-panel">
         <!-- Pack groups -->
         {#each groupedInstalled().packs as pack (pack.packMod.id)}
