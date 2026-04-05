@@ -5,7 +5,6 @@ package e2e
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -106,12 +105,13 @@ func writeFile(t *testing.T, h *Harness, gsID string, path string, content strin
 // readFile reads a file from the gameserver volume and returns its content.
 func readFile(t *testing.T, h *Harness, gsID string, path string) string {
 	t.Helper()
-	resp, err := http.Get(h.BaseURL + "/api/gameservers/" + gsID + "/files/content?path=" + path)
+	resp, err := h.Get("/api/gameservers/" + gsID + "/files/content?path=" + path)
 	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return string(body)
+	var result struct {
+		Content string `json:"content"`
+	}
+	require.NoError(t, DecodeData(resp, &result))
+	return result.Content
 }
 
 // createBackup creates a backup and returns its info.
@@ -215,9 +215,29 @@ func testGameEnv(h *Harness, overrides map[string]string) map[string]string {
 	return env
 }
 
-// waitForNoOperation polls until the gameserver has no active operation.
-func waitForNoOperation(t *testing.T, h *Harness, gsID string) {
+// waitForOperationComplete waits for an operation to appear on the gameserver
+// and then waits for it to clear. This handles the race where async operations
+// (like restore) are launched in a goroutine and operation_type isn't set
+// immediately — polling for nil too early would return before the operation starts.
+func waitForOperationComplete(t *testing.T, h *Harness, gsID string, opType string) {
 	t.Helper()
+
+	// Phase 1: wait for the operation to appear
+	require.Eventually(t, func() bool {
+		resp, err := h.Get("/api/gameservers/" + gsID)
+		if err != nil {
+			return false
+		}
+		var gs struct {
+			OperationType *string `json:"operation_type"`
+		}
+		if err := DecodeData(resp, &gs); err != nil {
+			return false
+		}
+		return gs.OperationType != nil && *gs.OperationType == opType
+	}, 30*time.Second, 250*time.Millisecond, "operation %q should appear on gameserver", opType)
+
+	// Phase 2: wait for it to clear
 	require.Eventually(t, func() bool {
 		resp, err := h.Get("/api/gameservers/" + gsID)
 		if err != nil {
@@ -230,7 +250,7 @@ func waitForNoOperation(t *testing.T, h *Harness, gsID string) {
 			return false
 		}
 		return gs.OperationType == nil
-	}, time.Minute, 500*time.Millisecond, "operation should complete")
+	}, 2*time.Minute, 500*time.Millisecond, "operation should complete")
 }
 
 // skipIfNotTestGame skips the test when running against a real game

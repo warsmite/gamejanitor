@@ -89,9 +89,8 @@ func TestE2E_Backup_RunningServer_RestoreVerifiesData(t *testing.T) {
 	writeFile(t, h, gs1.ID, "/data/backup-marker.txt", "overwritten")
 
 	// Restore the backup to the same gameserver (async operation).
-	// Poll until the operation clears rather than sleeping a fixed duration.
 	restoreBackup(t, h, gs1.ID, backup.ID)
-	waitForNoOperation(t, h, gs1.ID)
+	waitForOperationComplete(t, h, gs1.ID, "restore")
 
 	// Verify the marker file survived the round-trip
 	content := readFile(t, h, gs1.ID, "/data/backup-marker.txt")
