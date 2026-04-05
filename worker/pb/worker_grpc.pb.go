@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.5
-// source: proto/worker.proto
+// source: worker.proto
 
 package pb
 
@@ -63,7 +63,7 @@ const (
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 type WorkerServiceClient interface {
 	// Instance lifecycle
-	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error)
+	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullImageProgress], error)
 	CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error)
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResponse, error)
 	StopInstance(ctx context.Context, in *StopInstanceRequest, opts ...grpc.CallOption) (*StopInstanceResponse, error)
@@ -117,15 +117,24 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 	return &workerServiceClient{cc}
 }
 
-func (c *workerServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error) {
+func (c *workerServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullImageProgress], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PullImageResponse)
-	err := c.cc.Invoke(ctx, WorkerService_PullImage_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_PullImage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[PullImageRequest, PullImageProgress]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_PullImageClient = grpc.ServerStreamingClient[PullImageProgress]
 
 func (c *workerServiceClient) CreateInstance(ctx context.Context, in *CreateInstanceRequest, opts ...grpc.CallOption) (*CreateInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -189,7 +198,7 @@ func (c *workerServiceClient) Exec(ctx context.Context, in *ExecRequest, opts ..
 
 func (c *workerServiceClient) InstanceLogs(ctx context.Context, in *InstanceLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_InstanceLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_InstanceLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +257,7 @@ func (c *workerServiceClient) VolumeSize(ctx context.Context, in *VolumeSizeRequ
 
 func (c *workerServiceClient) BackupVolume(ctx context.Context, in *BackupVolumeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_BackupVolume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[2], WorkerService_BackupVolume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +276,7 @@ type WorkerService_BackupVolumeClient = grpc.ServerStreamingClient[DataChunk]
 
 func (c *workerServiceClient) RestoreVolume(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RestoreVolumeRequest, RestoreVolumeResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[2], WorkerService_RestoreVolume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_RestoreVolume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +319,7 @@ func (c *workerServiceClient) WriteFile(ctx context.Context, in *WriteFileReques
 
 func (c *workerServiceClient) WriteFileStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteFileStreamRequest, WriteFileStreamResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_WriteFileStream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_WriteFileStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +392,7 @@ func (c *workerServiceClient) CopyToInstance(ctx context.Context, in *CopyToInst
 
 func (c *workerServiceClient) CopyDirFromInstance(ctx context.Context, in *CopyDirFromInstanceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyDirFromInstance_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_CopyDirFromInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +411,7 @@ type WorkerService_CopyDirFromInstanceClient = grpc.ServerStreamingClient[DataCh
 
 func (c *workerServiceClient) CopyTarToInstance(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToInstanceRequest, CopyTarToInstanceResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_CopyTarToInstance_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_CopyTarToInstance_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +424,7 @@ type WorkerService_CopyTarToInstanceClient = grpc.ClientStreamingClient[CopyTarT
 
 func (c *workerServiceClient) WatchInstanceStates(ctx context.Context, in *WatchInstanceStatesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[InstanceStateUpdate], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[6], WorkerService_WatchInstanceStates_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[7], WorkerService_WatchInstanceStates_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +483,7 @@ func (c *workerServiceClient) PrepareGameScripts(ctx context.Context, in *Prepar
 
 func (c *workerServiceClient) EnsureDepot(ctx context.Context, in *EnsureDepotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[EnsureDepotProgress], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[7], WorkerService_EnsureDepot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[8], WorkerService_EnsureDepot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +528,7 @@ func (c *workerServiceClient) CopyDepotToVolume(ctx context.Context, in *CopyDep
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 type WorkerServiceServer interface {
 	// Instance lifecycle
-	PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error)
+	PullImage(*PullImageRequest, grpc.ServerStreamingServer[PullImageProgress]) error
 	CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error)
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResponse, error)
 	StopInstance(context.Context, *StopInstanceRequest) (*StopInstanceResponse, error)
@@ -573,8 +582,8 @@ type WorkerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWorkerServiceServer struct{}
 
-func (UnimplementedWorkerServiceServer) PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PullImage not implemented")
+func (UnimplementedWorkerServiceServer) PullImage(*PullImageRequest, grpc.ServerStreamingServer[PullImageProgress]) error {
+	return status.Error(codes.Unimplemented, "method PullImage not implemented")
 }
 func (UnimplementedWorkerServiceServer) CreateInstance(context.Context, *CreateInstanceRequest) (*CreateInstanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateInstance not implemented")
@@ -696,23 +705,16 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 	s.RegisterService(&WorkerService_ServiceDesc, srv)
 }
 
-func _WorkerService_PullImage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PullImageRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _WorkerService_PullImage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PullImageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(WorkerServiceServer).PullImage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkerService_PullImage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).PullImage(ctx, req.(*PullImageRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(WorkerServiceServer).PullImage(m, &grpc.GenericServerStream[PullImageRequest, PullImageProgress]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_PullImageServer = grpc.ServerStreamingServer[PullImageProgress]
 
 func _WorkerService_CreateInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateInstanceRequest)
@@ -1248,10 +1250,6 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*WorkerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "PullImage",
-			Handler:    _WorkerService_PullImage_Handler,
-		},
-		{
 			MethodName: "CreateInstance",
 			Handler:    _WorkerService_CreateInstance_Handler,
 		},
@@ -1354,6 +1352,11 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "PullImage",
+			Handler:       _WorkerService_PullImage_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "InstanceLogs",
 			Handler:       _WorkerService_InstanceLogs_Handler,
 			ServerStreams: true,
@@ -1394,7 +1397,7 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }
 
 const (
@@ -1576,5 +1579,5 @@ var ControllerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }

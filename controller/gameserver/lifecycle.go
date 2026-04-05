@@ -271,7 +271,15 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 		s.operations.SetOperation(id, "start", model.PhasePullingImage)
 	}
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
-	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
+	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
+		if s.operations != nil && p.TotalBytes > 0 {
+			s.operations.UpdateProgress(id, model.OperationProgress{
+				Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
+				CompletedBytes: p.CompletedBytes,
+				TotalBytes:     p.TotalBytes,
+			})
+		}
+	}); err != nil {
 		s.setError(id, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
@@ -684,7 +692,7 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 	}
 
 	// Pull latest image
-	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
+	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), nil); err != nil {
 		s.setError(id, operationFailedReason("Game update failed", err))
 		return fmt.Errorf("pulling image for update: %w", err)
 	}

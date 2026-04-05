@@ -147,10 +147,10 @@ func (w *SandboxWorker) instanceDir(id string) string {
 
 // --- Worker interface: Instance lifecycle ---
 
-func (w *SandboxWorker) PullImage(ctx context.Context, image string) error {
+func (w *SandboxWorker) PullImage(ctx context.Context, image string, onProgress func(worker.PullProgress)) error {
 	w.pullMu.Lock()
 	defer w.pullMu.Unlock()
-	_, err := pullAndExtractOCIImage(ctx, image, w.imagesDir(), w.log)
+	_, err := pullAndExtractOCIImage(ctx, image, w.imagesDir(), onProgress, w.log)
 	return err
 }
 

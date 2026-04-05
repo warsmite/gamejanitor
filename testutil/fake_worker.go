@@ -123,7 +123,7 @@ func (w *FakeWorker) VolumeExists(name string) bool {
 
 // Worker interface implementation
 
-func (w *FakeWorker) PullImage(ctx context.Context, image string) error {
+func (w *FakeWorker) PullImage(ctx context.Context, image string, onProgress func(worker.PullProgress)) error {
 	if err := w.popFailure("PullImage"); err != nil {
 		return err
 	}

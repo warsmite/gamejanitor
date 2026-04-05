@@ -17,6 +17,13 @@ type DepotProgress struct {
 	TotalChunks     int
 }
 
+type PullProgress struct {
+	CompletedBytes  uint64
+	TotalBytes      uint64
+	CompletedLayers int
+	TotalLayers     int
+}
+
 type InstanceOptions struct {
 	Name          string
 	Image         string

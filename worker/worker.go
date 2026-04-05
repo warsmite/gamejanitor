@@ -10,7 +10,7 @@ import (
 // SandboxWorker implements this locally, RemoteWorker via gRPC to a worker agent.
 type Worker interface {
 	// Instance lifecycle
-	PullImage(ctx context.Context, image string) error
+	PullImage(ctx context.Context, image string, onProgress func(PullProgress)) error
 	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
 	StartInstance(ctx context.Context, id string, readyPattern string) error
 	StopInstance(ctx context.Context, id string, timeoutSeconds int) error

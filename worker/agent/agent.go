@@ -29,11 +29,19 @@ func New(w worker.Worker, gameStore *games.GameStore, dataDir string, log *slog.
 	return &Agent{worker: w, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
-func (a *Agent) PullImage(ctx context.Context, req *pb.PullImageRequest) (*pb.PullImageResponse, error) {
-	if err := a.worker.PullImage(ctx, req.Image); err != nil {
-		return nil, err
+func (a *Agent) PullImage(req *pb.PullImageRequest, stream pb.WorkerService_PullImageServer) error {
+	err := a.worker.PullImage(stream.Context(), req.Image, func(p worker.PullProgress) {
+		stream.Send(&pb.PullImageProgress{
+			CompletedBytes:  p.CompletedBytes,
+			TotalBytes:      p.TotalBytes,
+			CompletedLayers: int32(p.CompletedLayers),
+			TotalLayers:     int32(p.TotalLayers),
+		})
+	})
+	if err != nil {
+		return err
 	}
-	return &pb.PullImageResponse{}, nil
+	return stream.Send(&pb.PullImageProgress{Completed: true})
 }
 
 func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceRequest) (*pb.CreateInstanceResponse, error) {

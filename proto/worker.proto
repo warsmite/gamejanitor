@@ -8,7 +8,7 @@ option go_package = "github.com/warsmite/gamejanitor/worker/pb";
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
 service WorkerService {
     // Instance lifecycle
-    rpc PullImage(PullImageRequest) returns (PullImageResponse);
+    rpc PullImage(PullImageRequest) returns (stream PullImageProgress);
     rpc CreateInstance(CreateInstanceRequest) returns (CreateInstanceResponse);
     rpc StartInstance(StartInstanceRequest) returns (StartInstanceResponse);
     rpc StopInstance(StopInstanceRequest) returns (StopInstanceResponse);
@@ -82,7 +82,16 @@ message DataChunk {
 message PullImageRequest {
     string image = 1;
 }
-message PullImageResponse {}
+
+// Streamed during PullImage. Progress messages have completed=false.
+// The final message has completed=true.
+message PullImageProgress {
+    bool completed = 1;
+    uint64 completed_bytes = 2;
+    uint64 total_bytes = 3;
+    int32 completed_layers = 4;
+    int32 total_layers = 5;
+}
 
 message PortBinding {
     int32 host_port = 1;

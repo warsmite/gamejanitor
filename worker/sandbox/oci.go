@@ -14,7 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/warsmite/gamejanitor/worker"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -33,7 +36,7 @@ type imageConfig struct {
 // pullAndExtractOCIImage pulls an instance image and extracts its filesystem to destDir.
 // Skips extraction if the image has already been extracted (digest marker file present).
 // The extracted rootfs is mounted read-only into instances so concurrent access is safe.
-func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir string, log *slog.Logger) (*imageConfig, error) {
+func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir string, onProgress func(worker.PullProgress), log *slog.Logger) (*imageConfig, error) {
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
 		return nil, fmt.Errorf("parsing image reference %s: %w", imageName, err)
@@ -81,11 +84,34 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 	layersDir := filepath.Join(destDir, "layers")
 	os.MkdirAll(layersDir, 0755)
 
-	log.Info("downloading image layers", "image", imageName, "count", len(layers))
+	// Compute total compressed size for progress reporting
+	var totalBytes uint64
+	for _, layer := range layers {
+		size, err := layer.Size()
+		if err == nil && size > 0 {
+			totalBytes += uint64(size)
+		}
+	}
+
+	log.Info("downloading image layers", "image", imageName, "count", len(layers), "total_bytes", totalBytes)
 
 	// Download and cache layers by digest (parallel)
 	layerDirs := make([]string, len(layers))
 	errCh := make(chan error, len(layers))
+	var completedBytes atomic.Uint64
+	var completedLayers atomic.Int32
+	totalLayers := int32(len(layers))
+
+	reportProgress := func() {
+		if onProgress != nil {
+			onProgress(worker.PullProgress{
+				CompletedBytes:  completedBytes.Load(),
+				TotalBytes:      totalBytes,
+				CompletedLayers: int(completedLayers.Load()),
+				TotalLayers:     int(totalLayers),
+			})
+		}
+	}
 
 	for i, layer := range layers {
 		i, layer := i, layer
@@ -96,12 +122,19 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 				return
 			}
 
+			layerSize, _ := layer.Size()
+
 			layerDir := filepath.Join(layersDir, layerDigest.Hex)
 			layerMarker := filepath.Join(layerDir, ".extracted")
 
 			if _, err := os.Stat(layerMarker); err == nil {
-				// Layer already cached
+				// Layer already cached — count as completed
 				layerDirs[i] = layerDir
+				if layerSize > 0 {
+					completedBytes.Add(uint64(layerSize))
+				}
+				completedLayers.Add(1)
+				reportProgress()
 				errCh <- nil
 				return
 			}
@@ -124,6 +157,11 @@ func pullAndExtractOCIImage(ctx context.Context, imageName string, destDir strin
 
 			os.WriteFile(layerMarker, nil, 0644)
 			layerDirs[i] = layerDir
+			if layerSize > 0 {
+				completedBytes.Add(uint64(layerSize))
+			}
+			completedLayers.Add(1)
+			reportProgress()
 			errCh <- nil
 		}()
 	}

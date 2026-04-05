@@ -31,9 +31,29 @@ func New(conn *grpc.ClientConn, nodeID string) *RemoteWorker {
 
 func (w *RemoteWorker) NodeID() string { return w.nodeID }
 
-func (w *RemoteWorker) PullImage(ctx context.Context, image string) error {
-	_, err := w.client.PullImage(ctx, &pb.PullImageRequest{Image: image})
-	return err
+func (w *RemoteWorker) PullImage(ctx context.Context, image string, onProgress func(worker.PullProgress)) error {
+	stream, err := w.client.PullImage(ctx, &pb.PullImageRequest{Image: image})
+	if err != nil {
+		return err
+	}
+
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			return nil // stream ended = success
+		}
+		if msg.Completed {
+			return nil
+		}
+		if onProgress != nil {
+			onProgress(worker.PullProgress{
+				CompletedBytes:  msg.CompletedBytes,
+				TotalBytes:      msg.TotalBytes,
+				CompletedLayers: int(msg.CompletedLayers),
+				TotalLayers:     int(msg.TotalLayers),
+			})
+		}
+	}
 }
 
 func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
