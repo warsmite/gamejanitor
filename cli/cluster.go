@@ -76,22 +76,17 @@ func resolveClusterContext() (resolvedURL, resolvedToken string) {
 		return
 	}
 
-	// Determine which cluster to look up
-	name := clusterName
-	if name == "" {
-		cfg, err := loadClustersConfig()
-		if err != nil {
-			return
-		}
-		name = cfg.Current
-	}
-
-	if name == "" {
+	cfg, err := loadClustersConfig()
+	if err != nil {
 		return
 	}
 
-	cfg, err := loadClustersConfig()
-	if err != nil {
+	// Determine which cluster to look up
+	name := clusterName
+	if name == "" {
+		name = cfg.Current
+	}
+	if name == "" {
 		return
 	}
 
