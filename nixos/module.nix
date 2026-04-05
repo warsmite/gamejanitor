@@ -18,8 +18,6 @@ let
       web_ui = cfg.webUI;
     }
     // lib.optionalAttrs (cfg.mode != "") { mode = cfg.mode; }
-    // lib.optionalAttrs (cfg.runtime != "auto") { runtime = cfg.runtime; }
-    // lib.optionalAttrs (cfg.runtimeSocket != null) { runtime_socket = cfg.runtimeSocket; }
     // lib.optionalAttrs (cfg.grpcPort != null) { grpc_port = cfg.grpcPort; }
     // lib.optionalAttrs (cfg.workerGrpcPort != null) { worker_grpc_port = cfg.workerGrpcPort; }
     // lib.optionalAttrs (cfg.sftpPort != null) { sftp_port = cfg.sftpPort; }
@@ -256,17 +254,8 @@ in {
       description = "Enable the embedded web UI. Disable for API-only deployments.";
     };
 
-    runtime = lib.mkOption {
-      type = lib.types.enum [ "auto" "docker" "process" ];
-      default = "auto";
-      description = "Runtime. Auto-detects Docker, falls back to process.";
-    };
-
-    runtimeSocket = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Explicit runtime socket path. Auto-detected if null.";
-    };
+    # Runtime option reserved for future alternative runtimes.
+    # Currently only sandbox is supported.
 
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
@@ -300,12 +289,11 @@ in {
       }
     ];
 
-    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.runtime != "process") true;
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";
-      after = [ "network-online.target" ] ++ lib.optional hasLocalWorker "docker.service";
-      wants = [ "network-online.target" ] ++ lib.optional hasLocalWorker "docker.service";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = cfg.environment;
@@ -328,9 +316,7 @@ in {
         Restart = "always";
         RestartSec = 5;
 
-        SupplementaryGroups = lib.optional hasLocalWorker "docker";
-
-        # DynamicUser works for controller-only nodes but conflicts with Docker
+        # DynamicUser works for controller-only nodes but conflicts with
         # volume ownership on worker nodes — disable it when a local worker is active.
         DynamicUser = lib.mkDefault (!hasLocalWorker);
         StateDirectory = "gamejanitor";

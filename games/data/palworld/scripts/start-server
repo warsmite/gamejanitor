@@ -27,7 +27,7 @@ echo "[start-server] config: name=${SERVER_NAME} max_players=${MAX_PLAYERS} diff
 echo "[start-server] config: game_port=${GAME_PORT} rcon_port=${RCON_PORT}"
 
 # Palworld stores saves under Pal/Saved/SaveGames
-# Symlink to /data/worlds so saves persist on the Docker volume
+# Symlink to /data/worlds so saves persist on the data volume
 SAVE_DIR="/data/server/Pal/Saved/SaveGames"
 mkdir -p /data/worlds
 mkdir -p "$(dirname "$SAVE_DIR")"

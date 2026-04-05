@@ -186,7 +186,7 @@
             done
           '';
 
-          # Wipe everything on homelab nodes — DB, Docker containers/volumes, data dir.
+          # Wipe everything on homelab nodes — DB, sandbox instances, volumes, data dir.
           # Usage: deploy-clean (all nodes) | deploy-clean sleepy
           deploy-clean = pkgs.writeShellScriptBin "deploy-clean" ''
             set -e
