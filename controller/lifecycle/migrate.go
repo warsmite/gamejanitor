@@ -93,6 +93,12 @@ func (s *Service) doMigrate(ctx context.Context, gameserverID string, targetNode
 		}
 	}
 
+	// Re-read after stop — stopInstance updates InstanceID and DesiredState in DB
+	gs, err = s.store.GetGameserver(gameserverID)
+	if err != nil || gs == nil {
+		return fmt.Errorf("re-reading gameserver %s after stop for migration: %w", gameserverID, err)
+	}
+
 	sourceWorker := s.dispatcher.WorkerFor(gameserverID)
 	if sourceWorker == nil {
 		s.setError(gameserverID, controller.OperationFailedReason("Migration failed", fmt.Errorf("source worker offline")))
