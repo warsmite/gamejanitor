@@ -20,7 +20,7 @@ type StatsHistoryWriter interface {
 }
 
 // StatsPoller polls instance stats for running gameservers and publishes
-// controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
+// gameserver.stats events via the EventBus. Also caches the latest stats so
 // the GET /stats endpoint can serve them instantly without querying the runtime.
 type StatsPoller struct {
 	store       Store
@@ -29,7 +29,7 @@ type StatsPoller struct {
 	log         *slog.Logger
 	mu          sync.RWMutex
 	pollers     map[string]context.CancelFunc
-	cache       map[string]*controller.GameserverStatsEvent
+	cache       map[string]*controller.StatsData
 
 	// Stats history persistence
 	statsWriter    StatsHistoryWriter
@@ -48,7 +48,7 @@ func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaste
 		statsWriter: statsWriter,
 		log:         log,
 		pollers:     make(map[string]context.CancelFunc),
-		cache:       make(map[string]*controller.GameserverStatsEvent),
+		cache:       make(map[string]*controller.StatsData),
 	}
 }
 
@@ -58,7 +58,7 @@ func (s *StatsPoller) SetPlayerCountFn(fn func(string) int) {
 }
 
 // GetCachedStats returns the latest polled stats, or nil if not available.
-func (s *StatsPoller) GetCachedStats(gameserverID string) *controller.GameserverStatsEvent {
+func (s *StatsPoller) GetCachedStats(gameserverID string) *controller.StatsData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cache[gameserverID]
@@ -95,7 +95,7 @@ func (s *StatsPoller) StopAll() {
 		cancel()
 		delete(s.pollers, id)
 	}
-	s.cache = make(map[string]*controller.GameserverStatsEvent)
+	s.cache = make(map[string]*controller.StatsData)
 	s.mu.Unlock()
 
 	// Stop the flusher and wait for final flush
@@ -180,33 +180,31 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("worker unavailable, stopping stats poll", "gameserver", gameserverID)
 		return false
 	}
-	event := controller.GameserverStatsEvent{
-		GameserverID:   gameserverID,
+	data := &controller.StatsData{
 		StorageLimitMB: gs.StorageLimitMB,
-		Timestamp:      time.Now(),
 	}
 
 	if gs.InstanceID != nil {
 		cs, err := w.InstanceStats(ctx, *gs.InstanceID)
 		if err == nil {
-			event.MemoryUsageMB = cs.MemoryUsageMB
-			event.MemoryLimitMB = cs.MemoryLimitMB
-			event.CPUPercent = cs.CPUPercent
-			event.NetRxBytes = cs.NetRxBytes
-			event.NetTxBytes = cs.NetTxBytes
+			data.MemoryUsageMB = cs.MemoryUsageMB
+			data.MemoryLimitMB = cs.MemoryLimitMB
+			data.CPUPercent = cs.CPUPercent
+			data.NetRxBytes = cs.NetRxBytes
+			data.NetTxBytes = cs.NetTxBytes
 		}
 	}
 
 	volSize, err := w.VolumeSize(ctx, gs.VolumeName)
 	if err == nil {
-		event.VolumeSizeBytes = volSize
+		data.VolumeSizeBytes = volSize
 	}
 
 	s.mu.Lock()
-	s.cache[gameserverID] = &event
+	s.cache[gameserverID] = data
 	s.mu.Unlock()
 
-	s.broadcaster.Publish(event)
+	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverStats, gameserverID, data))
 
 	// Buffer for history persistence
 	if s.statsWriter != nil {
@@ -215,15 +213,16 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		if s.playerCountFn != nil {
 			players = s.playerCountFn(gameserverID)
 		}
+		now := time.Now()
 		s.statsBuf = append(s.statsBuf, model.StatsSample{
 			GameserverID:    gameserverID,
-			Timestamp:       event.Timestamp,
-			CPUPercent:      event.CPUPercent,
-			MemoryUsageMB:   event.MemoryUsageMB,
-			MemoryLimitMB:   event.MemoryLimitMB,
-			NetRxBytes:      event.NetRxBytes,
-			NetTxBytes:      event.NetTxBytes,
-			VolumeSizeBytes: event.VolumeSizeBytes,
+			Timestamp:       now,
+			CPUPercent:      data.CPUPercent,
+			MemoryUsageMB:   data.MemoryUsageMB,
+			MemoryLimitMB:   data.MemoryLimitMB,
+			NetRxBytes:      data.NetRxBytes,
+			NetTxBytes:      data.NetTxBytes,
+			VolumeSizeBytes: data.VolumeSizeBytes,
 			PlayersOnline:   players,
 		})
 		s.bufMu.Unlock()

@@ -39,12 +39,10 @@ func TestWarning_StorageCrossesWarningThreshold(t *testing.T) {
 
 	limitMB := 1000
 	// Publish stats at 91% — should trigger warning
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-1",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-1", &controller.StatsData{
 		VolumeSizeBytes: 910 * 1024 * 1024, // 910 MB
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	})
+	}))
 
 	got := waitForWarning(t, ch, 2*time.Second)
 	require.NotNil(t, got, "should receive a storage warning")
@@ -65,12 +63,10 @@ func TestWarning_StorageDeduplicates(t *testing.T) {
 	defer unsub()
 
 	limitMB := 1000
-	stats := controller.GameserverStatsEvent{
-		GameserverID:    "gs-2",
+	stats := controller.NewSystemEvent(controller.EventGameserverStats, "gs-2", &controller.StatsData{
 		VolumeSizeBytes: 950 * 1024 * 1024,
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	}
+	})
 
 	// Fire twice
 	bus.Publish(stats)
@@ -99,23 +95,19 @@ func TestWarning_StorageEscalatesToCritical(t *testing.T) {
 	limitMB := 1000
 
 	// First: warning at 91%
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-3",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-3", &controller.StatsData{
 		VolumeSizeBytes: 910 * 1024 * 1024,
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	})
+	}))
 	got := waitForWarning(t, ch, 2*time.Second)
 	require.NotNil(t, got)
 	assert.Equal(t, "warning", got.Level)
 
 	// Then: critical at 100%
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-3",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-3", &controller.StatsData{
 		VolumeSizeBytes: 1000 * 1024 * 1024,
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	})
+	}))
 	got2 := waitForWarning(t, ch, 2*time.Second)
 	require.NotNil(t, got2)
 	assert.Equal(t, "critical", got2.Level)
@@ -135,23 +127,19 @@ func TestWarning_StorageResolves(t *testing.T) {
 	limitMB := 1000
 
 	// Trigger warning
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-4",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-4", &controller.StatsData{
 		VolumeSizeBytes: 950 * 1024 * 1024,
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	})
+	}))
 	got := waitForWarning(t, ch, 2*time.Second)
 	require.NotNil(t, got)
 	assert.Equal(t, "warning", got.Level)
 
 	// Drop below threshold
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-4",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-4", &controller.StatsData{
 		VolumeSizeBytes: 500 * 1024 * 1024,
 		StorageLimitMB:  &limitMB,
-		Timestamp:       time.Now(),
-	})
+	}))
 	resolved := waitForWarning(t, ch, 2*time.Second)
 	require.NotNil(t, resolved)
 	assert.Equal(t, "resolved", resolved.Level)
@@ -169,27 +157,40 @@ func TestWarning_NoLimitNoWarning(t *testing.T) {
 	defer unsub()
 
 	// No storage limit — should not warn
-	bus.Publish(controller.GameserverStatsEvent{
-		GameserverID:    "gs-5",
+	bus.Publish(controller.NewSystemEvent(controller.EventGameserverStats, "gs-5", &controller.StatsData{
 		VolumeSizeBytes: 999999 * 1024 * 1024,
 		StorageLimitMB:  nil,
-		Timestamp:       time.Now(),
-	})
+	}))
 
 	got := waitForWarning(t, ch, 500*time.Millisecond)
 	assert.Nil(t, got, "should not warn when no storage limit is set")
 }
 
-// waitForWarning waits for a GameserverWarningEvent on the channel.
+// warningResult holds the fields extracted from a gameserver.warning event for test assertions.
+type warningResult struct {
+	GameserverID string
+	Category     string
+	Level        string
+	Message      string
+}
+
+// waitForWarning waits for a gameserver.warning event on the channel.
 // Returns nil if none received within timeout.
-func waitForWarning(t *testing.T, ch <-chan controller.WebhookEvent, timeout time.Duration) *controller.GameserverWarningEvent {
+func waitForWarning(t *testing.T, ch <-chan controller.WebhookEvent, timeout time.Duration) *warningResult {
 	t.Helper()
 	deadline := time.After(timeout)
 	for {
 		select {
 		case evt := <-ch:
-			if w, ok := evt.(controller.GameserverWarningEvent); ok {
-				return &w
+			if e, ok := evt.(controller.Event); ok && e.Type == controller.EventGameserverWarning {
+				if data, ok := e.Data.(*controller.WarningData); ok {
+					return &warningResult{
+						GameserverID: e.GameserverID,
+						Category:     data.Category,
+						Level:        data.Level,
+						Message:      data.Message,
+					}
+				}
 			}
 			// Skip non-warning events
 		case <-deadline:

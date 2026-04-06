@@ -17,7 +17,7 @@ func TestEventBus_PublishSubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	evt := controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()}
+	evt := controller.NewSystemEvent(controller.EventImagePulling, "gs-1", nil)
 	bus.Publish(evt)
 
 	select {
@@ -37,7 +37,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	ch2, unsub2 := bus.Subscribe()
 	defer unsub2()
 
-	bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.NewSystemEvent(controller.EventImagePulling, "gs-1", nil))
 
 	select {
 	case <-ch1:
@@ -58,7 +58,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	unsub()
 
-	bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.NewSystemEvent(controller.EventImagePulling, "gs-1", nil))
 
 	select {
 	case _, ok := <-ch:
@@ -79,7 +79,7 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 
 	// Fill the 4096-element buffer and then some
 	for i := 0; i < 4100; i++ {
-		bus.Publish(controller.LifecycleEvent{Type_: controller.EventImagePulling, GameserverID: "gs-1", Timestamp: time.Now()})
+		bus.Publish(controller.NewSystemEvent(controller.EventImagePulling, "gs-1", nil))
 	}
 
 	// Should have at most 4096 events (buffer size)

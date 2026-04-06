@@ -3,7 +3,6 @@ package operation
 import (
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
@@ -41,11 +40,9 @@ func (t *Tracker) SetOperation(gameserverID, opType string, phase model.Operatio
 	t.notifyWatchersLocked(gameserverID, op)
 	t.mu.Unlock()
 
-	t.bus.Publish(controller.OperationEvent{
-		GameserverID: gameserverID,
-		Operation:    &model.Operation{Type: opType, Phase: phase},
-		Timestamp:    time.Now(),
-	})
+	t.bus.Publish(controller.NewSystemEvent(controller.EventGameserverOperation, gameserverID, &controller.OperationData{
+		Operation: &model.Operation{Type: opType, Phase: phase},
+	}))
 
 	t.log.Debug("operation set",
 		"gameserver_id", gameserverID,
@@ -79,11 +76,9 @@ func (t *Tracker) ClearOperation(gameserverID string) {
 		return
 	}
 
-	t.bus.Publish(controller.OperationEvent{
-		GameserverID: gameserverID,
-		Operation:    nil,
-		Timestamp:    time.Now(),
-	})
+	t.bus.Publish(controller.NewSystemEvent(controller.EventGameserverOperation, gameserverID, &controller.OperationData{
+		Operation: nil,
+	}))
 
 	t.log.Debug("operation cleared", "gameserver_id", gameserverID)
 }

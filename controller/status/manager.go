@@ -77,13 +77,18 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				switch e := ev.(type) {
-				case controller.GameserverErrorEvent:
-					m.log.Warn("gameserver error event", "gameserver", e.GameserverID, "reason", e.Reason)
-					m.workerStateMu.Lock()
-					m.errorReasons[e.GameserverID] = e.Reason
-					m.workerStateMu.Unlock()
-					m.stopPolling(e.GameserverID)
+				e, ok := ev.(controller.Event)
+				if !ok {
+					continue
+				}
+				if e.Type == controller.EventGameserverError {
+					if data, ok := e.Data.(*controller.ErrorData); ok {
+						m.log.Warn("gameserver error event", "gameserver", e.GameserverID, "reason", data.Reason)
+						m.workerStateMu.Lock()
+						m.errorReasons[e.GameserverID] = data.Reason
+						m.workerStateMu.Unlock()
+						m.stopPolling(e.GameserverID)
+					}
 				}
 			}
 		}

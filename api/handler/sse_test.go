@@ -63,14 +63,8 @@ func TestSSE_ScopedToken_OnlyReceivesOwnEvents(t *testing.T) {
 		auth.AllPermissions, []string{gsA})
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events", scopedToken, func() {
-		api.Services.Broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady,
-			GameserverID: gsA,
-			Timestamp:    time.Now(),
-		})
-		api.Services.Broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady,
-			GameserverID: gsB,
-			Timestamp:    time.Now(),
-		})
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsA, nil))
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsB, nil))
 	}, 300*time.Millisecond)
 
 	var hasA, hasB bool
@@ -98,14 +92,8 @@ func TestSSE_AdminToken_ReceivesAllEvents(t *testing.T) {
 	gsB := createGameserverWithToken(t, api, adminToken, "Server B")
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events", adminToken, func() {
-		api.Services.Broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady,
-			GameserverID: gsA,
-			Timestamp:    time.Now(),
-		})
-		api.Services.Broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady,
-			GameserverID: gsB,
-			Timestamp:    time.Now(),
-		})
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsA, nil))
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsB, nil))
 	}, 300*time.Millisecond)
 
 	var hasA, hasB bool
@@ -131,17 +119,12 @@ func TestSSE_TypeFilter(t *testing.T) {
 	gsA := createGameserverWithToken(t, api, adminToken, "Server A")
 
 	received := readSSEEvents(t, api.Server.URL+"/api/events?types=gameserver.ready", adminToken, func() {
-		api.Services.Broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady,
-			GameserverID: gsA,
-			Timestamp:    time.Now(),
-		})
-		api.Services.Broadcaster.Publish(controller.GameserverStatsEvent{
-			GameserverID:  gsA,
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsA, nil))
+		api.Services.Broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverStats, gsA, &controller.StatsData{
 			CPUPercent:    5.0,
 			MemoryUsageMB: 128,
 			MemoryLimitMB: 512,
-			Timestamp:     time.Now(),
-		})
+		}))
 	}, 300*time.Millisecond)
 
 	var hasReady, hasStats bool

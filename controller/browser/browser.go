@@ -88,9 +88,8 @@ func (c *ReachabilityChecker) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				if le, ok := event.(controller.LifecycleEvent); ok && le.Type_ == controller.EventGameserverReady {
-					gsID := event.EventGameserverID()
-					go c.check(ctx, gsID)
+				if e, ok := event.(controller.Event); ok && e.Type == controller.EventGameserverReady {
+					go c.check(ctx, e.GameserverID)
 				}
 			}
 		}
@@ -173,14 +172,12 @@ func (c *ReachabilityChecker) check(ctx context.Context, gameserverID string) {
 	c.log.Info("reachability check complete",
 		"id", gameserverID, "reachable", result.Reachable, "host", host, "port", port, "registered", result.Registered)
 
-	c.bus.Publish(controller.GameserverReachableEvent{
-		GameserverID: gameserverID,
-		Reachable:    result.Reachable,
-		Host:         host,
-		Port:         port,
-		Registered:   result.Registered,
-		Timestamp:    time.Now(),
-	})
+	c.bus.Publish(controller.NewSystemEvent(controller.EventGameserverReachable, gameserverID, &controller.ReachableData{
+		Reachable:  result.Reachable,
+		Host:       host,
+		Port:       port,
+		Registered: result.Registered,
+	}))
 }
 
 // resolveAddress determines the public host and game port for a gameserver.

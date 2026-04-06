@@ -81,11 +81,11 @@ func (p *EventPersister) persist(event controller.WebhookEvent) {
 	// Skip events already persisted by trackActivity/recordInstant to avoid duplicates.
 	// Those are action events (gameserver.start, gameserver.create, etc.) published
 	// from within the gameserver service after writing to the events table.
-	// We can identify them because GameserverActionEvent carries a full Gameserver object,
-	// while lifecycle/phase events don't. Use the event type prefix as a simpler check:
-	// action events from trackActivity already have the gameserver.* prefix and are persisted.
-	if _, isAction := event.(controller.GameserverActionEvent); isAction {
-		return
+	// GameserverActionData carries a full Gameserver object — that's the marker.
+	if e, ok := event.(controller.Event); ok {
+		if _, isAction := e.Data.(*controller.GameserverActionData); isAction {
+			return
+		}
 	}
 
 	gsID := event.EventGameserverID()

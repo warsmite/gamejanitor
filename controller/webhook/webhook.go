@@ -130,36 +130,11 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		return
 	}
 
-	// Build payload data -- action events carry their own resource state,
-	// lifecycle events are lightweight with just IDs.
-	var payloadData any
-	switch ev := event.(type) {
-	// Action events -- self-contained with full resource state
-	case controller.GameserverActionEvent:
-		payloadData = ev
-	case controller.BackupActionEvent:
-		payloadData = ev
-	case controller.WorkerActionEvent:
-		payloadData = ev
-	case controller.ScheduleActionEvent:
-		payloadData = ev
-	case controller.ScheduledTaskEvent:
-		payloadData = ev
-	case controller.ModActionEvent:
-		payloadData = ev
-
-	// Lifecycle events — lightweight, just IDs
-	case controller.LifecycleEvent:
-		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case controller.GameserverErrorEvent:
-		payloadData = map[string]any{"gameserver_id": ev.GameserverID, "reason": ev.Reason}
-
-	default:
-		w.log.Warn("webhook: unknown event type", "type", event.EventType())
+	e, ok := event.(controller.Event)
+	if !ok {
 		return
 	}
-
-	eventType := event.EventType()
+	eventType := e.Type
 
 	for _, ep := range endpoints {
 		if !matchEventFilter(eventType, []string(ep.Events)) {
@@ -169,9 +144,9 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		payload := WebhookPayload{
 			Version:   1,
 			ID:        uuid.New().String(),
-			Timestamp: event.EventTimestamp(),
+			Timestamp: e.Timestamp,
 			EventType: eventType,
-			Data:      payloadData,
+			Data:      e,
 		}
 
 		body, err := json.Marshal(payload)

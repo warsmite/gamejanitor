@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -56,7 +55,7 @@ func (s *Service) doArchive(ctx context.Context, id string) error {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopping, GameserverID: id, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
 
 		if err := s.doStop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before archive: %w", err)

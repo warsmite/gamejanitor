@@ -166,15 +166,13 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 				for i, p := range data.Players {
 					playerNames[i] = p.Name
 				}
-				s.broadcaster.Publish(controller.GameserverQueryEvent{
-					GameserverID:  gameserverID,
+				s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverQuery, gameserverID, &controller.QueryData{
 					PlayersOnline: data.PlayersOnline,
 					MaxPlayers:    data.MaxPlayers,
 					Players:       playerNames,
 					Map:           data.Map,
 					Version:       data.Version,
-					Timestamp:     time.Now(),
-				})
+				}))
 			}
 		}
 

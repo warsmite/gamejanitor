@@ -1157,13 +1157,9 @@ func (s *ModService) newInstalledMod(gameserverID, source, sourceID, category st
 }
 
 func (s *ModService) publishEvent(ctx context.Context, gameserverID string, mod *model.InstalledMod, eventType string) {
-	s.broadcaster.Publish(controller.ModActionEvent{
-		Type:         eventType,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: gameserverID,
-		Mod:          mod,
-	})
+	s.broadcaster.Publish(controller.NewEvent(eventType, gameserverID, controller.ActorFromContext(ctx), &controller.ModActionData{
+		Mod: mod,
+	}))
 }
 
 func (s *ModService) uninstallPackMods(ctx context.Context, gameserverID string, packMod *model.InstalledMod) error {

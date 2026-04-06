@@ -160,17 +160,15 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 
 	// Publish status change so SSE/webhook consumers get the derived display status
 	newStatus, newReason := m.DeriveStatus(gs)
-	m.broadcaster.Publish(controller.GameserverStatusChangedEvent{
-		GameserverID: gsID,
-		Status:       newStatus,
-		ErrorReason:  newReason,
-		Timestamp:    time.Now(),
-	})
+	m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverStatusChanged, gsID, &controller.StatusChangedData{
+		Status:      newStatus,
+		ErrorReason: newReason,
+	}))
 
 	switch update.State {
 	case worker.StateRunning:
 		m.log.Info("instance ready", "gameserver", gsID)
-		m.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventGameserverReady, GameserverID: gsID, Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsID, nil))
 		m.startPolling(gsID)
 
 		// Clear error state on successful start
@@ -194,7 +192,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		if wasRunning {
 			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), m.statsPoller.GetCachedStats(gsID))
 			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode, "reason", reason)
-			m.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceExited, GameserverID: gsID, Timestamp: time.Now()})
+			m.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceExited, gsID, nil))
 			m.handleUnexpectedDeath(gs, reason)
 		} else {
 			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
@@ -219,12 +217,9 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.log.Info("starting event watcher for remote worker", "worker", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
-	m.broadcaster.Publish(controller.WorkerActionEvent{
-		Type:      controller.EventWorkerConnected,
-		Timestamp: time.Now(),
-		Actor:     controller.SystemActor,
-		WorkerID:  nodeID,
-	})
+	m.broadcaster.Publish(controller.NewEvent(controller.EventWorkerConnected, "", controller.SystemActor, &controller.WorkerActionData{
+		WorkerID: nodeID,
+	}))
 
 	// Recover gameservers on this worker
 	go m.recoverWorkerGameservers(ctx, nodeID, w)
@@ -243,12 +238,9 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 	}
 	m.workerMu.Unlock()
 
-	m.broadcaster.Publish(controller.WorkerActionEvent{
-		Type:      controller.EventWorkerDisconnected,
-		Timestamp: time.Now(),
-		Actor:     controller.SystemActor,
-		WorkerID:  nodeID,
-	})
+	m.broadcaster.Publish(controller.NewEvent(controller.EventWorkerDisconnected, "", controller.SystemActor, &controller.WorkerActionData{
+		WorkerID: nodeID,
+	}))
 
 	m.log.Info("stopped event watcher for disconnected worker", "worker", nodeID)
 }

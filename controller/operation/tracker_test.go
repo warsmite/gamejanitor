@@ -221,10 +221,12 @@ func TestTracker_PublishesEvents(t *testing.T) {
 	select {
 	case ev := <-ch:
 		assert.Equal(t, "gameserver.operation", ev.EventType())
-		opEv, ok := ev.(controller.OperationEvent)
+		e, ok := ev.(controller.Event)
 		require.True(t, ok)
-		require.NotNil(t, opEv.Operation)
-		assert.Equal(t, model.PhaseDownloadingGame, opEv.Operation.Phase)
+		data, ok := e.Data.(*controller.OperationData)
+		require.True(t, ok)
+		require.NotNil(t, data.Operation)
+		assert.Equal(t, model.PhaseDownloadingGame, data.Operation.Phase)
 	case <-time.After(time.Second):
 		t.Fatal("no event published")
 	}
@@ -233,9 +235,11 @@ func TestTracker_PublishesEvents(t *testing.T) {
 
 	select {
 	case ev := <-ch:
-		opEv, ok := ev.(controller.OperationEvent)
+		e, ok := ev.(controller.Event)
 		require.True(t, ok)
-		assert.Nil(t, opEv.Operation)
+		data, ok := e.Data.(*controller.OperationData)
+		require.True(t, ok)
+		assert.Nil(t, data.Operation)
 	case <-time.After(time.Second):
 		t.Fatal("no clear event published")
 	}

@@ -154,11 +154,13 @@ drain:
 		case evt := <-ch:
 			if evt.EventType() == controller.EventGameserverCreate {
 				found = true
-				gsEvt, ok := evt.(controller.GameserverActionEvent)
+				e, ok := evt.(controller.Event)
 				assert.True(t, ok)
-				assert.Equal(t, gs.ID, gsEvt.GameserverID)
-				assert.NotNil(t, gsEvt.Gameserver)
-				assert.Equal(t, testutil.TestGameID, gsEvt.Gameserver.GameID)
+				assert.Equal(t, gs.ID, e.GameserverID)
+				data, ok := e.Data.(*controller.GameserverActionData)
+				assert.True(t, ok)
+				assert.NotNil(t, data.Gameserver)
+				assert.Equal(t, testutil.TestGameID, data.Gameserver.GameID)
 			}
 		default:
 			break drain

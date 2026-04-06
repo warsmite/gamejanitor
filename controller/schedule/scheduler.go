@@ -130,14 +130,10 @@ func (s *Scheduler) catchUpMissed() {
 				s.log.Warn("skipping missed schedule (not catch-up eligible)",
 					"schedule", sched.ID, "type", sched.Type,
 					"gameserver", sched.GameserverID, "was_due", sched.NextRun)
-				s.broadcaster.Publish(controller.ScheduledTaskEvent{
-					Type:         controller.EventScheduleTaskMissed,
-					Timestamp:    now,
-					Actor:        controller.Actor{Type: "schedule", ScheduleID: sched.ID},
-					GameserverID: sched.GameserverID,
-					Schedule:     &sched,
-					TaskType:     sched.Type,
-				})
+				s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskMissed, sched.GameserverID, controller.Actor{Type: "schedule", ScheduleID: sched.ID}, &controller.ScheduledTaskData{
+					Schedule: &sched,
+					TaskType: sched.Type,
+				}))
 			}
 		}
 	}
@@ -247,25 +243,17 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	if taskErr != nil {
 		s.log.Error("scheduled task failed", "schedule", scheduleID, "type", schedule.Type, "error", taskErr)
-		s.broadcaster.Publish(controller.ScheduledTaskEvent{
-			Type:         controller.EventScheduleTaskFailed,
-			Timestamp:    time.Now(),
-			Actor:        controller.Actor{Type: "schedule", ScheduleID: scheduleID},
-			GameserverID: schedule.GameserverID,
-			Schedule:     schedule,
-			TaskType:     schedule.Type,
-			Error:        taskErr.Error(),
-		})
+		s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskFailed, schedule.GameserverID, controller.Actor{Type: "schedule", ScheduleID: scheduleID}, &controller.ScheduledTaskData{
+			Schedule: schedule,
+			TaskType: schedule.Type,
+			Error:    taskErr.Error(),
+		}))
 	} else {
 		s.log.Info("scheduled task completed", "schedule", scheduleID, "type", schedule.Type)
-		s.broadcaster.Publish(controller.ScheduledTaskEvent{
-			Type:         controller.EventScheduleTaskCompleted,
-			Timestamp:    time.Now(),
-			Actor:        controller.Actor{Type: "schedule", ScheduleID: scheduleID},
-			GameserverID: schedule.GameserverID,
-			Schedule:     schedule,
-			TaskType:     schedule.Type,
-		})
+		s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskCompleted, schedule.GameserverID, controller.Actor{Type: "schedule", ScheduleID: scheduleID}, &controller.ScheduledTaskData{
+			Schedule: schedule,
+			TaskType: schedule.Type,
+		}))
 	}
 
 	// Update last_run and next_run

@@ -178,13 +178,9 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}
 
 	actor := controller.ActorFromContext(ctx)
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupCreate,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gameserverID,
-		Backup:       backup,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupCreate, gameserverID, actor, &controller.BackupActionData{
+		Backup: backup,
+	}))
 
 	s.log.Info("backup initiated", "gameserver", gameserverID, "backup", backupID)
 
@@ -299,13 +295,9 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	s.log.Info("backup completed", "gameserver", gameserverID, "backup", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupCompleted,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gameserverID,
-		Backup:       completedBackup,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupCompleted, gameserverID, actor, &controller.BackupActionData{
+		Backup: completedBackup,
+	}))
 }
 
 func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, name string, actor controller.Actor, reason string) {
@@ -323,14 +315,10 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 	}
 
 	failedBackup, _ := s.store.GetBackup(backupID)
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupFailed,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gameserverID,
-		Backup:       failedBackup,
-		Error:        reason,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupFailed, gameserverID, actor, &controller.BackupActionData{
+		Backup: failedBackup,
+		Error:  reason,
+	}))
 }
 
 func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupID string) error {
@@ -361,13 +349,9 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 
 	s.log.Info("restore initiated", "backup", backupID, "gameserver", gs.ID, "was_running", wasRunning)
 
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupRestore,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gs.ID,
-		Backup:       backup,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupRestore, gs.ID, actor, &controller.BackupActionData{
+		Backup: backup,
+	}))
 
 	go s.runRestore(gs.ID, backupID, backup.Name, gs.VolumeName, wasRunning, actor)
 
@@ -439,37 +423,29 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	s.log.Info("backup restored", "backup", backupID, "gameserver", gameserverID)
 
 	restoredBackup, _ := s.store.GetBackup(backupID)
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupRestoreCompleted,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gameserverID,
-		Backup:       restoredBackup,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupRestoreCompleted, gameserverID, actor, &controller.BackupActionData{
+		Backup: restoredBackup,
+	}))
 
 	if wasRunning {
 		s.log.Info("restarting gameserver after restore", "gameserver", gameserverID)
 		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
 			s.log.Error("failed to restart after restore", "gameserver", gameserverID, "error", err)
-			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, gameserverID, &controller.ErrorData{Reason: fmt.Sprintf("Restart after restore failed: %v", err)}))
 		}
 	} else {
-		s.broadcaster.Publish(controller.LifecycleEvent{Type_: controller.EventInstanceStopped, GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopped, gameserverID, nil))
 	}
 }
 
 func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor controller.Actor, reason string) {
 	s.log.Error("backup restore failed", "gameserver", gameserverID, "backup", backupID, "error", reason)
 	failedRestoreBackup, _ := s.store.GetBackup(backupID)
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupRestoreFailed,
-		Timestamp:    time.Now(),
-		Actor:        actor,
-		GameserverID: gameserverID,
-		Backup:       failedRestoreBackup,
-		Error:        reason,
-	})
-	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: controller.OperationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupRestoreFailed, gameserverID, actor, &controller.BackupActionData{
+		Backup: failedRestoreBackup,
+		Error:  reason,
+	}))
+	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, gameserverID, &controller.ErrorData{Reason: controller.OperationFailedReason("Backup restore failed", fmt.Errorf("%s", reason))}))
 }
 
 func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID string) error {
@@ -488,13 +464,9 @@ func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID
 		s.log.Warn("backup record deleted but store file removal failed", "backup", backupID, "error", err)
 	}
 
-	s.broadcaster.Publish(controller.BackupActionEvent{
-		Type:         controller.EventBackupDelete,
-		Timestamp:    time.Now(),
-		Actor:        controller.ActorFromContext(ctx),
-		GameserverID: backup.GameserverID,
-		Backup:       backup,
-	})
+	s.broadcaster.Publish(controller.NewEvent(controller.EventBackupDelete, backup.GameserverID, controller.ActorFromContext(ctx), &controller.BackupActionData{
+		Backup: backup,
+	}))
 
 	return nil
 }

@@ -68,8 +68,10 @@ collect:
 		case evt := <-ch:
 			evtType := evt.EventType()
 			if evtType == controller.EventScheduleTaskCompleted || evtType == controller.EventScheduleTaskFailed {
-				if te, ok := evt.(controller.ScheduledTaskEvent); ok && te.TaskType == "backup" {
-					executed++
+				if e, ok := evt.(controller.Event); ok {
+					if data, ok := e.Data.(*controller.ScheduledTaskData); ok && data.TaskType == "backup" {
+						executed++
+					}
 				}
 			}
 		case <-deadline:
@@ -136,19 +138,21 @@ func TestCatchUp_MissedRestart_Skipped(t *testing.T) {
 
 	// Collect events for a short window — restart/command should emit "missed" not "completed"
 	deadline := time.After(2 * time.Second)
-	var missedEvents []controller.ScheduledTaskEvent
-	var executedEvents []controller.ScheduledTaskEvent
+	var missedCount int
+	var executedCount int
 collect:
 	for {
 		select {
 		case evt := <-ch:
-			if te, ok := evt.(controller.ScheduledTaskEvent); ok {
-				switch te.Type {
-				case controller.EventScheduleTaskMissed:
-					missedEvents = append(missedEvents, te)
-				case controller.EventScheduleTaskCompleted, controller.EventScheduleTaskFailed:
-					if te.TaskType == "restart" || te.TaskType == "command" {
-						executedEvents = append(executedEvents, te)
+			if e, ok := evt.(controller.Event); ok {
+				if data, ok := e.Data.(*controller.ScheduledTaskData); ok {
+					switch e.Type {
+					case controller.EventScheduleTaskMissed:
+						missedCount++
+					case controller.EventScheduleTaskCompleted, controller.EventScheduleTaskFailed:
+						if data.TaskType == "restart" || data.TaskType == "command" {
+							executedCount++
+						}
 					}
 				}
 			}
@@ -156,8 +160,8 @@ collect:
 			break collect
 		}
 	}
-	assert.Len(t, missedEvents, 2, "both restart and command should emit missed events")
-	assert.Empty(t, executedEvents, "restart and command should not be executed during catch-up")
+	assert.Equal(t, 2, missedCount, "both restart and command should emit missed events")
+	assert.Equal(t, 0, executedCount, "restart and command should not be executed during catch-up")
 }
 
 // TestCatchUp_NotMissed_NoAction verifies that schedules with a future next_run
@@ -208,9 +212,11 @@ func TestCatchUp_NotMissed_NoAction(t *testing.T) {
 	for {
 		select {
 		case evt := <-ch:
-			if te, ok := evt.(controller.ScheduledTaskEvent); ok {
-				if te.TaskType == "backup" {
-					t.Fatalf("backup task should not have fired, got event type %s", te.Type)
+			if e, ok := evt.(controller.Event); ok {
+				if data, ok := e.Data.(*controller.ScheduledTaskData); ok {
+					if data.TaskType == "backup" {
+						t.Fatalf("backup task should not have fired, got event type %s", e.Type)
+					}
 				}
 			}
 		case <-deadline:

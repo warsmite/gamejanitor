@@ -77,13 +77,12 @@ func (s *StatusSubscriber) Stop() {
 func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 	// Status is derived on read. Polling is managed by StatusManager.
 	// The subscriber only clears operations on terminal events.
-	switch e := event.(type) {
-	case controller.LifecycleEvent:
-		switch e.Type_ {
-		case controller.EventGameserverReady, controller.EventInstanceStopped, controller.EventInstanceExited:
-			s.clearOperation(e.GameserverID)
-		}
-	case controller.GameserverErrorEvent:
+	e, ok := event.(controller.Event)
+	if !ok {
+		return
+	}
+	switch e.Type {
+	case controller.EventGameserverReady, controller.EventInstanceStopped, controller.EventInstanceExited, controller.EventGameserverError:
 		s.clearOperation(e.GameserverID)
 	}
 }

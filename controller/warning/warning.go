@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -52,8 +51,10 @@ func (w *WarningSubscriber) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				if stats, ok := event.(controller.GameserverStatsEvent); ok {
-					w.checkStorage(stats)
+				if e, ok := event.(controller.Event); ok && e.Type == controller.EventGameserverStats {
+					if stats, ok := e.Data.(*controller.StatsData); ok {
+						w.checkStorage(e.GameserverID, stats)
+					}
 				}
 			}
 		}
@@ -70,7 +71,7 @@ func (w *WarningSubscriber) Stop() {
 	w.log.Info("warning subscriber stopped")
 }
 
-func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) {
+func (w *WarningSubscriber) checkStorage(gameserverID string, stats *controller.StatsData) {
 	if stats.StorageLimitMB == nil || *stats.StorageLimitMB <= 0 {
 		return
 	}
@@ -81,7 +82,7 @@ func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) 
 	criticalThreshold := w.settingsSvc.GetInt(settings.SettingStorageCriticalThreshold)
 	warningThreshold := w.settingsSvc.GetInt(settings.SettingStorageWarningThreshold)
 
-	key := "storage:" + stats.GameserverID
+	key := "storage:" + gameserverID
 
 	w.mu.Lock()
 	currentLevel := w.active[key]
@@ -104,19 +105,17 @@ func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) 
 		delete(w.active, key)
 		w.mu.Unlock()
 
-		w.bus.Publish(controller.GameserverWarningEvent{
-			GameserverID: stats.GameserverID,
-			Category:     "storage",
-			Level:        "resolved",
-			Message:      fmt.Sprintf("Storage usage dropped below %d%%", warningThreshold),
-			Data: map[string]any{
+		w.bus.Publish(controller.NewSystemEvent(controller.EventGameserverWarning, gameserverID, &controller.WarningData{
+			Category: "storage",
+			Level:    "resolved",
+			Message:  fmt.Sprintf("Storage usage dropped below %d%%", warningThreshold),
+			Extra: map[string]any{
 				"used_mb":    stats.VolumeSizeBytes / (1024 * 1024),
 				"limit_mb":   *stats.StorageLimitMB,
 				"percentage": pct,
 			},
-			Timestamp: time.Now(),
-		})
-		w.log.Info("storage warning resolved", "gameserver", stats.GameserverID, "percentage", pct)
+		}))
+		w.log.Info("storage warning resolved", "gameserver", gameserverID, "percentage", pct)
 		return
 	}
 
@@ -127,18 +126,16 @@ func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) 
 		w.mu.Unlock()
 
 		msg := fmt.Sprintf("Storage usage at %d%% (%d/%d MB)", pct, stats.VolumeSizeBytes/(1024*1024), *stats.StorageLimitMB)
-		w.bus.Publish(controller.GameserverWarningEvent{
-			GameserverID: stats.GameserverID,
-			Category:     "storage",
-			Level:        newLevel,
-			Message:      msg,
-			Data: map[string]any{
+		w.bus.Publish(controller.NewSystemEvent(controller.EventGameserverWarning, gameserverID, &controller.WarningData{
+			Category: "storage",
+			Level:    newLevel,
+			Message:  msg,
+			Extra: map[string]any{
 				"used_mb":    stats.VolumeSizeBytes / (1024 * 1024),
 				"limit_mb":   *stats.StorageLimitMB,
 				"percentage": pct,
 			},
-			Timestamp: time.Now(),
-		})
-		w.log.Warn("storage warning fired", "gameserver", stats.GameserverID, "level", newLevel, "percentage", pct)
+		}))
+		w.log.Warn("storage warning fired", "gameserver", gameserverID, "level", newLevel, "percentage", pct)
 	}
 }

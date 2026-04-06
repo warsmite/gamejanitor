@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/operation"
@@ -149,7 +148,7 @@ func (s *Service) getGameserverWithStatus(id string) (*model.Gameserver, error) 
 // setError publishes an error event. The StatusManager picks it up and updates
 // the in-memory runtime state. No DB write — status is derived on read.
 func (s *Service) setError(id string, reason string) {
-	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: reason, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, id, &controller.ErrorData{Reason: reason}))
 }
 
 // runOperation launches a lifecycle operation in a background goroutine.
@@ -199,13 +198,9 @@ func (s *Service) trackActivity(ctx context.Context, gsID, workerID, opType stri
 	// Publish action event to EventBus for SSE/webhook subscribers
 	gs, _ := s.store.GetGameserver(gsID)
 	if gs != nil {
-		s.broadcaster.Publish(controller.GameserverActionEvent{
-			Type:         controller.EventTypeForOp(opType),
-			Timestamp:    time.Now(),
-			Actor:        controller.ActorFromContext(ctx),
-			GameserverID: gsID,
-			Gameserver:   gs,
-		})
+		s.broadcaster.Publish(controller.NewEvent(controller.EventTypeForOp(opType), gsID, controller.ActorFromContext(ctx), &controller.GameserverActionData{
+			Gameserver: gs,
+		}))
 	}
 
 	return opID, nil

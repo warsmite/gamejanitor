@@ -106,13 +106,9 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 			s.store.PopulateNode(gs)
 			var a controller.Actor
 			json.Unmarshal(actor, &a)
-			s.broadcaster.Publish(controller.GameserverActionEvent{
-				Type:         eventType,
-				Timestamp:    time.Now(),
-				Actor:        a,
-				GameserverID: *gameserverID,
-				Gameserver:   gs,
-			})
+			s.broadcaster.Publish(controller.NewEvent(eventType, *gameserverID, a, &controller.GameserverActionData{
+				Gameserver: gs,
+			}))
 		}
 	}
 }
