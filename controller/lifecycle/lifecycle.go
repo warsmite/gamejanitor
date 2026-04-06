@@ -39,7 +39,7 @@ func (s *Service) RestartAfterCrash(ctx context.Context, id string) error {
 // startInstance performs the full start sequence: validate → auto-migrate if
 // needed → download depot → pull image → install phase → start instance.
 func (s *Service) startInstance(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
-	gs, err := s.getGameserverWithStatus(id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -47,9 +47,11 @@ func (s *Service) startInstance(ctx context.Context, id string, onProgress opera
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	switch gs.Status {
-	case controller.StatusInstalling, controller.StatusStarting, controller.StatusRunning:
-		s.log.Info("gameserver already active, skipping start", "gameserver", id, "status", gs.Status)
+	// Skip if an instance is already running. Check the actual runtime state
+	// (instance ID + desired state), not the derived display status — the display
+	// status may reflect the runner's initial operation phase rather than reality.
+	if gs.InstanceID != nil && gs.DesiredState == "running" {
+		s.log.Info("gameserver already active, skipping start", "gameserver", id)
 		return nil
 	}
 

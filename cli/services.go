@@ -84,7 +84,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	// Placement service (shared between gameserver CRUD and lifecycle)
 	placementSvc := placement.NewService(db, dispatcher, settingsSvc, logger)
 
-	runner := operation.NewRunner(activityTracker, operationTracker, logger)
+	runner := operation.NewRunner(activityTracker, operationTracker, db, logger)
 
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
 	gameserverSvc.SetOperationTracker(operationTracker)

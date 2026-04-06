@@ -16,6 +16,13 @@ type ProgressFunc func(phase model.OperationPhase, progress *model.OperationProg
 // OperationFunc is the work function passed to Submit.
 type OperationFunc func(ctx context.Context, onProgress ProgressFunc) error
 
+// RunnerStore is the minimal store interface the runner needs to set desired
+// state synchronously before spawning the operation goroutine.
+type RunnerStore interface {
+	GetGameserver(id string) (*model.Gameserver, error)
+	UpdateGameserver(gs *model.Gameserver) error
+}
+
 // Runner manages the lifecycle of async operations. It owns the operation guard
 // (preventing concurrent operations), activity tracking (DB events), progress
 // reporting, and the background goroutine. Used at the HTTP boundary to return
@@ -23,12 +30,13 @@ type OperationFunc func(ctx context.Context, onProgress ProgressFunc) error
 type Runner struct {
 	activity *ActivityTracker
 	tracker  *Tracker
+	store    RunnerStore
 	log      *slog.Logger
 	wg       sync.WaitGroup
 }
 
-func NewRunner(activity *ActivityTracker, tracker *Tracker, log *slog.Logger) *Runner {
-	return &Runner{activity: activity, tracker: tracker, log: log}
+func NewRunner(activity *ActivityTracker, tracker *Tracker, store RunnerStore, log *slog.Logger) *Runner {
+	return &Runner{activity: activity, tracker: tracker, store: store, log: log}
 }
 
 // Submit validates the operation guard, records the activity, and runs fn in a
@@ -41,6 +49,16 @@ func (r *Runner) Submit(gsID, opType string, actor event.Actor, fn OperationFunc
 	_, err := r.activity.Start(gsID, "", opType, nil, nil)
 	if err != nil {
 		return err
+	}
+
+	// For start-like operations, set desired_state synchronously so DeriveStatus
+	// returns "starting" immediately. Without this, there's a race window between
+	// Submit returning and the goroutine setting desired_state inside lifecycle.Start.
+	if desiredState := desiredStateForOp(opType); desiredState != "" {
+		if gs, err := r.store.GetGameserver(gsID); err == nil && gs != nil {
+			gs.DesiredState = desiredState
+			r.store.UpdateGameserver(gs)
+		}
 	}
 
 	r.wg.Add(1)
@@ -71,6 +89,17 @@ func (r *Runner) Submit(gsID, opType string, actor event.Actor, fn OperationFunc
 // Wait blocks until all submitted operations complete. Intended for tests.
 func (r *Runner) Wait() {
 	r.wg.Wait()
+}
+
+// desiredStateForOp returns the desired_state to set synchronously before
+// the operation goroutine starts, or "" if no change is needed.
+func desiredStateForOp(opType string) string {
+	switch opType {
+	case model.OpStart, model.OpRestart, model.OpUpdate, model.OpReinstall:
+		return "running"
+	default:
+		return ""
+	}
 }
 
 // Tracker returns the operation tracker for read-only access.
