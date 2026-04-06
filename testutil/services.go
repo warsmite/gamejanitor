@@ -9,7 +9,10 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
+	"github.com/warsmite/gamejanitor/controller/console"
+	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
@@ -31,10 +34,11 @@ type ServiceBundle struct {
 	Broadcaster   *controller.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *gameserver.GameserverService
+	LifecycleSvc  *lifecycle.Service
 	QuerySvc      *status.QueryService
 	StatsPoller   *status.StatsPoller
-	ConsoleSvc    *gameserver.ConsoleService
-	FileSvc       *gameserver.FileService
+	ConsoleSvc    *console.Service
+	FileSvc       *file.Service
 	BackupSvc     *backup.BackupService
 	Scheduler     *schedule.Scheduler
 	ScheduleSvc   *schedule.ScheduleService
@@ -76,6 +80,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		Broadcaster:   svcs.Broadcaster,
 		SettingsSvc:   svcs.SettingsSvc,
 		GameserverSvc: svcs.GameserverSvc,
+		LifecycleSvc:  svcs.LifecycleSvc,
 		QuerySvc:      svcs.QuerySvc,
 		StatsPoller:   svcs.StatsPoller,
 		ConsoleSvc:    svcs.ConsoleSvc,
@@ -106,6 +111,7 @@ func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
 	svc := NewTestServices(t)
 
 	svc.GameserverSvc.SetStatusProvider(svc.StatusMgr)
+	svc.LifecycleSvc.SetStatusProvider(svc.StatusMgr)
 
 	ctx := TestContext()
 	svc.StatusMgr.Start(ctx)

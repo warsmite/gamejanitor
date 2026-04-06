@@ -1,4 +1,4 @@
-package gameserver
+package console
 
 import (
 	"context"
@@ -21,24 +21,24 @@ type LogSession struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
-// ConsoleStore abstracts the database operations the console service needs.
-type ConsoleStore interface {
+// Store abstracts the database operations the console service needs.
+type Store interface {
 	GetGameserver(id string) (*model.Gameserver, error)
 }
 
-type ConsoleService struct {
-	store      ConsoleStore
+type Service struct {
+	store      Store
 	dispatcher *orchestrator.Dispatcher
 	gameStore  *games.GameStore
 	log        *slog.Logger
 }
 
-func NewConsoleService(store ConsoleStore, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
-	return &ConsoleService{store: store, dispatcher: dispatcher, gameStore: gameStore, log: log}
+func NewService(store Store, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *Service {
+	return &Service{store: store, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 
 // StreamLogs returns a follow-mode log stream for a running gameserver's instance.
-func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
+func (s *Service) StreamLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
@@ -69,7 +69,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 // SendCommand executes a command inside a running gameserver's instance via /scripts/send-command.
 // Returns the command output (stdout), which is relevant for RCON-based games where
 // the response comes back on stdout rather than appearing in the instance log stream.
-func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, command string) (string, error) {
+func (s *Service) SendCommand(ctx context.Context, gameserverID string, command string) (string, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return "", fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
@@ -109,7 +109,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 
 // ListLogSessions returns available log sessions for a gameserver.
 // Index 0 is the most recent session (console.log), 1 is console.log.0, etc.
-func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID string) ([]LogSession, error) {
+func (s *Service) ListLogSessions(ctx context.Context, gameserverID string) ([]LogSession, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
@@ -150,7 +150,7 @@ func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID strin
 
 // ReadHistoricalLogs reads persisted logs from the volume for a stopped gameserver.
 // session=0 reads console.log (latest), session=1 reads console.log.0, etc.
-func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID string, session int, tail int) ([]string, error) {
+func (s *Service) ReadHistoricalLogs(ctx context.Context, gameserverID string, session int, tail int) ([]string, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)

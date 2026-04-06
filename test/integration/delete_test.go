@@ -26,7 +26,7 @@ func TestDelete_CleansUpBackupStoreFiles(t *testing.T) {
 
 	// Delete the gameserver — should clean up backup store files
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 
 	// Verify backup DB records are gone (cascade)
 	backups, err := svc.BackupSvc.ListBackups(model.BackupFilter{GameserverID: gs.ID})
@@ -50,7 +50,7 @@ func TestDelete_CleansUpSchedules(t *testing.T) {
 	require.NoError(t, svc.ScheduleSvc.CreateSchedule(ctx, sched))
 
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 
 	schedules, err := svc.ScheduleSvc.ListSchedules(gs.ID)
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestDelete_CleansUpVolume(t *testing.T) {
 	assert.True(t, fw.VolumeExists(gs.VolumeName))
 
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 	assert.False(t, fw.VolumeExists(gs.VolumeName), "volume should be removed on delete")
 }
 
@@ -95,7 +95,7 @@ func TestDelete_VolumeRemovalFailure_DeleteStillCompletes(t *testing.T) {
 	fw.FailNext("RemoveVolume", assert.AnError)
 
 	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	assert.Nil(t, fetched, "gameserver should be deleted even if volume removal failed")

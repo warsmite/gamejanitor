@@ -9,16 +9,16 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/go-chi/chi/v5"
 )
 
 type FileHandlers struct {
-	svc *gameserver.FileService
+	svc *file.Service
 	log *slog.Logger
 }
 
-func NewFileHandlers(svc *gameserver.FileService, log *slog.Logger) *FileHandlers {
+func NewFileHandlers(svc *file.Service, log *slog.Logger) *FileHandlers {
 	return &FileHandlers{svc: svc, log: log}
 }
 

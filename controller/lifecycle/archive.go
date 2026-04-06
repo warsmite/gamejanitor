@@ -1,4 +1,4 @@
-package gameserver
+package lifecycle
 
 import (
 	"compress/gzip"
@@ -15,7 +15,7 @@ import (
 
 // Archive validates the gameserver can be archived and launches the heavy work
 // (stop, backup, upload, cleanup) in a background goroutine via runOperation.
-func (s *GameserverService) Archive(ctx context.Context, id string) error {
+func (s *Service) Archive(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func (s *GameserverService) Archive(ctx context.Context, id string) error {
 
 // doArchive performs the heavy work of archiving a gameserver. Runs in a
 // background goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *GameserverService) doArchive(ctx context.Context, id string) error {
+func (s *Service) doArchive(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func (s *GameserverService) doArchive(ctx context.Context, id string) error {
 // Unarchive validates the gameserver can be unarchived and launches the heavy
 // work (download, decompress, restore) in a background goroutine via runOperation.
 // If targetNodeID is empty, a node is selected automatically via placement ranking.
-func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNodeID string) error {
+func (s *Service) Unarchive(ctx context.Context, id string, targetNodeID string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -176,7 +176,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, targetNode
 
 // doUnarchive performs the heavy work of restoring an archived gameserver. Runs
 // in a background goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *GameserverService) doUnarchive(ctx context.Context, id string, nodeID string) error {
+func (s *Service) doUnarchive(ctx context.Context, id string, nodeID string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err

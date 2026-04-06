@@ -87,7 +87,7 @@ func TestPermissions_OwnerHasAllPermissions(t *testing.T) {
 
 	// Owner can update name (no grant needed — ownership gives all permissions)
 	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
-	_, err = svc.GameserverSvc.UpdateGameserver(ownerCtx, update)
+	err = svc.GameserverSvc.UpdateGameserver(ownerCtx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -153,7 +153,7 @@ func TestPermissions_EmptyGrantMeansFullAccess(t *testing.T) {
 
 	// Grantee can update name (full access)
 	update := &model.Gameserver{ID: gs.ID, Name: "Renamed by grantee"}
-	_, err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -186,12 +186,12 @@ func TestPermissions_GrantedUserBlockedFromUngrantedPermission(t *testing.T) {
 
 	// Grantee can update env
 	update := &model.Gameserver{ID: gs.ID, Env: model.Env{"REQUIRED_VAR": "new"}}
-	_, err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
 	require.NoError(t, err)
 
 	// Grantee cannot update name (not in grant)
 	update = &model.Gameserver{ID: gs.ID, Name: "Blocked"}
-	_, err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing permission")
 }
@@ -364,7 +364,7 @@ func TestPermissions_GrantsPersistedViaPatch(t *testing.T) {
 		ID:     gs.ID,
 		Grants: model.GrantMap{granteeToken.ID: {auth.PermGameserverStart}},
 	}
-	_, err = svc.GameserverSvc.UpdateGameserver(adminCtx, update)
+	err = svc.GameserverSvc.UpdateGameserver(adminCtx, update)
 	require.NoError(t, err)
 
 	// Verify grants persisted

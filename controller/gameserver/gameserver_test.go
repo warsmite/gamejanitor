@@ -116,7 +116,7 @@ func TestGameserver_Delete_CascadesCleanup(t *testing.T) {
 
 	err = svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
 	require.NoError(t, err)
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 
 	// Verify gameserver is gone from DB
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)

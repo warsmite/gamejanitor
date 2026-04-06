@@ -19,7 +19,7 @@ func TestPipeline_StatusDerivedFromLifecycleEvents(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Start triggers the lifecycle; worker state arrives asynchronously via the event stream
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
 
 	// Poll until the worker-reported state is reflected in DeriveStatus
 	activeStatuses := []string{"installing", "starting", "running", "error"}
@@ -50,7 +50,7 @@ func TestPipeline_StatusChangedEventPublished(t *testing.T) {
 	ch, unsub := svc.Broadcaster.Subscribe()
 	defer unsub()
 
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
 
 	deadline := time.Now().Add(3 * time.Second)
 	found := false
@@ -78,10 +78,10 @@ func TestPipeline_StopDerivesStopped(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
-	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Stop(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Poll until DeriveStatus reflects the stopped state. The worker event
 	// stream is async — stale "running" events from Start may arrive after

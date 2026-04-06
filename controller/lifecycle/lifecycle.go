@@ -1,4 +1,4 @@
-package gameserver
+package lifecycle
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
@@ -18,68 +17,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// userFriendlyError translates runtime errors into messages a user can act on.
-func userFriendlyError(prefix string, err error) string {
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "address already in use") || strings.Contains(msg, "port is already allocated") {
-		return "Port conflict: a port is already in use. Edit ports or stop the conflicting gameserver."
-	}
-	return prefix + "."
-}
-
-// getGameserverWithStatus reads a gameserver from the store and applies derived status.
-func (s *GameserverService) getGameserverWithStatus(id string) (*model.Gameserver, error) {
-	gs, err := s.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		return gs, err
-	}
-	if s.statusProvider != nil {
-		gs.Status, gs.ErrorReason = s.statusProvider.DeriveStatus(gs)
-	}
-	return gs, nil
-}
-
-// setError publishes an error event. The StatusManager picks it up and updates
-// the in-memory runtime state. No DB write — status is derived on read.
-func (s *GameserverService) setError(id string, reason string) {
-	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: reason, Timestamp: time.Now()})
-}
-
-// runOperation launches a lifecycle operation in a background goroutine.
-// Captures the actor from ctx before spawning the goroutine. On completion,
-// marks the activity as completed or failed.
-func (s *GameserverService) runOperation(ctx context.Context, gsID, workerID, opType string, work func(ctx context.Context) error) error {
-	opID, err := s.trackActivity(ctx, gsID, workerID, opType, nil, nil)
-	if err != nil {
-		return err
-	}
-
-	// Capture actor before spawning the goroutine so it's available
-	// in the background context (the HTTP request context will be cancelled)
-	actor := controller.ActorFromContext(ctx)
-
-	s.operationWg.Add(1)
-	go func() {
-		defer s.operationWg.Done()
-		bgCtx := context.Background()
-		if actor.Type != "" {
-			bgCtx = controller.SetActorInContext(bgCtx, actor)
-		}
-		if err := work(bgCtx); err != nil {
-			s.log.Error("operation failed", "gameserver", gsID, "operation", opType, "error", err)
-			if opID != "" {
-				s.failActivity(gsID, err)
-			}
-		} else {
-			if opID != "" {
-				s.completeActivity(gsID)
-			}
-		}
-	}()
-	return nil
-}
-
-func (s *GameserverService) Start(ctx context.Context, id string) error {
+func (s *Service) Start(ctx context.Context, id string) error {
 	if s.statusProvider != nil {
 		s.statusProvider.ResetCrashCount(id)
 	}
@@ -89,11 +27,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 // RestartAfterCrash is called by the auto-restart system. Unlike Start(),
 // it does NOT reset the crash counter — the counter must accumulate across
 // retries so the 3-attempt limit works.
-func (s *GameserverService) RestartAfterCrash(ctx context.Context, id string) error {
+func (s *Service) RestartAfterCrash(ctx context.Context, id string) error {
 	return s.startInternal(ctx, id)
 }
 
-func (s *GameserverService) startInternal(ctx context.Context, id string) error {
+func (s *Service) startInternal(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -174,7 +112,7 @@ func (s *GameserverService) startInternal(ctx context.Context, id string) error 
 
 // doStart performs the heavy work of starting a gameserver. Runs in a background
 // goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *GameserverService) doStart(ctx context.Context, id string) error {
+func (s *Service) doStart(ctx context.Context, id string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -461,7 +399,7 @@ func (s *GameserverService) doStart(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *GameserverService) Stop(ctx context.Context, id string) error {
+func (s *Service) Stop(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -496,7 +434,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 
 // doStop performs the heavy work of stopping a gameserver. Runs in a background
 // goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *GameserverService) doStop(ctx context.Context, id string) error {
+func (s *Service) doStop(ctx context.Context, id string) error {
 	// Set the operation phase so DeriveStatus returns "stopping" instead of
 	// interpreting the non-zero exit code from SIGKILL as an error.
 	if s.operations != nil {
@@ -563,7 +501,7 @@ func (s *GameserverService) doStop(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *GameserverService) Restart(ctx context.Context, id string) error {
+func (s *Service) Restart(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -609,7 +547,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 	})
 }
 
-func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) error {
+func (s *Service) UpdateServerGame(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -637,7 +575,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 
 // doUpdateServerGame performs the heavy work of updating a gameserver's game.
 // Runs in a background goroutine — re-reads the gameserver from DB.
-func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) error {
+func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -734,7 +672,7 @@ func (s *GameserverService) doUpdateServerGame(ctx context.Context, id string) e
 	return s.doStart(ctx, id)
 }
 
-func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
+func (s *Service) Reinstall(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -757,7 +695,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 
 // doReinstall performs the heavy work of reinstalling a gameserver.
 // Runs in a background goroutine — re-reads the gameserver from DB.
-func (s *GameserverService) doReinstall(ctx context.Context, id string) error {
+func (s *Service) doReinstall(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -880,7 +818,7 @@ func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 
 // rotateConsoleLogs rotates console.log files on the volume before a fresh install.
 // Keeps up to 3 rotated copies (console.log.0 through console.log.2).
-func (s *GameserverService) rotateConsoleLogs(w worker.Worker, volumeName string) {
+func (s *Service) rotateConsoleLogs(w worker.Worker, volumeName string) {
 	ctx := context.Background()
 	logDir := ".gamejanitor/logs"
 	w.CreateDirectory(ctx, volumeName, logDir)
@@ -895,7 +833,7 @@ func (s *GameserverService) rotateConsoleLogs(w worker.Worker, volumeName string
 
 // copyDefaults copies files from the game's defaults directory into the volume root.
 // Only copies files that don't already exist on the volume (first-run behavior).
-func (s *GameserverService) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
+func (s *Service) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
 	if defaultsDir == "" {
 		return
 	}
@@ -921,7 +859,7 @@ func (s *GameserverService) copyDefaults(w worker.Worker, volumeName string, def
 }
 
 // waitForInstanceExit polls InspectInstance until the instance exits, returning the exit code.
-func (s *GameserverService) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
+func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {

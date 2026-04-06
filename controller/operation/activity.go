@@ -1,4 +1,4 @@
-package gameserver
+package operation
 
 import (
 	"context"
@@ -12,16 +12,16 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-type operationContextKey struct{}
+type activityContextKey struct{}
 
 // WithActivityID attaches an operation/event ID to the context.
 func WithActivityID(ctx context.Context, activityID string) context.Context {
-	return context.WithValue(ctx, operationContextKey{}, activityID)
+	return context.WithValue(ctx, activityContextKey{}, activityID)
 }
 
 // ActivityIDFromContext returns the operation ID from context, if any.
 func ActivityIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(operationContextKey{}).(string); ok {
+	if v, ok := ctx.Value(activityContextKey{}).(string); ok {
 		return v
 	}
 	return ""

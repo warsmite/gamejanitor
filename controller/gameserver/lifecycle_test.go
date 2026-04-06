@@ -20,10 +20,10 @@ func TestLifecycle_Start_HappyPath(t *testing.T) {
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	assert.Greater(t, fw.InstanceCount(), 0, "should have created an instance")
 
@@ -41,14 +41,14 @@ func TestLifecycle_Stop_HappyPath(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Start it first
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Then stop — verify it completes without error
-	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 }
 
 func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
@@ -57,14 +57,14 @@ func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs := testutil.CreateTestGameserver(t, svc)
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Inject worker state to simulate the status subscriber receiving a running event
 	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
 
 	// Starting again should be a no-op
-	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)
 }
 
@@ -79,10 +79,10 @@ func TestLifecycle_Start_PullImageFailure(t *testing.T) {
 	fw.FailNext("PullImage", fmt.Errorf("network timeout"))
 
 	// Start returns nil (dispatches async), but the background goroutine fails
-	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Poll until the StatusManager processes the error event from the EventBus
 	deadline := time.Now().Add(3 * time.Second)
@@ -104,7 +104,7 @@ func TestLifecycle_Start_NotFound(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	err := svc.GameserverSvc.Start(testutil.TestContext(), "nonexistent")
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), "nonexistent")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -116,10 +116,10 @@ func TestLifecycle_Stop_AlreadyStopped_Noop(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 	// Gameserver starts as "stopped" — stopping again should complete without error
-	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 }
 
 func TestLifecycle_Start_WorkerUnavailable(t *testing.T) {
@@ -132,7 +132,7 @@ func TestLifecycle_Start_WorkerUnavailable(t *testing.T) {
 	_ = fw
 	svc.Registry.Unregister("worker-1")
 
-	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker unavailable")
 }
@@ -144,8 +144,8 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Start it first
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Inject worker state so stop sees the gameserver as running
 	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
@@ -155,10 +155,10 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 
 	// Stop should still succeed — the lifecycle code logs a warning but
 	// proceeds with clearing the instance ID and completing the stop.
-	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 }
 
 func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
@@ -171,7 +171,7 @@ func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
 	svc.Registry.Unregister("worker-1")
 
 	// Restart requires starting, which needs a worker
-	err := svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Restart(testutil.TestContext(), gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker unavailable")
 }
@@ -204,10 +204,10 @@ func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start should detect overcommit and auto-migrate to big-node
-	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	err = svc.LifecycleSvc.Start(ctx, gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -232,10 +232,10 @@ func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	err = svc.LifecycleSvc.Start(ctx, gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestLifecycle_Start_FailsWhenNoNodeHasCapacity(t *testing.T) {
 	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
 	require.NoError(t, err)
 
-	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	err = svc.LifecycleSvc.Start(ctx, gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lacks capacity")
 }
@@ -296,10 +296,10 @@ func TestLifecycle_Start_AutoMigrateAfterResourceUpgrade(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start should detect overcommit and auto-migrate
-	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	err = svc.LifecycleSvc.Start(ctx, gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -323,10 +323,10 @@ func TestLifecycle_Start_SkipsCapacityCheckWithZeroLimits(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	err = svc.GameserverSvc.Start(ctx, gs.ID)
+	err = svc.LifecycleSvc.Start(ctx, gs.ID)
 	require.NoError(t, err)
 
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)

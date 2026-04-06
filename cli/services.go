@@ -9,9 +9,14 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
+	"github.com/warsmite/gamejanitor/controller/console"
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
+	"github.com/warsmite/gamejanitor/controller/placement"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -27,10 +32,11 @@ type Services struct {
 	Broadcaster     *controller.EventBus
 	SettingsSvc     *settings.SettingsService
 	GameserverSvc   *gameserver.GameserverService
+	LifecycleSvc    *lifecycle.Service
 	QuerySvc        *status.QueryService
 	StatsPoller     *status.StatsPoller
-	ConsoleSvc      *gameserver.ConsoleService
-	FileSvc         *gameserver.FileService
+	ConsoleSvc      *console.Service
+	FileSvc         *file.Service
 	BackupSvc       *backup.BackupService
 	Scheduler       *schedule.Scheduler
 	ScheduleSvc     *schedule.ScheduleService
@@ -44,7 +50,7 @@ type Services struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	ModSvc          *mod.ModService
 	BackupStorage   backup.Storage
-	ActivityTracker *gameserver.ActivityTracker
+	ActivityTracker *operation.ActivityTracker
 }
 
 // InitServicesOpts configures optional overrides for service initialization.
@@ -71,7 +77,19 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		settingsSvc.ApplyConfig(cfg.Settings)
 	}
 
-	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	// Activity + operation tracking (shared infrastructure)
+	activityTracker := operation.NewActivityTracker(db, logger)
+	operationTracker := operation.NewTracker(broadcaster, logger)
+
+	// Placement service (shared between gameserver CRUD and lifecycle)
+	placementSvc := placement.NewService(db, dispatcher, settingsSvc, logger)
+
+	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
+	gameserverSvc.SetActivityTracker(activityTracker)
+	gameserverSvc.SetOperationTracker(operationTracker)
+
+	lifecycleSvc := lifecycle.NewService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, activityTracker, operationTracker, cfg.DataDir, logger)
+
 	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
 	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
 	statsPoller.SetPlayerCountFn(func(gsID string) int {
@@ -80,18 +98,8 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		}
 		return 0
 	})
-	// ReadyWatcher is now worker-side — no controller-side watcher needed
-	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
-	fileSvc := gameserver.NewFileService(db, dispatcher, logger)
-
-	// Activity tracking
-	activityTracker := gameserver.NewActivityTracker(db, logger)
-	gameserverSvc.SetActivityTracker(activityTracker)
-
-	// Operation tracking (transient in-memory state for active operations)
-	operationTracker := gameserver.NewOperationTracker(broadcaster, logger)
-	gameserverSvc.SetOperationTracker(operationTracker)
-
+	consoleSvc := console.NewService(db, dispatcher, gameStore, logger)
+	fileSvc := file.NewService(db, dispatcher, logger)
 
 	// Backup storage
 	var backupStorage backup.Storage
@@ -105,14 +113,15 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		}
 	}
 
-	gameserverSvc.SetBackupStore(backupStorage)
-	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
+	lifecycleSvc.SetBackupStore(backupStorage)
+	backupSvc := backup.NewBackupService(db, dispatcher, lifecycleSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
 	backupSvc.SetActivityTracker(activityTracker)
-	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
+	scheduler := schedule.NewScheduler(db, backupSvc, lifecycleSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, gameserverSvc.RestartAfterCrash, logger)
+	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, logger)
 	gameserverSvc.SetStatusProvider(statusMgr)
+	lifecycleSvc.SetStatusProvider(statusMgr)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)
@@ -141,12 +150,13 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		}
 		return netutil.ValidateExternalURL(rawURL)
 	})
-	gameserverSvc.SetModReconciler(modSvc)
+	lifecycleSvc.SetModReconciler(modSvc)
 
 	return &Services{
 		Broadcaster:     broadcaster,
 		SettingsSvc:     settingsSvc,
 		GameserverSvc:   gameserverSvc,
+		LifecycleSvc:    lifecycleSvc,
 		QuerySvc:        querySvc,
 		StatsPoller:     statsPoller,
 		ConsoleSvc:      consoleSvc,

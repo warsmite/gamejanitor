@@ -1,4 +1,4 @@
-package gameserver
+package operation
 
 import (
 	"log/slog"
@@ -12,12 +12,12 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-func newTestTracker() *OperationTracker {
+func newTestTracker() *Tracker {
 	bus := controller.NewEventBus()
-	return NewOperationTracker(bus, slog.Default())
+	return NewTracker(bus, slog.Default())
 }
 
-func TestOperationTracker_SetAndGet(t *testing.T) {
+func TestTracker_SetAndGet(t *testing.T) {
 	tracker := newTestTracker()
 
 	assert.Nil(t, tracker.GetOperation("gs-1"))
@@ -31,7 +31,7 @@ func TestOperationTracker_SetAndGet(t *testing.T) {
 	assert.Nil(t, op.Progress)
 }
 
-func TestOperationTracker_UpdateProgress(t *testing.T) {
+func TestTracker_UpdateProgress(t *testing.T) {
 	tracker := newTestTracker()
 	tracker.SetOperation("gs-1", "start", model.PhaseDownloadingGame)
 
@@ -49,14 +49,14 @@ func TestOperationTracker_UpdateProgress(t *testing.T) {
 	assert.Equal(t, uint64(220), op.Progress.TotalBytes)
 }
 
-func TestOperationTracker_UpdateProgress_NoOp(t *testing.T) {
+func TestTracker_UpdateProgress_NoOp(t *testing.T) {
 	tracker := newTestTracker()
 	// No operation set — UpdateProgress should be a no-op
 	tracker.UpdateProgress("gs-1", model.OperationProgress{Percent: 50})
 	assert.Nil(t, tracker.GetOperation("gs-1"))
 }
 
-func TestOperationTracker_Clear(t *testing.T) {
+func TestTracker_Clear(t *testing.T) {
 	tracker := newTestTracker()
 	tracker.SetOperation("gs-1", "start", model.PhaseStarting)
 
@@ -67,7 +67,7 @@ func TestOperationTracker_Clear(t *testing.T) {
 	tracker.ClearOperation("gs-1")
 }
 
-func TestOperationTracker_PhaseChange(t *testing.T) {
+func TestTracker_PhaseChange(t *testing.T) {
 	tracker := newTestTracker()
 
 	tracker.SetOperation("gs-1", "start", model.PhaseDownloadingGame)
@@ -78,7 +78,7 @@ func TestOperationTracker_PhaseChange(t *testing.T) {
 	assert.Nil(t, tracker.GetOperation("gs-1").Progress) // progress reset on phase change
 }
 
-func TestOperationTracker_GetReturnsCopy(t *testing.T) {
+func TestTracker_GetReturnsCopy(t *testing.T) {
 	tracker := newTestTracker()
 	tracker.SetOperation("gs-1", "start", model.PhaseStarting)
 
@@ -89,7 +89,7 @@ func TestOperationTracker_GetReturnsCopy(t *testing.T) {
 	assert.Equal(t, model.PhaseStarting, op2.Phase) // original unchanged
 }
 
-func TestOperationTracker_MultipleGameservers(t *testing.T) {
+func TestTracker_MultipleGameservers(t *testing.T) {
 	tracker := newTestTracker()
 
 	tracker.SetOperation("gs-1", "start", model.PhaseDownloadingGame)
@@ -103,7 +103,7 @@ func TestOperationTracker_MultipleGameservers(t *testing.T) {
 	assert.NotNil(t, tracker.GetOperation("gs-2"))
 }
 
-func TestOperationTracker_Watch(t *testing.T) {
+func TestTracker_Watch(t *testing.T) {
 	tracker := newTestTracker()
 
 	ch, unwatch := tracker.Watch("gs-1")
@@ -143,7 +143,7 @@ func TestOperationTracker_Watch(t *testing.T) {
 	}
 }
 
-func TestOperationTracker_WatchUnsubscribe(t *testing.T) {
+func TestTracker_WatchUnsubscribe(t *testing.T) {
 	tracker := newTestTracker()
 
 	ch, unwatch := tracker.Watch("gs-1")
@@ -160,7 +160,7 @@ func TestOperationTracker_WatchUnsubscribe(t *testing.T) {
 	}
 }
 
-func TestOperationTracker_WatchDropsOldValues(t *testing.T) {
+func TestTracker_WatchDropsOldValues(t *testing.T) {
 	tracker := newTestTracker()
 
 	ch, unwatch := tracker.Watch("gs-1")
@@ -189,7 +189,7 @@ drain:
 	assert.Greater(t, lastOp.Progress.Percent, float64(50))
 }
 
-func TestOperationTracker_Concurrent(t *testing.T) {
+func TestTracker_Concurrent(t *testing.T) {
 	tracker := newTestTracker()
 
 	var wg sync.WaitGroup
@@ -209,9 +209,9 @@ func TestOperationTracker_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestOperationTracker_PublishesEvents(t *testing.T) {
+func TestTracker_PublishesEvents(t *testing.T) {
 	bus := controller.NewEventBus()
-	tracker := NewOperationTracker(bus, slog.Default())
+	tracker := NewTracker(bus, slog.Default())
 
 	ch, unsub := bus.Subscribe()
 	defer unsub()

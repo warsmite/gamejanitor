@@ -20,9 +20,9 @@ func TestArchive_HappyPath(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	err := svc.GameserverSvc.Archive(ctx, gs.ID)
+	err := svc.LifecycleSvc.Archive(ctx, gs.ID)
 	require.NoError(t, err)
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -45,10 +45,10 @@ func TestArchive_AlreadyArchived_Error(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
-	err := svc.GameserverSvc.Archive(ctx, gs.ID)
+	err := svc.LifecycleSvc.Archive(ctx, gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already archived")
 }
@@ -59,7 +59,7 @@ func TestArchive_NotFound_Error(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	err := svc.GameserverSvc.Archive(ctx, "nonexistent")
+	err := svc.LifecycleSvc.Archive(ctx, "nonexistent")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -73,12 +73,12 @@ func TestUnarchive_HappyPath(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
-	err := svc.GameserverSvc.Unarchive(ctx, gs.ID, "")
+	err := svc.LifecycleSvc.Unarchive(ctx, gs.ID, "")
 	require.NoError(t, err)
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -109,13 +109,13 @@ func TestUnarchive_TargetNode(t *testing.T) {
 	require.NoError(t, err)
 	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Unarchive to a specific node
-	err = svc.GameserverSvc.Unarchive(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.Unarchive(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestUnarchive_NotArchived_Error(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	err := svc.GameserverSvc.Unarchive(ctx, gs.ID, "")
+	err := svc.LifecycleSvc.Unarchive(ctx, gs.ID, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not archived")
 }
@@ -150,10 +150,10 @@ func TestUnarchive_PortsPreservedInClusterScope(t *testing.T) {
 	originalPorts := gs.Ports
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
-	require.NoError(t, svc.GameserverSvc.Unarchive(ctx, gs.ID, ""))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Unarchive(ctx, gs.ID, ""))
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -170,10 +170,10 @@ func TestUnarchive_PortsReallocatedInNodeScope(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
-	require.NoError(t, svc.GameserverSvc.Unarchive(ctx, gs.ID, ""))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Unarchive(ctx, gs.ID, ""))
+	svc.LifecycleSvc.WaitForOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -191,15 +191,15 @@ func TestDeleteArchived_SkipsWorkerCleanup(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	testutil.SeedVolumeData(t, w, gs.VolumeName)
 
-	require.NoError(t, svc.GameserverSvc.Archive(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Archive(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Worker can go offline — archived delete shouldn't need it
 	svc.Registry.Unregister("worker-1")
 
 	err := svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
 	require.NoError(t, err, "deleting archived gameserver should not require a live worker")
-	svc.GameserverSvc.WaitForOperations()
+	svc.GameserverSvc.WaitForDeleteOperations()
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)

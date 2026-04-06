@@ -1,4 +1,4 @@
-package gameserver
+package lifecycle
 
 import (
 	"compress/gzip"
@@ -16,7 +16,7 @@ import (
 // MigrateGameserver validates the migration request and launches the heavy work
 // (stop, transfer, restore, restart) in a background goroutine via runOperation.
 // Requires both source and target workers to be online.
-func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) error {
+func (s *Service) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) error {
 	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 // doMigrate performs the heavy work of migrating a gameserver between nodes.
 // Runs in a background goroutine — re-reads the gameserver from DB since state
 // may have changed.
-func (s *GameserverService) doMigrate(ctx context.Context, gameserverID string, targetNodeID string) error {
+func (s *Service) doMigrate(ctx context.Context, gameserverID string, targetNodeID string) error {
 	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err

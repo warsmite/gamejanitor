@@ -6,18 +6,19 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
+	"sync"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/auth"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/placement"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -49,127 +50,46 @@ type Store interface {
 	ListGrantedGameserverIDs(tokenID string) ([]string, error)
 }
 
-// StatusProvider derives the current status for a gameserver from runtime state.
+// StatusProvider derives the current display status for a gameserver from runtime state.
+// Used by CRUD reads (GetGameserver, ListGameservers) to enrich the response.
 type StatusProvider interface {
 	DeriveStatus(gs *model.Gameserver) (status string, errorReason string)
-	SetRunning(gameserverID string)
-	SetStopped(gameserverID string)
-	ClearError(gameserverID string)
-	ResetCrashCount(gameserverID string)
 }
 
-// BackupStore abstracts backup file storage (local disk or S3).
+// BackupStore abstracts backup file deletion for gameserver cleanup.
 type BackupStore interface {
-	Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error
-	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
 	Delete(ctx context.Context, gameserverID string, backupID string) error
-	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
-	SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error
-	LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error)
 	DeleteArchive(ctx context.Context, gameserverID string) error
 }
 
-// ModReconciler verifies DB-tracked mods exist on the volume before start.
-type ModReconciler interface {
-	Reconcile(ctx context.Context, gameserverID string) error
-}
-
 type GameserverService struct {
-	store           Store
-	dispatcher      *orchestrator.Dispatcher
-	log             *slog.Logger
-	broadcaster     *controller.EventBus
-	statusProvider  StatusProvider
-	modReconciler   ModReconciler
-	settingsSvc     *settings.SettingsService
-	gameStore       *games.GameStore
-	backupStore     BackupStore
-	dataDir         string
-	placement       *PlacementService
-	activity        *ActivityTracker
-	operations      *OperationTracker
-	operationWg     sync.WaitGroup
+	store          Store
+	dispatcher     *orchestrator.Dispatcher
+	log            *slog.Logger
+	broadcaster    *controller.EventBus
+	statusProvider StatusProvider
+	settingsSvc    *settings.SettingsService
+	gameStore      *games.GameStore
+	backupStore    BackupStore
+	dataDir        string
+	placement      *placement.Service
+	activity       *operation.ActivityTracker
+	operations     *operation.Tracker
+	deleteWg       sync.WaitGroup
 }
 
-// WaitForOperations blocks until all background lifecycle operations complete.
-// Intended for tests — production code should not call this.
-func (s *GameserverService) WaitForOperations() {
-	s.operationWg.Wait()
+// WaitForDeleteOperations blocks until all background delete operations complete.
+// Intended for tests.
+func (s *GameserverService) WaitForDeleteOperations() {
+	s.deleteWg.Wait()
 }
 
-func (s *GameserverService) SetModReconciler(r ModReconciler) {
-	s.modReconciler = r
-}
-
-
-func (s *GameserverService) SetActivityTracker(tracker *ActivityTracker) {
+func (s *GameserverService) SetActivityTracker(tracker *operation.ActivityTracker) {
 	s.activity = tracker
 }
 
-func (s *GameserverService) SetOperationTracker(tracker *OperationTracker) {
+func (s *GameserverService) SetOperationTracker(tracker *operation.Tracker) {
 	s.operations = tracker
-}
-
-// GetOperationState returns the current operation for a gameserver, or nil.
-func (s *GameserverService) GetOperationState(gameserverID string) *model.Operation {
-	if s.operations == nil {
-		return nil
-	}
-	return s.operations.GetOperation(gameserverID)
-}
-
-// WatchOperation returns a channel that streams operation state changes for a gameserver.
-// Includes progress updates. Call unwatch to stop.
-func (s *GameserverService) WatchOperation(gameserverID string) (ch <-chan *model.Operation, unwatch func()) {
-	if s.operations == nil {
-		c := make(chan *model.Operation)
-		close(c)
-		return c, func() {}
-	}
-	return s.operations.Watch(gameserverID)
-}
-
-// trackActivity starts an operation if the tracker is set. Also publishes the
-// action event to the EventBus. Returns "" if tracker is nil (tests) or if this
-// call is already part of a parent operation (e.g. Restart → Stop → Start).
-func (s *GameserverService) trackActivity(ctx context.Context, gsID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error) {
-	if s.activity == nil {
-		return "", nil
-	}
-	if ActivityIDFromContext(ctx) != "" {
-		return "", nil
-	}
-	opID, err := s.activity.Start(gsID, workerID, activityType, actor, data)
-	if err != nil {
-		return "", err
-	}
-
-	// Publish action event to EventBus for SSE/webhook subscribers
-	gs, _ := s.store.GetGameserver(gsID)
-	if gs != nil {
-		s.store.PopulateNode(gs)
-		s.broadcaster.Publish(controller.GameserverActionEvent{
-			Type:         controller.EventTypeForOp(activityType),
-			Timestamp:    time.Now(),
-			Actor:        controller.ActorFromContext(ctx),
-			GameserverID: gsID,
-			Gameserver:   gs,
-		})
-	}
-
-	return opID, nil
-}
-
-func (s *GameserverService) completeActivity(gameserverID string) {
-	if s.activity != nil {
-		s.activity.Complete(gameserverID)
-	}
-}
-
-func (s *GameserverService) failActivity(gameserverID string, err error) {
-	if s.activity != nil {
-		s.activity.Fail(gameserverID, err)
-	}
 }
 
 // recordInstant records an instant event and publishes to EventBus for CRUD operations.
@@ -197,9 +117,8 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 	}
 }
 
-func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
-	placement := NewPlacementService(store, dispatcher, settingsSvc, log)
-	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placement}
+func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, log *slog.Logger) *GameserverService {
+	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placementSvc}
 }
 
 // Called after both services are created to break the circular dependency.
@@ -523,24 +442,18 @@ func generatePassword(length int) (string, error) {
 }
 
 // UpdateGameserver merges provided fields and writes to DB.
-// Returns migrationTriggered=true if resources changed and the server needs to move to a different node.
-func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Gameserver) (migrationTriggered bool, err error) {
+func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Gameserver) error {
 	if err := gs.ValidateUpdate(); err != nil {
-		return false, err
+		return err
 	}
 
 	existing, err := s.store.GetGameserver(gs.ID)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if existing == nil {
-		return false, controller.ErrNotFoundf("gameserver %s not found", gs.ID)
+		return controller.ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
-
-	// Snapshot old resource values for capacity check
-	oldMemory := existing.MemoryLimitMB
-	oldCPU := existing.CPULimit
-	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
 	// Per-field permission checks — each configure.* permission guards specific fields.
 	// Owners have all permissions; granted tokens check their grant's permission list.
@@ -550,7 +463,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		if !isOwner {
 			grantPerms, hasGrant := existing.Grants[token.ID]
 			if !hasGrant {
-				return false, controller.ErrBadRequest("no access to this gameserver")
+				return controller.ErrBadRequest("no access to this gameserver")
 			}
 			type fieldCheck struct {
 				changed bool
@@ -567,7 +480,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 			}
 			for _, c := range checks {
 				if c.changed && !auth.HasGrantPermission(grantPerms, c.perm) {
-					return false, controller.ErrBadRequestf("missing permission %s to modify %s", c.perm, c.field)
+					return controller.ErrBadRequestf("missing permission %s to modify %s", c.perm, c.field)
 				}
 			}
 		}
@@ -582,7 +495,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		game := s.gameStore.GetGame(existing.GameID)
 		if game != nil {
 			if err := s.validateRequiredEnv(game, gs); err != nil {
-				return false, err
+				return err
 			}
 		}
 	}
@@ -628,57 +541,18 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 
 	// Enforce require_* settings
 	if s.settingsSvc.GetBool(settings.SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
-		return false, controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
+		return controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(settings.SettingRequireCPULimit) && existing.CPULimit <= 0 {
-		return false, controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
+		return controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
 	if s.settingsSvc.GetBool(settings.SettingRequireStorageLimit) && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
-		return false, controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
+		return controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 
-	// Auto-migration check: if resources changed and gameserver is on a node, check capacity
-	resourcesChanged := existing.MemoryLimitMB != oldMemory || existing.CPULimit != oldCPU || ptrIntOr0(existing.StorageLimitMB) != oldStorage
-	needsMigration := false
-
-	if resourcesChanged && existing.NodeID != nil && *existing.NodeID != "" {
-		limitErr := s.placement.CheckWorkerLimitsExcluding(*existing.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.ID)
-		if limitErr != nil {
-			// Current node can't fit — find a new one
-			foundNode, findErr := s.placement.FindNodeWithCapacity(existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.NodeTags, *existing.NodeID)
-
-			if findErr != nil {
-				reason := fmt.Sprintf("Upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity.", existing.MemoryLimitMB, existing.CPULimit)
-				s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: existing.ID, Reason: reason, Timestamp: time.Now()})
-				return false, fmt.Errorf("%s Resource values unchanged.", reason)
-			}
-
-			needsMigration = true
-			s.log.Info("auto-migration needed for resource upgrade", "id", existing.ID, "from_node", *existing.NodeID, "to_node", foundNode)
-
-			// Write new values first, then migrate async
-			if err := s.store.UpdateGameserver(existing); err != nil {
-				return false, err
-			}
-
-			go func() {
-				if err := s.MigrateGameserver(context.Background(), existing.ID, foundNode); err != nil {
-					s.log.Error("auto-migration failed", "id", existing.ID, "target_node", foundNode, "error", err)
-					s.broadcaster.Publish(controller.GameserverErrorEvent{
-						GameserverID: existing.ID,
-						Reason:       fmt.Sprintf("Auto-migration failed: %s", err.Error()),
-						Timestamp:    time.Now(),
-					})
-				}
-			}()
-		}
-	}
-
-	if !needsMigration {
-		s.log.Info("updating gameserver", "gameserver", gs.ID)
-		if err := s.store.UpdateGameserver(existing); err != nil {
-			return false, err
-		}
+	s.log.Info("updating gameserver", "gameserver", gs.ID)
+	if err := s.store.UpdateGameserver(existing); err != nil {
+		return err
 	}
 
 	if installTriggered {
@@ -695,7 +569,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	updateDataJSON, _ := json.Marshal(existing)
 	s.recordInstant(&existing.ID, controller.EventGameserverUpdate, updateActorJSON, updateDataJSON)
 
-	return needsMigration, nil
+	return nil
 }
 
 // installTriggeringEnvChanged checks if any env var marked with triggers_install
@@ -737,14 +611,37 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "desired_state", gs.DesiredState)
 
+	// Track operation directly — delete is the only CRUD operation that runs async
 	workerID := ""
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
+	if s.activity != nil {
+		if _, err := s.activity.Start(id, workerID, model.OpDelete, nil, nil); err != nil {
+			return err
+		}
+	}
 
-	return s.runOperation(ctx, id, workerID, model.OpDelete, func(ctx context.Context) error {
-		return s.doDelete(ctx, id)
-	})
+	actor := controller.ActorFromContext(ctx)
+	s.deleteWg.Add(1)
+	go func() {
+		defer s.deleteWg.Done()
+		bgCtx := context.Background()
+		if actor.Type != "" {
+			bgCtx = controller.SetActorInContext(bgCtx, actor)
+		}
+		if err := s.doDelete(bgCtx, id); err != nil {
+			s.log.Error("delete failed", "gameserver", id, "error", err)
+			if s.activity != nil {
+				s.activity.Fail(id, err)
+			}
+		} else {
+			if s.activity != nil {
+				s.activity.Complete(id)
+			}
+		}
+	}()
+	return nil
 }
 
 func (s *GameserverService) doDelete(ctx context.Context, id string) error {
@@ -755,25 +652,34 @@ func (s *GameserverService) doDelete(ctx context.Context, id string) error {
 
 	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
 	if !gs.IsArchived() {
-		if gs.InstanceID != nil {
-			if err := s.doStop(ctx, id); err != nil {
-				return fmt.Errorf("stopping gameserver before delete: %w", err)
-			}
-			gs, err = s.store.GetGameserver(id)
-			if err != nil || gs == nil {
-				return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
-			}
-		}
-
 		w := s.dispatcher.WorkerFor(id)
 		if w == nil {
 			s.log.Warn("worker unavailable during delete, skipping infrastructure cleanup", "gameserver", id)
 		} else {
+			// Tear down running instance directly — no status/event updates needed
+			// since the DB record is about to be deleted.
 			if gs.InstanceID != nil {
+				// Run stop-server script to flush world state before killing the process.
+				// Best-effort with short timeout — don't let a failing script block delete.
+				execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
+				_, _, _, execErr := w.Exec(execCtx, *gs.InstanceID, []string{"/scripts/stop-server"})
+				execCancel()
+				if execErr != nil {
+					s.log.Info("stop-server script not available or failed during delete, proceeding", "gameserver", id, "error", execErr)
+				}
+
+				stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+				if err := w.StopInstance(stopCtx, *gs.InstanceID, 10); err != nil {
+					s.log.Warn("failed to stop instance during delete", "gameserver", id, "error", err)
+				}
+				stopCancel()
+
 				if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
 					s.log.Warn("failed to remove instance by id during delete", "id", id, "error", err)
 				}
 			}
+
+			// Also try removing by name in case instance_id is stale
 			instanceName := naming.InstanceName(id)
 			if err := w.RemoveInstance(ctx, instanceName); err != nil {
 				s.log.Debug("no instance to remove by name during delete", "name", instanceName)
@@ -805,13 +711,12 @@ func (s *GameserverService) doDelete(ctx context.Context, id string) error {
 		return err
 	}
 
-	for _, b := range backups {
-		if err := s.backupStore.Delete(ctx, id, b.ID); err != nil {
-			s.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
-		}
-	}
-
 	if s.backupStore != nil {
+		for _, b := range backups {
+			if err := s.backupStore.Delete(ctx, id, b.ID); err != nil {
+				s.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
+			}
+		}
 		if err := s.backupStore.DeleteArchive(ctx, id); err != nil {
 			s.log.Warn("failed to remove archive store file", "gameserver", id, "error", err)
 		}

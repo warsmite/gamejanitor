@@ -1,4 +1,4 @@
-package gameserver
+package file
 
 import (
 	"context"
@@ -15,26 +15,26 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// FileStore abstracts the database operations the file service needs.
-type FileStore interface {
+// Store abstracts the database operations the file service needs.
+type Store interface {
 	GetGameserver(id string) (*model.Gameserver, error)
 }
 
-type FileService struct {
-	store      FileStore
+type Service struct {
+	store      Store
 	dispatcher *orchestrator.Dispatcher
 	log        *slog.Logger
 }
 
-func NewFileService(store FileStore, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *FileService {
-	return &FileService{
+func NewService(store Store, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *Service {
+	return &Service{
 		store:      store,
 		dispatcher: dispatcher,
 		log:        log,
 	}
 }
 
-func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, dirPath string) ([]worker.FileEntry, error) {
+func (s *Service) ListDirectory(ctx context.Context, gameserverID string, dirPath string) ([]worker.FileEntry, error) {
 	dirPath, err := validatePath(dirPath)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, di
 	return w.ListFiles(ctx, gs.VolumeName, relPath)
 }
 
-func (s *FileService) ReadFile(ctx context.Context, gameserverID string, filePath string) ([]byte, error) {
+func (s *Service) ReadFile(ctx context.Context, gameserverID string, filePath string) ([]byte, error) {
 	filePath, err := validatePath(filePath)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (s *FileService) ReadFile(ctx context.Context, gameserverID string, filePat
 	return w.ReadFile(ctx, gs.VolumeName, relPath)
 }
 
-func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
+func (s *Service) WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
 	filePath, err := validatePath(filePath)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func (s *FileService) WriteFile(ctx context.Context, gameserverID string, filePa
 	return w.WriteFile(ctx, gs.VolumeName, relPath, content, 0644)
 }
 
-func (s *FileService) WriteFileStream(ctx context.Context, gameserverID string, filePath string, reader io.Reader, perm os.FileMode) error {
+func (s *Service) WriteFileStream(ctx context.Context, gameserverID string, filePath string, reader io.Reader, perm os.FileMode) error {
 	filePath, err := validatePath(filePath)
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (s *FileService) WriteFileStream(ctx context.Context, gameserverID string, 
 	return w.WriteFileStream(ctx, gs.VolumeName, relPath, reader, perm)
 }
 
-func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targetPath string) error {
+func (s *Service) DeletePath(ctx context.Context, gameserverID string, targetPath string) error {
 	targetPath, err := validatePath(targetPath)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 	return w.DeletePath(ctx, gs.VolumeName, relPath)
 }
 
-func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error {
+func (s *Service) CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error {
 	dirPath, err := validatePath(dirPath)
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 	return w.CreateDirectory(ctx, gs.VolumeName, relPath)
 }
 
-func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPath string, newPath string) error {
+func (s *Service) RenamePath(ctx context.Context, gameserverID string, oldPath string, newPath string) error {
 	oldPath, err := validatePath(oldPath)
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 
 // OpenFile returns a streaming reader for file downloads without loading the
 // entire file into memory. Caller must close the reader.
-func (s *FileService) OpenFile(ctx context.Context, gameserverID string, filePath string) (io.ReadCloser, int64, error) {
+func (s *Service) OpenFile(ctx context.Context, gameserverID string, filePath string) (io.ReadCloser, int64, error) {
 	filePath, err := validatePath(filePath)
 	if err != nil {
 		return nil, 0, err
@@ -206,7 +206,7 @@ func (s *FileService) OpenFile(ctx context.Context, gameserverID string, filePat
 
 // DownloadToVolume tells the worker to download a URL directly to the gameserver volume.
 // The controller never touches the file bytes — the worker downloads directly.
-func (s *FileService) DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error {
+func (s *Service) DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error {
 	destPath, err := validatePath(destPath)
 	if err != nil {
 		return err
@@ -226,7 +226,7 @@ func (s *FileService) DownloadToVolume(ctx context.Context, gameserverID string,
 }
 
 // DownloadWorkshopItem downloads a Steam Workshop UGC item to the gameserver volume.
-func (s *FileService) DownloadWorkshopItem(ctx context.Context, gameserverID string, appID uint32, hcontentFile uint64, installPath string) error {
+func (s *Service) DownloadWorkshopItem(ctx context.Context, gameserverID string, appID uint32, hcontentFile uint64, installPath string) error {
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return err
@@ -240,7 +240,7 @@ func (s *FileService) DownloadWorkshopItem(ctx context.Context, gameserverID str
 	return w.DownloadWorkshopItem(ctx, gs.VolumeName, appID, hcontentFile, installPath)
 }
 
-func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, error) {
+func (s *Service) getGameserver(gameserverID string) (*model.Gameserver, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)

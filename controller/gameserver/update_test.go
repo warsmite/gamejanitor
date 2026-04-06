@@ -21,7 +21,7 @@ func TestUpdate_NameChange(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	update := &model.Gameserver{ID: gs.ID, Name: "New Name"}
-	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
+	err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -38,7 +38,7 @@ func TestUpdate_EnvChange(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	update := &model.Gameserver{ID: gs.ID, Env: model.Env{"REQUIRED_VAR": "updated", "SERVER_NAME": "My Server"}}
-	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
+	err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -71,7 +71,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 
 	// Try to change memory — should be blocked (has env perm, not resources)
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
-	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
+	err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing permission")
 }
@@ -89,7 +89,7 @@ func TestUpdate_AdminCanChangeResources(t *testing.T) {
 	ctx := auth.SetTokenInContext(testutil.TestContext(), token)
 
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
-	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
+	err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -104,7 +104,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	update := &model.Gameserver{ID: "nonexistent", Name: "Whatever"}
-	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
+	err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }

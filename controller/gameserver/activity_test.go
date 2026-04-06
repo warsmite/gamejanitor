@@ -18,8 +18,8 @@ func TestActivity_StartCreatesEvent(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	s := store.New(svc.DB)
 	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
@@ -48,7 +48,7 @@ func TestActivity_MutexRejectsConcurrent(t *testing.T) {
 	require.NoError(t, store.New(svc.DB).UpdateGameserver(gs))
 
 	// Start should be rejected — there's already an operation in progress
-	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already has an operation in progress")
 }
@@ -59,8 +59,8 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Set an operation in progress
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
@@ -69,9 +69,9 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	require.NoError(t, store.New(svc.DB).UpdateGameserver(fetched))
 
 	// Stop should still work despite the running operation
-	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
+	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
-	svc.GameserverSvc.WaitForOperations()
+	svc.LifecycleSvc.WaitForOperations()
 }
 
 func TestActivity_RestartCreatesOneEvent(t *testing.T) {
@@ -80,14 +80,14 @@ func TestActivity_RestartCreatesOneEvent(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Clear events from the start
 	svc.DB.Exec("DELETE FROM events")
 
-	require.NoError(t, svc.GameserverSvc.Restart(testutil.TestContext(), gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Restart(testutil.TestContext(), gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	s := store.New(svc.DB)
 	events, err := s.ListEvents(model.EventFilter{GameserverID: &gs.ID})
@@ -126,8 +126,8 @@ func TestActivity_BackupBlocksStart(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	ctx := testutil.TestContext()
 
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 
 	// Trigger a backup
 	_, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "test-backup")
@@ -138,7 +138,7 @@ func TestActivity_BackupBlocksStart(t *testing.T) {
 	// Check if operation is set
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	if fetched.OperationType != nil {
-		err = svc.GameserverSvc.Restart(ctx, gs.ID)
+		err = svc.LifecycleSvc.Restart(ctx, gs.ID)
 		assert.Error(t, err, "restart should be rejected while backup is running")
 		assert.Contains(t, err.Error(), "already has an operation in progress")
 	} else {
@@ -153,12 +153,12 @@ func TestActivity_MultipleStopsAllowed(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 	ctx := testutil.TestContext()
 
-	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
-	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
-	require.NoError(t, svc.GameserverSvc.Stop(ctx, gs.ID))
-	svc.GameserverSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Stop(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Stop(ctx, gs.ID))
+	svc.LifecycleSvc.WaitForOperations()
 }
 
 func ptrStr(s string) *string { return &s }

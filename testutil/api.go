@@ -41,6 +41,7 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		LogPath:         "",
 		GameStore:       svc.GameStore,
 		GameserverSvc:   svc.GameserverSvc,
+		LifecycleSvc:    svc.LifecycleSvc,
 		ConsoleSvc:      svc.ConsoleSvc,
 		FileSvc:         svc.FileSvc,
 		ScheduleSvc:     svc.ScheduleSvc,

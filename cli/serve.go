@@ -434,6 +434,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		LogPath:         logPath,
 		GameStore:       gameStore,
 		GameserverSvc:   svcs.GameserverSvc,
+		LifecycleSvc:    svcs.LifecycleSvc,
 		ConsoleSvc:      svcs.ConsoleSvc,
 		FileSvc:         svcs.FileSvc,
 		ScheduleSvc:     svcs.ScheduleSvc,

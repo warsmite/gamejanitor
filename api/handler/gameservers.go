@@ -11,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller/console"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker/logparse"
@@ -25,15 +27,16 @@ type StatsHistoryQuerier interface {
 
 type GameserverHandlers struct {
 	svc          *gameserver.GameserverService
-	consoleSvc   *gameserver.ConsoleService
+	lifecycle    *lifecycle.Service
+	consoleSvc   *console.Service
 	querySvc     *status.QueryService
 	statsPoller  *status.StatsPoller
 	statsHistory StatsHistoryQuerier
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, consoleSvc *gameserver.ConsoleService, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, log: log}
+func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *lifecycle.Service, consoleSvc *console.Service, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, lifecycle: lifecycleSvc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -133,8 +136,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	gs.ID = id
 
-	migrationTriggered, err := h.svc.UpdateGameserver(r.Context(), &gs)
-	if err != nil {
+	if err := h.svc.UpdateGameserver(r.Context(), &gs); err != nil {
 		h.log.Error("updating gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
@@ -143,13 +145,6 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.svc.GetGameserver(id)
 	if err != nil || updated == nil {
 		respondOK(w, gs) // fallback to request data
-		return
-	}
-	if migrationTriggered {
-		respondOK(w, map[string]any{
-			"gameserver":         updated,
-			"migration_triggered": true,
-		})
 		return
 	}
 	respondOK(w, updated)
@@ -166,27 +161,27 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Start(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.Start(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Stop(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Stop(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.Stop(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Restart(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Restart(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.Restart(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) UpdateServerGame(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.UpdateServerGame(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.UpdateServerGame(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.Reinstall(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Archive(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Archive(detachedCtx(r), id) })
+	h.doAction(w, r, func(id string) error { return h.lifecycle.Archive(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +192,7 @@ func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
 	// Body is optional — empty body means auto-place
 	json.NewDecoder(r.Body).Decode(&body)
 
-	h.doAction(w, r, func(_ string) error { return h.svc.Unarchive(detachedCtx(r), id, body.NodeID) })
+	h.doAction(w, r, func(_ string) error { return h.lifecycle.Unarchive(detachedCtx(r), id, body.NodeID) })
 }
 
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +214,7 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 	// The gameserver.migrate event fires at start, gameserver.error or instance_stopped on completion.
 	ctx := detachedCtx(r)
 	go func() {
-		if err := h.svc.MigrateGameserver(ctx, id, body.NodeID); err != nil {
+		if err := h.lifecycle.MigrateGameserver(ctx, id, body.NodeID); err != nil {
 			h.log.Error("background migration failed", "id", id, "target_node", body.NodeID, "error", err)
 		}
 	}()
@@ -239,9 +234,9 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 	}
 
 	actionFn, ok := map[string]func(context.Context, string) error{
-		"start":   h.svc.Start,
-		"stop":    h.svc.Stop,
-		"restart": h.svc.Restart,
+		"start":   h.lifecycle.Start,
+		"stop":    h.lifecycle.Stop,
+		"restart": h.lifecycle.Restart,
 	}[body.Action]
 	if !ok {
 		respondError(w, http.StatusBadRequest, "action must be start, stop, or restart")
@@ -359,7 +354,7 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if gs.InstanceID != nil {
-		info, err := h.svc.GetInstanceInfo(r.Context(), id)
+		info, err := h.lifecycle.GetInstanceInfo(r.Context(), id)
 		if err != nil {
 			h.log.Warn("failed to inspect instance for status", "id", id, "error", err)
 		} else {
@@ -417,7 +412,7 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fallback: live fetch (poller not running yet)
-	stats, err := h.svc.GetGameserverStats(r.Context(), id)
+	stats, err := h.lifecycle.GetGameserverStats(r.Context(), id)
 	if err != nil {
 		h.log.Warn("failed to get gameserver stats", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), "failed to get gameserver stats")
@@ -453,11 +448,11 @@ func (h *GameserverHandlers) OperationStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch, unwatch := h.svc.WatchOperation(id)
+	ch, unwatch := h.lifecycle.WatchOperation(id)
 	defer unwatch()
 
 	// Send the current state immediately so the client doesn't start blank
-	current := h.svc.GetOperationState(id)
+	current := h.lifecycle.GetOperationState(id)
 	data, _ := json.Marshal(current)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	flusher.Flush()
@@ -513,7 +508,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader, err := h.svc.GetInstanceLogs(r.Context(), id, tail)
+	reader, err := h.lifecycle.GetInstanceLogs(r.Context(), id, tail)
 	if err != nil {
 		// Fall back to historical logs from volume
 		lines, histErr := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, 0, tail)
@@ -542,7 +537,7 @@ func (h *GameserverHandlers) LogSessions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if sessions == nil {
-		sessions = []gameserver.LogSession{}
+		sessions = []console.LogSession{}
 	}
 	respondOK(w, sessions)
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // OperationClearer clears the active operation for a gameserver.
-// Implemented by gameserver.OperationTracker.
+// Implemented by operation.Tracker.
 type OperationClearer interface {
 	ClearOperation(gameserverID string)
 }
