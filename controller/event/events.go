@@ -1,6 +1,7 @@
 package event
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
@@ -93,18 +94,49 @@ var AllEventTypes = []string{
 // Event is the single event type published through the EventBus.
 // The Data field carries event-specific payload — type-switch on it
 // when you need access to the extra fields.
+//
+// MarshalJSON flattens the Data fields into the top-level JSON object so
+// consumers see {"type":"...","gameserver_id":"...","cpu_percent":5.2,...}
+// instead of nested {"type":"...","data":{"cpu_percent":5.2,...}}.
 type Event struct {
 	Type         string    `json:"type"`
 	GameserverID string    `json:"gameserver_id,omitempty"`
 	Actor        Actor     `json:"actor"`
 	Timestamp    time.Time `json:"timestamp"`
-	Data         any       `json:"data,omitempty"`
+	Data         any       `json:"-"` // excluded from default marshal, flattened by MarshalJSON
 }
 
 func (e Event) EventType() string        { return e.Type }
 func (e Event) EventTimestamp() time.Time { return e.Timestamp }
 func (e Event) EventGameserverID() string { return e.GameserverID }
 func (e Event) EventActor() Actor         { return e.Actor }
+
+func (e Event) MarshalJSON() ([]byte, error) {
+	flat := map[string]any{
+		"type":      e.Type,
+		"actor":     e.Actor,
+		"timestamp": e.Timestamp,
+	}
+	if e.GameserverID != "" {
+		flat["gameserver_id"] = e.GameserverID
+	}
+
+	// Merge data fields into the flat map
+	if e.Data != nil {
+		dataBytes, err := json.Marshal(e.Data)
+		if err != nil {
+			return nil, err
+		}
+		var dataMap map[string]any
+		if err := json.Unmarshal(dataBytes, &dataMap); err == nil {
+			for k, v := range dataMap {
+				flat[k] = v
+			}
+		}
+	}
+
+	return json.Marshal(flat)
+}
 
 // --- Event data types ---
 
