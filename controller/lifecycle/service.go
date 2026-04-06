@@ -2,14 +2,11 @@ package lifecycle
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"strings"
-	"sync"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/placement"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -60,9 +57,6 @@ type Service struct {
 	backupStore    BackupStore
 	dataDir        string
 	placement      *placement.Service
-	activity       *operation.ActivityTracker
-	operations     *operation.Tracker
-	operationWg    sync.WaitGroup
 }
 
 func NewService(
@@ -72,8 +66,6 @@ func NewService(
 	settingsSvc *settings.SettingsService,
 	gameStore *games.GameStore,
 	placementSvc *placement.Service,
-	activity *operation.ActivityTracker,
-	operations *operation.Tracker,
 	dataDir string,
 	log *slog.Logger,
 ) *Service {
@@ -84,15 +76,12 @@ func NewService(
 		settingsSvc: settingsSvc,
 		gameStore:   gameStore,
 		placement:   placementSvc,
-		activity:    activity,
-		operations:  operations,
 		dataDir:     dataDir,
 		log:         log,
 	}
 }
 
-// GetGameserver reads a gameserver from the store. Exposed to satisfy
-// backup.GameserverLifecycle interface.
+// GetGameserver reads a gameserver from the store.
 func (s *Service) GetGameserver(id string) (*model.Gameserver, error) {
 	return s.store.GetGameserver(id)
 }
@@ -107,30 +96,6 @@ func (s *Service) SetBackupStore(store BackupStore) {
 
 func (s *Service) SetModReconciler(r ModReconciler) {
 	s.modReconciler = r
-}
-
-// WaitForOperations blocks until all background lifecycle operations complete.
-// Intended for tests — production code should not call this.
-func (s *Service) WaitForOperations() {
-	s.operationWg.Wait()
-}
-
-// WatchOperation returns a channel that streams operation state changes for a gameserver.
-func (s *Service) WatchOperation(gameserverID string) (ch <-chan *model.Operation, unwatch func()) {
-	if s.operations == nil {
-		c := make(chan *model.Operation)
-		close(c)
-		return c, func() {}
-	}
-	return s.operations.Watch(gameserverID)
-}
-
-// GetOperationState returns the current operation for a gameserver, or nil.
-func (s *Service) GetOperationState(gameserverID string) *model.Operation {
-	if s.operations == nil {
-		return nil
-	}
-	return s.operations.GetOperation(gameserverID)
 }
 
 // getGameserverWithStatus reads a gameserver from the store and applies derived status.
@@ -149,70 +114,6 @@ func (s *Service) getGameserverWithStatus(id string) (*model.Gameserver, error) 
 // the in-memory runtime state. No DB write — status is derived on read.
 func (s *Service) setError(id string, reason string) {
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, id, &event.ErrorData{Reason: reason}))
-}
-
-// runOperation launches a lifecycle operation in a background goroutine.
-// Captures the actor from ctx before spawning the goroutine. On completion,
-// marks the activity as completed or failed.
-func (s *Service) runOperation(ctx context.Context, gsID, workerID, opType string, work func(ctx context.Context) error) error {
-	opID, err := s.trackActivity(ctx, gsID, workerID, opType)
-	if err != nil {
-		return err
-	}
-
-	actor := event.ActorFromContext(ctx)
-
-	s.operationWg.Add(1)
-	go func() {
-		defer s.operationWg.Done()
-		bgCtx := context.Background()
-		if actor.Type != "" {
-			bgCtx = event.SetActorInContext(bgCtx, actor)
-		}
-		if err := work(bgCtx); err != nil {
-			s.log.Error("operation failed", "gameserver", gsID, "operation", opType, "error", err)
-			if opID != "" {
-				s.activity.Fail(gsID, err)
-			}
-		} else {
-			if opID != "" {
-				s.activity.Complete(gsID)
-			}
-		}
-	}()
-	return nil
-}
-
-func (s *Service) trackActivity(ctx context.Context, gsID, workerID, opType string) (string, error) {
-	if s.activity == nil {
-		return "", nil
-	}
-	if operation.ActivityIDFromContext(ctx) != "" {
-		return "", nil
-	}
-	opID, err := s.activity.Start(gsID, workerID, opType, nil, nil)
-	if err != nil {
-		return "", err
-	}
-
-	// Publish action event to EventBus for SSE/webhook subscribers
-	gs, _ := s.store.GetGameserver(gsID)
-	if gs != nil {
-		s.broadcaster.Publish(event.NewEvent(event.EventTypeForOp(opType), gsID, event.ActorFromContext(ctx), &event.GameserverActionData{
-			Gameserver: gs,
-		}))
-	}
-
-	return opID, nil
-}
-
-// recordInstant creates an event for operations that complete immediately.
-func (s *Service) recordInstant(gameserverID *string, eventType string, actor json.RawMessage, data json.RawMessage) {
-	if s.activity != nil {
-		if err := s.activity.RecordInstant(gameserverID, eventType, actor, data); err != nil {
-			s.log.Error("failed to record instant event", "type", eventType, "error", err)
-		}
-	}
 }
 
 func ptrIntOr0(p *int) int {

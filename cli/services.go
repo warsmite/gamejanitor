@@ -50,6 +50,7 @@ type Services struct {
 	ModSvc          *mod.ModService
 	BackupStorage   backup.Storage
 	ActivityTracker *operation.ActivityTracker
+	Runner          *operation.Runner
 }
 
 // InitServicesOpts configures optional overrides for service initialization.
@@ -83,11 +84,12 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	// Placement service (shared between gameserver CRUD and lifecycle)
 	placementSvc := placement.NewService(db, dispatcher, settingsSvc, logger)
 
+	runner := operation.NewRunner(activityTracker, operationTracker, logger)
+
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
-	gameserverSvc.SetActivityTracker(activityTracker)
 	gameserverSvc.SetOperationTracker(operationTracker)
 
-	lifecycleSvc := lifecycle.NewService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, activityTracker, operationTracker, cfg.DataDir, logger)
+	lifecycleSvc := lifecycle.NewService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
 
 	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
 	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
@@ -115,10 +117,10 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	lifecycleSvc.SetBackupStore(backupStorage)
 	backupSvc := backup.NewBackupService(db, dispatcher, lifecycleSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
 	backupSvc.SetActivityTracker(activityTracker)
-	scheduler := schedule.NewScheduler(db, backupSvc, lifecycleSvc, consoleSvc, broadcaster, logger)
+	scheduler := schedule.NewScheduler(db, backupSvc, lifecycleSvc, consoleSvc, runner, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, logger)
+	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, runner, logger)
 	gameserverSvc.SetStatusProvider(statusMgr)
 	lifecycleSvc.SetStatusProvider(statusMgr)
 	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
@@ -174,6 +176,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		ModSvc:          modSvc,
 		BackupStorage:   backupStorage,
 		ActivityTracker: activityTracker,
+		Runner:          runner,
 	}, nil
 }
 

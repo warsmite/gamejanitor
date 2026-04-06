@@ -11,6 +11,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -18,21 +19,26 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-func (s *Service) Start(ctx context.Context, id string) error {
+// Start validates preconditions and starts a gameserver. Blocks until the
+// gameserver is running or an error occurs. Resets the crash counter so
+// auto-restart gets a fresh retry budget.
+func (s *Service) Start(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
 	if s.statusProvider != nil {
 		s.statusProvider.ResetCrashCount(id)
 	}
-	return s.startInternal(ctx, id)
+	return s.startInstance(ctx, id, onProgress)
 }
 
 // RestartAfterCrash is called by the auto-restart system. Unlike Start(),
 // it does NOT reset the crash counter — the counter must accumulate across
 // retries so the 3-attempt limit works.
 func (s *Service) RestartAfterCrash(ctx context.Context, id string) error {
-	return s.startInternal(ctx, id)
+	return s.startInstance(ctx, id, nil)
 }
 
-func (s *Service) startInternal(ctx context.Context, id string) error {
+// startInstance performs the full start sequence: validate → auto-migrate if
+// needed → download depot → pull image → install phase → start instance.
+func (s *Service) startInstance(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -66,7 +72,6 @@ func (s *Service) startInternal(ctx context.Context, id string) error {
 
 	// Check if assigned node can fit this gameserver's resources.
 	// If not, auto-migrate to a node that can before starting.
-	// This runs synchronously — capacity errors are validation failures.
 	if gs.NodeID != nil && *gs.NodeID != "" {
 		limitErr := s.placement.CheckWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
 		if limitErr != nil {
@@ -79,13 +84,10 @@ func (s *Service) startInternal(ctx context.Context, id string) error {
 			}
 
 			s.log.Info("auto-migrating before start", "gameserver", id, "from_node", *gs.NodeID, "to_node", foundNode)
-			// Call doMigrate directly — MigrateGameserver is async, but auto-migration
-			// must complete synchronously before start proceeds
 			if err := s.doMigrate(ctx, id, foundNode); err != nil {
 				return fmt.Errorf("auto-migration before start failed: %w", err)
 			}
 
-			// Reload gameserver after migration (node_id changed)
 			gs, err = s.store.GetGameserver(id)
 			if err != nil || gs == nil {
 				return fmt.Errorf("reloading gameserver after migration: %w", err)
@@ -101,20 +103,8 @@ func (s *Service) startInternal(ctx context.Context, id string) error {
 	gs.DesiredState = "running"
 	s.store.UpdateGameserver(gs)
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-
-	return s.runOperation(ctx, id, workerID, model.OpStart, func(ctx context.Context) error {
-		return s.doStart(ctx, id)
-	})
-}
-
-// doStart performs the heavy work of starting a gameserver. Runs in a background
-// goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *Service) doStart(ctx context.Context, id string) error {
-	gs, err := s.store.GetGameserver(id)
+	// Re-read for the heavy work
+	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -122,19 +112,18 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	game := s.gameStore.GetGame(gs.GameID)
+	game = s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return fmt.Errorf("game %s not found for gameserver %s", gs.GameID, id)
 	}
 
-	w := s.dispatcher.WorkerFor(id)
+	w = s.dispatcher.WorkerFor(id)
 	if w == nil {
 		s.setError(id, "Worker became unavailable during start.")
 		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
 	// Download game files via Steam depot downloader for all Steam games.
-	// Anonymous games need no credentials. Auth-required games need a linked Steam account.
 	var depotDir string
 	depotAppID := game.DepotAppID()
 	if depotAppID != 0 {
@@ -153,13 +142,11 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotDownloading, id, &event.DepotDownloadingData{
 			AppID: depotAppID,
 		}))
-		if s.operations != nil {
-			s.operations.SetOperation(id, "start", model.PhaseDownloadingGame)
-		}
+		reportProgress(onProgress, model.PhaseDownloadingGame, nil)
 
 		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken, func(p worker.DepotProgress) {
-			if s.operations != nil && p.TotalBytes > 0 {
-				s.operations.UpdateProgress(id, model.OperationProgress{
+			if p.TotalBytes > 0 {
+				reportProgress(onProgress, model.PhaseDownloadingGame, &model.OperationProgress{
 					Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
 					CompletedBytes: p.CompletedBytes,
 					TotalBytes:     p.TotalBytes,
@@ -186,13 +173,11 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	}
 
 	// Pull image
-	if s.operations != nil {
-		s.operations.SetOperation(id, "start", model.PhasePullingImage)
-	}
+	reportProgress(onProgress, model.PhasePullingImage, nil)
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
-		if s.operations != nil && p.TotalBytes > 0 {
-			s.operations.UpdateProgress(id, model.OperationProgress{
+		if p.TotalBytes > 0 {
+			reportProgress(onProgress, model.PhasePullingImage, &model.OperationProgress{
 				Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
 				CompletedBytes: p.CompletedBytes,
 				TotalBytes:     p.TotalBytes,
@@ -218,7 +203,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
-	// Prepare game scripts on the target worker (extracts locally for bind-mounting)
+	// Prepare game scripts on the target worker
 	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
 		s.setError(id, "Failed to extract game scripts.")
@@ -226,8 +211,6 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	}
 
 	// Copy depot files into the volume on the host (outside the instance).
-	// Doing this inside the instance hits the cgroup memory limit because
-	// the kernel page cache from copying large depots (3+ GB) counts against it.
 	if depotDir != "" && !gs.Installed {
 		s.log.Info("copying depot to volume", "gameserver", id, "depot", depotDir)
 		if err := w.CopyDepotToVolume(ctx, depotDir, gs.VolumeName); err != nil {
@@ -237,7 +220,6 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	}
 
 	// Reconcile mods — ensure DB-tracked mods exist on the volume before starting.
-	// Non-fatal: missing mods are logged but don't block the start.
 	if s.modReconciler != nil {
 		if err := s.modReconciler.Reconcile(ctx, id); err != nil {
 			s.log.Warn("mod reconciliation had errors, continuing with start", "gameserver", id, "error", err)
@@ -255,8 +237,6 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	}
 
 	// Remove old instance if exists (stale from prior run/crash).
-	// Clear InstanceID first so late "die" events from the old instance
-	// are recognized as stale by the StatusManager.
 	instanceName := naming.InstanceName(id)
 	if gs.InstanceID != nil {
 		oldID := *gs.InstanceID
@@ -274,15 +254,12 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 
 	// Install phase — runs install-server in a short-lived instance, then marks installed
 	if !gs.Installed {
-		if s.operations != nil {
-			s.operations.SetOperation(id, "start", model.PhaseInstalling)
-		}
+		reportProgress(onProgress, model.PhaseInstalling, nil)
 
 		s.rotateConsoleLogs(w, gs.VolumeName)
 		s.copyDefaults(w, gs.VolumeName, defaultsDir)
 
 		installName := naming.InstallInstanceName(id)
-		// Clean up any stale install instance from a prior failed attempt
 		w.RemoveInstance(ctx, installName)
 
 		s.log.Info("running install phase", "gameserver", id)
@@ -311,8 +288,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 
 		exitCode, installErr := s.waitForInstanceExit(ctx, w, installID)
 
-		// Copy install output to the volume's console log so the user can see
-		// it in the console tab — the install instance is about to be removed.
+		// Copy install output to the volume's console log
 		if logReader, logErr := w.InstanceLogs(ctx, installID, 0, false); logErr == nil {
 			logData, _ := io.ReadAll(logReader)
 			logReader.Close()
@@ -347,10 +323,8 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		s.log.Info("install phase complete", "gameserver", id)
 	}
 
-	// Start phase — create the long-lived instance with start-server as entrypoint
-	if s.operations != nil {
-		s.operations.SetOperation(id, "start", model.PhaseStarting)
-	}
+	// Start phase
+	reportProgress(onProgress, model.PhaseStarting, nil)
 
 	instanceID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:          instanceName,
@@ -369,7 +343,6 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		return fmt.Errorf("creating instance for gameserver %s: %w", id, err)
 	}
 
-	// Save instance ID, desired state, and snapshot the applied config for restart-required detection
 	gs.InstanceID = &instanceID
 	gs.DesiredState = "running"
 	gs.AppliedConfig = gs.SnapshotConfig()
@@ -379,7 +352,6 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	}
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceCreating, id, nil))
 
-	// Start instance — worker handles ready detection via the ready pattern
 	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
 		s.setError(id, userFriendlyError("Failed to start instance", err))
 		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
@@ -394,6 +366,8 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	return nil
 }
 
+// Stop validates preconditions and stops a running gameserver. Blocks until
+// the instance is stopped and removed.
 func (s *Service) Stop(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
@@ -403,7 +377,6 @@ func (s *Service) Stop(ctx context.Context, id string) error {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	// Already stopped or in error — nothing to do
 	if gs.Status == controller.StatusStopped || gs.Status == controller.StatusError {
 		s.log.Info("gameserver already stopped, skipping stop", "gameserver", id, "status", gs.Status)
 		return nil
@@ -417,25 +390,12 @@ func (s *Service) Stop(ctx context.Context, id string) error {
 	}
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-
-	return s.runOperation(ctx, id, workerID, model.OpStop, func(ctx context.Context) error {
-		return s.doStop(ctx, id)
-	})
+	return s.stopInstance(ctx, id)
 }
 
-// doStop performs the heavy work of stopping a gameserver. Runs in a background
-// goroutine — re-reads the gameserver from DB since state may have changed.
-func (s *Service) doStop(ctx context.Context, id string) error {
-	// Set the operation phase so DeriveStatus returns "stopping" instead of
-	// interpreting the non-zero exit code from SIGKILL as an error.
-	if s.operations != nil {
-		s.operations.SetOperation(id, model.OpStop, model.PhaseStopping)
-	}
-
+// stopInstance performs the raw stop work without validation or status updates.
+// Used by Stop, Restart, Archive, Migrate, UpdateServerGame, and Reinstall.
+func (s *Service) stopInstance(ctx context.Context, id string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s for stop: %w", id, err)
@@ -449,16 +409,13 @@ func (s *Service) doStop(ctx context.Context, id string) error {
 		if w == nil {
 			s.log.Warn("worker unavailable during stop, skipping instance cleanup", "gameserver", id)
 		} else {
-			// Run stop-server script if it exists — announces shutdown, saves world.
-			// Use a short timeout so a missing/failing script doesn't delay the stop.
 			execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
 			_, _, _, execErr := w.Exec(execCtx, *gs.InstanceID, []string{"/scripts/stop-server"})
 			execCancel()
 			if execErr != nil {
 				s.log.Info("stop-server script not available or failed, proceeding with instance stop", "gameserver", id, "error", execErr)
 			}
-			// StopInstance sends SIGTERM, waits timeoutSeconds, then SIGKILL.
-			// Add a context deadline as a safety net in case the worker hangs.
+
 			stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
 			if err := w.StopInstance(stopCtx, *gs.InstanceID, 10); err != nil {
 				s.log.Warn("failed to stop instance gracefully", "gameserver", id, "error", err)
@@ -470,7 +427,6 @@ func (s *Service) doStop(ctx context.Context, id string) error {
 		}
 	}
 
-	// Re-read after instance cleanup to avoid stale data
 	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
@@ -485,8 +441,6 @@ func (s *Service) doStop(ctx context.Context, id string) error {
 	}
 
 	// Clear any worker state that was re-injected by the exit event during stop.
-	// Without this, DeriveStatus sees StateExited with non-zero exit code (from SIGKILL)
-	// and returns "error" instead of "stopped".
 	if s.statusProvider != nil {
 		s.statusProvider.SetStopped(id)
 	}
@@ -496,7 +450,8 @@ func (s *Service) doStop(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Service) Restart(ctx context.Context, id string) error {
+// Restart stops a running gameserver and starts it again. Blocks until complete.
+func (s *Service) Restart(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -509,40 +464,24 @@ func (s *Service) Restart(ctx context.Context, id string) error {
 	if w == nil {
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
 	}
-	_ = w
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
+	if gs.Status != controller.StatusStopped && gs.Status != controller.StatusError {
+		if s.statusProvider != nil {
+			s.statusProvider.SetStopped(id)
+		}
+		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
+
+		if err := s.stopInstance(ctx, id); err != nil {
+			return fmt.Errorf("stopping gameserver for restart: %w", err)
+		}
 	}
 
-	return s.runOperation(ctx, id, workerID, model.OpRestart, func(ctx context.Context) error {
-		// Re-read status to check if stop is needed
-		gs, err := s.getGameserverWithStatus(id)
-		if err != nil {
-			return err
-		}
-		if gs == nil {
-			return fmt.Errorf("gameserver %s not found", id)
-		}
-
-		if gs.Status != controller.StatusStopped && gs.Status != controller.StatusError {
-			// Clear runtime state synchronously before doStop
-			if s.statusProvider != nil {
-				s.statusProvider.SetStopped(id)
-			}
-			s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
-
-			if err := s.doStop(ctx, id); err != nil {
-				return fmt.Errorf("stopping gameserver for restart: %w", err)
-			}
-		}
-
-		return s.doStart(ctx, id)
-	})
+	return s.startInstance(ctx, id, onProgress)
 }
 
-func (s *Service) UpdateServerGame(ctx context.Context, id string) error {
+// UpdateServerGame stops the gameserver, pulls the latest image, runs the
+// update-server script, and restarts. Blocks until complete.
+func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -558,32 +497,6 @@ func (s *Service) UpdateServerGame(ctx context.Context, id string) error {
 
 	s.log.Info("updating game for gameserver", "gameserver", id, "game", game.ID)
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-
-	return s.runOperation(ctx, id, workerID, model.OpUpdate, func(ctx context.Context) error {
-		return s.doUpdateServerGame(ctx, id)
-	})
-}
-
-// doUpdateServerGame performs the heavy work of updating a gameserver's game.
-// Runs in a background goroutine — re-reads the gameserver from DB.
-func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
-		return err
-	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
-	}
-
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return fmt.Errorf("game %s not found", gs.GameID)
-	}
-
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 
 	if gs.Status != controller.StatusStopped {
@@ -592,7 +505,7 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 		}
 		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
-		if err := s.doStop(ctx, id); err != nil {
+		if err := s.stopInstance(ctx, id); err != nil {
 			s.setError(id, controller.OperationFailedReason("Game update failed", err))
 			return fmt.Errorf("stopping gameserver for update: %w", err)
 		}
@@ -604,7 +517,6 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
-	// Re-read after stop
 	gs, err = s.store.GetGameserver(id)
 	if err != nil || gs == nil {
 		return fmt.Errorf("re-reading gameserver %s after stop for update: %w", id, err)
@@ -616,7 +528,7 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
-	// Prepare scripts on the target worker for update instance
+	// Prepare scripts
 	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
 		s.setError(id, controller.OperationFailedReason("Game update failed", err))
@@ -624,14 +536,13 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 	}
 	updateBinds := []string{scriptDir + ":/scripts:ro"}
 
-	// Merge env vars so the update script has access to config (VERSION, EULA, etc.)
 	env, err := mergeEnv(game, gs)
 	if err != nil {
 		s.setError(id, controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("merging env for update: %w", err)
 	}
 
-	// Run update-server in a short-lived instance with entrypoint override
+	// Run update-server in a short-lived instance
 	tempName := naming.UpdateInstanceName(id)
 	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
@@ -664,10 +575,12 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 	}
 
 	s.log.Info("game updated, restarting gameserver", "gameserver", id)
-	return s.doStart(ctx, id)
+	return s.startInstance(ctx, id, onProgress)
 }
 
-func (s *Service) Reinstall(ctx context.Context, id string) error {
+// Reinstall stops the gameserver, wipes the volume, and performs a fresh install.
+// Blocks until complete.
+func (s *Service) Reinstall(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -678,27 +591,6 @@ func (s *Service) Reinstall(ctx context.Context, id string) error {
 
 	s.log.Info("reinstalling gameserver (full wipe)", "gameserver", id)
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-
-	return s.runOperation(ctx, id, workerID, model.OpReinstall, func(ctx context.Context) error {
-		return s.doReinstall(ctx, id)
-	})
-}
-
-// doReinstall performs the heavy work of reinstalling a gameserver.
-// Runs in a background goroutine — re-reads the gameserver from DB.
-func (s *Service) doReinstall(ctx context.Context, id string) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
-		return err
-	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
-	}
-
 	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 
 	if gs.Status != controller.StatusStopped {
@@ -707,7 +599,7 @@ func (s *Service) doReinstall(ctx context.Context, id string) error {
 		}
 		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
-		if err := s.doStop(ctx, id); err != nil {
+		if err := s.stopInstance(ctx, id); err != nil {
 			s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
 			return fmt.Errorf("stopping gameserver for reinstall: %w", err)
 		}
@@ -719,7 +611,6 @@ func (s *Service) doReinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("worker unavailable for gameserver %s", id)
 	}
 
-	// Re-read after stop
 	gs, err = s.store.GetGameserver(id)
 	if err != nil || gs == nil {
 		return fmt.Errorf("re-reading gameserver %s after stop for reinstall: %w", id, err)
@@ -731,7 +622,7 @@ func (s *Service) doReinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
 	}
 
-	// Wipe all data by removing and recreating the volume
+	// Wipe all data
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
 		s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
 		return fmt.Errorf("removing volume for reinstall: %w", err)
@@ -742,7 +633,7 @@ func (s *Service) doReinstall(ctx context.Context, id string) error {
 	}
 
 	s.log.Info("volume wiped, starting fresh install", "gameserver", id)
-	return s.doStart(ctx, id)
+	return s.startInstance(ctx, id, onProgress)
 }
 
 func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
@@ -756,18 +647,13 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 		}
 	}
 
-	// Step 2: Merge gameserver env overrides (user values win)
 	for k, v := range gs.Env {
 		if !systemKeys[k] {
 			env[k] = v
 		}
 	}
 
-	// Step 3: Override system fields from port mappings
 	ports := gs.Ports
-
-	// Map game definition ports to their allocated host ports
-	// System env vars whose default matches a game port get overridden with the host port
 	gamePortToHost := make(map[string]int)
 	for _, gp := range game.DefaultPorts {
 		for _, p := range ports {
@@ -786,12 +672,10 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 		}
 	}
 
-	// Step 4: Inject MEMORY_LIMIT_MB
 	if gs.MemoryLimitMB > 0 {
 		env["MEMORY_LIMIT_MB"] = strconv.Itoa(gs.MemoryLimitMB)
 	}
 
-	// Step 5: Convert to []string
 	result := make([]string, 0, len(env))
 	for k, v := range env {
 		result = append(result, k+"="+v)
@@ -803,16 +687,14 @@ func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 	bindings := make([]worker.PortBinding, len(gs.Ports))
 	for i, p := range gs.Ports {
 		bindings[i] = worker.PortBinding{
-			HostPort:      int(p.HostPort),
+			HostPort:     int(p.HostPort),
 			InstancePort: int(p.InstancePort),
-			Protocol:      p.Protocol,
+			Protocol:     p.Protocol,
 		}
 	}
 	return bindings, nil
 }
 
-// rotateConsoleLogs rotates console.log files on the volume before a fresh install.
-// Keeps up to 3 rotated copies (console.log.0 through console.log.2).
 func (s *Service) rotateConsoleLogs(w worker.Worker, volumeName string) {
 	ctx := context.Background()
 	logDir := ".gamejanitor/logs"
@@ -826,8 +708,6 @@ func (s *Service) rotateConsoleLogs(w worker.Worker, volumeName string) {
 	w.RenamePath(ctx, volumeName, logDir+"/console.log", logDir+"/console.log.0")
 }
 
-// copyDefaults copies files from the game's defaults directory into the volume root.
-// Only copies files that don't already exist on the volume (first-run behavior).
 func (s *Service) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
 	if defaultsDir == "" {
 		return
@@ -853,7 +733,6 @@ func (s *Service) copyDefaults(w worker.Worker, volumeName string, defaultsDir s
 	}
 }
 
-// waitForInstanceExit polls InspectInstance until the instance exits, returning the exit code.
 func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -870,5 +749,12 @@ func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, inst
 				return info.ExitCode, nil
 			}
 		}
+	}
+}
+
+// reportProgress calls onProgress if non-nil.
+func reportProgress(onProgress operation.ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
+	if onProgress != nil {
+		onProgress(phase, progress)
 	}
 }

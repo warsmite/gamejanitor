@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
@@ -33,7 +34,7 @@ type Store interface {
 // GameserverLifecycle is a narrow interface for gameserver operations needed by backup.
 type GameserverLifecycle interface {
 	Stop(ctx context.Context, id string) error
-	Start(ctx context.Context, id string) error
+	Start(ctx context.Context, id string, onProgress operation.ProgressFunc) error
 	GetGameserver(id string) (*model.Gameserver, error)
 }
 
@@ -430,7 +431,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 
 	if wasRunning {
 		s.log.Info("restarting gameserver after restore", "gameserver", gameserverID)
-		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
+		if err := s.gameserverSvc.Start(ctx, gameserverID, nil); err != nil {
 			s.log.Error("failed to restart after restore", "gameserver", gameserverID, "error", err)
 			s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gameserverID, &event.ErrorData{Reason: fmt.Sprintf("Restart after restore failed: %v", err)}))
 		}

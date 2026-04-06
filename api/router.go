@@ -18,6 +18,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/controller/webhook"
@@ -43,8 +44,10 @@ type RouterOptions struct {
 	AuthSvc         *auth.AuthService
 	ModSvc          *mod.ModService
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
-	WebhookSvc      *webhook.WebhookEndpointService
-	EventHistorySvc *event.EventHistoryService
+	WebhookSvc       *webhook.WebhookEndpointService
+	EventHistorySvc  *event.EventHistoryService
+	Runner           *operation.Runner
+	OperationTracker *operation.Tracker
 	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
 	GameserverQuerier handler.GameserverQuerier
@@ -86,7 +89,7 @@ func NewRouter(opts RouterOptions) *Router {
 
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
-	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.LifecycleSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Log)
+	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.LifecycleSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Runner, opts.OperationTracker, opts.Log)
 	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.GameserverQuerier, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)

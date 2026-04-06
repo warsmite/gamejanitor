@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/validate"
 )
@@ -100,4 +102,15 @@ func serviceErrorMessage(err error) string {
 		return svcErr.Error()
 	}
 	return "internal server error"
+}
+
+// detachedCtx creates a new context that preserves request values (actor, auth)
+// but is not canceled when the HTTP request completes. This allows long-running
+// operations like backups to survive client disconnects.
+func detachedCtx(r *http.Request) context.Context {
+	ctx := context.Background()
+	if actor := event.ActorFromContext(r.Context()); actor.Type != "" {
+		ctx = event.SetActorInContext(ctx, actor)
+	}
+	return ctx
 }

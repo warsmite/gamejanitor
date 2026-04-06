@@ -2,9 +2,8 @@ package testutil
 
 import (
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/webhook"
-
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/store"
 	"net/http/httptest"
 	"testing"
@@ -36,29 +35,31 @@ func NewTestAPI(t *testing.T) *TestAPI {
 	log := TestLogger()
 	db := store.New(svc.DB)
 	router := api.NewRouter(api.RouterOptions{
-		Config:          cfg,
-		Role:            "controller+worker",
-		LogPath:         "",
-		GameStore:       svc.GameStore,
-		GameserverSvc:   svc.GameserverSvc,
-		LifecycleSvc:    svc.LifecycleSvc,
-		ConsoleSvc:      svc.ConsoleSvc,
-		FileSvc:         svc.FileSvc,
-		ScheduleSvc:     svc.ScheduleSvc,
-		BackupSvc:       svc.BackupSvc,
-		QuerySvc:        svc.QuerySvc,
-		StatsPoller:     svc.StatsPoller,
-		SettingsSvc:     svc.SettingsSvc,
-		AuthSvc:         svc.AuthSvc,
-		WorkerNodeSvc:   orchestrator.NewWorkerNodeService(db, svc.Registry, svc.Broadcaster, log),
-		WebhookSvc:      webhook.NewWebhookEndpointService(db, log),
-		EventHistorySvc: event.NewEventHistoryService(db),
-		ActivityStore:    db,
+		Config:            cfg,
+		Role:              "controller+worker",
+		LogPath:           "",
+		GameStore:         svc.GameStore,
+		GameserverSvc:     svc.GameserverSvc,
+		LifecycleSvc:      svc.LifecycleSvc,
+		ConsoleSvc:        svc.ConsoleSvc,
+		FileSvc:           svc.FileSvc,
+		ScheduleSvc:       svc.ScheduleSvc,
+		BackupSvc:         svc.BackupSvc,
+		QuerySvc:          svc.QuerySvc,
+		StatsPoller:       svc.StatsPoller,
+		SettingsSvc:       svc.SettingsSvc,
+		AuthSvc:           svc.AuthSvc,
+		WorkerNodeSvc:     orchestrator.NewWorkerNodeService(db, svc.Registry, svc.Broadcaster, log),
+		WebhookSvc:        webhook.NewWebhookEndpointService(db, log),
+		EventHistorySvc:   event.NewEventHistoryService(db),
+		Runner:            svc.Runner,
+		OperationTracker:  svc.Runner.Tracker(),
+		ActivityStore:     db,
 		GameserverQuerier: db.GameserverStore,
-		Broadcaster:      svc.Broadcaster,
-		ModSvc:          svc.ModSvc,
-		Log:             log,
-		WebUI:           nil,
+		Broadcaster:       svc.Broadcaster,
+		ModSvc:            svc.ModSvc,
+		Log:               log,
+		WebUI:             nil,
 	})
 
 	server := httptest.NewServer(router)

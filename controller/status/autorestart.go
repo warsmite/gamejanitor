@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -40,12 +41,20 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason strin
 	delete(m.workerStates, gs.ID)
 	m.workerStateMu.Unlock()
 
-	go func() {
-		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
-			m.log.Error("auto-restart failed", "gameserver", gs.ID, "attempt", count, "error", err)
-			m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gs.ID, &event.ErrorData{Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error())}))
+	if m.runner != nil {
+		if err := m.runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "system"}, func(ctx context.Context, _ operation.ProgressFunc) error {
+			return m.restartFunc(ctx, gs.ID)
+		}); err != nil {
+			m.log.Error("auto-restart rejected by operation guard", "gameserver", gs.ID, "attempt", count, "error", err)
 		}
-	}()
+	} else {
+		go func() {
+			if err := m.restartFunc(context.Background(), gs.ID); err != nil {
+				m.log.Error("auto-restart failed", "gameserver", gs.ID, "attempt", count, "error", err)
+				m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gs.ID, &event.ErrorData{Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error())}))
+			}
+		}()
+	}
 }
 
 // describeExit produces a human-readable crash reason from the exit code,

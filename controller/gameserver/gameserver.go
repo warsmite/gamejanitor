@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sync"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,33 +73,15 @@ type GameserverService struct {
 	backupStore    BackupStore
 	dataDir        string
 	placement      *placement.Service
-	activity       *operation.ActivityTracker
 	operations     *operation.Tracker
-	deleteWg       sync.WaitGroup
-}
-
-// WaitForDeleteOperations blocks until all background delete operations complete.
-// Intended for tests.
-func (s *GameserverService) WaitForDeleteOperations() {
-	s.deleteWg.Wait()
-}
-
-func (s *GameserverService) SetActivityTracker(tracker *operation.ActivityTracker) {
-	s.activity = tracker
 }
 
 func (s *GameserverService) SetOperationTracker(tracker *operation.Tracker) {
 	s.operations = tracker
 }
 
-// recordInstant records an instant event and publishes to EventBus for CRUD operations.
+// recordInstant publishes an instant event to EventBus for CRUD operations.
 func (s *GameserverService) recordInstant(gameserverID *string, eventType string, actor json.RawMessage, data json.RawMessage) {
-	if s.activity != nil {
-		if err := s.activity.RecordInstant(gameserverID, eventType, actor, data); err != nil {
-			s.log.Error("failed to record instant event", "type", eventType, "error", err)
-		}
-	}
-
 	if gameserverID != nil {
 		gs, _ := s.store.GetGameserver(*gameserverID)
 		if gs != nil {
@@ -608,37 +589,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name, "desired_state", gs.DesiredState)
 
-	// Track operation directly — delete is the only CRUD operation that runs async
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-	if s.activity != nil {
-		if _, err := s.activity.Start(id, workerID, model.OpDelete, nil, nil); err != nil {
-			return err
-		}
-	}
-
-	actor := event.ActorFromContext(ctx)
-	s.deleteWg.Add(1)
-	go func() {
-		defer s.deleteWg.Done()
-		bgCtx := context.Background()
-		if actor.Type != "" {
-			bgCtx = event.SetActorInContext(bgCtx, actor)
-		}
-		if err := s.doDelete(bgCtx, id); err != nil {
-			s.log.Error("delete failed", "gameserver", id, "error", err)
-			if s.activity != nil {
-				s.activity.Fail(id, err)
-			}
-		} else {
-			if s.activity != nil {
-				s.activity.Complete(id)
-			}
-		}
-	}()
-	return nil
+	return s.doDelete(ctx, id)
 }
 
 func (s *GameserverService) doDelete(ctx context.Context, id string) error {

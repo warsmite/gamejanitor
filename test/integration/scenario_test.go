@@ -50,13 +50,13 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 	assert.NotEmpty(t, gs.Ports)
 
 	// Start should work
-	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID))
-	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(ctx, gs.ID, nil))
+	
 	assert.Greater(t, fw.InstanceCount(), 0)
 
 	// Stop should work
 	require.NoError(t, svc.LifecycleSvc.Stop(ctx, gs.ID))
-	svc.LifecycleSvc.WaitForOperations()
+	
 }
 
 func TestScenario_Newbie_DefaultSettings_Safe(t *testing.T) {
@@ -148,8 +148,8 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 	testutil.SeedVolumeData(t, wUS, gs.VolumeName)
 
 	// Migrate to EU
-	require.NoError(t, svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-eu"))
-	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-eu", nil))
+	
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	assert.Equal(t, "node-eu", *fetched.NodeID)

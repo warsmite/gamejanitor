@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/robfig/cron/v3"
 )
 
 // GameserverOps is the subset of gameserver operations the scheduler needs.
 type GameserverOps interface {
-	Restart(ctx context.Context, id string) error
-	UpdateServerGame(ctx context.Context, id string) error
+	Restart(ctx context.Context, id string, onProgress operation.ProgressFunc) error
+	UpdateServerGame(ctx context.Context, id string, onProgress operation.ProgressFunc) error
 }
 
 // BackupOps is the subset of backup operations the scheduler needs.
@@ -35,19 +36,21 @@ type Scheduler struct {
 	backupSvc     BackupOps
 	gameserverSvc GameserverOps
 	consoleSvc    ConsoleOps
+	runner        *operation.Runner
 	broadcaster   *event.EventBus
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(store Store, backupSvc BackupOps, gameserverSvc GameserverOps, consoleSvc ConsoleOps, broadcaster *event.EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(store Store, backupSvc BackupOps, gameserverSvc GameserverOps, consoleSvc ConsoleOps, runner *operation.Runner, broadcaster *event.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		store:         store,
 		backupSvc:     backupSvc,
 		gameserverSvc: gameserverSvc,
 		consoleSvc:    consoleSvc,
+		runner:        runner,
 		broadcaster:   broadcaster,
 		log:           log,
 		entries:       make(map[string]cron.EntryID),
@@ -220,9 +223,16 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	s.log.Info("executing scheduled task", "schedule", scheduleID, "type", schedule.Type, "gameserver", schedule.GameserverID)
 
 	var taskErr error
+	schedActor := event.Actor{Type: "schedule", ScheduleID: scheduleID}
 	switch schedule.Type {
 	case "restart":
-		taskErr = s.gameserverSvc.Restart(ctx, schedule.GameserverID)
+		if s.runner != nil {
+			taskErr = s.runner.Submit(schedule.GameserverID, model.OpRestart, schedActor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+				return s.gameserverSvc.Restart(ctx, schedule.GameserverID, onProgress)
+			})
+		} else {
+			taskErr = s.gameserverSvc.Restart(ctx, schedule.GameserverID, nil)
+		}
 	case "backup":
 		_, taskErr = s.backupSvc.CreateBackup(ctx, schedule.GameserverID, "Scheduled backup")
 	case "command":
@@ -235,7 +245,13 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		}
 		_, taskErr = s.consoleSvc.SendCommand(ctx, schedule.GameserverID, payload.Command)
 	case "update":
-		taskErr = s.gameserverSvc.UpdateServerGame(ctx, schedule.GameserverID)
+		if s.runner != nil {
+			taskErr = s.runner.Submit(schedule.GameserverID, model.OpUpdate, schedActor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+				return s.gameserverSvc.UpdateServerGame(ctx, schedule.GameserverID, onProgress)
+			})
+		} else {
+			taskErr = s.gameserverSvc.UpdateServerGame(ctx, schedule.GameserverID, nil)
+		}
 	default:
 		s.log.Error("unknown schedule type", "schedule", scheduleID, "type", schedule.Type)
 		return

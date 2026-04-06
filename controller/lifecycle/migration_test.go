@@ -31,9 +31,9 @@ func TestMigration_HappyPath(t *testing.T) {
 
 	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
-	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.NoError(t, err)
-	svc.LifecycleSvc.WaitForOperations()
+	
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestMigration_SameNode_Error(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	err := svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, *gs.NodeID)
+	err := svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, *gs.NodeID, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already on node")
 }
@@ -89,7 +89,7 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
 	require.NoError(t, err)
 
-	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.Error(t, err, "should reject migration when target node is full")
 }
 
@@ -103,7 +103,7 @@ func TestMigration_TargetWorkerMustBeOnline(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	err := svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err := svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unavailable")
 }
@@ -128,7 +128,7 @@ func TestMigration_SourceWorkerMustBeOnline(t *testing.T) {
 	// Unregister worker-1 after creation
 	svc.Registry.Unregister("worker-1")
 
-	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "source worker is offline")
 }
@@ -139,7 +139,7 @@ func TestMigration_GameserverNotFound(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	err := svc.LifecycleSvc.MigrateGameserver(ctx, "nonexistent", "worker-1")
+	err := svc.LifecycleSvc.MigrateGameserver(ctx, "nonexistent", "worker-1", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -163,9 +163,9 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	originalPorts := gs.Ports
 	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
-	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.NoError(t, err)
-	svc.LifecycleSvc.WaitForOperations()
+	
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -192,9 +192,9 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	require.NoError(t, err)
 	testutil.SeedVolumeData(t, w1, gs.VolumeName)
 
-	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "worker-2", nil)
 	require.NoError(t, err)
-	svc.LifecycleSvc.WaitForOperations()
+	
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -222,7 +222,7 @@ func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	testutil.SeedVolumeData(t, wA, gs.VolumeName)
 
 	// Launch async migration
-	require.NoError(t, svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-b"))
+	require.NoError(t, svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-b", nil))
 
 	// Read the gameserver repeatedly while migration runs in the background
 	validNodes := map[string]bool{"node-a": true, "node-b": true}
@@ -240,7 +240,7 @@ func TestMigration_ReadDuringMigration_ConsistentData(t *testing.T) {
 	}
 
 	// Wait for migration to complete
-	svc.LifecycleSvc.WaitForOperations()
+	
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
@@ -274,17 +274,17 @@ func TestMigration_ConcurrentMigrate_Rejected(t *testing.T) {
 	errCh2 := make(chan error, 1)
 
 	go func() {
-		errCh1 <- svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-b")
+		errCh1 <- svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-b", nil)
 	}()
 	go func() {
-		errCh2 <- svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-c")
+		errCh2 <- svc.LifecycleSvc.MigrateGameserver(ctx, gs.ID, "node-c", nil)
 	}()
 
 	err1 := <-errCh1
 	err2 := <-errCh2
 
 	// Wait for background operations to complete
-	svc.LifecycleSvc.WaitForOperations()
+	
 
 	// At least one should succeed; the other might fail or both succeed
 	// (if the first completes before the second starts). The key: no panic,

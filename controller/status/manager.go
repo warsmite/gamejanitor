@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -19,6 +20,7 @@ type StatusManager struct {
 	dispatcher  *orchestrator.Dispatcher
 	registry    *orchestrator.Registry
 	restartFunc func(ctx context.Context, id string) error
+	runner      *operation.Runner
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -37,7 +39,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *QueryService, statsPoller *StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *QueryService, statsPoller *StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, runner *operation.Runner, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		store:         store,
 		broadcaster:   broadcaster,
@@ -46,6 +48,7 @@ func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *QueryS
 		dispatcher:    dispatcher,
 		registry:      registry,
 		restartFunc:   restartFunc,
+		runner:        runner,
 		log:           log,
 		workerStates:  make(map[string]*worker.InstanceStateUpdate),
 		errorReasons:  make(map[string]string),

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"github.com/warsmite/gamejanitor/controller/event"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,8 +11,10 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/console"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/lifecycle"
+	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker/logparse"
@@ -32,11 +33,13 @@ type GameserverHandlers struct {
 	querySvc     *status.QueryService
 	statsPoller  *status.StatsPoller
 	statsHistory StatsHistoryQuerier
+	ops          *operation.Runner
+	tracker      *operation.Tracker
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *lifecycle.Service, consoleSvc *console.Service, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, lifecycle: lifecycleSvc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, log: log}
+func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *lifecycle.Service, consoleSvc *console.Service, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, ops *operation.Runner, tracker *operation.Tracker, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, lifecycle: lifecycleSvc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, ops: ops, tracker: tracker, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +155,10 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteGameserver(detachedCtx(r), id); err != nil {
+	actor := event.ActorFromContext(r.Context())
+	if err := h.ops.Submit(id, model.OpDelete, actor, func(ctx context.Context, _ operation.ProgressFunc) error {
+		return h.svc.DeleteGameserver(ctx, id)
+	}); err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
@@ -161,27 +167,39 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.Start(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpStart, func(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+		return h.lifecycle.Start(ctx, id, onProgress)
+	})
 }
 
 func (h *GameserverHandlers) Stop(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.Stop(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpStop, func(ctx context.Context, id string, _ operation.ProgressFunc) error {
+		return h.lifecycle.Stop(ctx, id)
+	})
 }
 
 func (h *GameserverHandlers) Restart(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.Restart(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpRestart, func(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+		return h.lifecycle.Restart(ctx, id, onProgress)
+	})
 }
 
 func (h *GameserverHandlers) UpdateServerGame(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.UpdateServerGame(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpUpdate, func(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+		return h.lifecycle.UpdateServerGame(ctx, id, onProgress)
+	})
 }
 
 func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.Reinstall(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpReinstall, func(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+		return h.lifecycle.Reinstall(ctx, id, onProgress)
+	})
 }
 
 func (h *GameserverHandlers) Archive(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.lifecycle.Archive(detachedCtx(r), id) })
+	h.submitAction(w, r, model.OpArchive, func(ctx context.Context, id string, _ operation.ProgressFunc) error {
+		return h.lifecycle.Archive(ctx, id)
+	})
 }
 
 func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +210,15 @@ func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
 	// Body is optional — empty body means auto-place
 	json.NewDecoder(r.Body).Decode(&body)
 
-	h.doAction(w, r, func(_ string) error { return h.lifecycle.Unarchive(detachedCtx(r), id, body.NodeID) })
+	actor := event.ActorFromContext(r.Context())
+	if err := h.ops.Submit(id, model.OpUnarchive, actor, func(ctx context.Context, _ operation.ProgressFunc) error {
+		return h.lifecycle.Unarchive(ctx, id, body.NodeID)
+	}); err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	gs, _ := h.svc.GetGameserver(id)
+	respondOK(w, gs)
 }
 
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
@@ -209,16 +235,13 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Run migration in background — return 202 immediately.
-	// Migration involves stopping, volume transfer, and node reassignment which can take minutes.
-	// The gameserver.migrate event fires at start, gameserver.error or instance_stopped on completion.
-	ctx := detachedCtx(r)
-	go func() {
-		if err := h.lifecycle.MigrateGameserver(ctx, id, body.NodeID); err != nil {
-			h.log.Error("background migration failed", "id", id, "target_node", body.NodeID, "error", err)
-		}
-	}()
-
+	actor := event.ActorFromContext(r.Context())
+	if err := h.ops.Submit(id, model.OpMigrate, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+		return h.lifecycle.MigrateGameserver(ctx, id, body.NodeID, onProgress)
+	}); err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -233,11 +256,17 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	actionFn, ok := map[string]func(context.Context, string) error{
-		"start":   h.lifecycle.Start,
-		"stop":    h.lifecycle.Stop,
-		"restart": h.lifecycle.Restart,
-	}[body.Action]
+	type bulkActionDef struct {
+		opType string
+		fn     func(context.Context, string, operation.ProgressFunc) error
+	}
+	actionDefs := map[string]bulkActionDef{
+		"start":   {model.OpStart, h.lifecycle.Start},
+		"stop":    {model.OpStop, func(ctx context.Context, id string, _ operation.ProgressFunc) error { return h.lifecycle.Stop(ctx, id) }},
+		"restart": {model.OpRestart, h.lifecycle.Restart},
+	}
+
+	def, ok := actionDefs[body.Action]
 	if !ok {
 		respondError(w, http.StatusBadRequest, "action must be start, stop, or restart")
 		return
@@ -260,6 +289,7 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	actor := event.ActorFromContext(r.Context())
 	type result struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`
@@ -267,30 +297,33 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 		Error  string `json:"error,omitempty"`
 	}
 	var results []result
-	ctx := r.Context()
 	for _, gs := range gameservers {
-		r := result{ID: gs.ID, Name: gs.Name}
-		if err := actionFn(ctx, gs.ID); err != nil {
-			r.Error = err.Error()
-			r.Status = gs.Status
+		res := result{ID: gs.ID, Name: gs.Name}
+		gsID := gs.ID
+		if err := h.ops.Submit(gsID, def.opType, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+			return def.fn(ctx, gsID, onProgress)
+		}); err != nil {
+			res.Error = err.Error()
+			res.Status = gs.Status
 		} else {
-			updated, _ := h.svc.GetGameserver(gs.ID)
-			if updated != nil {
-				r.Status = updated.Status
-			}
+			res.Status = "accepted"
 		}
-		results = append(results, r)
+		results = append(results, res)
 	}
 
-	h.log.Info("bulk action completed", "action", body.Action, "total", len(gameservers), "node_id", body.NodeID)
+	h.log.Info("bulk action submitted", "action", body.Action, "total", len(gameservers), "node_id", body.NodeID)
 	respondOK(w, results)
 }
 
-// doAction runs a lifecycle action, then fetches and returns the updated gameserver.
-func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, action func(string) error) {
+// submitAction submits a lifecycle operation through the runner and returns the gameserver.
+// The runner handles context detachment, activity tracking, and the operation guard.
+func (h *GameserverHandlers) submitAction(w http.ResponseWriter, r *http.Request, opType string, fn func(context.Context, string, operation.ProgressFunc) error) {
 	id := chi.URLParam(r, "id")
-	if err := action(id); err != nil {
-		h.log.Error("gameserver action failed", "id", id, "error", err)
+	actor := event.ActorFromContext(r.Context())
+	if err := h.ops.Submit(id, opType, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+		return fn(ctx, id, onProgress)
+	}); err != nil {
+		h.log.Error("gameserver action failed", "id", id, "operation", opType, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -302,18 +335,6 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	respondOK(w, gs)
-}
-
-// detachedCtx creates a new context that preserves request values (actor, auth)
-// but is not canceled when the HTTP request completes. This allows long-running
-// operations like image pulls to survive client disconnects.
-func detachedCtx(r *http.Request) context.Context {
-	ctx := context.Background()
-	// Preserve actor for event publishing
-	if actor := event.ActorFromContext(r.Context()); actor.Type != "" {
-		ctx = event.SetActorInContext(ctx, actor)
-	}
-	return ctx
 }
 
 type statusResponse struct {
@@ -448,11 +469,11 @@ func (h *GameserverHandlers) OperationStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch, unwatch := h.lifecycle.WatchOperation(id)
+	ch, unwatch := h.tracker.Watch(id)
 	defer unwatch()
 
 	// Send the current state immediately so the client doesn't start blank
-	current := h.lifecycle.GetOperationState(id)
+	current := h.tracker.GetOperation(id)
 	data, _ := json.Marshal(current)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	flusher.Flush()

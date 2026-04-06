@@ -28,6 +28,7 @@ func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *status.Sta
 		svc.Dispatcher,
 		svc.Registry,
 		nil, // restartFunc not needed for recovery tests
+		nil, // runner not needed for recovery tests
 		log,
 	)
 	svc.GameserverSvc.SetStatusProvider(sm)
@@ -41,8 +42,8 @@ func TestRecovery_RunningInDB_InstanceGone(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Start the gameserver so it gets a real instance
-	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID))
-	svc.LifecycleSvc.WaitForOperations()
+	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil))
+	
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
