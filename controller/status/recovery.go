@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
@@ -155,26 +156,23 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	// Capture previous state before update
 	m.workerStateMu.Lock()
 	prev := m.workerStates[gsID]
-	m.workerStates[gsID] = &update
 	m.workerStateMu.Unlock()
-
-	// Publish status change so SSE/webhook consumers get the derived display status
-	newStatus, newReason := m.DeriveStatus(gs)
-	m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, gsID, &event.StatusChangedData{
-		Status:      newStatus,
-		ErrorReason: newReason,
-	}))
 
 	switch update.State {
 	case worker.StateRunning:
+		m.workerStateMu.Lock()
+		m.workerStates[gsID] = &update
+		delete(m.errorReasons, gsID)
+		m.workerStateMu.Unlock()
+
 		m.log.Info("instance ready", "gameserver", gsID)
 		m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverReady, gsID, nil))
 		m.startPolling(gsID)
 
-		// Clear error state on successful start
-		m.workerStateMu.Lock()
-		delete(m.errorReasons, gsID)
-		m.workerStateMu.Unlock()
+		// Publish status change
+		m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, gsID, &event.StatusChangedData{
+			Status: controller.StatusRunning,
+		}))
 
 		// Persist install flag
 		if update.Installed && !gs.Installed {
@@ -187,14 +185,28 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	case worker.StateExited:
 		m.stopPolling(gsID)
 
-		// If previous state was running/starting, this is an unexpected death
+		// If previous state was running/starting, this is an unexpected death.
+		// If prev is nil, SetStopped was called before the exit event — this is
+		// an expected stop. Don't write the exit state to the cache, because
+		// DeriveStatus would see the non-zero exit code and return "error" during
+		// the window before stopInstance finishes its cleanup.
 		wasRunning := prev != nil && (prev.State == worker.StateRunning || prev.State == worker.StateStarting)
 		if wasRunning {
+			m.workerStateMu.Lock()
+			m.workerStates[gsID] = &update
+			m.workerStateMu.Unlock()
+
 			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), m.statsPoller.GetCachedStats(gsID))
 			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode, "reason", reason)
 			m.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceExited, gsID, nil))
 			m.handleUnexpectedDeath(gs, reason)
+
+			m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, gsID, &event.StatusChangedData{
+				Status:      controller.StatusError,
+				ErrorReason: reason,
+			}))
 		} else {
+			// Expected stop — don't write exit state to cache
 			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
 		}
 	}
