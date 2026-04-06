@@ -1,4 +1,4 @@
-package gameserver_test
+package console_test
 
 import (
 	"testing"

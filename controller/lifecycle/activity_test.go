@@ -1,4 +1,4 @@
-package gameserver_test
+package lifecycle_test
 
 import (
 	"testing"
