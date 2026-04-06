@@ -235,6 +235,15 @@ func (t *InstanceTracker) watchLogsLoop(ctx context.Context, id string, re *rege
 			return
 		}
 	}
+
+	// Scanner exited without matching — the log reader returned EOF
+	// (instance exited or reader closed). Log so we can diagnose
+	// missed ready patterns.
+	if err := scanner.Err(); err != nil {
+		t.log.Warn("ready watcher: scanner error", "id", id, "error", err)
+	} else {
+		t.log.Warn("ready watcher: EOF without matching ready pattern", "id", id)
+	}
 }
 
 func (t *InstanceTracker) snapshotLocked(inst *TrackedInstance) InstanceStateUpdate {

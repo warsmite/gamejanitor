@@ -311,15 +311,20 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
-		if inst.exitCode.Load() != 0 && uptime < 3*time.Second {
-			// Immediate exit with error — likely a sandbox/config problem, not a game crash.
-			// Read the output log for the actual error.
+		exitCode := inst.exitCode.Load()
+		// Extract the signal that killed the process (if any)
+		var signalInfo string
+		if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			signalInfo = status.Signal().String()
+		}
+
+		if exitCode != 0 && uptime < 3*time.Second {
 			logData, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
 			w.log.Error("instance failed to start (exited immediately)",
-				"id", id, "exit_code", inst.exitCode.Load(), "uptime", uptime.Round(time.Millisecond),
+				"id", id, "exit_code", exitCode, "signal", signalInfo, "uptime", uptime.Round(time.Millisecond),
 				"output", truncate(string(logData), 500))
 		} else {
-			w.log.Info("instance exited", "id", id, "exit_code", inst.exitCode.Load(), "uptime", uptime.Round(time.Second))
+			w.log.Info("instance exited", "id", id, "exit_code", exitCode, "signal", signalInfo, "uptime", uptime.Round(time.Second))
 		}
 		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
 		close(inst.done)

@@ -273,6 +273,17 @@ func (r *followReader) Read(p []byte) (int, error) {
 		inst, ok := r.worker.instances[r.instanceID]
 		r.worker.mu.Unlock()
 		if !ok || inst.exited.Load() {
+			// Instance exited — keep reading until the file is fully drained.
+			// The ready pattern may be in the final log lines that were
+			// written to disk but not yet read by this file descriptor.
+			// Poll briefly to let any buffered writes flush.
+			for range 20 { // up to ~1s (20 × 50ms)
+				n, _ := r.f.Read(p)
+				if n > 0 {
+					return n, nil
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
 			return 0, io.EOF
 		}
 
