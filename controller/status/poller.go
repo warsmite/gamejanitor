@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -25,11 +25,11 @@ type StatsHistoryWriter interface {
 type StatsPoller struct {
 	store       Store
 	dispatcher  *orchestrator.Dispatcher
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	log         *slog.Logger
 	mu          sync.RWMutex
 	pollers     map[string]context.CancelFunc
-	cache       map[string]*controller.StatsData
+	cache       map[string]*event.StatsData
 
 	// Stats history persistence
 	statsWriter    StatsHistoryWriter
@@ -40,7 +40,7 @@ type StatsPoller struct {
 	flusherStop context.CancelFunc
 }
 
-func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, statsWriter StatsHistoryWriter, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, statsWriter StatsHistoryWriter, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
 		store:       store,
 		dispatcher:  dispatcher,
@@ -48,7 +48,7 @@ func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaste
 		statsWriter: statsWriter,
 		log:         log,
 		pollers:     make(map[string]context.CancelFunc),
-		cache:       make(map[string]*controller.StatsData),
+		cache:       make(map[string]*event.StatsData),
 	}
 }
 
@@ -58,7 +58,7 @@ func (s *StatsPoller) SetPlayerCountFn(fn func(string) int) {
 }
 
 // GetCachedStats returns the latest polled stats, or nil if not available.
-func (s *StatsPoller) GetCachedStats(gameserverID string) *controller.StatsData {
+func (s *StatsPoller) GetCachedStats(gameserverID string) *event.StatsData {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cache[gameserverID]
@@ -95,7 +95,7 @@ func (s *StatsPoller) StopAll() {
 		cancel()
 		delete(s.pollers, id)
 	}
-	s.cache = make(map[string]*controller.StatsData)
+	s.cache = make(map[string]*event.StatsData)
 	s.mu.Unlock()
 
 	// Stop the flusher and wait for final flush
@@ -180,7 +180,7 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("worker unavailable, stopping stats poll", "gameserver", gameserverID)
 		return false
 	}
-	data := &controller.StatsData{
+	data := &event.StatsData{
 		StorageLimitMB: gs.StorageLimitMB,
 	}
 
@@ -204,7 +204,7 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 	s.cache[gameserverID] = data
 	s.mu.Unlock()
 
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverStats, gameserverID, data))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverStats, gameserverID, data))
 
 	// Buffer for history persistence
 	if s.statsWriter != nil {

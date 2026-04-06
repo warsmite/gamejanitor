@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
@@ -14,7 +14,7 @@ import (
 // when conditions are detected (e.g. storage approaching limits). Deduplicates
 // warnings so each condition fires once, and emits a "resolved" when it clears.
 type WarningSubscriber struct {
-	bus         *controller.EventBus
+	bus         *event.EventBus
 	settingsSvc *settings.SettingsService
 	log         *slog.Logger
 	cancel      context.CancelFunc
@@ -26,7 +26,7 @@ type WarningSubscriber struct {
 	mu     sync.Mutex
 }
 
-func New(bus *controller.EventBus, settingsSvc *settings.SettingsService, log *slog.Logger) *WarningSubscriber {
+func New(bus *event.EventBus, settingsSvc *settings.SettingsService, log *slog.Logger) *WarningSubscriber {
 	return &WarningSubscriber{
 		bus:         bus,
 		settingsSvc: settingsSvc,
@@ -47,12 +47,12 @@ func (w *WarningSubscriber) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-ch:
+			case evt, ok := <-ch:
 				if !ok {
 					return
 				}
-				if e, ok := event.(controller.Event); ok && e.Type == controller.EventGameserverStats {
-					if stats, ok := e.Data.(*controller.StatsData); ok {
+				if e, ok := evt.(event.Event); ok && e.Type == event.EventGameserverStats {
+					if stats, ok := e.Data.(*event.StatsData); ok {
 						w.checkStorage(e.GameserverID, stats)
 					}
 				}
@@ -71,7 +71,7 @@ func (w *WarningSubscriber) Stop() {
 	w.log.Info("warning subscriber stopped")
 }
 
-func (w *WarningSubscriber) checkStorage(gameserverID string, stats *controller.StatsData) {
+func (w *WarningSubscriber) checkStorage(gameserverID string, stats *event.StatsData) {
 	if stats.StorageLimitMB == nil || *stats.StorageLimitMB <= 0 {
 		return
 	}
@@ -105,7 +105,7 @@ func (w *WarningSubscriber) checkStorage(gameserverID string, stats *controller.
 		delete(w.active, key)
 		w.mu.Unlock()
 
-		w.bus.Publish(controller.NewSystemEvent(controller.EventGameserverWarning, gameserverID, &controller.WarningData{
+		w.bus.Publish(event.NewSystemEvent(event.EventGameserverWarning, gameserverID, &event.WarningData{
 			Category: "storage",
 			Level:    "resolved",
 			Message:  fmt.Sprintf("Storage usage dropped below %d%%", warningThreshold),
@@ -126,7 +126,7 @@ func (w *WarningSubscriber) checkStorage(gameserverID string, stats *controller.
 		w.mu.Unlock()
 
 		msg := fmt.Sprintf("Storage usage at %d%% (%d/%d MB)", pct, stats.VolumeSizeBytes/(1024*1024), *stats.StorageLimitMB)
-		w.bus.Publish(controller.NewSystemEvent(controller.EventGameserverWarning, gameserverID, &controller.WarningData{
+		w.bus.Publish(event.NewSystemEvent(event.EventGameserverWarning, gameserverID, &event.WarningData{
 			Category: "storage",
 			Level:    newLevel,
 			Message:  msg,

@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
@@ -66,7 +67,7 @@ type GameserverService struct {
 	store          Store
 	dispatcher     *orchestrator.Dispatcher
 	log            *slog.Logger
-	broadcaster    *controller.EventBus
+	broadcaster    *event.EventBus
 	statusProvider StatusProvider
 	settingsSvc    *settings.SettingsService
 	gameStore      *games.GameStore
@@ -104,16 +105,16 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 		gs, _ := s.store.GetGameserver(*gameserverID)
 		if gs != nil {
 			s.store.PopulateNode(gs)
-			var a controller.Actor
+			var a event.Actor
 			json.Unmarshal(actor, &a)
-			s.broadcaster.Publish(controller.NewEvent(eventType, *gameserverID, a, &controller.GameserverActionData{
+			s.broadcaster.Publish(event.NewEvent(eventType, *gameserverID, a, &event.GameserverActionData{
 				Gameserver: gs,
 			}))
 		}
 	}
 }
 
-func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, log *slog.Logger) *GameserverService {
+func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placementSvc}
 }
 
@@ -304,10 +305,10 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	portsCommitted = true
 	s.placement.CommitPorts(gs.ID)
 
-	actor := controller.ActorFromContext(ctx)
+	actor := event.ActorFromContext(ctx)
 	actorJSON, _ := json.Marshal(actor)
 	dataJSON, _ := json.Marshal(gs)
-	s.recordInstant(&gs.ID, controller.EventGameserverCreate, actorJSON, dataJSON)
+	s.recordInstant(&gs.ID, event.EventGameserverCreate, actorJSON, dataJSON)
 
 	return rawPassword, nil
 }
@@ -560,10 +561,10 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		}
 	}
 
-	updateActor := controller.ActorFromContext(ctx)
+	updateActor := event.ActorFromContext(ctx)
 	updateActorJSON, _ := json.Marshal(updateActor)
 	updateDataJSON, _ := json.Marshal(existing)
-	s.recordInstant(&existing.ID, controller.EventGameserverUpdate, updateActorJSON, updateDataJSON)
+	s.recordInstant(&existing.ID, event.EventGameserverUpdate, updateActorJSON, updateDataJSON)
 
 	return nil
 }
@@ -618,13 +619,13 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 
-	actor := controller.ActorFromContext(ctx)
+	actor := event.ActorFromContext(ctx)
 	s.deleteWg.Add(1)
 	go func() {
 		defer s.deleteWg.Done()
 		bgCtx := context.Background()
 		if actor.Type != "" {
-			bgCtx = controller.SetActorInContext(bgCtx, actor)
+			bgCtx = event.SetActorInContext(bgCtx, actor)
 		}
 		if err := s.doDelete(bgCtx, id); err != nil {
 			s.log.Error("delete failed", "gameserver", id, "error", err)
@@ -698,10 +699,10 @@ func (s *GameserverService) doDelete(ctx context.Context, id string) error {
 	}
 
 	s.store.PopulateNode(gs)
-	deleteActor := controller.ActorFromContext(ctx)
+	deleteActor := event.ActorFromContext(ctx)
 	deleteActorJSON, _ := json.Marshal(deleteActor)
 	deleteDataJSON, _ := json.Marshal(gs)
-	s.recordInstant(&gs.ID, controller.EventGameserverDelete, deleteActorJSON, deleteDataJSON)
+	s.recordInstant(&gs.ID, event.EventGameserverDelete, deleteActorJSON, deleteDataJSON)
 
 	if err := s.store.DeleteGameserver(id); err != nil {
 		return err

@@ -1,7 +1,7 @@
 package gameserver_test
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -152,12 +152,12 @@ drain:
 	for {
 		select {
 		case evt := <-ch:
-			if evt.EventType() == controller.EventGameserverCreate {
+			if evt.EventType() == event.EventGameserverCreate {
 				found = true
-				e, ok := evt.(controller.Event)
+				e, ok := evt.(event.Event)
 				assert.True(t, ok)
 				assert.Equal(t, gs.ID, e.GameserverID)
-				data, ok := e.Data.(*controller.GameserverActionData)
+				data, ok := e.Data.(*event.GameserverActionData)
 				assert.True(t, ok)
 				assert.NotNil(t, data.Gameserver)
 				assert.Equal(t, testutil.TestGameID, data.Gameserver.GameID)

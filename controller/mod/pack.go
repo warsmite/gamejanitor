@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -217,7 +218,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		overrideModCount++
 	}
 
-	s.publishEvent(ctx, gameserverID, pack, controller.EventModInstalled)
+	s.publishEvent(ctx, gameserverID, pack, event.EventModInstalled)
 
 	result.Pack = pack
 	result.ModCount = len(contents.Mods) + overrideModCount

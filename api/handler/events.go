@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -39,13 +38,13 @@ func visibleGameserverIDs(r *http.Request, vis GameserverQuerier) []string {
 }
 
 type EventHandlers struct {
-	bus        *controller.EventBus
+	bus        *event.EventBus
 	historySvc *event.EventHistoryService
 	visibility GameserverQuerier
 	log        *slog.Logger
 }
 
-func NewEventHandlers(bus *controller.EventBus, historySvc *event.EventHistoryService, visibility GameserverQuerier, log *slog.Logger) *EventHandlers {
+func NewEventHandlers(bus *event.EventBus, historySvc *event.EventHistoryService, visibility GameserverQuerier, log *slog.Logger) *EventHandlers {
 	return &EventHandlers{bus: bus, historySvc: historySvc, visibility: visibility, log: log}
 }
 
@@ -89,26 +88,26 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case event, ok := <-ch:
+		case evt, ok := <-ch:
 			if !ok {
 				return
 			}
-			if !matchesTypeFilter(event.EventType(), typeFilter) {
+			if !matchesTypeFilter(evt.EventType(), typeFilter) {
 				continue
 			}
 			// Filter by token scope — cluster events (empty gameserver ID) only for all-access tokens
 			if allowedSet != nil {
-				gsID := event.EventGameserverID()
+				gsID := evt.EventGameserverID()
 				if gsID == "" || !allowedSet[gsID] {
 					continue
 				}
 			}
-			data, err := json.Marshal(event)
+			data, err := json.Marshal(evt)
 			if err != nil {
 				h.log.Error("marshaling SSE event", "error", err)
 				continue
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.EventType(), data)
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", evt.EventType(), data)
 			flusher.Flush()
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": heartbeat\n\n")

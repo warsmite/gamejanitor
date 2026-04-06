@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 )
 
 // skipPersistence contains event types that are too high-frequency to persist.
 var skipPersistence = map[string]bool{
-	controller.EventGameserverStats:     true,
-	controller.EventGameserverQuery:     true,
-	controller.EventGameserverOperation: true,
+	EventGameserverStats:     true,
+	EventGameserverQuery:     true,
+	EventGameserverOperation: true,
 }
 
 // PersistenceStore abstracts event writes for the persister.
@@ -29,13 +28,13 @@ type PersistenceStore interface {
 // schedule events, and mod events that would otherwise be ephemeral.
 type EventPersister struct {
 	store  PersistenceStore
-	bus    *controller.EventBus
+	bus    *EventBus
 	log    *slog.Logger
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
-func NewEventPersister(store PersistenceStore, bus *controller.EventBus, log *slog.Logger) *EventPersister {
+func NewEventPersister(store PersistenceStore, bus *EventBus, log *slog.Logger) *EventPersister {
 	return &EventPersister{store: store, bus: bus, log: log}
 }
 
@@ -71,7 +70,7 @@ func (p *EventPersister) Stop() {
 	p.log.Info("event persister stopped")
 }
 
-func (p *EventPersister) persist(event controller.WebhookEvent) {
+func (p *EventPersister) persist(event WebhookEvent) {
 	eventType := event.EventType()
 
 	if skipPersistence[eventType] {
@@ -82,8 +81,8 @@ func (p *EventPersister) persist(event controller.WebhookEvent) {
 	// Those are action events (gameserver.start, gameserver.create, etc.) published
 	// from within the gameserver service after writing to the events table.
 	// GameserverActionData carries a full Gameserver object — that's the marker.
-	if e, ok := event.(controller.Event); ok {
-		if _, isAction := e.Data.(*controller.GameserverActionData); isAction {
+	if e, ok := event.(Event); ok {
+		if _, isAction := e.Data.(*GameserverActionData); isAction {
 			return
 		}
 	}

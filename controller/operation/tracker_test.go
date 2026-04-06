@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
 func newTestTracker() *Tracker {
-	bus := controller.NewEventBus()
+	bus := event.NewEventBus()
 	return NewTracker(bus, slog.Default())
 }
 
@@ -210,7 +210,7 @@ func TestTracker_Concurrent(t *testing.T) {
 }
 
 func TestTracker_PublishesEvents(t *testing.T) {
-	bus := controller.NewEventBus()
+	bus := event.NewEventBus()
 	tracker := NewTracker(bus, slog.Default())
 
 	ch, unsub := bus.Subscribe()
@@ -221,9 +221,9 @@ func TestTracker_PublishesEvents(t *testing.T) {
 	select {
 	case ev := <-ch:
 		assert.Equal(t, "gameserver.operation", ev.EventType())
-		e, ok := ev.(controller.Event)
+		e, ok := ev.(event.Event)
 		require.True(t, ok)
-		data, ok := e.Data.(*controller.OperationData)
+		data, ok := e.Data.(*event.OperationData)
 		require.True(t, ok)
 		require.NotNil(t, data.Operation)
 		assert.Equal(t, model.PhaseDownloadingGame, data.Operation.Phase)
@@ -235,9 +235,9 @@ func TestTracker_PublishesEvents(t *testing.T) {
 
 	select {
 	case ev := <-ch:
-		e, ok := ev.(controller.Event)
+		e, ok := ev.(event.Event)
 		require.True(t, ok)
-		data, ok := e.Data.(*controller.OperationData)
+		data, ok := e.Data.(*event.OperationData)
 		require.True(t, ok)
 		assert.Nil(t, data.Operation)
 	case <-time.After(time.Second):

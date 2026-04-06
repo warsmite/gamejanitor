@@ -1,4 +1,4 @@
-package controller
+package event
 
 import (
 	"log/slog"
@@ -50,15 +50,15 @@ func (b *EventBus) Subscribe() (<-chan WebhookEvent, func()) {
 }
 
 // Publish sends an event to all subscribers. Non-blocking: slow clients miss events.
-func (b *EventBus) Publish(event WebhookEvent) {
+func (b *EventBus) Publish(ev WebhookEvent) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
 	for _, ch := range b.subscribers {
 		select {
-		case ch <- event:
+		case ch <- ev:
 		default:
-			slog.Warn("event bus: dropped event, subscriber buffer full", "event_type", event.EventType())
+			slog.Warn("event bus: dropped event, subscriber buffer full", "event_type", ev.EventType())
 		}
 	}
 }

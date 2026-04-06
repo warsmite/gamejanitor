@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/placement"
@@ -52,7 +52,7 @@ type Service struct {
 	store          Store
 	dispatcher     *orchestrator.Dispatcher
 	log            *slog.Logger
-	broadcaster    *controller.EventBus
+	broadcaster    *event.EventBus
 	statusProvider StatusProvider
 	modReconciler  ModReconciler
 	settingsSvc    *settings.SettingsService
@@ -68,7 +68,7 @@ type Service struct {
 func NewService(
 	store Store,
 	dispatcher *orchestrator.Dispatcher,
-	broadcaster *controller.EventBus,
+	broadcaster *event.EventBus,
 	settingsSvc *settings.SettingsService,
 	gameStore *games.GameStore,
 	placementSvc *placement.Service,
@@ -148,7 +148,7 @@ func (s *Service) getGameserverWithStatus(id string) (*model.Gameserver, error) 
 // setError publishes an error event. The StatusManager picks it up and updates
 // the in-memory runtime state. No DB write — status is derived on read.
 func (s *Service) setError(id string, reason string) {
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, id, &controller.ErrorData{Reason: reason}))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, id, &event.ErrorData{Reason: reason}))
 }
 
 // runOperation launches a lifecycle operation in a background goroutine.
@@ -160,14 +160,14 @@ func (s *Service) runOperation(ctx context.Context, gsID, workerID, opType strin
 		return err
 	}
 
-	actor := controller.ActorFromContext(ctx)
+	actor := event.ActorFromContext(ctx)
 
 	s.operationWg.Add(1)
 	go func() {
 		defer s.operationWg.Done()
 		bgCtx := context.Background()
 		if actor.Type != "" {
-			bgCtx = controller.SetActorInContext(bgCtx, actor)
+			bgCtx = event.SetActorInContext(bgCtx, actor)
 		}
 		if err := work(bgCtx); err != nil {
 			s.log.Error("operation failed", "gameserver", gsID, "operation", opType, "error", err)
@@ -198,7 +198,7 @@ func (s *Service) trackActivity(ctx context.Context, gsID, workerID, opType stri
 	// Publish action event to EventBus for SSE/webhook subscribers
 	gs, _ := s.store.GetGameserver(gsID)
 	if gs != nil {
-		s.broadcaster.Publish(controller.NewEvent(controller.EventTypeForOp(opType), gsID, controller.ActorFromContext(ctx), &controller.GameserverActionData{
+		s.broadcaster.Publish(event.NewEvent(event.EventTypeForOp(opType), gsID, event.ActorFromContext(ctx), &event.GameserverActionData{
 			Gameserver: gs,
 		}))
 	}

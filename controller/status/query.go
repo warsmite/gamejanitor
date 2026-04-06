@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gjq"
@@ -32,14 +33,14 @@ type QueryPlayer struct {
 type QueryService struct {
 	store       Store
 	log         *slog.Logger
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	gameStore   *games.GameStore
 	mu          sync.RWMutex
 	cache       map[string]*QueryData
 	pollers     map[string]context.CancelFunc
 }
 
-func NewQueryService(store Store, broadcaster *controller.EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
+func NewQueryService(store Store, broadcaster *event.EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
 	return &QueryService{
 		store:       store,
 		log:         log,
@@ -166,7 +167,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 				for i, p := range data.Players {
 					playerNames[i] = p.Name
 				}
-				s.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverQuery, gameserverID, &controller.QueryData{
+				s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverQuery, gameserverID, &event.QueryData{
 					PlayersOnline: data.PlayersOnline,
 					MaxPlayers:    data.MaxPlayers,
 					Players:       playerNames,

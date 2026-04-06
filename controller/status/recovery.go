@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
@@ -160,7 +160,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 
 	// Publish status change so SSE/webhook consumers get the derived display status
 	newStatus, newReason := m.DeriveStatus(gs)
-	m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverStatusChanged, gsID, &controller.StatusChangedData{
+	m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, gsID, &event.StatusChangedData{
 		Status:      newStatus,
 		ErrorReason: newReason,
 	}))
@@ -168,7 +168,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 	switch update.State {
 	case worker.StateRunning:
 		m.log.Info("instance ready", "gameserver", gsID)
-		m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverReady, gsID, nil))
+		m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverReady, gsID, nil))
 		m.startPolling(gsID)
 
 		// Clear error state on successful start
@@ -192,7 +192,7 @@ func (m *StatusManager) handleInstanceStateUpdate(update worker.InstanceStateUpd
 		if wasRunning {
 			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), m.statsPoller.GetCachedStats(gsID))
 			m.log.Warn("unexpected instance death", "gameserver", gsID, "exit_code", update.ExitCode, "reason", reason)
-			m.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceExited, gsID, nil))
+			m.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceExited, gsID, nil))
 			m.handleUnexpectedDeath(gs, reason)
 		} else {
 			m.log.Debug("instance state: expected instance stop", "gameserver", gsID)
@@ -217,7 +217,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.log.Info("starting event watcher for remote worker", "worker", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
-	m.broadcaster.Publish(controller.NewEvent(controller.EventWorkerConnected, "", controller.SystemActor, &controller.WorkerActionData{
+	m.broadcaster.Publish(event.NewEvent(event.EventWorkerConnected, "", event.SystemActor, &event.WorkerActionData{
 		WorkerID: nodeID,
 	}))
 
@@ -238,7 +238,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 	}
 	m.workerMu.Unlock()
 
-	m.broadcaster.Publish(controller.NewEvent(controller.EventWorkerDisconnected, "", controller.SystemActor, &controller.WorkerActionData{
+	m.broadcaster.Publish(event.NewEvent(event.EventWorkerDisconnected, "", event.SystemActor, &event.WorkerActionData{
 		WorkerID: nodeID,
 	}))
 

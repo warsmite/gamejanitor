@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/validate"
 )
@@ -26,11 +27,11 @@ type WorkerNodeStore interface {
 type WorkerNodeService struct {
 	store       WorkerNodeStore
 	registry    *Registry
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	log         *slog.Logger
 }
 
-func NewWorkerNodeService(store WorkerNodeStore, registry *Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
+func NewWorkerNodeService(store WorkerNodeStore, registry *Registry, broadcaster *event.EventBus, log *slog.Logger) *WorkerNodeService {
 	return &WorkerNodeService{store: store, registry: registry, broadcaster: broadcaster, log: log}
 }
 
@@ -175,7 +176,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	}
 
 	view, _ := s.Get(id)
-	s.broadcaster.Publish(controller.NewEvent(controller.EventWorkerUpdated, "", controller.ActorFromContext(ctx), &controller.WorkerActionData{
+	s.broadcaster.Publish(event.NewEvent(event.EventWorkerUpdated, "", event.ActorFromContext(ctx), &event.WorkerActionData{
 		WorkerID: id,
 		Worker:   view,
 	}))

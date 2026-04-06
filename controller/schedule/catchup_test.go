@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
@@ -67,9 +67,9 @@ collect:
 		select {
 		case evt := <-ch:
 			evtType := evt.EventType()
-			if evtType == controller.EventScheduleTaskCompleted || evtType == controller.EventScheduleTaskFailed {
-				if e, ok := evt.(controller.Event); ok {
-					if data, ok := e.Data.(*controller.ScheduledTaskData); ok && data.TaskType == "backup" {
+			if evtType == event.EventScheduleTaskCompleted || evtType == event.EventScheduleTaskFailed {
+				if e, ok := evt.(event.Event); ok {
+					if data, ok := e.Data.(*event.ScheduledTaskData); ok && data.TaskType == "backup" {
 						executed++
 					}
 				}
@@ -144,12 +144,12 @@ collect:
 	for {
 		select {
 		case evt := <-ch:
-			if e, ok := evt.(controller.Event); ok {
-				if data, ok := e.Data.(*controller.ScheduledTaskData); ok {
+			if e, ok := evt.(event.Event); ok {
+				if data, ok := e.Data.(*event.ScheduledTaskData); ok {
 					switch e.Type {
-					case controller.EventScheduleTaskMissed:
+					case event.EventScheduleTaskMissed:
 						missedCount++
-					case controller.EventScheduleTaskCompleted, controller.EventScheduleTaskFailed:
+					case event.EventScheduleTaskCompleted, event.EventScheduleTaskFailed:
 						if data.TaskType == "restart" || data.TaskType == "command" {
 							executedCount++
 						}
@@ -212,8 +212,8 @@ func TestCatchUp_NotMissed_NoAction(t *testing.T) {
 	for {
 		select {
 		case evt := <-ch:
-			if e, ok := evt.(controller.Event); ok {
-				if data, ok := e.Data.(*controller.ScheduledTaskData); ok {
+			if e, ok := evt.(event.Event); ok {
+				if data, ok := e.Data.(*event.ScheduledTaskData); ok {
 					if data.TaskType == "backup" {
 						t.Fatalf("backup task should not have fired, got event type %s", e.Type)
 					}

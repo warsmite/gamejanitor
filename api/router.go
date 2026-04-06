@@ -5,7 +5,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -49,7 +48,7 @@ type RouterOptions struct {
 	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
 	GameserverQuerier handler.GameserverQuerier
-	Broadcaster      *controller.EventBus
+	Broadcaster      *event.EventBus
 	Log             *slog.Logger
 	WebUI           fs.FS // embedded UI static files (nil to disable)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -149,7 +150,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 			}
 		}
 
-		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventDepotDownloading, id, &controller.DepotDownloadingData{
+		s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotDownloading, id, &event.DepotDownloadingData{
 			AppID: depotAppID,
 		}))
 		if s.operations != nil {
@@ -173,11 +174,11 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		depotDir = depotResult.DepotDir
 
 		if depotResult.Cached {
-			s.broadcaster.Publish(controller.NewSystemEvent(controller.EventDepotCached, id, &controller.DepotCachedData{
+			s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotCached, id, &event.DepotCachedData{
 				AppID: depotAppID,
 			}))
 		} else {
-			s.broadcaster.Publish(controller.NewSystemEvent(controller.EventDepotComplete, id, &controller.DepotCompleteData{
+			s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotComplete, id, &event.DepotCompleteData{
 				AppID:           depotAppID,
 				BytesDownloaded: depotResult.BytesDownloaded,
 			}))
@@ -188,7 +189,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	if s.operations != nil {
 		s.operations.SetOperation(id, "start", model.PhasePullingImage)
 	}
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventImagePulling, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
 		if s.operations != nil && p.TotalBytes > 0 {
 			s.operations.UpdateProgress(id, model.OperationProgress{
@@ -201,7 +202,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		s.setError(id, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventImagePulled, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulled, id, nil))
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
@@ -376,7 +377,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 		w.RemoveInstance(ctx, instanceID)
 		return err
 	}
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceCreating, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceCreating, id, nil))
 
 	// Start instance — worker handles ready detection via the ready pattern
 	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
@@ -387,7 +388,7 @@ func (s *Service) doStart(ctx context.Context, id string) error {
 	if s.statusProvider != nil {
 		s.statusProvider.SetRunning(id)
 	}
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStarted, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStarted, id, nil))
 
 	s.log.Info("gameserver started", "gameserver", id, "instance_id", instanceID[:12])
 	return nil
@@ -414,7 +415,7 @@ func (s *Service) Stop(ctx context.Context, id string) error {
 	if s.statusProvider != nil {
 		s.statusProvider.SetStopped(id)
 	}
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -490,7 +491,7 @@ func (s *Service) doStop(ctx context.Context, id string) error {
 		s.statusProvider.SetStopped(id)
 	}
 
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopped, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopped, id, nil))
 	s.log.Info("gameserver stopped", "gameserver", id)
 	return nil
 }
@@ -530,7 +531,7 @@ func (s *Service) Restart(ctx context.Context, id string) error {
 			if s.statusProvider != nil {
 				s.statusProvider.SetStopped(id)
 			}
-			s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
+			s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
 			if err := s.doStop(ctx, id); err != nil {
 				return fmt.Errorf("stopping gameserver for restart: %w", err)
@@ -583,13 +584,13 @@ func (s *Service) doUpdateServerGame(ctx context.Context, id string) error {
 		return fmt.Errorf("game %s not found", gs.GameID)
 	}
 
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventImagePulling, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 
 	if gs.Status != controller.StatusStopped {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
+		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
 		if err := s.doStop(ctx, id); err != nil {
 			s.setError(id, controller.OperationFailedReason("Game update failed", err))
@@ -698,13 +699,13 @@ func (s *Service) doReinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	s.broadcaster.Publish(controller.NewSystemEvent(controller.EventImagePulling, id, nil))
+	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
 
 	if gs.Status != controller.StatusStopped {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
+		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
 		if err := s.doStop(ctx, id); err != nil {
 			s.setError(id, controller.OperationFailedReason("Reinstall failed", err))

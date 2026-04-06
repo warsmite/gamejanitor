@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/robfig/cron/v3"
 )
@@ -35,13 +35,13 @@ type Scheduler struct {
 	backupSvc     BackupOps
 	gameserverSvc GameserverOps
 	consoleSvc    ConsoleOps
-	broadcaster   *controller.EventBus
+	broadcaster   *event.EventBus
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(store Store, backupSvc BackupOps, gameserverSvc GameserverOps, consoleSvc ConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(store Store, backupSvc BackupOps, gameserverSvc GameserverOps, consoleSvc ConsoleOps, broadcaster *event.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		store:         store,
@@ -130,7 +130,7 @@ func (s *Scheduler) catchUpMissed() {
 				s.log.Warn("skipping missed schedule (not catch-up eligible)",
 					"schedule", sched.ID, "type", sched.Type,
 					"gameserver", sched.GameserverID, "was_due", sched.NextRun)
-				s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskMissed, sched.GameserverID, controller.Actor{Type: "schedule", ScheduleID: sched.ID}, &controller.ScheduledTaskData{
+				s.broadcaster.Publish(event.NewEvent(event.EventScheduleTaskMissed, sched.GameserverID, event.Actor{Type: "schedule", ScheduleID: sched.ID}, &event.ScheduledTaskData{
 					Schedule: &sched,
 					TaskType: sched.Type,
 				}))
@@ -216,7 +216,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	// No operation timeout. Scheduled tasks include game updates (50GB+ image pulls)
 	// and backups (500GB+ volumes) that can legitimately run for hours on slow
 	// networks. The cron library won't fire the next run until this one completes.
-	ctx := controller.SetActorInContext(context.Background(), controller.Actor{Type: "schedule", ScheduleID: scheduleID})
+	ctx := event.SetActorInContext(context.Background(), event.Actor{Type: "schedule", ScheduleID: scheduleID})
 	s.log.Info("executing scheduled task", "schedule", scheduleID, "type", schedule.Type, "gameserver", schedule.GameserverID)
 
 	var taskErr error
@@ -243,14 +243,14 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	if taskErr != nil {
 		s.log.Error("scheduled task failed", "schedule", scheduleID, "type", schedule.Type, "error", taskErr)
-		s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskFailed, schedule.GameserverID, controller.Actor{Type: "schedule", ScheduleID: scheduleID}, &controller.ScheduledTaskData{
+		s.broadcaster.Publish(event.NewEvent(event.EventScheduleTaskFailed, schedule.GameserverID, event.Actor{Type: "schedule", ScheduleID: scheduleID}, &event.ScheduledTaskData{
 			Schedule: schedule,
 			TaskType: schedule.Type,
 			Error:    taskErr.Error(),
 		}))
 	} else {
 		s.log.Info("scheduled task completed", "schedule", scheduleID, "type", schedule.Type)
-		s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleTaskCompleted, schedule.GameserverID, controller.Actor{Type: "schedule", ScheduleID: scheduleID}, &controller.ScheduledTaskData{
+		s.broadcaster.Publish(event.NewEvent(event.EventScheduleTaskCompleted, schedule.GameserverID, event.Actor{Type: "schedule", ScheduleID: scheduleID}, &event.ScheduledTaskData{
 			Schedule: schedule,
 			TaskType: schedule.Type,
 		}))

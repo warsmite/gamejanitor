@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
@@ -104,12 +104,12 @@ func TestLogger() *slog.Logger {
 
 // TestContext returns a context with a system actor set (for event publishing).
 func TestContext() context.Context {
-	return controller.SetActorInContext(context.Background(), controller.SystemActor)
+	return event.SetActorInContext(context.Background(), event.SystemActor)
 }
 
 // WaitForEvent subscribes to the event bus and waits for an event of the given type.
 // Returns the event or fails the test if the timeout (default 2s) expires.
-func WaitForEvent(t *testing.T, bus *controller.EventBus, eventType string, timeout ...time.Duration) controller.WebhookEvent {
+func WaitForEvent(t *testing.T, bus *event.EventBus, eventType string, timeout ...time.Duration) event.WebhookEvent {
 	t.Helper()
 
 	d := 2 * time.Second
@@ -153,11 +153,11 @@ func WaitForBackupCompletion(t *testing.T, svc *ServiceBundle, backupID string) 
 }
 
 // CollectEvents subscribes to the event bus and collects all events for the given duration.
-func CollectEvents(bus *controller.EventBus, duration time.Duration) []controller.WebhookEvent {
+func CollectEvents(bus *event.EventBus, duration time.Duration) []event.WebhookEvent {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	var events []controller.WebhookEvent
+	var events []event.WebhookEvent
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 

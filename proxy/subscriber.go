@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -28,7 +29,7 @@ type Subscriber struct {
 // NewSubscriber creates a proxy subscriber that syncs routes from events.
 // localNodeID is the controller's own worker ID (empty if controller-only, no local worker).
 // Gameservers on the local node are served directly by the runtime — no proxy needed.
-func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.EventBus, localNodeID string, log *slog.Logger) *Subscriber {
+func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *event.EventBus, localNodeID string, log *slog.Logger) *Subscriber {
 	s := &Subscriber{
 		manager:     manager,
 		lookup:      lookup,
@@ -43,13 +44,13 @@ func NewSubscriber(manager *Manager, lookup GameserverLookup, bus *controller.Ev
 	return s
 }
 
-func (s *Subscriber) listen(ch <-chan controller.WebhookEvent) {
-	for event := range ch {
-		switch event.EventType() {
-		case controller.EventInstanceStarted, controller.EventGameserverReady:
-			s.addRoutes(event.EventGameserverID())
-		case controller.EventInstanceStopped, controller.EventInstanceExited, controller.EventGameserverError:
-			s.removeRoutes(event.EventGameserverID())
+func (s *Subscriber) listen(ch <-chan event.WebhookEvent) {
+	for evt := range ch {
+		switch evt.EventType() {
+		case event.EventInstanceStarted, event.EventGameserverReady:
+			s.addRoutes(evt.EventGameserverID())
+		case event.EventInstanceStopped, event.EventInstanceExited, event.EventGameserverError:
+			s.removeRoutes(evt.EventGameserverID())
 		}
 	}
 }

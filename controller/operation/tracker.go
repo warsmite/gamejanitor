@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -17,11 +17,11 @@ type Tracker struct {
 	operations map[string]*model.Operation
 	watchers   map[string]map[uint64]chan *model.Operation
 	nextWatch  uint64
-	bus        *controller.EventBus
+	bus        *event.EventBus
 	log        *slog.Logger
 }
 
-func NewTracker(bus *controller.EventBus, log *slog.Logger) *Tracker {
+func NewTracker(bus *event.EventBus, log *slog.Logger) *Tracker {
 	return &Tracker{
 		operations: make(map[string]*model.Operation),
 		watchers:   make(map[string]map[uint64]chan *model.Operation),
@@ -40,7 +40,7 @@ func (t *Tracker) SetOperation(gameserverID, opType string, phase model.Operatio
 	t.notifyWatchersLocked(gameserverID, op)
 	t.mu.Unlock()
 
-	t.bus.Publish(controller.NewSystemEvent(controller.EventGameserverOperation, gameserverID, &controller.OperationData{
+	t.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, gameserverID, &event.OperationData{
 		Operation: &model.Operation{Type: opType, Phase: phase},
 	}))
 
@@ -76,7 +76,7 @@ func (t *Tracker) ClearOperation(gameserverID string) {
 		return
 	}
 
-	t.bus.Publish(controller.NewSystemEvent(controller.EventGameserverOperation, gameserverID, &controller.OperationData{
+	t.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, gameserverID, &event.OperationData{
 		Operation: nil,
 	}))
 

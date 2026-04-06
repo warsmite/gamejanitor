@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -318,7 +319,7 @@ func ValidateEventFilter(events []string) error {
 			continue
 		}
 		matched := false
-		for _, known := range controller.AllEventTypes {
+		for _, known := range event.AllEventTypes {
 			if e == known {
 				matched = true
 				break

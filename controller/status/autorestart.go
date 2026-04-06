@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -15,7 +15,7 @@ const maxAutoRestartAttempts = 3
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
 func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason string) {
 	if gs.AutoRestart == nil || !*gs.AutoRestart || m.restartFunc == nil {
-		m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, gs.ID, &controller.ErrorData{Reason: reason}))
+		m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gs.ID, &event.ErrorData{Reason: reason}))
 		return
 	}
 
@@ -28,7 +28,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason strin
 		m.log.Error("auto-restart limit reached, giving up", "gameserver", gs.ID, "attempts", maxAutoRestartAttempts, "reason", reason)
 		gs.DesiredState = "stopped"
 		m.store.UpdateGameserver(gs)
-		m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, gs.ID, &controller.ErrorData{Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", maxAutoRestartAttempts, reason)}))
+		m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gs.ID, &event.ErrorData{Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", maxAutoRestartAttempts, reason)}))
 		return
 	}
 
@@ -43,14 +43,14 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason strin
 	go func() {
 		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
 			m.log.Error("auto-restart failed", "gameserver", gs.ID, "attempt", count, "error", err)
-			m.broadcaster.Publish(controller.NewSystemEvent(controller.EventGameserverError, gs.ID, &controller.ErrorData{Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error())}))
+			m.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gs.ID, &event.ErrorData{Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error())}))
 		}
 	}()
 }
 
 // describeExit produces a human-readable crash reason from the exit code,
 // uptime, and last-known resource usage.
-func describeExit(exitCode int, uptime time.Duration, lastStats *controller.StatsData) string {
+func describeExit(exitCode int, uptime time.Duration, lastStats *event.StatsData) string {
 	uptimeStr := uptime.Round(time.Second).String()
 
 	var reason string

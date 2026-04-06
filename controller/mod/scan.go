@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -154,7 +155,7 @@ func (s *ModService) TrackFile(ctx context.Context, gameserverID, category, file
 		return nil, fmt.Errorf("tracking file: %w", err)
 	}
 
-	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	s.publishEvent(ctx, gameserverID, mod, event.EventModInstalled)
 	return mod, nil
 }
 

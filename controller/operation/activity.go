@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -60,7 +60,7 @@ func (t *ActivityTracker) Start(gameserverID, workerID, opType string, actor jso
 	}
 
 	eventID := uuid.New().String()
-	if err := t.recordEvent(eventID, &gameserverID, workerID, controller.EventTypeForOp(opType), actor, data); err != nil {
+	if err := t.recordEvent(eventID, &gameserverID, workerID, event.EventTypeForOp(opType), actor, data); err != nil {
 		return "", err
 	}
 

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -45,7 +45,7 @@ type ReachabilityStore interface {
 // when a gameserver reaches "running" status. Results are cached in memory
 // and emitted as events.
 type ReachabilityChecker struct {
-	bus         *controller.EventBus
+	bus         *event.EventBus
 	settingsSvc *settings.SettingsService
 	store       ReachabilityStore
 	log         *slog.Logger
@@ -59,7 +59,7 @@ type ReachabilityChecker struct {
 	mu      sync.RWMutex
 }
 
-func New(bus *controller.EventBus, settingsSvc *settings.SettingsService, store ReachabilityStore, log *slog.Logger) *ReachabilityChecker {
+func New(bus *event.EventBus, settingsSvc *settings.SettingsService, store ReachabilityStore, log *slog.Logger) *ReachabilityChecker {
 	return &ReachabilityChecker{
 		bus:         bus,
 		settingsSvc: settingsSvc,
@@ -84,11 +84,11 @@ func (c *ReachabilityChecker) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-ch:
+			case evt, ok := <-ch:
 				if !ok {
 					return
 				}
-				if e, ok := event.(controller.Event); ok && e.Type == controller.EventGameserverReady {
+				if e, ok := evt.(event.Event); ok && e.Type == event.EventGameserverReady {
 					go c.check(ctx, e.GameserverID)
 				}
 			}
@@ -172,7 +172,7 @@ func (c *ReachabilityChecker) check(ctx context.Context, gameserverID string) {
 	c.log.Info("reachability check complete",
 		"id", gameserverID, "reachable", result.Reachable, "host", host, "port", port, "registered", result.Registered)
 
-	c.bus.Publish(controller.NewSystemEvent(controller.EventGameserverReachable, gameserverID, &controller.ReachableData{
+	c.bus.Publish(event.NewSystemEvent(event.EventGameserverReachable, gameserverID, &event.ReachableData{
 		Reachable:  result.Reachable,
 		Host:       host,
 		Port:       port,

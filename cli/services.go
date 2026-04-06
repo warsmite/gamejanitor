@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/console"
@@ -29,7 +28,7 @@ import (
 
 // Services holds all wired services. Exported so testutil can use the same wiring.
 type Services struct {
-	Broadcaster     *controller.EventBus
+	Broadcaster     *event.EventBus
 	SettingsSvc     *settings.SettingsService
 	GameserverSvc   *gameserver.GameserverService
 	LifecycleSvc    *lifecycle.Service
@@ -68,7 +67,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		opts = &InitServicesOpts{}
 	}
 
-	broadcaster := controller.NewEventBus()
+	broadcaster := event.NewEventBus()
 	db := store.New(database)
 
 	settingsSvc := settings.NewSettingsServiceWithMode(db, logger, cfg.Mode)

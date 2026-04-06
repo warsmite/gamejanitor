@@ -6,7 +6,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/cli"
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/console"
@@ -31,7 +31,7 @@ type ServiceBundle struct {
 	GameStore     *games.GameStore
 	Registry      *orchestrator.Registry
 	Dispatcher    *orchestrator.Dispatcher
-	Broadcaster   *controller.EventBus
+	Broadcaster   *event.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *gameserver.GameserverService
 	LifecycleSvc  *lifecycle.Service

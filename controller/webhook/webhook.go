@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -57,7 +57,7 @@ type WebhookPayload struct {
 type WebhookWorker struct {
 	store       Store
 	gsLookup    GameserverLookup
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	client      *http.Client
 	log         *slog.Logger
 	cancel      context.CancelFunc
@@ -72,7 +72,7 @@ type WebhookWorker struct {
 	PollInterval time.Duration
 }
 
-func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *controller.EventBus, log *slog.Logger) *WebhookWorker {
+func NewWebhookWorker(store Store, gsLookup GameserverLookup, broadcaster *event.EventBus, log *slog.Logger) *WebhookWorker {
 	return &WebhookWorker{
 		store:       store,
 		gsLookup:    gsLookup,
@@ -111,16 +111,16 @@ func (w *WebhookWorker) subscribeLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case event, ok := <-ch:
+		case evt, ok := <-ch:
 			if !ok {
 				return
 			}
-			w.enqueueEvent(event)
+			w.enqueueEvent(evt)
 		}
 	}
 }
 
-func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
+func (w *WebhookWorker) enqueueEvent(evt event.WebhookEvent) {
 	endpoints, err := w.store.ListEnabledWebhookEndpoints()
 	if err != nil {
 		w.log.Error("webhook: failed to list enabled endpoints", "error", err)
@@ -130,7 +130,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		return
 	}
 
-	e, ok := event.(controller.Event)
+	e, ok := evt.(event.Event)
 	if !ok {
 		return
 	}

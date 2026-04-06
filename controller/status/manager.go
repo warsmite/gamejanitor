@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -13,7 +13,7 @@ import (
 type StatusManager struct {
 	store       Store
 	log         *slog.Logger
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	querySvc    *QueryService
 	statsPoller *StatsPoller
 	dispatcher  *orchestrator.Dispatcher
@@ -37,7 +37,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(store Store, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *QueryService, statsPoller *StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		store:         store,
 		broadcaster:   broadcaster,
@@ -77,12 +77,12 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				e, ok := ev.(controller.Event)
+				e, ok := ev.(event.Event)
 				if !ok {
 					continue
 				}
-				if e.Type == controller.EventGameserverError {
-					if data, ok := e.Data.(*controller.ErrorData); ok {
+				if e.Type == event.EventGameserverError {
+					if data, ok := e.Data.(*event.ErrorData); ok {
 						m.log.Warn("gameserver error event", "gameserver", e.GameserverID, "reason", data.Reason)
 						m.workerStateMu.Lock()
 						m.errorReasons[e.GameserverID] = data.Reason

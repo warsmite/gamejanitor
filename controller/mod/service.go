@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
@@ -57,7 +58,7 @@ type ModService struct {
 	store       Store
 	gameStore   *games.GameStore
 	options     *games.OptionsRegistry
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	log         *slog.Logger
 
 	// ValidateURL is called before any external download. Returns an error if the
@@ -70,7 +71,7 @@ type ModService struct {
 	locksMu sync.Mutex
 }
 
-func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, options *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, options *games.OptionsRegistry, broadcaster *event.EventBus, log *slog.Logger) *ModService {
 	return &ModService{
 		catalogs:    make(map[string]ModCatalog),
 		locks:       make(map[string]*sync.Mutex),
@@ -394,7 +395,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 		return nil, fmt.Errorf("saving installed mod: %w", err)
 	}
 
-	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	s.publishEvent(ctx, gameserverID, mod, event.EventModInstalled)
 	return mod, nil
 }
 
@@ -460,7 +461,7 @@ func (s *ModService) InstallFromURL(ctx context.Context, gameserverID, category,
 		return nil, fmt.Errorf("saving mod record: %w", err)
 	}
 
-	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	s.publishEvent(ctx, gameserverID, mod, event.EventModInstalled)
 	return mod, nil
 }
 
@@ -513,7 +514,7 @@ func (s *ModService) InstallFromUpload(ctx context.Context, gameserverID, catego
 		return nil, fmt.Errorf("saving mod record: %w", err)
 	}
 
-	s.publishEvent(ctx, gameserverID, mod, controller.EventModInstalled)
+	s.publishEvent(ctx, gameserverID, mod, event.EventModInstalled)
 	return mod, nil
 }
 
@@ -591,7 +592,7 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID, modID string) 
 		s.removeOrphanedDependencies(ctx, gameserverID, modID)
 	}
 
-	s.publishEvent(ctx, gameserverID, mod, controller.EventModUninstalled)
+	s.publishEvent(ctx, gameserverID, mod, event.EventModUninstalled)
 	return nil
 }
 
@@ -1157,7 +1158,7 @@ func (s *ModService) newInstalledMod(gameserverID, source, sourceID, category st
 }
 
 func (s *ModService) publishEvent(ctx context.Context, gameserverID string, mod *model.InstalledMod, eventType string) {
-	s.broadcaster.Publish(controller.NewEvent(eventType, gameserverID, controller.ActorFromContext(ctx), &controller.ModActionData{
+	s.broadcaster.Publish(event.NewEvent(eventType, gameserverID, event.ActorFromContext(ctx), &event.ModActionData{
 		Mod: mod,
 	}))
 }

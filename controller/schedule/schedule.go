@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
@@ -25,11 +26,11 @@ type Store interface {
 type ScheduleService struct {
 	store       Store
 	scheduler   *Scheduler
-	broadcaster *controller.EventBus
+	broadcaster *event.EventBus
 	log         *slog.Logger
 }
 
-func NewScheduleService(store Store, scheduler *Scheduler, broadcaster *controller.EventBus, log *slog.Logger) *ScheduleService {
+func NewScheduleService(store Store, scheduler *Scheduler, broadcaster *event.EventBus, log *slog.Logger) *ScheduleService {
 	return &ScheduleService{store: store, scheduler: scheduler, broadcaster: broadcaster, log: log}
 }
 
@@ -78,7 +79,7 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *model.Sc
 		}
 	}
 
-	s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleCreate, schedule.GameserverID, controller.ActorFromContext(ctx), &controller.ScheduleActionData{
+	s.broadcaster.Publish(event.NewEvent(event.EventScheduleCreate, schedule.GameserverID, event.ActorFromContext(ctx), &event.ScheduleActionData{
 		Schedule: schedule,
 	}))
 
@@ -103,7 +104,7 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *model.Sc
 		return fmt.Errorf("updating schedule in cron: %w", err)
 	}
 
-	s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleUpdate, schedule.GameserverID, controller.ActorFromContext(ctx), &controller.ScheduleActionData{
+	s.broadcaster.Publish(event.NewEvent(event.EventScheduleUpdate, schedule.GameserverID, event.ActorFromContext(ctx), &event.ScheduleActionData{
 		Schedule: schedule,
 	}))
 
@@ -123,7 +124,7 @@ func (s *ScheduleService) DeleteSchedule(ctx context.Context, gameserverID, sche
 		return err
 	}
 
-	s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleDelete, schedule.GameserverID, controller.ActorFromContext(ctx), &controller.ScheduleActionData{
+	s.broadcaster.Publish(event.NewEvent(event.EventScheduleDelete, schedule.GameserverID, event.ActorFromContext(ctx), &event.ScheduleActionData{
 		Schedule: schedule,
 	}))
 
@@ -148,7 +149,7 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, gameserverID, sche
 		return fmt.Errorf("updating schedule in cron after toggle: %w", err)
 	}
 
-	s.broadcaster.Publish(controller.NewEvent(controller.EventScheduleUpdate, schedule.GameserverID, controller.ActorFromContext(ctx), &controller.ScheduleActionData{
+	s.broadcaster.Publish(event.NewEvent(event.EventScheduleUpdate, schedule.GameserverID, event.ActorFromContext(ctx), &event.ScheduleActionData{
 		Schedule: schedule,
 	}))
 

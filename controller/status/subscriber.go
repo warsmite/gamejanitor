@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 )
 
 // OperationClearer clears the active operation for a gameserver.
@@ -20,7 +20,7 @@ type OperationClearer interface {
 type StatusSubscriber struct {
 	store       Store
 	log         *slog.Logger
-	bus         *controller.EventBus
+	bus         *event.EventBus
 	querySvc    *QueryService
 	statsPoller *StatsPoller
 	operations  OperationClearer
@@ -32,7 +32,7 @@ func (s *StatusSubscriber) SetOperationClearer(oc OperationClearer) {
 	s.operations = oc
 }
 
-func NewStatusSubscriber(store Store, bus *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *StatusSubscriber {
+func NewStatusSubscriber(store Store, bus *event.EventBus, querySvc *QueryService, statsPoller *StatsPoller, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
 		store:       store,
 		bus:         bus,
@@ -54,11 +54,11 @@ func (s *StatusSubscriber) Start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-ch:
+			case evt, ok := <-ch:
 				if !ok {
 					return
 				}
-				s.handleEvent(event)
+				s.handleEvent(evt)
 			}
 		}
 	}()
@@ -74,15 +74,15 @@ func (s *StatusSubscriber) Stop() {
 	s.log.Info("status subscriber stopped")
 }
 
-func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
+func (s *StatusSubscriber) handleEvent(evt event.WebhookEvent) {
 	// Status is derived on read. Polling is managed by StatusManager.
 	// The subscriber only clears operations on terminal events.
-	e, ok := event.(controller.Event)
+	e, ok := evt.(event.Event)
 	if !ok {
 		return
 	}
 	switch e.Type {
-	case controller.EventGameserverReady, controller.EventInstanceStopped, controller.EventInstanceExited, controller.EventGameserverError:
+	case event.EventGameserverReady, event.EventInstanceStopped, event.EventInstanceExited, event.EventGameserverError:
 		s.clearOperation(e.GameserverID)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -55,7 +56,7 @@ func (s *Service) doArchive(ctx context.Context, id string) error {
 		if s.statusProvider != nil {
 			s.statusProvider.SetStopped(id)
 		}
-		s.broadcaster.Publish(controller.NewSystemEvent(controller.EventInstanceStopping, id, nil))
+		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
 		if err := s.doStop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before archive: %w", err)
@@ -184,7 +185,7 @@ func (s *Service) doUnarchive(ctx context.Context, id string, nodeID string) err
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	actor := controller.ActorFromContext(ctx)
+	actor := event.ActorFromContext(ctx)
 
 	w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 	if err != nil || w == nil {
@@ -244,7 +245,7 @@ func (s *Service) doUnarchive(ctx context.Context, id string, nodeID string) err
 
 	actorJSON, _ := json.Marshal(actor)
 	dataJSON, _ := json.Marshal(gs)
-	s.recordInstant(&gs.ID, controller.EventGameserverUnarchive, actorJSON, dataJSON)
+	s.recordInstant(&gs.ID, event.EventGameserverUnarchive, actorJSON, dataJSON)
 
 	s.log.Info("gameserver unarchived", "gameserver", id, "node", nodeID)
 	return nil
