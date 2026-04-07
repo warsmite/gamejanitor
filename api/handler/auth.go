@@ -49,17 +49,19 @@ type tokenResponse struct {
 	Name    string `json:"name"`
 }
 
+type createTokenRequest struct {
+	Name           string   `json:"name"`
+	Role           string   `json:"role"`
+	CanCreate      bool     `json:"can_create"`
+	ExpiresIn      string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
+	MaxGameservers *int     `json:"max_gameservers,omitempty"`
+	MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
+	MaxCPU         *float64 `json:"max_cpu,omitempty"`
+	MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
+}
+
 func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name           string   `json:"name"`
-		Role           string   `json:"role"`
-		CanCreate      bool     `json:"can_create"`
-		ExpiresIn      string   `json:"expires_in"` // e.g. "720h" for 30 days, empty = never
-		MaxGameservers *int     `json:"max_gameservers,omitempty"`
-		MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
-		MaxCPU         *float64 `json:"max_cpu,omitempty"`
-		MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
-	}
+	var req createTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
@@ -100,16 +102,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w, tokenResponse{Token: rawToken, TokenID: token.ID, Name: token.Name})
 }
 
-func (h *AuthHandlers) createUserToken(req struct {
-	Name           string   `json:"name"`
-	Role           string   `json:"role"`
-	CanCreate      bool     `json:"can_create"`
-	ExpiresIn      string   `json:"expires_in"`
-	MaxGameservers *int     `json:"max_gameservers,omitempty"`
-	MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
-	MaxCPU         *float64 `json:"max_cpu,omitempty"`
-	MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
-}) (string, *model.Token, error) {
+func (h *AuthHandlers) createUserToken(req createTokenRequest) (string, *model.Token, error) {
 	var expiresAt *time.Time
 	if req.ExpiresIn != "" {
 		d, err := time.ParseDuration(req.ExpiresIn)
