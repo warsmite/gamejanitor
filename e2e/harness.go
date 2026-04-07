@@ -291,14 +291,15 @@ func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration
 			continue
 		}
 		var gs struct {
-			Status      string `json:"status"`
-			ErrorReason string `json:"error_reason"`
+			Status        string  `json:"status"`
+			ErrorReason   string  `json:"error_reason"`
+			OperationType *string `json:"operation_type"`
 		}
 		if err := DecodeData(resp, &gs); err != nil {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
-		if gs.Status == targetStatus {
+		if gs.Status == targetStatus && gs.OperationType == nil {
 			return nil
 		}
 		if gs.Status != lastStatus {
