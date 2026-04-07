@@ -121,7 +121,9 @@ func (h *GameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *ht
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondOK(w, map[string]string{"sftp_password": rawPassword})
+	respondOK(w, struct {
+		SFTPPassword string `json:"sftp_password"`
+	}{SFTPPassword: rawPassword})
 }
 
 func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {

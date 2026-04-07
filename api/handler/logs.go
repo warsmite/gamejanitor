@@ -28,7 +28,9 @@ func (h *LogHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	lines, err := tailFile(h.logPath, tail)
 	if err != nil {
 		if os.IsNotExist(err) {
-			respondOK(w, map[string]any{"lines": []string{}})
+			respondOK(w, struct {
+				Lines []string `json:"lines"`
+			}{Lines: []string{}})
 			return
 		}
 		h.log.Error("reading log file", "error", err)
@@ -36,7 +38,9 @@ func (h *LogHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, map[string]any{"lines": lines})
+	respondOK(w, struct {
+		Lines []string `json:"lines"`
+	}{Lines: lines})
 }
 
 // tailFile reads the last n lines from a file by seeking backward from the end.

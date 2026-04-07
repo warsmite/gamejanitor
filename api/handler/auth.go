@@ -171,7 +171,9 @@ func (h *AuthHandlers) GenerateClaimCode(w http.ResponseWriter, r *http.Request)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondOK(w, map[string]string{"claim_code": code})
+	respondOK(w, struct {
+		ClaimCode string `json:"claim_code"`
+	}{ClaimCode: code})
 }
 
 // RedeemClaimCode is a public endpoint that exchanges a claim code for a raw token.
@@ -195,38 +197,56 @@ func (h *AuthHandlers) RedeemClaimCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, map[string]string{"token": rawToken})
+	respondOK(w, struct {
+		Token string `json:"token"`
+	}{Token: rawToken})
+}
+
+type meResponse struct {
+	Role      string    `json:"role"`
+	TokenID   string    `json:"token_id,omitempty"`
+	CanCreate bool      `json:"can_create,omitempty"`
+	Quotas    *meQuotas `json:"quotas,omitempty"`
+}
+
+type meQuotas struct {
+	MaxGameservers *int     `json:"max_gameservers"`
+	MaxMemoryMB    *int     `json:"max_memory_mb"`
+	MaxCPU         *float64 `json:"max_cpu"`
+	MaxStorageMB   *int     `json:"max_storage_mb"`
+	UsedGameservers int     `json:"used_gameservers"`
+	UsedMemoryMB    int     `json:"used_memory_mb"`
+	UsedCPU         float64 `json:"used_cpu"`
+	UsedStorageMB   int     `json:"used_storage_mb"`
 }
 
 // Me returns the calling token's role, permissions, and quota usage.
 func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	token := auth.TokenFromContext(r.Context())
 	if token == nil {
-		respondOK(w, map[string]any{
-			"role": "admin",
-		})
+		respondOK(w, meResponse{Role: "admin"})
 		return
 	}
 
-	resp := map[string]any{
-		"role":       token.Role,
-		"token_id":   token.ID,
-		"can_create": token.CanCreate(),
+	resp := meResponse{
+		Role:      token.Role,
+		TokenID:   token.ID,
+		CanCreate: token.CanCreate(),
 	}
 
 	// Include quota info for user tokens
 	if token.Role == auth.RoleUser && h.gsQuery != nil {
 		count, _ := h.gsQuery.CountGameserversByToken(token.ID)
 		memUsed, cpuUsed, storageUsed, _ := h.gsQuery.SumResourcesByToken(token.ID)
-		resp["quotas"] = map[string]any{
-			"max_gameservers":  token.MaxGameservers,
-			"max_memory_mb":    token.MaxMemoryMB,
-			"max_cpu":          token.MaxCPU,
-			"max_storage_mb":   token.MaxStorageMB,
-			"used_gameservers": count,
-			"used_memory_mb":   memUsed,
-			"used_cpu":         cpuUsed,
-			"used_storage_mb":  storageUsed,
+		resp.Quotas = &meQuotas{
+			MaxGameservers:  token.MaxGameservers,
+			MaxMemoryMB:     token.MaxMemoryMB,
+			MaxCPU:          token.MaxCPU,
+			MaxStorageMB:    token.MaxStorageMB,
+			UsedGameservers: count,
+			UsedMemoryMB:    memUsed,
+			UsedCPU:         cpuUsed,
+			UsedStorageMB:   storageUsed,
 		}
 	}
 

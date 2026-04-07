@@ -67,7 +67,9 @@ func (h *FileHandlers) Read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, map[string]string{"content": string(content)})
+	respondOK(w, struct {
+		Content string `json:"content"`
+	}{Content: string(content)})
 }
 
 func (h *FileHandlers) Write(w http.ResponseWriter, r *http.Request) {

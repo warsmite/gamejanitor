@@ -139,6 +139,12 @@ func (h *GameserverHandlers) OperationStream(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+type logsResponse struct {
+	Lines      []string `json:"lines"`
+	Historical bool     `json:"historical,omitempty"`
+	Session    *int     `json:"session,omitempty"`
+}
+
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -164,7 +170,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		if lines == nil {
 			lines = []string{}
 		}
-		respondOK(w, map[string]any{"lines": lines, "historical": true, "session": session})
+		respondOK(w, logsResponse{Lines: lines, Historical: true, Session: &session})
 		return
 	}
 
@@ -180,13 +186,13 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		if lines == nil {
 			lines = []string{}
 		}
-		respondOK(w, map[string]any{"lines": lines, "historical": true})
+		respondOK(w, logsResponse{Lines: lines, Historical: true})
 		return
 	}
 	defer reader.Close()
 
 	lines := logparse.ParseLogLines(reader)
-	respondOK(w, map[string]any{"lines": lines})
+	respondOK(w, logsResponse{Lines: lines})
 }
 
 func (h *GameserverHandlers) LogSessions(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +274,9 @@ func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, map[string]string{"output": output})
+	respondOK(w, struct {
+		Output string `json:"output"`
+	}{Output: output})
 }
 
 func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request) {
