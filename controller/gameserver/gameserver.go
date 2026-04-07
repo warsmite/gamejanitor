@@ -74,6 +74,7 @@ type GameserverService struct {
 	dataDir        string
 	placement      *placement.Service
 	operations     *operation.Tracker
+	sftpPort       int
 }
 
 func (s *GameserverService) SetOperationTracker(tracker *operation.Tracker) {
@@ -95,8 +96,8 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 	}
 }
 
-func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, log *slog.Logger) *GameserverService {
-	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log, placement: placementSvc}
+func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, sftpPort int, log *slog.Logger) *GameserverService {
+	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, sftpPort: sftpPort, log: log, placement: placementSvc}
 }
 
 // Called after both services are created to break the circular dependency.
@@ -137,13 +138,7 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 	}
 	s.store.PopulateNodes(gameservers)
 	for i := range gameservers {
-		gameservers[i].ComputeRestartRequired()
-		if s.operations != nil {
-			gameservers[i].Operation = s.operations.GetOperation(gameservers[i].ID)
-		}
-		if s.statusProvider != nil {
-			gameservers[i].Status, gameservers[i].ErrorReason = s.statusProvider.DeriveStatus(&gameservers[i])
-		}
+		s.enrich(&gameservers[i])
 	}
 	return gameservers, nil
 }
@@ -154,14 +149,30 @@ func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) 
 		return gs, err
 	}
 	s.store.PopulateNode(gs)
+	s.enrich(gs)
+	return gs, nil
+}
+
+// enrich populates all derived fields on a gameserver: status, operation,
+// restart check, connection host, and SFTP port.
+func (s *GameserverService) enrich(gs *model.Gameserver) {
 	gs.ComputeRestartRequired()
 	if s.operations != nil {
-		gs.Operation = s.operations.GetOperation(id)
+		gs.Operation = s.operations.GetOperation(gs.ID)
 	}
 	if s.statusProvider != nil {
 		gs.Status, gs.ErrorReason = s.statusProvider.DeriveStatus(gs)
 	}
-	return gs, nil
+	// Resolve the connection host using the same priority chain as the server:
+	// gameserver override > global setting > worker external IP > worker LAN IP
+	if gs.ConnectionAddress != nil && *gs.ConnectionAddress != "" {
+		gs.ConnectionHost = *gs.ConnectionAddress
+	} else if host, ok := s.settingsSvc.ResolveConnectionIP(gs.NodeID); ok {
+		gs.ConnectionHost = host
+	}
+	if s.sftpPort > 0 {
+		gs.SFTPPort = s.sftpPort
+	}
 }
 
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Gameserver) (string, error) {

@@ -86,7 +86,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 
 	runner := operation.NewRunner(activityTracker, operationTracker, db, logger)
 
-	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
+	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, cfg.SFTPPort, logger)
 	gameserverSvc.SetOperationTracker(operationTracker)
 
 	lifecycleSvc := lifecycle.NewService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)

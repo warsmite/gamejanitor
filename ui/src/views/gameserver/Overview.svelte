@@ -14,18 +14,17 @@
   const query = $derived(gsState?.query ?? null);
   const isRunning = $derived(gameserverStore.isRunning(id));
   const sftpAddr = $derived(gameserverStore.sftpAddress(id));
-  const connIP = $derived(gameserverStore.connectionIP(id));
-
   // Additional ports beyond the primary game port (rcon, query if different, etc.)
   const extraPorts = $derived(() => {
+    const host = gameserver?.connection_host;
     const ports = gameserver?.ports || [];
     const gamePort = ports.find((p: any) => p.name === 'game') || ports[0];
-    if (!connIP || !gamePort) return [];
+    if (!host || !gamePort) return [];
     return ports
       .filter((p: any) => p !== gamePort && p.host_port !== gamePort.host_port)
       .map((p: any) => ({
         label: p.name.charAt(0).toUpperCase() + p.name.slice(1),
-        value: `${connIP}:${p.host_port}`,
+        value: `${host}:${p.host_port}`,
       }));
   });
 

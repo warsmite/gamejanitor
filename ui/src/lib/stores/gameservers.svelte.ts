@@ -36,7 +36,6 @@ class GameserverStore {
   tokenId = $state<string>('');
   tokenRole = $state<string>('');
   canCreate = $state(false);
-  sftpPort = $state(0);
   cluster = $state<{ total_memory_mb: number; allocated_memory_mb: number; total_cpu: number; allocated_cpu: number; total_storage_mb: number; allocated_storage_mb: number } | null>(null);
   loading = $state(true);
   initialized = $state(false);
@@ -76,34 +75,17 @@ class GameserverStore {
 
   connectionAddress(id: string): string {
     const gs = this.gameservers[id]?.gameserver;
-    if (!gs) return '';
-    if (gs.connection_address) return gs.connection_address;
-
-    const ip = gs.node?.external_ip || gs.node?.lan_ip || '';
+    if (!gs || !gs.connection_host) return '';
     const ports = gs.ports || [];
     const gamePort = ports.find((p: any) => p.name === 'game') || ports[0];
-    if (!ip || !gamePort) return '';
-    return `${ip}:${gamePort.host_port}`;
-  }
-
-  connectionIP(id: string): string {
-    const gs = this.gameservers[id]?.gameserver;
-    if (!gs) return '';
-    // If there's a custom connection_address, extract the host part
-    if (gs.connection_address) {
-      const addr = gs.connection_address;
-      const colonIdx = addr.lastIndexOf(':');
-      return colonIdx > 0 ? addr.substring(0, colonIdx) : addr;
-    }
-    return gs.node?.external_ip || gs.node?.lan_ip || '';
+    if (!gamePort) return '';
+    return `${gs.connection_host}:${gamePort.host_port}`;
   }
 
   sftpAddress(id: string): string {
     const gs = this.gameservers[id]?.gameserver;
-    if (!gs || !this.sftpPort) return '';
-    const ip = this.connectionIP(id);
-    if (!ip) return '';
-    return `sftp://${gs.sftp_username}@${ip}:${this.sftpPort}`;
+    if (!gs || !gs.connection_host || !gs.sftp_port) return '';
+    return `sftp://${gs.sftp_username}@${gs.connection_host}:${gs.sftp_port}`;
   }
 
   // Check if the current token has a permission on a specific gameserver.
@@ -157,9 +139,6 @@ class GameserverStore {
         api.me.get().catch(() => null),
       ]);
 
-      if (clusterStatus?.config?.sftp_port) {
-        this.sftpPort = clusterStatus.config.sftp_port;
-      }
       if (clusterStatus?.cluster) {
         this.cluster = clusterStatus.cluster;
       }

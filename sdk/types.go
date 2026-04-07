@@ -23,12 +23,14 @@ type Gameserver struct {
 	NodeID            *string           `json:"node_id"`
 	Node              *GameserverNode   `json:"node,omitempty"`
 	SFTPUsername      string            `json:"sftp_username"`
+	SFTPPort          int               `json:"sftp_port,omitempty"`
 	Installed         bool              `json:"installed"`
 	BackupLimit       *int              `json:"backup_limit"`
 	StorageLimitMB    *int              `json:"storage_limit_mb"`
 	NodeTags          map[string]string `json:"node_tags"`
 	AutoRestart       *bool             `json:"auto_restart"`
 	ConnectionAddress *string           `json:"connection_address"`
+	ConnectionHost    string            `json:"connection_host,omitempty"`
 	DesiredState      string            `json:"desired_state"`
 	RestartRequired   bool              `json:"restart_required"`
 	StartedAt         *time.Time        `json:"started_at,omitempty"`

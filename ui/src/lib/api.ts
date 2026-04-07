@@ -150,9 +150,11 @@ export interface Gameserver {
   node?: GameserverNode;
   node_tags: Record<string, string>;
   sftp_username: string;
+  sftp_port?: number;
   installed: boolean;
   auto_restart: boolean;
   connection_address?: string;
+  connection_host?: string;
   desired_state: string;
   created_by_token_id?: string;
   grants: Record<string, string[]>;

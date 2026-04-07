@@ -53,6 +53,8 @@ type Gameserver struct {
 	Grants             GrantMap        `json:"grants"`
 	RestartRequired    bool            `json:"restart_required"`          // derived, not stored
 	StartedAt          *time.Time      `json:"started_at,omitempty"`      // derived from worker state, not stored
+	ConnectionHost     string          `json:"connection_host,omitempty"` // derived: resolved host for client connections
+	SFTPPort           int             `json:"sftp_port,omitempty"`       // derived: SFTP port from config
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
