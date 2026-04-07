@@ -156,17 +156,9 @@ export interface Gameserver {
   desired_state: string;
   created_by_token_id?: string;
   grants: Record<string, string[]>;
+  started_at?: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface GameserverStatus {
-  status: string;
-  error_reason?: string;
-  instance?: {
-    state: string;
-    started_at: string;
-  };
 }
 
 export interface GameserverStats {
@@ -488,7 +480,6 @@ export const api = {
     unarchive: (id: string, nodeId?: string) => post<Gameserver>(`/api/gameservers/${id}/unarchive`, nodeId ? { node_id: nodeId } : undefined),
     bulk: (action: string, ids: string[]) => post<any>('/api/gameservers/bulk', { action, all: ids.length === 0 }),
     regenerateSftpPassword: (id: string) => post<{ sftp_password: string }>(`/api/gameservers/${id}/regenerate-sftp-password`),
-    status: (id: string) => get<GameserverStatus>(`/api/gameservers/${id}/status`),
     stats: (id: string) => get<GameserverStats>(`/api/gameservers/${id}/stats`),
     statsHistory: (id: string, period: '1h' | '24h' | '7d' = '1h') =>
       get<StatsHistoryPoint[]>(`/api/gameservers/${id}/stats/history`, { period }),

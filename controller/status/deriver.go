@@ -8,6 +8,7 @@ import (
 
 // DeriveStatus computes the user-facing status for a gameserver by combining
 // worker-reported state, operation phase, archive flag, and worker reachability.
+// Also sets StartedAt from the worker state cache when the instance is running.
 // This is the single source of truth — no status column needed.
 func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, errorReason string) {
 	if gs.DesiredState == "archived" {
@@ -31,6 +32,11 @@ func (m *StatusManager) DeriveStatus(gs *model.Gameserver) (status string, error
 
 	// Get worker-reported state
 	ws := m.getWorkerState(gs.ID)
+
+	// Populate StartedAt from worker state when the instance is running
+	if ws != nil && !ws.StartedAt.IsZero() && (ws.State == worker.StateRunning || ws.State == worker.StateStarting) {
+		gs.StartedAt = &ws.StartedAt
+	}
 
 	// Check operation phase first — operations override worker state display
 	if gs.Operation != nil {

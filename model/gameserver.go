@@ -51,7 +51,8 @@ type Gameserver struct {
 	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
 	CreatedByTokenID   *string         `json:"created_by_token_id,omitempty"`
 	Grants             GrantMap        `json:"grants"`
-	RestartRequired    bool            `json:"restart_required"` // derived, not stored
+	RestartRequired    bool            `json:"restart_required"`          // derived, not stored
+	StartedAt          *time.Time      `json:"started_at,omitempty"`      // derived from worker state, not stored
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }

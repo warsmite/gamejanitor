@@ -182,19 +182,19 @@ var statusCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		status, err := getClient().Gameservers.Status(ctx(), gsID)
+		gs, err := getClient().Gameservers.Get(ctx(), gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSON(status)
+			printJSON(gs)
 			return nil
 		}
 
-		fmt.Printf("Status:      %s\n", colorStatus(status.Status))
-		if status.Instance != nil && !status.Instance.StartedAt.IsZero() {
-			d := time.Since(status.Instance.StartedAt)
+		fmt.Printf("Status:      %s\n", colorStatus(gs.Status))
+		if gs.StartedAt != nil && !gs.StartedAt.IsZero() {
+			d := time.Since(*gs.StartedAt)
 			fmt.Printf("Uptime:      %s\n", formatDuration(d))
 		}
 

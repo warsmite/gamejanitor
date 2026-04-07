@@ -31,6 +31,7 @@ type Gameserver struct {
 	ConnectionAddress *string           `json:"connection_address"`
 	DesiredState      string            `json:"desired_state"`
 	RestartRequired   bool              `json:"restart_required"`
+	StartedAt         *time.Time        `json:"started_at,omitempty"`
 	CreatedAt         time.Time         `json:"created_at"`
 	UpdatedAt         time.Time         `json:"updated_at"`
 }
@@ -116,19 +117,6 @@ type BulkActionResult struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
-}
-
-// GameserverStatus is the response from the status endpoint.
-type GameserverStatus struct {
-	Status      string         `json:"status"`
-	ErrorReason string         `json:"error_reason,omitempty"`
-	Instance    *InstanceInfo `json:"instance"`
-}
-
-// InstanceInfo describes the underlying instance state.
-type InstanceInfo struct {
-	State     string    `json:"state"`
-	StartedAt time.Time `json:"started_at"`
 }
 
 // QueryData is the response from the query endpoint (live server state).

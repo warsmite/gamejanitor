@@ -191,11 +191,6 @@ class GameserverStore {
         if (gs.status === 'running') {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch((e) => { console.warn('gameserverStore:', e); });
-          api.gameservers.status(gs.id).then(s => {
-            if (s?.instance?.started_at && this.gameservers[gs.id]) {
-              this.gameservers[gs.id].instanceStartedAt = s.instance.started_at;
-            }
-          }).catch((e) => { console.warn('gameserverStore:', e); });
         }
       }
 
@@ -352,7 +347,7 @@ class GameserverStore {
       stats: null,
       query: null,
       logLines: [],
-      instanceStartedAt: '',
+      instanceStartedAt: gs.started_at || '',
       backups: null,
       schedules: null,
     };

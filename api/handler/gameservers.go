@@ -337,56 +337,12 @@ func (h *GameserverHandlers) submitAction(w http.ResponseWriter, r *http.Request
 	respondOK(w, gs)
 }
 
-type statusResponse struct {
-	Status      string         `json:"status"`
-	ErrorReason string         `json:"error_reason,omitempty"`
-	Instance    *instanceInfo `json:"instance"`
-}
-
 type queryInfo struct {
 	PlayersOnline int      `json:"players_online"`
 	MaxPlayers    int      `json:"max_players"`
 	Players       []string `json:"players"`
 	Map           string   `json:"map"`
 	Version       string   `json:"version"`
-}
-
-type instanceInfo struct {
-	State     string    `json:"state"`
-	StartedAt time.Time `json:"started_at"`
-}
-
-func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	gs, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver for status", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	if gs == nil {
-		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
-		return
-	}
-
-	resp := statusResponse{
-		Status:      gs.Status,
-		ErrorReason: gs.ErrorReason,
-	}
-
-	if gs.InstanceID != nil {
-		info, err := h.lifecycle.GetInstanceInfo(r.Context(), id)
-		if err != nil {
-			h.log.Warn("failed to inspect instance for status", "id", id, "error", err)
-		} else {
-			resp.Instance = &instanceInfo{
-				State:     info.State,
-				StartedAt: info.StartedAt,
-			}
-		}
-	}
-
-	respondOK(w, resp)
 }
 
 func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
