@@ -15,7 +15,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
@@ -31,7 +30,7 @@ type RouterOptions struct {
 	LogPath         string
 	GameStore       *games.GameStore
 	GameserverSvc   *gameserver.GameserverService
-	LifecycleSvc    *lifecycle.Service
+	LifecycleSvc    *gameserver.LifecycleService
 	ConsoleSvc      *gameserver.ConsoleService
 	FileSvc         *file.Service
 	ScheduleSvc     *schedule.ScheduleService

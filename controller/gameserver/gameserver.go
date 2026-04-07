@@ -3,6 +3,7 @@ package gameserver
 import (
 	"context"
 	"crypto/rand"
+	"io"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -50,15 +51,22 @@ type Store interface {
 	CreateEvent(e *model.Event) error
 }
 
-// StatusProvider derives the current display status for a gameserver from runtime state.
-// Used by CRUD reads (GetGameserver, ListGameservers) to enrich the response.
+// StatusProvider derives the current status for a gameserver from runtime state.
 type StatusProvider interface {
 	DeriveStatus(gs *model.Gameserver) (status string, errorReason string)
+	SetRunning(gameserverID string)
+	SetStopped(gameserverID string)
+	ClearError(gameserverID string)
+	ResetCrashCount(gameserverID string)
 }
 
-// BackupStore abstracts backup file deletion for gameserver cleanup.
+// BackupStore abstracts backup/archive file storage (local disk or S3).
 type BackupStore interface {
+	Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error
+	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
 	Delete(ctx context.Context, gameserverID string, backupID string) error
+	SaveArchive(ctx context.Context, gameserverID string, reader io.Reader) error
+	LoadArchive(ctx context.Context, gameserverID string) (io.ReadCloser, error)
 	DeleteArchive(ctx context.Context, gameserverID string) error
 }
 

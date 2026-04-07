@@ -1,4 +1,4 @@
-package lifecycle
+package gameserver
 
 import (
 	"compress/gzip"
@@ -9,14 +9,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 // MigrateGameserver validates the migration request and transfers the gameserver
 // to the target node. Stops the gameserver if running, transfers volume data via
 // the backup store, and optionally restarts. Blocks until complete.
-func (s *Service) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string, onProgress ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err
@@ -62,7 +61,7 @@ func (s *Service) MigrateGameserver(ctx context.Context, gameserverID string, ta
 
 // doMigrate performs the migration work. Separated so startInstance can call it
 // for auto-migration before start without re-validating.
-func (s *Service) doMigrate(ctx context.Context, gameserverID string, targetNodeID string) error {
+func (s *LifecycleService) doMigrate(ctx context.Context, gameserverID string, targetNodeID string) error {
 	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err

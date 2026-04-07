@@ -1,4 +1,4 @@
-package lifecycle
+package gameserver
 
 import (
 	"compress/gzip"
@@ -13,7 +13,7 @@ import (
 
 // Archive stops the gameserver, backs up its volume to archive storage,
 // removes the instance and volume, and marks it as archived. Blocks until complete.
-func (s *Service) Archive(ctx context.Context, id string) error {
+func (s *LifecycleService) Archive(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (s *Service) Archive(ctx context.Context, id string) error {
 
 // Unarchive restores an archived gameserver's volume from archive storage onto
 // the target node (or auto-selected node). Blocks until complete.
-func (s *Service) Unarchive(ctx context.Context, id string, targetNodeID string) error {
+func (s *LifecycleService) Unarchive(ctx context.Context, id string, targetNodeID string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err

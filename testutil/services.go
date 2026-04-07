@@ -11,7 +11,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
@@ -33,7 +32,7 @@ type ServiceBundle struct {
 	Broadcaster   *event.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *gameserver.GameserverService
-	LifecycleSvc  *lifecycle.Service
+	LifecycleSvc  *gameserver.LifecycleService
 	QuerySvc      *status.QueryService
 	StatsPoller   *status.StatsPoller
 	ConsoleSvc    *gameserver.ConsoleService

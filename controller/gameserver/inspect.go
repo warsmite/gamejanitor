@@ -1,4 +1,4 @@
-package lifecycle
+package gameserver
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-func (s *Service) GetInstanceInfo(ctx context.Context, gameserverID string) (*worker.InstanceInfo, error) {
+func (s *LifecycleService) GetInstanceInfo(ctx context.Context, gameserverID string) (*worker.InstanceInfo, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func (s *Service) GetInstanceInfo(ctx context.Context, gameserverID string) (*wo
 	return w.InspectInstance(ctx, *gs.InstanceID)
 }
 
-func (s *Service) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
+func (s *LifecycleService) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (s *Service) GetGameserverStats(ctx context.Context, gameserverID string) (
 	return stats, nil
 }
 
-func (s *Service) GetVolumeSize(ctx context.Context, gameserverID string) (int64, error) {
+func (s *LifecycleService) GetVolumeSize(ctx context.Context, gameserverID string) (int64, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return 0, err
@@ -82,7 +82,7 @@ func (s *Service) GetVolumeSize(ctx context.Context, gameserverID string) (int64
 	return w.VolumeSize(ctx, gs.VolumeName)
 }
 
-func (s *Service) GetInstanceLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
+func (s *LifecycleService) GetInstanceLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err

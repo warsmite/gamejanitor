@@ -1,4 +1,4 @@
-package lifecycle
+package gameserver
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -22,7 +21,7 @@ import (
 // Start validates preconditions and starts a gameserver. Blocks until the
 // gameserver is running or an error occurs. Resets the crash counter so
 // auto-restart gets a fresh retry budget.
-func (s *Service) Start(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) Start(ctx context.Context, id string, onProgress ProgressFunc) error {
 	if s.statusProvider != nil {
 		s.statusProvider.ResetCrashCount(id)
 	}
@@ -32,13 +31,13 @@ func (s *Service) Start(ctx context.Context, id string, onProgress gameserver.Pr
 // RestartAfterCrash is called by the auto-restart system. Unlike Start(),
 // it does NOT reset the crash counter — the counter must accumulate across
 // retries so the 3-attempt limit works.
-func (s *Service) RestartAfterCrash(ctx context.Context, id string) error {
+func (s *LifecycleService) RestartAfterCrash(ctx context.Context, id string) error {
 	return s.startInstance(ctx, id, nil)
 }
 
 // startInstance performs the full start sequence: validate → auto-migrate if
 // needed → download depot → pull image → install phase → start instance.
-func (s *Service) startInstance(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgress ProgressFunc) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -370,7 +369,7 @@ func (s *Service) startInstance(ctx context.Context, id string, onProgress games
 
 // Stop validates preconditions and stops a running gameserver. Blocks until
 // the instance is stopped and removed.
-func (s *Service) Stop(ctx context.Context, id string) error {
+func (s *LifecycleService) Stop(ctx context.Context, id string) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -397,7 +396,7 @@ func (s *Service) Stop(ctx context.Context, id string) error {
 
 // stopInstance performs the raw stop work without validation or status updates.
 // Used by Stop, Restart, Archive, Migrate, UpdateServerGame, and Reinstall.
-func (s *Service) stopInstance(ctx context.Context, id string) error {
+func (s *LifecycleService) stopInstance(ctx context.Context, id string) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s for stop: %w", id, err)
@@ -453,7 +452,7 @@ func (s *Service) stopInstance(ctx context.Context, id string) error {
 }
 
 // Restart stops a running gameserver and starts it again. Blocks until complete.
-func (s *Service) Restart(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) Restart(ctx context.Context, id string, onProgress ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -483,7 +482,7 @@ func (s *Service) Restart(ctx context.Context, id string, onProgress gameserver.
 
 // UpdateServerGame stops the gameserver, pulls the latest image, runs the
 // update-server script, and restarts. Blocks until complete.
-func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) UpdateServerGame(ctx context.Context, id string, onProgress ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -582,7 +581,7 @@ func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress ga
 
 // Reinstall stops the gameserver, wipes the volume, and performs a fresh install.
 // Blocks until complete.
-func (s *Service) Reinstall(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
+func (s *LifecycleService) Reinstall(ctx context.Context, id string, onProgress ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -697,7 +696,7 @@ func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 	return bindings, nil
 }
 
-func (s *Service) rotateConsoleLogs(w worker.Worker, volumeName string) {
+func (s *LifecycleService) rotateConsoleLogs(w worker.Worker, volumeName string) {
 	ctx := context.Background()
 	logDir := ".gamejanitor/logs"
 	w.CreateDirectory(ctx, volumeName, logDir)
@@ -710,7 +709,7 @@ func (s *Service) rotateConsoleLogs(w worker.Worker, volumeName string) {
 	w.RenamePath(ctx, volumeName, logDir+"/console.log", logDir+"/console.log.0")
 }
 
-func (s *Service) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
+func (s *LifecycleService) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
 	if defaultsDir == "" {
 		return
 	}
@@ -735,7 +734,7 @@ func (s *Service) copyDefaults(w worker.Worker, volumeName string, defaultsDir s
 	}
 }
 
-func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
+func (s *LifecycleService) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -755,7 +754,7 @@ func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, inst
 }
 
 // reportProgress calls onProgress if non-nil.
-func reportProgress(onProgress gameserver.ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
+func reportProgress(onProgress ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
 	if onProgress != nil {
 		onProgress(phase, progress)
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/placement"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
@@ -29,7 +28,7 @@ type Services struct {
 	Broadcaster     *event.EventBus
 	SettingsSvc     *settings.SettingsService
 	GameserverSvc   *gameserver.GameserverService
-	LifecycleSvc    *lifecycle.Service
+	LifecycleSvc    *gameserver.LifecycleService
 	QuerySvc        *status.QueryService
 	StatsPoller     *status.StatsPoller
 	ConsoleSvc      *gameserver.ConsoleService
@@ -87,7 +86,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, cfg.SFTPPort, logger)
 	gameserverSvc.SetOperationTracker(operationTracker)
 
-	lifecycleSvc := lifecycle.NewService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
+	lifecycleSvc := gameserver.NewLifecycleService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
 
 	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
 	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
