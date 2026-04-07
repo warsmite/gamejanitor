@@ -47,24 +47,23 @@ func (h *FileHandlers) Read(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check file size before reading into memory
 	reader, size, err := h.svc.OpenFile(r.Context(), id, filePath)
 	if err != nil {
 		h.log.Error("reading file", "gameserver", id, "path", filePath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	reader.Close()
+	defer reader.Close()
 
 	if size > MaxFileReadBytes {
 		respondError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("file is %d MB, exceeds %d MB read limit — use the download endpoint for large files", size/(1024*1024), MaxFileReadBytes/(1024*1024)))
 		return
 	}
 
-	content, err := h.svc.ReadFile(r.Context(), id, filePath)
+	content, err := io.ReadAll(reader)
 	if err != nil {
-		h.log.Error("reading file", "gameserver", id, "path", filePath, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		h.log.Error("reading file content", "gameserver", id, "path", filePath, "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to read file")
 		return
 	}
 
