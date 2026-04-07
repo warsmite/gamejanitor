@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -42,6 +43,12 @@ func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, tokens)
 }
 
+type tokenResponse struct {
+	Token   string `json:"token,omitempty"`
+	TokenID string `json:"token_id"`
+	Name    string `json:"name"`
+}
+
 func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name           string   `json:"name"`
@@ -66,58 +73,48 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Role == "worker" {
-		rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
-		if err != nil {
-			h.log.Error("creating worker token", "error", err)
-			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-			return
-		}
-		if rawToken == "" {
-			respondOK(w, map[string]any{
-				"token_id": token.ID,
-				"name":     token.Name,
-				"exists":   true,
-			})
-			return
-		}
-		respondCreated(w, map[string]any{
-			"token":    rawToken,
-			"token_id": token.ID,
-			"name":     token.Name,
-		})
+	var rawToken string
+	var token *model.Token
+	var err error
+
+	switch req.Role {
+	case "worker":
+		rawToken, token, err = h.authSvc.CreateWorkerToken(req.Name)
+	case "admin":
+		rawToken, token, err = h.authSvc.CreateAdminToken(req.Name)
+	case "user":
+		rawToken, token, err = h.createUserToken(req)
+	}
+	if err != nil {
+		h.log.Error("creating token", "role", req.Role, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
-	if req.Role == "admin" {
-		rawToken, token, err := h.authSvc.CreateAdminToken(req.Name)
-		if err != nil {
-			h.log.Error("creating admin token", "error", err)
-			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-			return
-		}
-		if rawToken == "" {
-			respondOK(w, map[string]any{
-				"token_id": token.ID,
-				"name":     token.Name,
-				"exists":   true,
-			})
-			return
-		}
-		respondCreated(w, map[string]any{
-			"token":    rawToken,
-			"token_id": token.ID,
-			"name":     token.Name,
-		})
+	// Worker/admin tokens are idempotent — empty rawToken means it already existed
+	if rawToken == "" {
+		respondError(w, http.StatusConflict, "token \""+token.Name+"\" already exists")
 		return
 	}
 
+	respondCreated(w, tokenResponse{Token: rawToken, TokenID: token.ID, Name: token.Name})
+}
+
+func (h *AuthHandlers) createUserToken(req struct {
+	Name           string   `json:"name"`
+	Role           string   `json:"role"`
+	CanCreate      bool     `json:"can_create"`
+	ExpiresIn      string   `json:"expires_in"`
+	MaxGameservers *int     `json:"max_gameservers,omitempty"`
+	MaxMemoryMB    *int     `json:"max_memory_mb,omitempty"`
+	MaxCPU         *float64 `json:"max_cpu,omitempty"`
+	MaxStorageMB   *int     `json:"max_storage_mb,omitempty"`
+}) (string, *model.Token, error) {
 	var expiresAt *time.Time
 	if req.ExpiresIn != "" {
 		d, err := time.ParseDuration(req.ExpiresIn)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, "invalid expires_in duration: "+err.Error())
-			return
+			return "", nil, &controller.ServiceError{Code: http.StatusBadRequest, Message: "invalid expires_in duration: " + err.Error()}
 		}
 		t := time.Now().Add(d)
 		expiresAt = &t
@@ -132,18 +129,8 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 			MaxStorageMB:   req.MaxStorageMB,
 		}
 	}
-	rawToken, token, err := h.authSvc.CreateUserToken(req.Name, req.CanCreate, expiresAt, quotas)
-	if err != nil {
-		h.log.Error("creating token", "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
 
-	respondCreated(w, map[string]any{
-		"token":    rawToken,
-		"token_id": token.ID,
-		"name":     token.Name,
-	})
+	return h.authSvc.CreateUserToken(req.Name, req.CanCreate, expiresAt, quotas)
 }
 
 func (h *AuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {

@@ -90,14 +90,14 @@ var tokensCreateCmd = &cobra.Command{
 				Role: "worker",
 			})
 			if err != nil {
+				if apiErr, ok := err.(*gamejanitor.Error); ok && apiErr.StatusCode == 409 {
+					fmt.Fprintf(os.Stderr, "Worker token %q already exists. Use 'tokens rotate' to regenerate.\n", name)
+					return nil
+				}
 				return exitError(err)
 			}
 			if jsonOutput {
 				printJSON(result)
-				return nil
-			}
-			if result.Exists {
-				fmt.Fprintf(os.Stderr, "Worker token %q already exists (id: %s)\n", result.Name, result.TokenID)
 				return nil
 			}
 			fmt.Fprintf(os.Stderr, "Worker token %q created (id: %s)\n", result.Name, result.TokenID)

@@ -292,7 +292,6 @@ type CreateTokenResponse struct {
 	Token   string `json:"token"`
 	TokenID string `json:"token_id"`
 	Name    string `json:"name"`
-	Exists  bool   `json:"exists,omitempty"`
 }
 
 // --- Webhooks ---
