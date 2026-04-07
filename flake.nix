@@ -454,10 +454,40 @@
             deploy
             echo "Waiting for workers to connect..."
             sleep 3
+
+            # Capture logs from all nodes for post-mortem debugging
+            LOG_DIR="/tmp/gamejanitor-e2e-logs"
+            rm -rf "$LOG_DIR"
+            mkdir -p "$LOG_DIR"
+            ssh sleepy 'journalctl -u gamejanitor-dev -f --no-pager -o cat' > "$LOG_DIR/sleepy.log" 2>&1 &
+            PID_SLEEPY=$!
+            ssh dopey 'journalctl -u gamejanitor-dev -f --no-pager -o cat' > "$LOG_DIR/dopey.log" 2>&1 &
+            PID_DOPEY=$!
+            ssh grumpy 'journalctl -u gamejanitor-dev -f --no-pager -o cat' > "$LOG_DIR/grumpy.log" 2>&1 &
+            PID_GRUMPY=$!
+
             export GAMEJANITOR_API_URL="http://sleepy:8080"
             export E2E_GAME_ID="''${E2E_GAME_ID:-minecraft-java}"
             echo "Running e2e against homelab (game=$E2E_GAME_ID)..."
-            exec go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@"
+            echo "Logs: $LOG_DIR/{sleepy,dopey,grumpy}.log"
+            go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@"
+            EXIT=$?
+
+            kill $PID_SLEEPY $PID_DOPEY $PID_GRUMPY 2>/dev/null
+            wait $PID_SLEEPY $PID_DOPEY $PID_GRUMPY 2>/dev/null
+
+            if [ $EXIT -ne 0 ]; then
+              echo ""
+              echo "=== LOGS AVAILABLE ==="
+              echo "  Controller: $LOG_DIR/sleepy.log"
+              echo "  Worker 1:   $LOG_DIR/dopey.log"
+              echo "  Worker 2:   $LOG_DIR/grumpy.log"
+              echo ""
+              echo "Useful greps:"
+              echo "  grep 'error\|WARN\|unexpected\|EOF without' $LOG_DIR/*.log"
+              echo "  grep '<gameserver-id>' $LOG_DIR/*.log"
+            fi
+            exit $EXIT
           '';
 
           loc = pkgs.writeShellScriptBin "loc" ''
