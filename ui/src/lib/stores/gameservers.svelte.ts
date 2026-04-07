@@ -177,10 +177,16 @@ class GameserverStore {
         this.gameservers[gs.id] = this.newState(gs);
       }
 
-      // Connect live data for active servers
+      // Connect live data for active servers.
+      // Limit log streams to avoid hitting the browser's per-host connection limit
+      // (6 for HTTP/1.1). Each EventSource holds a persistent connection.
+      // Reserve 2 connections for the SSE event stream and regular API calls.
+      const maxLogStreams = 4;
+      let logStreamCount = 0;
       for (const gs of gameservers) {
-        if (gs.status !== 'stopped') {
+        if (gs.status !== 'stopped' && logStreamCount < maxLogStreams) {
           this.connectLogStream(gs.id);
+          logStreamCount++;
         }
         if (gs.status === 'running') {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
