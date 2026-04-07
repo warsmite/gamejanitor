@@ -214,7 +214,7 @@ func waitForWorkerOnline(t *testing.T, baseURL string, timeout time.Duration) st
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/api/workers")
+		resp, err := http.Get(baseURL + "/api/cluster/workers")
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
@@ -240,7 +240,7 @@ func waitForWorkerStatus(t *testing.T, baseURL string, workerID string, targetSt
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/api/workers")
+		resp, err := http.Get(baseURL + "/api/cluster/workers")
 		if err != nil {
 			time.Sleep(500 * time.Millisecond)
 			continue

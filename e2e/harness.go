@@ -369,7 +369,7 @@ func (h *Harness) WaitForNodeChange(gsID, targetNodeID string, timeout time.Dura
 // Workers returns online worker IDs.
 func (h *Harness) Workers(t *testing.T) []string {
 	t.Helper()
-	resp, err := h.Get("/api/workers")
+	resp, err := h.Get("/api/cluster/workers")
 	if err != nil {
 		return nil
 	}
@@ -430,7 +430,7 @@ func (h *Harness) waitForWorker(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(h.BaseURL + "/api/workers")
+		resp, err := http.Get(h.BaseURL + "/api/cluster/workers")
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue

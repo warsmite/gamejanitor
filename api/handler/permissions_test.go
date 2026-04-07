@@ -150,7 +150,7 @@ func TestAPI_SettingsEndpoint_RequiresSettingsView(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
-func TestAPI_WorkersEndpoint_RequiresNodesManage(t *testing.T) {
+func TestAPI_ClusterEndpoint_RequiresAdmin(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 	enableAuth(api)
@@ -158,7 +158,7 @@ func TestAPI_WorkersEndpoint_RequiresNodesManage(t *testing.T) {
 	customToken := testutil.MustCreateUserToken(t, api.Services,
 		[]string{auth.PermGameserverStart}, nil)
 
-	req := authRequest("GET", api.Server.URL+"/api/workers", customToken, nil)
+	req := authRequest("GET", api.Server.URL+"/api/cluster", customToken, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -245,12 +245,12 @@ func TestAPI_CanCreate_CannotAccessClusterRoutes(t *testing.T) {
 	resp.Body.Close()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant settings access")
 
-	// Workers
-	req = authRequest("GET", api.Server.URL+"/api/workers", creatorToken, nil)
+	// Cluster
+	req = authRequest("GET", api.Server.URL+"/api/cluster", creatorToken, nil)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	resp.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant workers access")
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "can_create should not grant cluster access")
 
 	// Webhooks
 	req = authRequest("GET", api.Server.URL+"/api/webhooks", creatorToken, nil)

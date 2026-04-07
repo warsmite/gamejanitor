@@ -132,15 +132,15 @@ class GameserverStore {
     if (this.initialized) return;
 
     try {
-      const [gameservers, gameList, clusterStatus, meResponse] = await Promise.all([
+      const [gameservers, gameList, clusterData, meResponse] = await Promise.all([
         api.gameservers.list(),
         api.games.list(),
-        api.clusterStatus.get().catch(() => null),
+        api.cluster.get().catch(() => null),
         api.me.get().catch(() => null),
       ]);
 
-      if (clusterStatus?.cluster) {
-        this.cluster = clusterStatus.cluster;
+      if (clusterData) {
+        this.cluster = clusterData;
       }
 
       this.tokenId = meResponse?.token_id || '';

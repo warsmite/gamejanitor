@@ -22,10 +22,15 @@ func TestAPI_Settings_Get(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var settings map[string]any
-	json.NewDecoder(resp.Body).Decode(&settings)
-	assert.Contains(t, settings, "auth_enabled")
-	assert.Contains(t, settings, "port_range_start")
+	var result struct {
+		Settings map[string]any `json:"settings"`
+		Config   map[string]any `json:"config"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Contains(t, result.Settings, "auth_enabled")
+	assert.Contains(t, result.Settings, "port_range_start")
+	assert.Contains(t, result.Config, "bind")
+	assert.Contains(t, result.Config, "sftp_port")
 }
 
 func TestAPI_Settings_Update(t *testing.T) {
@@ -46,10 +51,12 @@ func TestAPI_Settings_Update(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify the value changed
-	var settings map[string]any
-	json.NewDecoder(resp.Body).Decode(&settings)
+	var result struct {
+		Settings map[string]any `json:"settings"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
 
-	portStart, ok := settings["port_range_start"]
+	portStart, ok := result.Settings["port_range_start"]
 	assert.True(t, ok)
 	assert.Equal(t, float64(27500), portStart)
 }

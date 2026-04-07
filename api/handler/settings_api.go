@@ -1,25 +1,63 @@
 package handler
 
 import (
-	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller/settings"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller/auth"
+	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 type SettingsAPIHandlers struct {
 	settingsSvc *settings.SettingsService
 	authSvc     *auth.AuthService
+	cfg         config.Config
 	log         *slog.Logger
 }
 
-func NewSettingsAPIHandlers(settingsSvc *settings.SettingsService, authSvc *auth.AuthService, log *slog.Logger) *SettingsAPIHandlers {
-	return &SettingsAPIHandlers{settingsSvc: settingsSvc, authSvc: authSvc, log: log}
+func NewSettingsAPIHandlers(settingsSvc *settings.SettingsService, authSvc *auth.AuthService, cfg config.Config, log *slog.Logger) *SettingsAPIHandlers {
+	return &SettingsAPIHandlers{settingsSvc: settingsSvc, authSvc: authSvc, cfg: cfg, log: log}
+}
+
+type serverConfig struct {
+	Bind            string `json:"bind"`
+	Port            int    `json:"port"`
+	GRPCPort        int    `json:"grpc_port"`
+	SFTPPort        int    `json:"sftp_port"`
+	DataDir         string `json:"data_dir"`
+	BackupStoreType string `json:"backup_store_type"`
+	WebUI           bool   `json:"web_ui"`
+	Controller      bool   `json:"controller"`
+	Worker          bool   `json:"worker"`
+}
+
+type settingsResponse struct {
+	Settings map[string]any `json:"settings"`
+	Config   serverConfig   `json:"config"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	respondOK(w, h.settingsSvc.All())
+	backupStoreType := "local"
+	if h.cfg.BackupStore != nil && h.cfg.BackupStore.Type != "" {
+		backupStoreType = h.cfg.BackupStore.Type
+	}
+
+	respondOK(w, settingsResponse{
+		Settings: h.settingsSvc.All(),
+		Config: serverConfig{
+			Bind:            h.cfg.Bind,
+			Port:            h.cfg.Port,
+			GRPCPort:        h.cfg.GRPCPort,
+			SFTPPort:        h.cfg.SFTPPort,
+			DataDir:         h.cfg.DataDir,
+			BackupStoreType: backupStoreType,
+			WebUI:           h.cfg.WebUI,
+			Controller:      h.cfg.Controller,
+			Worker:          h.cfg.Worker,
+		},
+	})
 }
 
 func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {

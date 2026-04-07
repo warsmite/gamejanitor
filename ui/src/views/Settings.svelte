@@ -61,12 +61,9 @@
 
   onMount(async () => {
     try {
-      const [s, status] = await Promise.all([
-        api.settings.get(),
-        api.clusterStatus.get(),
-      ]);
-      settings = s;
-      config = status.config || {};
+      const result = await api.settings.get();
+      settings = result.settings;
+      config = result.config || {};
     } catch (e: any) {
       toast(`Failed to load settings: ${e.message}`, 'error');
     } finally {
@@ -106,7 +103,7 @@
       } else if (id === 'webhooks') {
         webhooks = await api.webhooks.list();
       } else if (id === 'workers') {
-        workers = await api.workers.list();
+        workers = await api.cluster.workers();
       } else if (id === 'events') {
         await loadEvents();
       }

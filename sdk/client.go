@@ -39,13 +39,13 @@ type Client struct {
 	Files       *FileService
 	Mods        *ModService
 	Schedules   *ScheduleService
+	Cluster     *ClusterService
 	Workers     *WorkerService
 	Tokens      *TokenService
 	Webhooks    *WebhookService
 	Events      *EventService
 	Settings    *SettingsService
 	Games       *GameService
-	Status      *StatusService
 	Logs        *LogService
 }
 
@@ -89,13 +89,13 @@ func New(baseURL string, opts ...Option) *Client {
 	c.Files = &FileService{client: c}
 	c.Mods = &ModService{client: c}
 	c.Schedules = &ScheduleService{client: c}
+	c.Cluster = &ClusterService{client: c}
 	c.Workers = &WorkerService{client: c}
 	c.Tokens = &TokenService{client: c}
 	c.Webhooks = &WebhookService{client: c}
 	c.Events = &EventService{client: c}
 	c.Settings = &SettingsService{client: c}
 	c.Games = &GameService{client: c}
-	c.Status = &StatusService{client: c}
 	c.Logs = &LogService{client: c}
 
 	return c

@@ -528,13 +528,16 @@ export const api = {
     get: () => get<{ role: string; token_id?: string; quotas?: any }>('/api/me'),
   },
 
-  clusterStatus: {
-    get: () => get<any>('/api/status'),
+  cluster: {
+    get: () => get<any>('/api/cluster'),
+    workers: () => get<any[]>('/api/cluster/workers'),
+    worker: (id: string) => get<any>(`/api/cluster/workers/${id}`),
+    updateWorker: (id: string, data: any) => patch<any>(`/api/cluster/workers/${id}`, data),
   },
 
   settings: {
-    get: () => get<Record<string, any>>('/api/settings'),
-    update: (data: Record<string, any>) => patch<Record<string, any>>('/api/settings', data),
+    get: () => get<{ settings: Record<string, any>; config: any }>('/api/settings'),
+    update: (data: Record<string, any>) => patch<{ settings: Record<string, any>; config: any }>('/api/settings', data),
   },
 
   tokens: {
@@ -552,11 +555,6 @@ export const api = {
     delete: (id: string) => del(`/api/webhooks/${id}`),
     test: (id: string) => post<{ response_status: number; success: boolean }>(`/api/webhooks/${id}/test`),
     deliveries: (id: string) => get<WebhookDelivery[]>(`/api/webhooks/${id}/deliveries`),
-  },
-
-  workers: {
-    list: () => get<WorkerView[]>('/api/workers'),
-    get: (id: string) => get<WorkerView>(`/api/workers/${id}`),
   },
 
   mods: {

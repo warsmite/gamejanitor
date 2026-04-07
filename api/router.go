@@ -95,9 +95,8 @@ func NewRouter(opts RouterOptions) *Router {
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
 	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
 	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.GameserverQuerier, opts.Log)
-	workerHandlers := handler.NewWorkerHandlers(opts.WorkerNodeSvc, opts.Log)
-	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.WorkerNodeSvc, opts.Config, opts.Log)
-	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
+	clusterHandlers := handler.NewClusterHandlers(opts.WorkerNodeSvc, opts.Log)
+	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Config, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
 
@@ -135,7 +134,6 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Use(authMiddleware)
 		r.Use(rateLimitStore.PerTokenMiddleware())
 
-		r.Get("/status", statusHandlers.Get)
 		r.Get("/me", authHandlers.Me)
 
 		r.Route("/games", func(r chi.Router) {
@@ -231,12 +229,15 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Get("/events/history", eventHandlers.History)
 
 
-		r.Route("/workers", func(r chi.Router) {
+		r.Route("/cluster", func(r chi.Router) {
 			r.Use(requireAdmin)
-			r.Get("/", workerHandlers.List)
-			r.Route("/{workerID}", func(r chi.Router) {
-				r.Get("/", workerHandlers.Get)
-				r.Patch("/", workerHandlers.Update)
+			r.Get("/", clusterHandlers.Get)
+			r.Route("/workers", func(r chi.Router) {
+				r.Get("/", clusterHandlers.ListWorkers)
+				r.Route("/{workerID}", func(r chi.Router) {
+					r.Get("/", clusterHandlers.GetWorker)
+					r.Patch("/", clusterHandlers.UpdateWorker)
+				})
 			})
 		})
 

@@ -10,7 +10,7 @@ type WorkerService struct {
 // List returns all worker nodes in the cluster.
 func (s *WorkerService) List(ctx context.Context) ([]Worker, error) {
 	var workers []Worker
-	if err := s.client.get(ctx, "/api/workers", &workers); err != nil {
+	if err := s.client.get(ctx, "/api/cluster/workers", &workers); err != nil {
 		return nil, err
 	}
 	return workers, nil
@@ -19,7 +19,7 @@ func (s *WorkerService) List(ctx context.Context) ([]Worker, error) {
 // Get returns a single worker node.
 func (s *WorkerService) Get(ctx context.Context, workerID string) (*Worker, error) {
 	var worker Worker
-	if err := s.client.get(ctx, "/api/workers/"+workerID, &worker); err != nil {
+	if err := s.client.get(ctx, "/api/cluster/workers/"+workerID, &worker); err != nil {
 		return nil, err
 	}
 	return &worker, nil
@@ -28,7 +28,7 @@ func (s *WorkerService) Get(ctx context.Context, workerID string) (*Worker, erro
 // Update partially updates a worker node's configuration.
 func (s *WorkerService) Update(ctx context.Context, workerID string, req *UpdateWorkerRequest) (*Worker, error) {
 	var worker Worker
-	if err := s.client.patch(ctx, "/api/workers/"+workerID, req, &worker); err != nil {
+	if err := s.client.patch(ctx, "/api/cluster/workers/"+workerID, req, &worker); err != nil {
 		return nil, err
 	}
 	return &worker, nil

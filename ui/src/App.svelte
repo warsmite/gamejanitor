@@ -51,7 +51,7 @@
 
     // Check if multi-node for cluster nav
     if (!embedded) {
-      api.workers.list().then(w => { multiNode = w.length > 1; }).catch(() => {});
+      api.cluster.workers().then(w => { multiNode = w.length > 1; }).catch(() => {});
     }
 
     // Intercept internal link clicks for client-side navigation

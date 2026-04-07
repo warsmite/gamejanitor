@@ -15,7 +15,7 @@
 
   onMount(async () => {
     try {
-      workers = await api.workers.list();
+      workers = await api.cluster.workers();
     } catch (e: any) {
       console.warn('Cluster: failed to load workers', e);
       toast('Failed to load workers', 'error');
@@ -52,7 +52,7 @@
       await api.gameservers.migrate(target.gsId, targetNodeId);
       toast(`Migrating "${target.gsName}" to ${targetNodeId}`, 'info');
       migrateTarget = null;
-      workers = await api.workers.list();
+      workers = await api.cluster.workers();
     } catch (e: any) {
       toast(`Migration failed: ${e.message}`, 'error');
       migrateTarget = null;
