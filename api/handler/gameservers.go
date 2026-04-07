@@ -144,10 +144,11 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	// Re-read from DB to get final state
+	// Re-read from DB to get final state with derived fields
 	updated, err := h.svc.GetGameserver(id)
-	if err != nil || updated == nil {
-		respondOK(w, gs) // fallback to request data
+	if err != nil {
+		h.log.Error("getting gameserver after update", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, updated)
@@ -354,7 +355,7 @@ func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
 
 	qd := h.querySvc.GetQueryData(id)
 	if qd == nil {
-		respondOK(w, nil)
+		respondOK(w, queryInfo{})
 		return
 	}
 

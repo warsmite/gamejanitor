@@ -32,7 +32,7 @@ func (h *LogHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.log.Error("reading log file", "error", err)
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to read log file")
 		return
 	}
 

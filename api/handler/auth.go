@@ -159,7 +159,7 @@ func (h *AuthHandlers) RotateToken(w http.ResponseWriter, r *http.Request) {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondOK(w, map[string]any{"token": rawToken, "token_id": newToken.ID, "name": newToken.Name})
+	respondOK(w, tokenResponse{Token: rawToken, TokenID: newToken.ID, Name: newToken.Name})
 }
 
 // GenerateClaimCode creates or regenerates an invite link claim code for a token.
