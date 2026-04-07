@@ -12,7 +12,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/worker"
-	"github.com/warsmite/gamejanitor/worker/pb"
+	pb "github.com/warsmite/gamejanitor/worker/proto"
 )
 
 // Agent wraps a LocalWorker and exposes it as a gRPC service.

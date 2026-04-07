@@ -22,7 +22,7 @@ import (
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/agent"
-	"github.com/warsmite/gamejanitor/worker/pb"
+	pb "github.com/warsmite/gamejanitor/worker/proto"
 	"github.com/warsmite/gamejanitor/worker/sandbox"
 	"google.golang.org/grpc"
 	grpcCredentials "google.golang.org/grpc/credentials"

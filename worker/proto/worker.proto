@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package worker;
 
-option go_package = "github.com/warsmite/gamejanitor/worker/pb";
+option go_package = "github.com/warsmite/gamejanitor/worker/proto";
 
 // WorkerService is the gRPC interface between controller and worker agents.
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.

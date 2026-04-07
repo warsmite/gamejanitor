@@ -17,7 +17,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
-	"github.com/warsmite/gamejanitor/worker/pb"
+	pb "github.com/warsmite/gamejanitor/worker/proto"
 
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"

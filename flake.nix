@@ -390,7 +390,7 @@
           gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
             protoc --go_out=. --go_opt=module=github.com/warsmite/gamejanitor \
                    --go-grpc_out=. --go-grpc_opt=module=github.com/warsmite/gamejanitor \
-                   proto/worker.proto
+                   worker/proto/worker.proto
           '';
 
           build = pkgs.writeShellScriptBin "build" ''
@@ -498,7 +498,7 @@
 
           loc = pkgs.writeShellScriptBin "loc" ''
             ${pkgs.tokei}/bin/tokei . \
-              --exclude vendor --exclude node_modules --exclude 'worker/pb/*.go' \
+              --exclude vendor --exclude node_modules --exclude 'worker/proto/*.pb.go' \
               --types Go,TypeScript,TSX,CSS,HTML,Nix,YAML,Protobuf,SQL,Shell
           '';
 

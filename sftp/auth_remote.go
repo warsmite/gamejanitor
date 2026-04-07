@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/warsmite/gamejanitor/worker/pb"
+	pb "github.com/warsmite/gamejanitor/worker/proto"
 )
 
 // RemoteAuth validates SFTP credentials by calling back to the controller via gRPC.

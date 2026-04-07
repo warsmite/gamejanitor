@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/worker"
-	"github.com/warsmite/gamejanitor/worker/pb"
+	pb "github.com/warsmite/gamejanitor/worker/proto"
 	"google.golang.org/grpc"
 )
 
