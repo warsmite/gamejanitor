@@ -1,13 +1,13 @@
-package orchestrator_test
+package cluster_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
@@ -22,7 +22,7 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-1", Name: "worker-1"}))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	require.NoError(t, reg.LoadFromDB())
 
 	// Worker loaded as offline
@@ -35,7 +35,7 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 
 	// Register with a connection
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1", LanIP: "10.0.0.1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1", LanIP: "10.0.0.1"})
 
 	w, ok := reg.Get("w-1")
 	assert.True(t, ok)
@@ -54,9 +54,9 @@ func TestRegistry_SetOffline(t *testing.T) {
 
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-1", Name: "worker-1"}))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1"})
 
 	_, ok := reg.Get("w-1")
 	assert.True(t, ok)
@@ -76,9 +76,9 @@ func TestRegistry_Unregister(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1"})
 
 	assert.Equal(t, 1, reg.Count())
 
@@ -93,15 +93,15 @@ func TestRegistry_UpdateHeartbeat(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{
+	reg.Register("w-1", fw, cluster.WorkerInfo{
 		ID:            "w-1",
 		MemoryTotalMB: 8000,
 		TokenID:       "tok-original",
 	})
 
-	err := reg.UpdateHeartbeat("w-1", orchestrator.WorkerInfo{
+	err := reg.UpdateHeartbeat("w-1", cluster.WorkerInfo{
 		ID:                "w-1",
 		MemoryTotalMB:     8000,
 		MemoryAvailableMB: 4000,
@@ -117,9 +117,9 @@ func TestRegistry_UpdateHeartbeat_OfflineWorkerErrors(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 
-	err := reg.UpdateHeartbeat("w-nonexistent", orchestrator.WorkerInfo{ID: "w-nonexistent"})
+	err := reg.UpdateHeartbeat("w-nonexistent", cluster.WorkerInfo{ID: "w-nonexistent"})
 	assert.Error(t, err)
 }
 
@@ -127,7 +127,7 @@ func TestRegistry_Callbacks(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 
 	var onlineID, offlineID string
 	reg.SetCallbacks(
@@ -136,7 +136,7 @@ func TestRegistry_Callbacks(t *testing.T) {
 	)
 
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1"})
 	assert.Equal(t, "w-1", onlineID)
 
 	reg.SetOffline("w-1")
@@ -147,13 +147,13 @@ func TestRegistry_Unregister_FiresOfflineCallback(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 
 	var offlineID string
 	reg.SetCallbacks(nil, func(nodeID string) { offlineID = nodeID })
 
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1"})
 
 	reg.Unregister("w-1")
 	assert.Equal(t, "w-1", offlineID)
@@ -163,12 +163,12 @@ func TestRegistry_ListWorkers(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
 
-	reg.Register("w-1", fw1, orchestrator.WorkerInfo{ID: "w-1"})
-	reg.Register("w-2", fw2, orchestrator.WorkerInfo{ID: "w-2"})
+	reg.Register("w-1", fw1, cluster.WorkerInfo{ID: "w-1"})
+	reg.Register("w-2", fw2, cluster.WorkerInfo{ID: "w-2"})
 	reg.SetOffline("w-2")
 
 	all := reg.ListWorkers()
@@ -183,12 +183,12 @@ func TestRegistry_ReRegister_ReplacesConnection(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
 
-	reg.Register("w-1", fw1, orchestrator.WorkerInfo{ID: "w-1", LanIP: "10.0.0.1"})
-	reg.Register("w-1", fw2, orchestrator.WorkerInfo{ID: "w-1", LanIP: "10.0.0.2"})
+	reg.Register("w-1", fw1, cluster.WorkerInfo{ID: "w-1", LanIP: "10.0.0.1"})
+	reg.Register("w-1", fw2, cluster.WorkerInfo{ID: "w-1", LanIP: "10.0.0.2"})
 
 	// Should still have one worker, with updated info
 	assert.Equal(t, 1, reg.Count())
@@ -200,16 +200,16 @@ func TestRegistry_LastSeen_SetOnRegisterAndHeartbeat(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
+	reg := cluster.NewRegistry(nil, log)
 	fw := testutil.NewFakeWorker(t)
 
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1"})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1"})
 
 	info, _ := reg.GetInfo("w-1")
 	assert.WithinDuration(t, time.Now(), info.LastSeen, 2*time.Second)
 
 	time.Sleep(10 * time.Millisecond)
-	reg.UpdateHeartbeat("w-1", orchestrator.WorkerInfo{ID: "w-1"})
+	reg.UpdateHeartbeat("w-1", cluster.WorkerInfo{ID: "w-1"})
 
 	info2, _ := reg.GetInfo("w-1")
 	assert.True(t, info2.LastSeen.After(info.LastSeen), "heartbeat should update LastSeen")

@@ -21,8 +21,7 @@ import (
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/backup"
-	"github.com/warsmite/gamejanitor/controller/browser"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/warning"
 	gjproxy "github.com/warsmite/gamejanitor/proxy"
@@ -189,11 +188,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	db := store.New(database)
-	registry := orchestrator.NewRegistry(db, logger)
+	registry := cluster.NewRegistry(db, logger)
 	if err := registry.LoadFromDB(); err != nil {
 		return fmt.Errorf("failed to load workers from database: %w", err)
 	}
-	dispatcher := orchestrator.NewDispatcher(registry, db, logger)
+	dispatcher := cluster.NewDispatcher(registry, db, logger)
 
 	svcs, err := InitServices(database, dispatcher, registry, gameStore, cfg, logger, nil)
 	if err != nil {
@@ -220,7 +219,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Game traffic proxy — forwards game ports from controller to worker nodes.
 	// Enables stable connect addresses across migrations.
-	reachabilityChecker := browser.New(svcs.Broadcaster, svcs.SettingsSvc, db, logger)
+	reachabilityChecker := cluster.New(svcs.Broadcaster, svcs.SettingsSvc, db, logger)
 	reachabilityChecker.Start(ctx)
 	defer reachabilityChecker.Stop()
 

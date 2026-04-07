@@ -7,8 +7,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller/placement"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 )
@@ -20,7 +19,7 @@ type ModReconciler interface {
 
 type LifecycleService struct {
 	store          Store
-	dispatcher     *orchestrator.Dispatcher
+	dispatcher     *cluster.Dispatcher
 	log            *slog.Logger
 	broadcaster    *event.EventBus
 	statusProvider StatusProvider
@@ -29,16 +28,16 @@ type LifecycleService struct {
 	gameStore      *games.GameStore
 	backupStore    BackupStore
 	dataDir        string
-	placement      *placement.Service
+	placement      *cluster.PlacementService
 }
 
 func NewLifecycleService(
 	store Store,
-	dispatcher *orchestrator.Dispatcher,
+	dispatcher *cluster.Dispatcher,
 	broadcaster *event.EventBus,
 	settingsSvc *settings.SettingsService,
 	gameStore *games.GameStore,
-	placementSvc *placement.Service,
+	placementSvc *cluster.PlacementService,
 	dataDir string,
 	log *slog.Logger,
 ) *LifecycleService {

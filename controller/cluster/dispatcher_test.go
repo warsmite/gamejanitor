@@ -1,12 +1,12 @@
-package orchestrator_test
+package cluster_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
@@ -81,13 +81,13 @@ func TestDispatcher_RankWorkersForPlacement_PrefersMostHeadroom(t *testing.T) {
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-small", Name: "small"}))
 	require.NoError(t, s.SetWorkerNodeLimits("w-small", intPtr(4000), floatPtr(2.0), nil))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
-	reg.Register("w-big", fw1, orchestrator.WorkerInfo{ID: "w-big"})
-	reg.Register("w-small", fw2, orchestrator.WorkerInfo{ID: "w-small"})
+	reg.Register("w-big", fw1, cluster.WorkerInfo{ID: "w-big"})
+	reg.Register("w-small", fw2, cluster.WorkerInfo{ID: "w-small"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{})
 
 	require.Len(t, candidates, 2)
@@ -106,13 +106,13 @@ func TestDispatcher_RankWorkersForPlacement_SkipsCordoned(t *testing.T) {
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-cordoned", Name: "cordoned"}))
 	require.NoError(t, s.SetWorkerNodeCordoned("w-cordoned", true))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
-	reg.Register("w-active", fw1, orchestrator.WorkerInfo{ID: "w-active"})
-	reg.Register("w-cordoned", fw2, orchestrator.WorkerInfo{ID: "w-cordoned"})
+	reg.Register("w-active", fw1, cluster.WorkerInfo{ID: "w-active"})
+	reg.Register("w-cordoned", fw2, cluster.WorkerInfo{ID: "w-cordoned"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{})
 
 	require.Len(t, candidates, 1)
@@ -123,8 +123,8 @@ func TestDispatcher_RankWorkersForPlacement_NoWorkers(t *testing.T) {
 	t.Parallel()
 	log := testutil.TestLogger()
 
-	reg := orchestrator.NewRegistry(nil, log)
-	dispatcher := orchestrator.NewDispatcher(reg, nil, log)
+	reg := cluster.NewRegistry(nil, log)
+	dispatcher := cluster.NewDispatcher(reg, nil, log)
 
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{})
 	assert.Nil(t, candidates)
@@ -141,13 +141,13 @@ func TestDispatcher_RankWorkersForPlacement_LabelFiltering(t *testing.T) {
 
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-plain", Name: "plain"}))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
-	reg.Register("w-tagged", fw1, orchestrator.WorkerInfo{ID: "w-tagged"})
-	reg.Register("w-plain", fw2, orchestrator.WorkerInfo{ID: "w-plain"})
+	reg.Register("w-tagged", fw1, cluster.WorkerInfo{ID: "w-tagged"})
+	reg.Register("w-plain", fw2, cluster.WorkerInfo{ID: "w-plain"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 
 	// Require gpu label — only w-tagged qualifies
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{"gpu": "true"})

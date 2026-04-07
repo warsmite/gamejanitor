@@ -16,7 +16,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/games"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/worker"
@@ -70,7 +70,7 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 
 	// Start SFTP on worker if port is configured
 	if cfg.SFTPPort > 0 && cfg.ControllerAddress != "" {
-		sftpClient, sftpConn, err := orchestrator.DialController(cfg.ControllerAddress, cfg.WorkerToken, workerTLSConfig)
+		sftpClient, sftpConn, err := cluster.DialController(cfg.ControllerAddress, cfg.WorkerToken, workerTLSConfig)
 		if err != nil {
 			logger.Warn("failed to connect to controller for sftp auth, sftp disabled", "error", err)
 		} else {
@@ -145,7 +145,7 @@ func runRegistrationLoop(ctx context.Context, cfg config.Config, workerID string
 			)
 		}
 
-		client, conn, err := orchestrator.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
+		client, conn, err := cluster.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
 			sleepCtx(ctx, backoff)
@@ -261,7 +261,7 @@ type grpcHandle struct {
 	logger   *slog.Logger
 }
 
-func newGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, grpcStore orchestrator.GRPCStore, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) *grpcHandle {
+func newGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *cluster.Registry, authSvc *auth.AuthService, grpcStore cluster.GRPCStore, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) *grpcHandle {
 	addr := fmt.Sprintf("%s:%d", bindAddress, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -288,7 +288,7 @@ func newGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, 
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
-		controllerSvc := orchestrator.NewControllerGRPC(registry, authSvc, grpcStore, dialBackTLS, caCert, caKey, logger)
+		controllerSvc := cluster.NewControllerGRPC(registry, authSvc, grpcStore, dialBackTLS, caCert, caKey, logger)
 		pb.RegisterControllerServiceServer(server, controllerSvc)
 	}
 

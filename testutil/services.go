@@ -12,10 +12,9 @@ import (
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
@@ -27,14 +26,14 @@ import (
 type ServiceBundle struct {
 	DB            *sql.DB
 	GameStore     *games.GameStore
-	Registry      *orchestrator.Registry
-	Dispatcher    *orchestrator.Dispatcher
+	Registry      *cluster.Registry
+	Dispatcher    *cluster.Dispatcher
 	Broadcaster   *event.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *gameserver.GameserverService
 	LifecycleSvc  *gameserver.LifecycleService
-	QuerySvc      *status.QueryService
-	StatsPoller   *status.StatsPoller
+	QuerySvc      *cluster.QueryService
+	StatsPoller   *cluster.StatsPoller
 	ConsoleSvc    *gameserver.ConsoleService
 	FileSvc       *file.Service
 	BackupSvc     *backup.BackupService
@@ -58,8 +57,8 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	gameStore := NewTestGameStore(t)
 	s := store.New(db)
 
-	registry := orchestrator.NewRegistry(s, log)
-	dispatcher := orchestrator.NewDispatcher(registry, s, log)
+	registry := cluster.NewRegistry(s, log)
+	dispatcher := cluster.NewDispatcher(registry, s, log)
 
 	dataDir := t.TempDir()
 	cfg := config.DefaultConfig()
@@ -155,7 +154,7 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 		t.Fatalf("inserting worker node: %v", err)
 	}
 
-	info := orchestrator.WorkerInfo{ID: nodeID}
+	info := cluster.WorkerInfo{ID: nodeID}
 	svc.Registry.Register(nodeID, fw, info)
 
 	t.Cleanup(func() {

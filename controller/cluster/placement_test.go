@@ -1,4 +1,4 @@
-package placement_test
+package cluster_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/settings"

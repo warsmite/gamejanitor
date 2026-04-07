@@ -1,4 +1,4 @@
-package status
+package cluster
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -24,7 +23,7 @@ type StatsHistoryWriter interface {
 // the GET /stats endpoint can serve them instantly without querying the runtime.
 type StatsPoller struct {
 	store       Store
-	dispatcher  *orchestrator.Dispatcher
+	dispatcher  *Dispatcher
 	broadcaster *event.EventBus
 	log         *slog.Logger
 	mu          sync.RWMutex
@@ -40,7 +39,7 @@ type StatsPoller struct {
 	flusherStop context.CancelFunc
 }
 
-func NewStatsPoller(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, statsWriter StatsHistoryWriter, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(store Store, dispatcher *Dispatcher, broadcaster *event.EventBus, statsWriter StatsHistoryWriter, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
 		store:       store,
 		dispatcher:  dispatcher,

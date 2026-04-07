@@ -1,6 +1,7 @@
-package orchestrator_test
+package cluster_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"context"
 	"sync"
 	"testing"
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
@@ -40,13 +40,13 @@ func TestPlacement_PrefersWorkerWithMostHeadroom(t *testing.T) {
 	gs2.VolumeName = "vol-light"
 	require.NoError(t, s.CreateGameserver(gs2))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	fw1 := testutil.NewFakeWorker(t)
 	fw2 := testutil.NewFakeWorker(t)
-	reg.Register("w-busy", fw1, orchestrator.WorkerInfo{ID: "w-busy"})
-	reg.Register("w-free", fw2, orchestrator.WorkerInfo{ID: "w-free"})
+	reg.Register("w-busy", fw1, cluster.WorkerInfo{ID: "w-busy"})
+	reg.Register("w-free", fw2, cluster.WorkerInfo{ID: "w-free"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{})
 
 	require.Len(t, candidates, 2)
@@ -66,11 +66,11 @@ func TestPlacement_SkipsCordoned(t *testing.T) {
 	require.NoError(t, s.SetWorkerNodeLimits("w-cordoned", intPtr(16000), nil, nil))
 	require.NoError(t, s.SetWorkerNodeCordoned("w-cordoned", true))
 
-	reg := orchestrator.NewRegistry(s, log)
-	reg.Register("w-active", testutil.NewFakeWorker(t), orchestrator.WorkerInfo{ID: "w-active"})
-	reg.Register("w-cordoned", testutil.NewFakeWorker(t), orchestrator.WorkerInfo{ID: "w-cordoned"})
+	reg := cluster.NewRegistry(s, log)
+	reg.Register("w-active", testutil.NewFakeWorker(t), cluster.WorkerInfo{ID: "w-active"})
+	reg.Register("w-cordoned", testutil.NewFakeWorker(t), cluster.WorkerInfo{ID: "w-cordoned"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{})
 
 	require.Len(t, candidates, 1)
@@ -88,11 +88,11 @@ func TestPlacement_LabelFiltering(t *testing.T) {
 
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-plain", Name: "plain"}))
 
-	reg := orchestrator.NewRegistry(s, log)
-	reg.Register("w-gpu", testutil.NewFakeWorker(t), orchestrator.WorkerInfo{ID: "w-gpu"})
-	reg.Register("w-plain", testutil.NewFakeWorker(t), orchestrator.WorkerInfo{ID: "w-plain"})
+	reg := cluster.NewRegistry(s, log)
+	reg.Register("w-gpu", testutil.NewFakeWorker(t), cluster.WorkerInfo{ID: "w-gpu"})
+	reg.Register("w-plain", testutil.NewFakeWorker(t), cluster.WorkerInfo{ID: "w-plain"})
 
-	dispatcher := orchestrator.NewDispatcher(reg, s, log)
+	dispatcher := cluster.NewDispatcher(reg, s, log)
 
 	// With label requirement
 	candidates := dispatcher.RankWorkersForPlacement(model.Labels{"gpu": "true"})
@@ -114,7 +114,7 @@ func TestWorkerLifecycle_FullCycle(t *testing.T) {
 
 	require.NoError(t, s.UpsertWorkerNode(&model.WorkerNode{ID: "w-1", Name: "worker-1"}))
 
-	reg := orchestrator.NewRegistry(s, log)
+	reg := cluster.NewRegistry(s, log)
 	require.NoError(t, reg.LoadFromDB())
 
 	var onlineCalls, offlineCalls []string
@@ -130,11 +130,11 @@ func TestWorkerLifecycle_FullCycle(t *testing.T) {
 
 	// 2. Register (simulates first heartbeat dial-back)
 	fw := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw, orchestrator.WorkerInfo{ID: "w-1", MemoryTotalMB: 8000})
+	reg.Register("w-1", fw, cluster.WorkerInfo{ID: "w-1", MemoryTotalMB: 8000})
 	assert.Equal(t, []string{"w-1"}, onlineCalls)
 
 	// 3. Heartbeat updates stats
-	require.NoError(t, reg.UpdateHeartbeat("w-1", orchestrator.WorkerInfo{
+	require.NoError(t, reg.UpdateHeartbeat("w-1", cluster.WorkerInfo{
 		ID: "w-1", MemoryTotalMB: 8000, MemoryAvailableMB: 5000,
 	}))
 	info, _ = reg.GetInfo("w-1")
@@ -148,11 +148,11 @@ func TestWorkerLifecycle_FullCycle(t *testing.T) {
 
 	// 5. Worker reconnects
 	fw2 := testutil.NewFakeWorker(t)
-	reg.Register("w-1", fw2, orchestrator.WorkerInfo{ID: "w-1", MemoryTotalMB: 8000})
+	reg.Register("w-1", fw2, cluster.WorkerInfo{ID: "w-1", MemoryTotalMB: 8000})
 	assert.Equal(t, []string{"w-1", "w-1"}, onlineCalls) // called twice
 
 	// 6. Heartbeat on new connection works
-	require.NoError(t, reg.UpdateHeartbeat("w-1", orchestrator.WorkerInfo{
+	require.NoError(t, reg.UpdateHeartbeat("w-1", cluster.WorkerInfo{
 		ID: "w-1", MemoryTotalMB: 8000, MemoryAvailableMB: 6000,
 	}))
 	info, _ = reg.GetInfo("w-1")
@@ -304,18 +304,18 @@ func TestPortRange_OverlapRejected(t *testing.T) {
 
 	s := store.New(svc.DB)
 	log := testutil.TestLogger()
-	wnSvc := orchestrator.NewWorkerNodeService(s, svc.Registry, svc.Broadcaster, log)
+	wnSvc := cluster.NewWorkerNodeService(s, svc.Registry, svc.Broadcaster, log)
 
 	ctx := context.Background()
 
 	// Set range for A
-	require.NoError(t, wnSvc.Update(ctx, "worker-a", &orchestrator.WorkerNodeUpdate{
+	require.NoError(t, wnSvc.Update(ctx, "worker-a", &cluster.WorkerNodeUpdate{
 		PortRangeStart: intPtr(25000),
 		PortRangeEnd:   intPtr(25100),
 	}))
 
 	// Set overlapping range for B — should fail
-	err := wnSvc.Update(ctx, "worker-b", &orchestrator.WorkerNodeUpdate{
+	err := wnSvc.Update(ctx, "worker-b", &cluster.WorkerNodeUpdate{
 		PortRangeStart: intPtr(25050),
 		PortRangeEnd:   intPtr(25150),
 	})

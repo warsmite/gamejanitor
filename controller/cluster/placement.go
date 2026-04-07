@@ -1,4 +1,4 @@
-package placement
+package cluster
 
 import (
 	"fmt"
@@ -7,30 +7,17 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// Store abstracts database operations the placement service needs.
-type Store interface {
-	ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error)
-	GetWorkerNode(id string) (*model.WorkerNode, error)
-	AllocatedMemoryByNode(nodeID string) (int, error)
-	AllocatedCPUByNode(nodeID string) (float64, error)
-	AllocatedStorageByNode(nodeID string) (int, error)
-	AllocatedMemoryByNodeExcluding(nodeID, excludeID string) (int, error)
-	AllocatedCPUByNodeExcluding(nodeID, excludeID string) (float64, error)
-	AllocatedStorageByNodeExcluding(nodeID, excludeID string) (int, error)
-}
-
-// Service handles node selection, capacity checking, and port allocation
-// for gameserver placement. All operations that assign a gameserver to a node or
+// PlacementService handles node selection, capacity checking, and port allocation
+// for gameserver  All operations that assign a gameserver to a node or
 // allocate ports go through this service to serialize concurrent access.
-type Service struct {
+type PlacementService struct {
 	store       Store
-	dispatcher  *orchestrator.Dispatcher
+	dispatcher  *Dispatcher
 	settingsSvc *settings.SettingsService
 	log         *slog.Logger
 	mu          sync.Mutex // serializes port allocation + node assignment
@@ -42,8 +29,8 @@ type Service struct {
 	pendingPorts map[string][]int
 }
 
-func NewService(store Store, dispatcher *orchestrator.Dispatcher, settingsSvc *settings.SettingsService, log *slog.Logger) *Service {
-	return &Service{
+func NewPlacementService(store Store, dispatcher *Dispatcher, settingsSvc *settings.SettingsService, log *slog.Logger) *PlacementService {
+	return &PlacementService{
 		store:        store,
 		dispatcher:   dispatcher,
 		settingsSvc:  settingsSvc,
@@ -54,7 +41,7 @@ func NewService(store Store, dispatcher *orchestrator.Dispatcher, settingsSvc *s
 
 // CommitPorts removes a gameserver's ports from the pending set.
 // Call after the gameserver has been persisted to the database.
-func (p *Service) CommitPorts(gameserverID string) {
+func (p *PlacementService) CommitPorts(gameserverID string) {
 	p.mu.Lock()
 	delete(p.pendingPorts, gameserverID)
 	p.mu.Unlock()
@@ -62,7 +49,7 @@ func (p *Service) CommitPorts(gameserverID string) {
 
 // ReleasePorts removes a gameserver's ports from the pending set without persisting.
 // Call when gameserver creation fails and the allocated ports should be freed.
-func (p *Service) ReleasePorts(gameserverID string) {
+func (p *PlacementService) ReleasePorts(gameserverID string) {
 	p.mu.Lock()
 	delete(p.pendingPorts, gameserverID)
 	p.mu.Unlock()
@@ -70,7 +57,7 @@ func (p *Service) ReleasePorts(gameserverID string) {
 
 // PlaceGameserver selects a node and allocates ports for a new or relocated gameserver.
 // Acquires the placement lock to prevent concurrent port allocation races.
-func (p *Service) PlaceGameserver(game *games.Game, gs *model.Gameserver) (nodeID string, ports model.Ports, err error) {
+func (p *PlacementService) PlaceGameserver(game *games.Game, gs *model.Gameserver) (nodeID string, ports model.Ports, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -124,7 +111,7 @@ func (p *Service) PlaceGameserver(game *games.Game, gs *model.Gameserver) (nodeI
 // ReallocatePorts allocates new ports for a gameserver on a specific node.
 // Used during migration and unarchive when moving to a different node.
 // No pending tracking needed — the gameserver already exists in the DB.
-func (p *Service) ReallocatePorts(game *games.Game, nodeID string, excludeID string) (model.Ports, error) {
+func (p *PlacementService) ReallocatePorts(game *games.Game, nodeID string, excludeID string) (model.Ports, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.AllocatePorts(game, nodeID, excludeID, "")
@@ -132,7 +119,7 @@ func (p *Service) ReallocatePorts(game *games.Game, nodeID string, excludeID str
 
 // FindNodeWithCapacity finds a node that can fit the given resources.
 // Used by auto-migration when the current node can't fit after a resource update.
-func (p *Service) FindNodeWithCapacity(mem int, cpu float64, storage int, tags model.Labels, excludeNodeID string) (string, error) {
+func (p *PlacementService) FindNodeWithCapacity(mem int, cpu float64, storage int, tags model.Labels, excludeNodeID string) (string, error) {
 	candidates := p.dispatcher.RankWorkersForPlacement(tags)
 	for _, c := range candidates {
 		if c.NodeID == excludeNodeID {
@@ -148,7 +135,7 @@ func (p *Service) FindNodeWithCapacity(mem int, cpu float64, storage int, tags m
 // UsedHostPorts returns all host ports in use.
 // In cluster scope: checks all nodes (ports are cluster-unique).
 // In node scope: checks only the given node.
-func (p *Service) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
+func (p *PlacementService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
 	var filter model.GameserverFilter
 	if p.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		filter.NodeID = &nodeID
@@ -185,13 +172,13 @@ func (p *Service) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, 
 	return used, nil
 }
 
-func (p *Service) portRange() (int, int) {
+func (p *PlacementService) portRange() (int, int) {
 	return p.settingsSvc.GetInt(settings.SettingPortRangeStart), p.settingsSvc.GetInt(settings.SettingPortRangeEnd)
 }
 
 // portRangeForNode returns the port range for a specific worker node.
 // Uses the worker's per-node range if set, otherwise falls back to the global range.
-func (p *Service) portRangeForNode(nodeID string) (int, int) {
+func (p *PlacementService) portRangeForNode(nodeID string) (int, int) {
 	if nodeID != "" {
 		node, err := p.store.GetWorkerNode(nodeID)
 		if err == nil && node != nil && node.PortRangeStart != nil && node.PortRangeEnd != nil {
@@ -204,17 +191,17 @@ func (p *Service) portRangeForNode(nodeID string) (int, int) {
 // CheckWorkerLimits returns an error if adding the given resources would exceed
 // the worker's configured limits. Pass excludeID to ignore one gameserver's
 // allocation (used when checking after a resource update).
-func (p *Service) CheckWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int) error {
+func (p *PlacementService) CheckWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int) error {
 	return p.checkWorkerLimits(nodeID, memoryNeeded, cpuNeeded, storageNeeded, "")
 }
 
 // CheckWorkerLimitsExcluding is like CheckWorkerLimits but excludes one gameserver's allocation.
 // Used by auto-migration to check if a node can still fit after a resource update.
-func (p *Service) CheckWorkerLimitsExcluding(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
+func (p *PlacementService) CheckWorkerLimitsExcluding(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
 	return p.checkWorkerLimits(nodeID, memoryNeeded, cpuNeeded, storageNeeded, excludeID)
 }
 
-func (p *Service) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
+func (p *PlacementService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
 	node, err := p.store.GetWorkerNode(nodeID)
 	if err != nil || node == nil {
 		return nil // no node record = no limits
@@ -283,7 +270,7 @@ func (p *Service) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded f
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
 // gameserverID is used to track the allocation in pendingPorts until CommitPorts/ReleasePorts is called.
 // Pass empty string if pending tracking is not needed (e.g. reallocation for existing gameservers).
-func (p *Service) AllocatePorts(game *games.Game, nodeID string, excludeID string, gameserverID string) (model.Ports, error) {
+func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, excludeID string, gameserverID string) (model.Ports, error) {
 	gamePorts := game.DefaultPorts
 	if len(gamePorts) == 0 {
 		return model.Ports{}, nil

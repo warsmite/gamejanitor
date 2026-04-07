@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -22,11 +22,11 @@ type Store interface {
 
 type Service struct {
 	store      Store
-	dispatcher *orchestrator.Dispatcher
+	dispatcher *cluster.Dispatcher
 	log        *slog.Logger
 }
 
-func NewService(store Store, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *Service {
+func NewService(store Store, dispatcher *cluster.Dispatcher, log *slog.Logger) *Service {
 	return &Service{
 		store:      store,
 		dispatcher: dispatcher,

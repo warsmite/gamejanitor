@@ -1,4 +1,4 @@
-package orchestrator
+package cluster
 
 import (
 	"github.com/warsmite/gamejanitor/worker"

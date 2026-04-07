@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/status"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/go-chi/chi/v5"
 	"strings"
@@ -21,15 +21,15 @@ type GameserverHandlers struct {
 	svc          *gameserver.GameserverService
 	lifecycle    *gameserver.LifecycleService
 	consoleSvc   *gameserver.ConsoleService
-	querySvc     *status.QueryService
-	statsPoller  *status.StatsPoller
+	querySvc     *cluster.QueryService
+	statsPoller  *cluster.StatsPoller
 	statsHistory StatsHistoryQuerier
 	ops          *gameserver.Runner
 	tracker      *gameserver.Tracker
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *gameserver.LifecycleService, consoleSvc *gameserver.ConsoleService, querySvc *status.QueryService, statsPoller *status.StatsPoller, statsHistory StatsHistoryQuerier, ops *gameserver.Runner, tracker *gameserver.Tracker, log *slog.Logger) *GameserverHandlers {
+func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *gameserver.LifecycleService, consoleSvc *gameserver.ConsoleService, querySvc *cluster.QueryService, statsPoller *cluster.StatsPoller, statsHistory StatsHistoryQuerier, ops *gameserver.Runner, tracker *gameserver.Tracker, log *slog.Logger) *GameserverHandlers {
 	return &GameserverHandlers{svc: svc, lifecycle: lifecycleSvc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, ops: ops, tracker: tracker, log: log}
 }
 

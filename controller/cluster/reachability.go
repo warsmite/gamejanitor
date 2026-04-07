@@ -1,6 +1,6 @@
 // Package browser integrates with the gamejanitor browser service (gamejanitor.net)
 // to check public reachability of gameservers and optionally register them.
-package browser
+package cluster
 
 import (
 	"context"

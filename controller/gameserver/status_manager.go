@@ -6,8 +6,7 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/status"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -15,10 +14,10 @@ type StatusManager struct {
 	store       Store
 	log         *slog.Logger
 	broadcaster *event.EventBus
-	querySvc    *status.QueryService
-	statsPoller *status.StatsPoller
-	dispatcher  *orchestrator.Dispatcher
-	registry    *orchestrator.Registry
+	querySvc    *cluster.QueryService
+	statsPoller *cluster.StatsPoller
+	dispatcher  *cluster.Dispatcher
+	registry    *cluster.Registry
 	restartFunc func(ctx context.Context, id string) error
 	runner      *Runner
 
@@ -39,7 +38,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *status.QueryService, statsPoller *status.StatsPoller, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, runner *Runner, log *slog.Logger) *StatusManager {
+func NewStatusManager(store Store, broadcaster *event.EventBus, querySvc *cluster.QueryService, statsPoller *cluster.StatsPoller, dispatcher *cluster.Dispatcher, registry *cluster.Registry, restartFunc func(ctx context.Context, id string) error, runner *Runner, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		store:         store,
 		broadcaster:   broadcaster,

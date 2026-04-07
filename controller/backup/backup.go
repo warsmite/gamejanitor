@@ -13,7 +13,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -52,7 +52,7 @@ const maxConcurrentBackups = 3
 
 type BackupService struct {
 	store         Store
-	dispatcher    *orchestrator.Dispatcher
+	dispatcher    *cluster.Dispatcher
 	gameserverSvc GameserverLifecycle
 	gameStore     *games.GameStore
 	storage       Storage
@@ -95,7 +95,7 @@ func (s *BackupService) failActivityRecord(gameserverID string, reason error) {
 	}
 }
 
-func NewBackupService(store Store, dispatcher *orchestrator.Dispatcher, gameserverSvc GameserverLifecycle, gameStore *games.GameStore, storage Storage, settingsSvc *settings.SettingsService, broadcaster *event.EventBus, log *slog.Logger) *BackupService {
+func NewBackupService(store Store, dispatcher *cluster.Dispatcher, gameserverSvc GameserverLifecycle, gameStore *games.GameStore, storage Storage, settingsSvc *settings.SettingsService, broadcaster *event.EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{
 		store:         store,
 		dispatcher:    dispatcher,

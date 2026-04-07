@@ -1,4 +1,4 @@
-package orchestrator
+package cluster
 
 import (
 	"github.com/warsmite/gamejanitor/worker"
@@ -21,7 +21,7 @@ type DispatcherStore interface {
 	GameserverCountByNode(nodeID string) (int, error)
 }
 
-// PlacementCandidate is a worker ranked for gameserver placement.
+// PlacementCandidate is a worker ranked for gameserver 
 type PlacementCandidate struct {
 	Worker          worker.Worker
 	NodeID          string
@@ -168,7 +168,7 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 }
 
 // SelectWorkerByNodeID returns the worker.Worker for a specific node ID.
-// Used when the user explicitly chooses a node for placement.
+// Used when the user explicitly chooses a node for 
 func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (worker.Worker, error) {
 	if nodeID == "" {
 		return nil, fmt.Errorf("node_id is required")

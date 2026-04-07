@@ -17,8 +17,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller/placement"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -72,7 +71,7 @@ type BackupStore interface {
 
 type GameserverService struct {
 	store          Store
-	dispatcher     *orchestrator.Dispatcher
+	dispatcher     *cluster.Dispatcher
 	log            *slog.Logger
 	broadcaster    *event.EventBus
 	statusProvider StatusProvider
@@ -80,7 +79,7 @@ type GameserverService struct {
 	gameStore      *games.GameStore
 	backupStore    BackupStore
 	dataDir        string
-	placement      *placement.Service
+	placement      *cluster.PlacementService
 	operations     *Tracker
 	sftpPort       int
 }
@@ -104,7 +103,7 @@ func (s *GameserverService) recordInstant(gameserverID *string, eventType string
 	}
 }
 
-func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *event.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *placement.Service, dataDir string, sftpPort int, log *slog.Logger) *GameserverService {
+func NewGameserverService(store Store, dispatcher *cluster.Dispatcher, broadcaster *event.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, placementSvc *cluster.PlacementService, dataDir string, sftpPort int, log *slog.Logger) *GameserverService {
 	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, sftpPort: sftpPort, log: log, placement: placementSvc}
 }
 

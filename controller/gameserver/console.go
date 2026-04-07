@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/games"
 )
 
@@ -22,12 +22,12 @@ type LogSession struct {
 
 type ConsoleService struct {
 	store      Store
-	dispatcher *orchestrator.Dispatcher
+	dispatcher *cluster.Dispatcher
 	gameStore  *games.GameStore
 	log        *slog.Logger
 }
 
-func NewConsoleService(store Store, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
+func NewConsoleService(store Store, dispatcher *cluster.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
 	return &ConsoleService{store: store, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 

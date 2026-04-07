@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
@@ -17,7 +17,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/schedule"
-	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/api/handler"
 	"github.com/go-chi/chi/v5"
@@ -35,12 +34,12 @@ type RouterOptions struct {
 	FileSvc         *file.Service
 	ScheduleSvc     *schedule.ScheduleService
 	BackupSvc       *backup.BackupService
-	QuerySvc        *status.QueryService
-	StatsPoller     *status.StatsPoller
+	QuerySvc        *cluster.QueryService
+	StatsPoller     *cluster.StatsPoller
 	SettingsSvc     *settings.SettingsService
 	AuthSvc         *auth.AuthService
 	ModSvc          *mod.ModService
-	WorkerNodeSvc   *orchestrator.WorkerNodeService
+	WorkerNodeSvc   *cluster.WorkerNodeService
 	WebhookSvc       *webhook.WebhookEndpointService
 	EventHistorySvc  *event.EventHistoryService
 	Runner           *gameserver.Runner

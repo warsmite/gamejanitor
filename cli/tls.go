@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/utilities/tlsutil"
 	pb "github.com/warsmite/gamejanitor/worker/proto"
 
@@ -108,7 +108,7 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 		netInfo := detectNetInfo(logger)
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
 
-		client, conn, err := orchestrator.DialControllerEnrollment(cfg.ControllerAddress, cfg.WorkerToken)
+		client, conn, err := cluster.DialControllerEnrollment(cfg.ControllerAddress, cfg.WorkerToken)
 		if err != nil {
 			logger.Error("failed to connect to controller for enrollment", "error", err, "retry_in", backoff)
 			time.Sleep(backoff)

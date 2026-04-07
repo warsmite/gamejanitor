@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/status"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 )
 
 // OperationClearer clears the active operation for a gameserver.
@@ -22,8 +22,8 @@ type StatusSubscriber struct {
 	store       Store
 	log         *slog.Logger
 	bus         *event.EventBus
-	querySvc    *status.QueryService
-	statsPoller *status.StatsPoller
+	querySvc    *cluster.QueryService
+	statsPoller *cluster.StatsPoller
 	operations  OperationClearer
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
@@ -33,7 +33,7 @@ func (s *StatusSubscriber) SetOperationClearer(oc OperationClearer) {
 	s.operations = oc
 }
 
-func NewStatusSubscriber(store Store, bus *event.EventBus, querySvc *status.QueryService, statsPoller *status.StatsPoller, log *slog.Logger) *StatusSubscriber {
+func NewStatusSubscriber(store Store, bus *event.EventBus, querySvc *cluster.QueryService, statsPoller *cluster.StatsPoller, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
 		store:       store,
 		bus:         bus,

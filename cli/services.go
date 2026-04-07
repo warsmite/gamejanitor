@@ -12,11 +12,9 @@ import (
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/mod"
-	"github.com/warsmite/gamejanitor/controller/placement"
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/utilities/netutil"
@@ -29,8 +27,8 @@ type Services struct {
 	SettingsSvc     *settings.SettingsService
 	GameserverSvc   *gameserver.GameserverService
 	LifecycleSvc    *gameserver.LifecycleService
-	QuerySvc        *status.QueryService
-	StatsPoller     *status.StatsPoller
+	QuerySvc        *cluster.QueryService
+	StatsPoller     *cluster.StatsPoller
 	ConsoleSvc      *gameserver.ConsoleService
 	FileSvc         *file.Service
 	BackupSvc       *backup.BackupService
@@ -43,7 +41,7 @@ type Services struct {
 	EventPersister  *event.EventPersister
 	WebhookWorker   *webhook.WebhookWorker
 	WebhookSvc      *webhook.WebhookEndpointService
-	WorkerNodeSvc   *orchestrator.WorkerNodeService
+	WorkerNodeSvc   *cluster.WorkerNodeService
 	ModSvc          *mod.ModService
 	BackupStorage   backup.Storage
 	ActivityTracker *gameserver.ActivityTracker
@@ -60,7 +58,7 @@ type InitServicesOpts struct {
 
 // InitServices wires all services together. This is the single composition root
 // used by both production (cli/serve.go) and tests (testutil/services.go).
-func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger, opts *InitServicesOpts) (*Services, error) {
+func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cluster.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger, opts *InitServicesOpts) (*Services, error) {
 	if opts == nil {
 		opts = &InitServicesOpts{}
 	}
@@ -79,7 +77,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	operationTracker := gameserver.NewTracker(broadcaster, logger)
 
 	// Placement service (shared between gameserver CRUD and lifecycle)
-	placementSvc := placement.NewService(db, dispatcher, settingsSvc, logger)
+	placementSvc := cluster.NewPlacementService(db, dispatcher, settingsSvc, logger)
 
 	runner := gameserver.NewRunner(activityTracker, operationTracker, db, logger)
 
@@ -88,8 +86,8 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 
 	lifecycleSvc := gameserver.NewLifecycleService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
 
-	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
-	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
+	querySvc := cluster.NewQueryService(db, broadcaster, gameStore, logger)
+	statsPoller := cluster.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
 	statsPoller.SetPlayerCountFn(func(gsID string) int {
 		if q := querySvc.GetQueryData(gsID); q != nil {
 			return q.PlayersOnline
@@ -132,7 +130,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		return netutil.ValidateWebhookURL(rawURL)
 	}
 	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
-	workerNodeSvc := orchestrator.NewWorkerNodeService(db, registry, broadcaster, logger)
+	workerNodeSvc := cluster.NewWorkerNodeService(db, registry, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
 	modSvc := mod.NewModService(db, fileSvc, gameStore, optionsRegistry, broadcaster, logger)
 

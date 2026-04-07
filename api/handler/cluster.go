@@ -5,16 +5,16 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/go-chi/chi/v5"
 )
 
 type ClusterHandlers struct {
-	workerSvc *orchestrator.WorkerNodeService
+	workerSvc *cluster.WorkerNodeService
 	log       *slog.Logger
 }
 
-func NewClusterHandlers(workerSvc *orchestrator.WorkerNodeService, log *slog.Logger) *ClusterHandlers {
+func NewClusterHandlers(workerSvc *cluster.WorkerNodeService, log *slog.Logger) *ClusterHandlers {
 	return &ClusterHandlers{workerSvc: workerSvc, log: log}
 }
 
@@ -82,7 +82,7 @@ func (h *ClusterHandlers) GetWorker(w http.ResponseWriter, r *http.Request) {
 func (h *ClusterHandlers) UpdateWorker(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	var req orchestrator.WorkerNodeUpdate
+	var req cluster.WorkerNodeUpdate
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
