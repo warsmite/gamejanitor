@@ -201,7 +201,6 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 	body, _ := io.ReadAll(readResp.Body)
 	readResp.Body.Close()
 
-	// The response might be wrapped in an envelope or raw — depends on handler
 	assert.Contains(t, string(body), "hello from e2e")
 
 	// Cleanup

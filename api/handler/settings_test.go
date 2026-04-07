@@ -22,13 +22,8 @@ func TestAPI_Settings_Get(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
-	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "ok", result.Status)
-
-	// Should contain known settings
 	var settings map[string]any
-	json.Unmarshal(result.Data, &settings)
+	json.NewDecoder(resp.Body).Decode(&settings)
 	assert.Contains(t, settings, "auth_enabled")
 	assert.Contains(t, settings, "port_range_start")
 }
@@ -51,10 +46,8 @@ func TestAPI_Settings_Update(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify the value changed
-	var result apiResponse
-	json.NewDecoder(resp.Body).Decode(&result)
 	var settings map[string]any
-	json.Unmarshal(result.Data, &settings)
+	json.NewDecoder(resp.Body).Decode(&settings)
 
 	portStart, ok := settings["port_range_start"]
 	assert.True(t, ok)

@@ -1,7 +1,6 @@
 package handler_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -11,10 +10,8 @@ import (
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
-type apiResponse struct {
-	Status string          `json:"status"`
-	Data   json.RawMessage `json:"data,omitempty"`
-	Error  string          `json:"error,omitempty"`
+type apiErrorResponse struct {
+	Error string `json:"error,omitempty"`
 }
 
 func TestAPI_HealthEndpoint_NoAuthRequired(t *testing.T) {

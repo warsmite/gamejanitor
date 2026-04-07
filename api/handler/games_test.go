@@ -21,12 +21,8 @@ func TestAPI_ListGames_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
-
 	var games []map[string]any
-	require.NoError(t, json.Unmarshal(result.Data, &games))
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&games))
 	assert.GreaterOrEqual(t, len(games), 10, "should include embedded games")
 
 	// Verify test-game is in the list
@@ -50,12 +46,8 @@ func TestAPI_GetGame_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
-
 	var game map[string]any
-	require.NoError(t, json.Unmarshal(result.Data, &game))
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&game))
 	assert.Equal(t, testutil.TestGameID, game["id"])
 	assert.Equal(t, "Test Game", game["name"])
 }

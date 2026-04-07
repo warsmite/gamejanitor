@@ -220,11 +220,11 @@ func RequireGameserverAccess(settingsSvc *settings.SettingsService, ac handler.G
 func handleForbidden(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
-	w.Write([]byte(`{"status":"error","error":"forbidden"}`))
+	w.Write([]byte(`{"error":"forbidden"}`))
 }
 
 func handleUnauthorized(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"status":"error","error":"unauthorized"}`))
+	w.Write([]byte(`{"error":"unauthorized"}`))
 }

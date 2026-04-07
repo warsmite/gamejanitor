@@ -92,10 +92,10 @@ func TestAPI_GameserverScoping_CustomTokenCannotAccessOtherGameserver(t *testing
 		req := authRequest("POST", api.Server.URL+"/api/gameservers", adminToken, body)
 		resp, err := http.DefaultClient.Do(req)
 		require.NoError(t, err)
-		var result struct{ Data struct{ ID string } }
+		var result struct{ ID string }
 		json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
-		gsIDs = append(gsIDs, result.Data.ID)
+		gsIDs = append(gsIDs, result.ID)
 	}
 
 	// Custom token scoped to gs A only, with access permission
@@ -178,9 +178,9 @@ func mustCreateCanCreateToken(t *testing.T, api *testutil.TestAPI) string {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var result struct{ Data struct{ Token string } }
+	var result struct{ Token string }
 	json.NewDecoder(resp.Body).Decode(&result)
-	return result.Data.Token
+	return result.Token
 }
 
 func TestAPI_CanCreate_AllowsGameserverCreation(t *testing.T) {

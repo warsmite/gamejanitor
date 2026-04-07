@@ -26,9 +26,8 @@ func TestFiles_PathTraversal_Rejected(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	var result apiResponse
+	var result apiErrorResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "error", result.Status)
 	assert.Contains(t, result.Error, "must be within /data")
 }
 
@@ -45,9 +44,8 @@ func TestFiles_List_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
+	var result []map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
 }
 
 func TestFiles_Read_NotFound(t *testing.T) {

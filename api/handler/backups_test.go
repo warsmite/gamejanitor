@@ -23,10 +23,10 @@ func createGameserverViaAPI(t *testing.T, api *testutil.TestAPI) string {
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var result struct{ Data struct{ ID string } }
+	var result struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&result)
-	require.NotEmpty(t, result.Data.ID)
-	return result.Data.ID
+	require.NotEmpty(t, result.ID)
+	return result.ID
 }
 
 func TestAPI_Backups_Create(t *testing.T) {
@@ -44,15 +44,12 @@ func TestAPI_Backups_Create(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 
 	var result struct {
-		Status string `json:"status"`
-		Data   struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		ID string `json:"id"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "ok", result.Status)
+	assert.NotEmpty(t, result.ID)
 
-	testutil.WaitForBackupCompletion(t, api.Services, result.Data.ID)
+	testutil.WaitForBackupCompletion(t, api.Services, result.ID)
 }
 
 func TestAPI_Backups_List(t *testing.T) {
@@ -67,9 +64,8 @@ func TestAPI_Backups_List(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
+	var result []json.RawMessage
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "ok", result.Status)
 }
 
 func TestAPI_Backups_Delete_NotFound(t *testing.T) {

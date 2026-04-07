@@ -28,9 +28,9 @@ func TestAPI_Schedules_Create(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var result apiResponse
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "ok", result.Status)
+	assert.NotEmpty(t, result["id"])
 }
 
 func TestAPI_Schedules_Create_InvalidCron(t *testing.T) {
@@ -89,10 +89,10 @@ func TestAPI_Schedules_Delete(t *testing.T) {
 		"name": "to-delete", "type": "restart", "cron_expr": "0 0 * * *",
 	})
 	createResp, _ := http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/schedules", "application/json", bytes.NewReader(body))
-	var createResult struct{ Data struct{ ID string } }
+	var createResult struct{ ID string }
 	json.NewDecoder(createResp.Body).Decode(&createResult)
 	createResp.Body.Close()
-	schedID := createResult.Data.ID
+	schedID := createResult.ID
 	require.NotEmpty(t, schedID)
 
 	// Delete

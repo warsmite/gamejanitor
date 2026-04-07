@@ -23,9 +23,8 @@ func TestAPI_ListGameservers_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result apiResponse
+	var result []json.RawMessage
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
 }
 
 func TestAPI_CreateGameserver_Success(t *testing.T) {
@@ -46,9 +45,9 @@ func TestAPI_CreateGameserver_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var result apiResponse
+	var result map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
+	assert.NotEmpty(t, result["id"])
 }
 
 func TestAPI_CreateGameserver_InvalidJSON(t *testing.T) {
@@ -61,9 +60,9 @@ func TestAPI_CreateGameserver_InvalidJSON(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	var result apiResponse
+	var result apiErrorResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "error", result.Status)
+	assert.NotEmpty(t, result.Error)
 }
 
 func TestAPI_GetGameserver_NotFound(t *testing.T) {
@@ -95,13 +94,10 @@ func TestAPI_GetGameserver_Success(t *testing.T) {
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
 	var createResult struct {
-		Status string `json:"status"`
-		Data   struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		ID string `json:"id"`
 	}
 	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&createResult))
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 	require.NotEmpty(t, gsID)
 
 	// Get it and verify response body has the right data
@@ -112,17 +108,14 @@ func TestAPI_GetGameserver_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)
 
 	var getResult struct {
-		Status string `json:"status"`
-		Data   struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			GameID string `json:"game_id"`
-		} `json:"data"`
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		GameID string `json:"game_id"`
 	}
 	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&getResult))
-	assert.Equal(t, gsID, getResult.Data.ID)
-	assert.Equal(t, "Get Test", getResult.Data.Name)
-	assert.Equal(t, testutil.TestGameID, getResult.Data.GameID)
+	assert.Equal(t, gsID, getResult.ID)
+	assert.Equal(t, "Get Test", getResult.Name)
+	assert.Equal(t, testutil.TestGameID, getResult.GameID)
 }
 
 func TestAPI_DeleteGameserver_Success(t *testing.T) {
@@ -142,12 +135,10 @@ func TestAPI_DeleteGameserver_Success(t *testing.T) {
 	defer createResp.Body.Close()
 
 	var createResult struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		ID string `json:"id"`
 	}
 	json.NewDecoder(createResp.Body).Decode(&createResult)
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 
 	// Delete
 	req, _ := http.NewRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, nil)
@@ -168,27 +159,24 @@ func TestAPI_DeleteGameserver_Success(t *testing.T) {
 	}, 5*time.Second, 50*time.Millisecond, "gameserver should be deleted")
 }
 
-func TestAPI_ResponseEnvelope(t *testing.T) {
+func TestAPI_ResponseFormat(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 
-	// Success response has "status": "ok"
+	// Success response — data returned directly, no wrapper
 	resp, err := http.Get(api.Server.URL + "/api/gameservers")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	var result apiResponse
+	var result []json.RawMessage
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "ok", result.Status)
-	assert.Empty(t, result.Error)
 
-	// Error response has "status": "error"
+	// Error response — {"error": "message"}
 	errResp, err := http.Get(api.Server.URL + "/api/gameservers/nonexistent")
 	require.NoError(t, err)
 	defer errResp.Body.Close()
 
-	var errResult apiResponse
+	var errResult apiErrorResponse
 	require.NoError(t, json.NewDecoder(errResp.Body).Decode(&errResult))
-	assert.Equal(t, "error", errResult.Status)
 	assert.NotEmpty(t, errResult.Error)
 }

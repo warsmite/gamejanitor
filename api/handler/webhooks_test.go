@@ -27,9 +27,9 @@ func TestAPI_Webhooks_Create(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var result apiResponse
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "ok", result.Status)
+	assert.NotEmpty(t, result["endpoint"])
 }
 
 func TestAPI_Webhooks_List(t *testing.T) {
@@ -52,10 +52,10 @@ func TestAPI_Webhooks_Delete(t *testing.T) {
 		"url": "https://example.com/hook", "events": []string{"*"},
 	})
 	createResp, _ := http.Post(api.Server.URL+"/api/webhooks", "application/json", bytes.NewReader(body))
-	var createResult struct{ Data struct{ Endpoint struct{ ID string } } }
+	var createResult struct{ Endpoint struct{ ID string } }
 	json.NewDecoder(createResp.Body).Decode(&createResult)
 	createResp.Body.Close()
-	whID := createResult.Data.Endpoint.ID
+	whID := createResult.Endpoint.ID
 	require.NotEmpty(t, whID)
 
 	// Delete
@@ -87,10 +87,10 @@ func TestAPI_Webhooks_Get(t *testing.T) {
 		"url": "https://example.com/hook", "events": []string{"gameserver.*"},
 	})
 	createResp, _ := http.Post(api.Server.URL+"/api/webhooks", "application/json", bytes.NewReader(body))
-	var createResult struct{ Data struct{ Endpoint struct{ ID string } } }
+	var createResult struct{ Endpoint struct{ ID string } }
 	json.NewDecoder(createResp.Body).Decode(&createResult)
 	createResp.Body.Close()
-	whID := createResult.Data.Endpoint.ID
+	whID := createResult.Endpoint.ID
 
 	// Get
 	resp, err := http.Get(api.Server.URL + "/api/webhooks/" + whID)
@@ -100,14 +100,12 @@ func TestAPI_Webhooks_Get(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Data struct {
-			ID  string `json:"id"`
-			URL string `json:"url"`
-		} `json:"data"`
+		ID  string `json:"id"`
+		URL string `json:"url"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, whID, result.Data.ID)
-	assert.Equal(t, "https://example.com/hook", result.Data.URL)
+	assert.Equal(t, whID, result.ID)
+	assert.Equal(t, "https://example.com/hook", result.URL)
 }
 
 func TestAPI_Webhooks_Deliveries(t *testing.T) {
@@ -119,10 +117,10 @@ func TestAPI_Webhooks_Deliveries(t *testing.T) {
 		"url": "https://example.com/hook", "events": []string{"*"},
 	})
 	createResp, _ := http.Post(api.Server.URL+"/api/webhooks", "application/json", bytes.NewReader(body))
-	var createResult struct{ Data struct{ Endpoint struct{ ID string } } }
+	var createResult struct{ Endpoint struct{ ID string } }
 	json.NewDecoder(createResp.Body).Decode(&createResult)
 	createResp.Body.Close()
-	whID := createResult.Data.Endpoint.ID
+	whID := createResult.Endpoint.ID
 
 	// List deliveries (should be empty)
 	resp, err := http.Get(api.Server.URL + "/api/webhooks/" + whID + "/deliveries")

@@ -25,38 +25,36 @@ const (
 	MaxFileUploadBytes = 100 * 1024 * 1024 // 100 MB — multipart file uploads
 )
 
-type envelope struct {
-	Status string `json:"status"`
-	Data   any    `json:"data,omitempty"`
-	Error  string `json:"error,omitempty"`
-}
-
 func respondOK(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(envelope{Status: "ok", Data: data})
+	json.NewEncoder(w).Encode(data)
 }
 
 func respondCreated(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(envelope{Status: "ok", Data: data})
+	json.NewEncoder(w).Encode(data)
 }
 
 func respondAccepted(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(envelope{Status: "ok", Data: data})
+	json.NewEncoder(w).Encode(data)
 }
 
 func respondNoContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
 func respondError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(envelope{Status: "error", Error: message})
+	json.NewEncoder(w).Encode(errorResponse{Error: message})
 }
 
 // parsePagination extracts optional limit/offset from query params.

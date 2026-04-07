@@ -54,11 +54,11 @@ async function request<T>(method: string, path: string, body?: any, query?: Reco
 
   const json = await resp.json();
 
-  if (!resp.ok || json.status === 'error') {
+  if (!resp.ok) {
     throw new ApiClientError(resp.status, json.error || 'Unknown error');
   }
 
-  return json.data as T;
+  return json as T;
 }
 
 function get<T>(path: string, query?: Record<string, any>): Promise<T> {
@@ -603,7 +603,7 @@ export const api = {
         throw new ApiClientError(resp.status, json.error || 'Upload failed');
       }
       const json = await resp.json();
-      return json.data as InstalledMod;
+      return json as InstalledMod;
     },
   },
 

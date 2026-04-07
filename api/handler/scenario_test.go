@@ -39,22 +39,18 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var createResult struct {
-		Status string `json:"status"`
-		Data   struct {
-			ID            string `json:"id"`
-			Name          string `json:"name"`
-			SFTPUsername   string `json:"sftp_username"`
-			SFTPPassword   string `json:"sftp_password"`
-		} `json:"data"`
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		SFTPUsername   string `json:"sftp_username"`
+		SFTPPassword   string `json:"sftp_password"`
 	}
 	json.NewDecoder(resp.Body).Decode(&createResult)
 	resp.Body.Close()
 
-	assert.Equal(t, "ok", createResult.Status)
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 	require.NotEmpty(t, gsID)
-	assert.NotEmpty(t, createResult.Data.SFTPUsername)
-	assert.NotEmpty(t, createResult.Data.SFTPPassword, "create response should include SFTP password")
+	assert.NotEmpty(t, createResult.SFTPUsername)
+	assert.NotEmpty(t, createResult.SFTPPassword, "create response should include SFTP password")
 
 	// 3. Get the gameserver
 	resp, err = http.Get(api.Server.URL + "/api/gameservers/" + gsID)
@@ -81,11 +77,9 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 			return false
 		}
 		defer resp.Body.Close()
-		var body struct {
-			Data struct{ Status string } `json:"data"`
-		}
+		var body struct{ Status string }
 		json.NewDecoder(resp.Body).Decode(&body)
-		return body.Data.Status == "stopped"
+		return body.Status == "stopped"
 	}, 5*time.Second, 100*time.Millisecond, "gameserver should reach stopped")
 
 	// 6. Delete it
@@ -144,10 +138,10 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var createResult struct{ Data struct{ ID string } }
+	var createResult struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&createResult)
 	resp.Body.Close()
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 
 	// 5. Create a limited operator token with access to the created gameserver
 	operatorToken := testutil.MustCreateUserToken(t, api.Services,
@@ -178,29 +172,26 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestAPIScenario_ResponseFormat_ConsistentEnvelope(t *testing.T) {
+func TestAPIScenario_ResponseFormat_NoEnvelope(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 
-	// Every API response should use {"status": "ok/error", ...}
-
-	// Success
+	// Success — data returned directly (no wrapper)
 	resp, _ := http.Get(api.Server.URL + "/api/games")
-	var okResult map[string]any
-	json.NewDecoder(resp.Body).Decode(&okResult)
+	var games []map[string]any
+	json.NewDecoder(resp.Body).Decode(&games)
 	resp.Body.Close()
-	assert.Equal(t, "ok", okResult["status"])
-	assert.Contains(t, okResult, "data")
+	assert.IsType(t, []map[string]any{}, games, "success response should be the data directly")
 
-	// Not found
+	// Error — {"error": "message"}
 	resp, _ = http.Get(api.Server.URL + "/api/gameservers/nonexistent")
 	var errResult map[string]any
 	json.NewDecoder(resp.Body).Decode(&errResult)
 	resp.Body.Close()
-	assert.Equal(t, "error", errResult["status"])
 	assert.Contains(t, errResult, "error")
+	assert.NotContains(t, errResult, "status", "error response should not contain status field")
 
-	// Health endpoint is the exception — returns plain text
+	// Health endpoint — plain text
 	resp, _ = http.Get(api.Server.URL + "/health")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()

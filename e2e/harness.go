@@ -230,19 +230,17 @@ func (h *Harness) Patch(path string, body any) (*http.Response, error) {
 
 func DecodeData(resp *http.Response, v any) error {
 	defer resp.Body.Close()
-	var env struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-	if env.Status != "ok" {
-		return fmt.Errorf("API error: %s", env.Error)
+	if resp.StatusCode >= 400 {
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		return fmt.Errorf("API error: %s", errResp.Error)
 	}
 	if v != nil {
-		return json.Unmarshal(env.Data, v)
+		return json.NewDecoder(resp.Body).Decode(v)
 	}
 	return nil
 }

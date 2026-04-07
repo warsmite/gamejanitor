@@ -29,21 +29,20 @@ func createGameserverWithToken(t *testing.T, api *testutil.TestAPI, adminToken, 
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "admin should be able to create a gameserver")
 
-	var result struct{ Data struct{ ID string } }
+	var result struct{ ID string }
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	require.NotEmpty(t, result.Data.ID)
-	return result.Data.ID
+	require.NotEmpty(t, result.ID)
+	return result.ID
 }
 
 // decodeErrorBody reads the error envelope and returns the error message.
 func decodeErrorBody(t *testing.T, resp *http.Response) string {
 	t.Helper()
-	var envelope struct {
-		Status string `json:"status"`
-		Error  string `json:"error"`
+	var errResp struct {
+		Error string `json:"error"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&envelope))
-	return envelope.Error
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&errResp))
+	return errResp.Error
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +63,10 @@ func TestPermissions_Me_AdminRole(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Data struct {
-			Role string `json:"role"`
-		} `json:"data"`
+		Role string `json:"role"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "admin", result.Data.Role)
+	assert.Equal(t, "admin", result.Role)
 }
 
 func TestPermissions_Me_UserRole(t *testing.T) {
@@ -86,14 +83,12 @@ func TestPermissions_Me_UserRole(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Data struct {
-			Role    string `json:"role"`
-			TokenID string `json:"token_id"`
-		} `json:"data"`
+		Role    string `json:"role"`
+		TokenID string `json:"token_id"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "user", result.Data.Role)
-	assert.NotEmpty(t, result.Data.TokenID)
+	assert.Equal(t, "user", result.Role)
+	assert.NotEmpty(t, result.TokenID)
 }
 
 func TestPermissions_Me_AuthDisabled(t *testing.T) {
@@ -106,12 +101,10 @@ func TestPermissions_Me_AuthDisabled(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Data struct {
-			Role string `json:"role"`
-		} `json:"data"`
+		Role string `json:"role"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Equal(t, "admin", result.Data.Role)
+	assert.Equal(t, "admin", result.Role)
 }
 
 // ---------------------------------------------------------------------------

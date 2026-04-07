@@ -101,11 +101,9 @@ func New(baseURL string, opts ...Option) *Client {
 	return c
 }
 
-// apiResponse is the standard envelope returned by all API endpoints.
-type apiResponse struct {
-	Status string          `json:"status"`
-	Data   json.RawMessage `json:"data,omitempty"`
-	Error  string          `json:"error,omitempty"`
+// apiError is the error shape returned by all API endpoints on failure.
+type apiError struct {
+	Error string `json:"error,omitempty"`
 }
 
 func (c *Client) newRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
@@ -138,8 +136,8 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any) 
 	return req, nil
 }
 
-// do executes a request, unwraps the API envelope, and decodes data into dest.
-// Pass nil for dest on 204 No Content responses.
+// do executes a request and decodes the JSON response into dest.
+// Pass nil for dest on 204 No Content or 202 Accepted responses.
 func (c *Client) do(req *http.Request, dest any) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -151,21 +149,17 @@ func (c *Client) do(req *http.Request, dest any) error {
 		return nil
 	}
 
-	var envelope apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		return fmt.Errorf("gamejanitor: decoding response: %w", err)
-	}
-
-	if envelope.Status == "error" || resp.StatusCode >= 400 {
-		return &Error{
-			StatusCode: resp.StatusCode,
-			Message:    envelope.Error,
+	if resp.StatusCode >= 400 {
+		var errResp apiError
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+			return &Error{StatusCode: resp.StatusCode, Message: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 		}
+		return &Error{StatusCode: resp.StatusCode, Message: errResp.Error}
 	}
 
-	if dest != nil && len(envelope.Data) > 0 {
-		if err := json.Unmarshal(envelope.Data, dest); err != nil {
-			return fmt.Errorf("gamejanitor: decoding response data: %w", err)
+	if dest != nil {
+		if err := json.NewDecoder(resp.Body).Decode(dest); err != nil {
+			return fmt.Errorf("gamejanitor: decoding response: %w", err)
 		}
 	}
 
@@ -182,11 +176,11 @@ func (c *Client) doRaw(req *http.Request) (*http.Response, error) {
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		var envelope apiResponse
-		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		var errResp apiError
+		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
 			return nil, &Error{StatusCode: resp.StatusCode, Message: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 		}
-		return nil, &Error{StatusCode: resp.StatusCode, Message: envelope.Error}
+		return nil, &Error{StatusCode: resp.StatusCode, Message: errResp.Error}
 	}
 
 	return resp, nil

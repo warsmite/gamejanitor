@@ -36,14 +36,12 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var adminResult struct {
-		Data struct {
-			Token   string `json:"token"`
-			TokenID string `json:"token_id"`
-		} `json:"data"`
+		Token   string `json:"token"`
+		TokenID string `json:"token_id"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&adminResult))
 	resp.Body.Close()
-	adminToken := adminResult.Data.Token
+	adminToken := adminResult.Token
 	require.NotEmpty(t, adminToken)
 
 	// Enable auth first, then disable localhost bypass (must be in two steps —
@@ -77,13 +75,11 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "admin should create gameserver")
 	var gsResult struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		ID string `json:"id"`
 	}
 	json.NewDecoder(resp.Body).Decode(&gsResult)
 	resp.Body.Close()
-	adminGsID := gsResult.Data.ID
+	adminGsID := gsResult.ID
 	require.NotEmpty(t, adminGsID)
 
 	t.Cleanup(func() {
@@ -99,26 +95,22 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var viewerResult struct {
-		Data struct {
-			Token   string `json:"token"`
-			TokenID string `json:"token_id"`
-		} `json:"data"`
+		Token   string `json:"token"`
+		TokenID string `json:"token_id"`
 	}
 	json.NewDecoder(resp.Body).Decode(&viewerResult)
 	resp.Body.Close()
-	viewerToken := viewerResult.Data.Token
-	viewerTokenID := viewerResult.Data.TokenID
+	viewerToken := viewerResult.Token
+	viewerTokenID := viewerResult.TokenID
 	require.NotEmpty(t, viewerToken)
 
 	// 4. Viewer cannot see admin's gameserver (no grant)
 	resp, err = h.AuthGet("/api/gameservers", viewerToken)
 	require.NoError(t, err)
-	var listResult struct {
-		Data []struct{ ID string } `json:"data"`
-	}
+	var listResult []struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&listResult)
 	resp.Body.Close()
-	assert.Len(t, listResult.Data, 0, "viewer with no grants should see no gameservers")
+	assert.Len(t, listResult, 0, "viewer with no grants should see no gameservers")
 
 	// 5. Admin grants viewer access to the gameserver with start permission
 	resp, err = h.AuthPatch("/api/gameservers/"+adminGsID, adminToken, map[string]any{
@@ -135,9 +127,9 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	require.NoError(t, err)
 	json.NewDecoder(resp.Body).Decode(&listResult)
 	resp.Body.Close()
-	assert.Len(t, listResult.Data, 1, "viewer with grant should see the gameserver")
-	if len(listResult.Data) > 0 {
-		assert.Equal(t, adminGsID, listResult.Data[0].ID)
+	assert.Len(t, listResult, 1, "viewer with grant should see the gameserver")
+	if len(listResult) > 0 {
+		assert.Equal(t, adminGsID, listResult[0].ID)
 	}
 
 	// 7. Viewer cannot create a gameserver (no can_create)
@@ -168,14 +160,12 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var creatorResult struct {
-		Data struct {
-			Token   string `json:"token"`
-			TokenID string `json:"token_id"`
-		} `json:"data"`
+		Token   string `json:"token"`
+		TokenID string `json:"token_id"`
 	}
 	json.NewDecoder(resp.Body).Decode(&creatorResult)
 	resp.Body.Close()
-	creatorToken := creatorResult.Data.Token
+	creatorToken := creatorResult.Token
 	require.NotEmpty(t, creatorToken)
 
 	// 10. Creator creates a gameserver (ownership)
@@ -187,13 +177,11 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "creator should create gameserver")
 	var creatorGsResult struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		ID string `json:"id"`
 	}
 	json.NewDecoder(resp.Body).Decode(&creatorGsResult)
 	resp.Body.Close()
-	creatorGsID := creatorGsResult.Data.ID
+	creatorGsID := creatorGsResult.ID
 
 	t.Cleanup(func() {
 		h.AuthPost("/api/gameservers/"+creatorGsID+"/stop", adminToken, nil)
@@ -207,26 +195,24 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	require.NoError(t, err)
 	json.NewDecoder(resp.Body).Decode(&listResult)
 	resp.Body.Close()
-	assert.Len(t, listResult.Data, 1, "creator should see only owned gameserver")
-	if len(listResult.Data) > 0 {
-		assert.Equal(t, creatorGsID, listResult.Data[0].ID)
+	assert.Len(t, listResult, 1, "creator should see only owned gameserver")
+	if len(listResult) > 0 {
+		assert.Equal(t, creatorGsID, listResult[0].ID)
 	}
 
 	// 12. /api/me returns correct info for each token
 	resp, err = h.AuthGet("/api/me", adminToken)
 	require.NoError(t, err)
 	var meResult struct {
-		Data struct {
-			Role string `json:"role"`
-		} `json:"data"`
+		Role string `json:"role"`
 	}
 	json.NewDecoder(resp.Body).Decode(&meResult)
 	resp.Body.Close()
-	assert.Equal(t, "admin", meResult.Data.Role)
+	assert.Equal(t, "admin", meResult.Role)
 
 	resp, err = h.AuthGet("/api/me", viewerToken)
 	require.NoError(t, err)
 	json.NewDecoder(resp.Body).Decode(&meResult)
 	resp.Body.Close()
-	assert.Equal(t, "user", meResult.Data.Role)
+	assert.Equal(t, "user", meResult.Role)
 }

@@ -71,10 +71,10 @@ func TestSecurity_TokenScopedToGameserver_CannotListOthers(t *testing.T) {
 		})
 		req := authRequest("POST", api.Server.URL+"/api/gameservers", adminToken, body)
 		resp, _ := http.DefaultClient.Do(req)
-		var result struct{ Data struct{ ID string } }
+		var result struct{ ID string }
 		json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
-		gsIDs = append(gsIDs, result.Data.ID)
+		gsIDs = append(gsIDs, result.ID)
 	}
 
 	// Token scoped to first gameserver only
@@ -87,12 +87,10 @@ func TestSecurity_TokenScopedToGameserver_CannotListOthers(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	var result struct {
-		Data []struct{ ID string } `json:"data"`
-	}
+	var result []struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Len(t, result.Data, 1, "scoped token should only see its own gameserver")
-	assert.Equal(t, gsIDs[0], result.Data[0].ID)
+	assert.Len(t, result, 1, "scoped token should only see its own gameserver")
+	assert.Equal(t, gsIDs[0], result[0].ID)
 }
 
 func TestSecurity_ExpiredToken_Rejected(t *testing.T) {
@@ -127,10 +125,10 @@ func TestSecurity_StartEndpoint_RequiresCorrectPermission(t *testing.T) {
 	})
 	req := authRequest("POST", api.Server.URL+"/api/gameservers", adminToken, body)
 	resp, _ := http.DefaultClient.Do(req)
-	var createResult struct{ Data struct{ ID string } }
+	var createResult struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&createResult)
 	resp.Body.Close()
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 
 	// Token with files.read but NOT gameserver.start
 	wrongPermToken := testutil.MustCreateUserToken(t, api.Services,
@@ -159,10 +157,10 @@ func TestSecurity_DeleteEndpoint_RequiresDeletePermission(t *testing.T) {
 	})
 	req := authRequest("POST", api.Server.URL+"/api/gameservers", adminToken, body)
 	resp, _ := http.DefaultClient.Do(req)
-	var createResult struct{ Data struct{ ID string } }
+	var createResult struct{ ID string }
 	json.NewDecoder(resp.Body).Decode(&createResult)
 	resp.Body.Close()
-	gsID := createResult.Data.ID
+	gsID := createResult.ID
 
 	// Token with start but NOT delete
 	startOnlyToken := testutil.MustCreateUserToken(t, api.Services,
