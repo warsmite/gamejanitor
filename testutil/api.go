@@ -54,7 +54,6 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		EventHistorySvc:   event.NewEventHistoryService(db),
 		Runner:            svc.Runner,
 		OperationTracker:  svc.Runner.Tracker(),
-		ActivityStore:     db,
 		GameserverQuerier: db.GameserverStore,
 		Broadcaster:       svc.Broadcaster,
 		ModSvc:            svc.ModSvc,

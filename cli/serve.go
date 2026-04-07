@@ -448,7 +448,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		EventHistorySvc:   svcs.EventHistorySvc,
 		Runner:            svcs.Runner,
 		OperationTracker:  svcs.Runner.Tracker(),
-		ActivityStore:     db,
 		StatsHistory:      db.GameserverStatsStore,
 		GameserverQuerier: db.GameserverStore,
 		Broadcaster:       svcs.Broadcaster,

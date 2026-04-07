@@ -48,7 +48,6 @@ type RouterOptions struct {
 	EventHistorySvc  *event.EventHistoryService
 	Runner           *operation.Runner
 	OperationTracker *operation.Tracker
-	ActivityStore    handler.EventStore
 	StatsHistory     handler.StatsHistoryQuerier
 	GameserverQuerier handler.GameserverQuerier
 	Broadcaster      *event.EventBus
@@ -101,7 +100,7 @@ func NewRouter(opts RouterOptions) *Router {
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
-	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.GameserverQuerier, opts.Log)
+
 
 	ac := opts.GameserverQuerier
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
@@ -226,7 +225,7 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
 		r.Get("/events/history", eventHandlers.History)
-		r.Get("/activity", activityHandlers.List)
+
 
 		r.Route("/workers", func(r chi.Router) {
 			r.Use(requireAdmin)
