@@ -13,8 +13,6 @@ import (
 	goproto "google.golang.org/protobuf/proto"
 )
 
-const loginTimeout = 30 * time.Second
-
 // LoginWithRefreshToken authenticates to Steam using a previously obtained refresh token.
 // This is the primary login path for automated use.
 func (c *Client) LoginWithRefreshToken(ctx context.Context, accountName, refreshToken string) error {

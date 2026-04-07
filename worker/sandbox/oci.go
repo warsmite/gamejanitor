@@ -300,33 +300,6 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-// ensureResolvConf writes a fallback resolv.conf to dataDir if the system one is missing or empty.
-// Returns the path to a working resolv.conf for binding into sandboxes.
-func ensureResolvConf(dataDir string) string {
-	// Check if system resolv.conf works
-	systemConf := "/etc/resolv.conf"
-	if data, err := os.ReadFile(systemConf); err == nil {
-		content := strings.TrimSpace(string(data))
-		if content != "" && strings.Contains(content, "nameserver") {
-			// Verify the nameserver isn't just localhost (broken on Android)
-			for _, line := range strings.Split(content, "\n") {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "nameserver") {
-					addr := strings.TrimSpace(strings.TrimPrefix(line, "nameserver"))
-					if addr != "::1" && addr != "127.0.0.1" {
-						return systemConf
-					}
-				}
-			}
-		}
-	}
-
-	// Write a fallback resolv.conf
-	fallback := filepath.Join(dataDir, "resolv.conf")
-	os.WriteFile(fallback, []byte("nameserver 8.8.8.8\nnameserver 1.1.1.1\n"), 0644)
-	return fallback
-}
-
 func extractTarLayer(r io.Reader, extractDir string) error {
 	tr := tar.NewReader(r)
 	for {
