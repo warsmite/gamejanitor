@@ -136,6 +136,26 @@ func (r *Registry) Register(nodeID string, w worker.Worker, info WorkerInfo) {
 	}
 }
 
+// ClearWorker removes the worker's connection from the registry without changing
+// its status or triggering the offline callback. Used when the event stream breaks
+// — the worker is still running and will re-register on the next heartbeat.
+// The nil connection causes UpdateHeartbeat to fail, forcing the heartbeat handler
+// to fall through to the dial-back path.
+func (r *Registry) ClearWorker(nodeID string) {
+	r.mu.Lock()
+	rw, ok := r.workers[nodeID]
+	if ok {
+		if rw.worker != nil {
+			if closer, ok := rw.worker.(interface{ Close() error }); ok {
+				closer.Close()
+			}
+		}
+		rw.worker = nil
+	}
+	r.mu.Unlock()
+	r.log.Info("worker connection cleared for re-registration", "worker", nodeID)
+}
+
 // SetOffline transitions a worker to offline state, closing its connection
 // but keeping it in the registry with persisted metadata.
 func (r *Registry) SetOffline(nodeID string) {

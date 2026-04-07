@@ -347,6 +347,8 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 		return nil
 	}
 
+	w.log.Info("StopInstance called", "id", id, "pid", inst.pid, "uptime", time.Since(inst.startedAt).Round(time.Second))
+
 	// Send SIGTERM via systemctl kill — most reliable, reaches all processes in the scope
 	if w.paths.hasSystemd() {
 		prefix := systemctlPrefix(w.paths)
@@ -391,6 +393,7 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 	w.mu.Unlock()
 
 	if ok && !inst.exited.Load() {
+		w.log.Warn("RemoveInstance: killing running instance", "id", id, "pid", inst.pid)
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 	} else if ok {

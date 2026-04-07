@@ -121,7 +121,12 @@ func (m *StatusManager) watchWorkerEvents(ctx context.Context, label string, w w
 				if !ok {
 					return
 				}
-				m.log.Error("instance state watcher error", "worker", label, "error", err)
+				m.log.Warn("instance state watcher stream broke, forcing worker re-registration on next heartbeat", "worker", label, "error", err)
+				// Clear the worker from the registry so the next heartbeat
+				// falls through to the dial-back path and re-establishes both
+				// the gRPC connection and the event stream. Don't use SetOffline
+				// — gameservers are still running, we just lost the event stream.
+				m.registry.ClearWorker(label)
 				return
 			case update, ok := <-updateCh:
 				if !ok {

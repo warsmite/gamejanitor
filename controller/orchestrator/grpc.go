@@ -201,13 +201,6 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		c.log.Info("worker activated via first heartbeat", "worker", req.WorkerId, "grpc_address", node.GRPCAddress)
 	}
 
-	// Check that the worker's token still exists (lightweight, no bcrypt)
-	storedInfo, ok := c.registry.GetInfo(req.WorkerId)
-	if !ok || !c.tokenAuth.IsWorkerTokenValid(storedInfo.TokenID) {
-		c.log.Warn("worker token revoked, rejecting heartbeat", "worker", req.WorkerId, "token", storedInfo.TokenID)
-		return &pb.HeartbeatResponse{Accepted: false}, nil
-	}
-
 	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
 		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
