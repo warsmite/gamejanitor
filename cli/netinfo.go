@@ -1,4 +1,4 @@
-package netinfo
+package cli
 
 import (
 	"io"
@@ -10,14 +10,14 @@ import (
 )
 
 // Info holds the detected network addresses for this host.
-type Info struct {
+type NetInfo struct {
 	ExternalIP string
 	LANIP      string
 }
 
 // Detect discovers the host's LAN and external IP addresses.
-func Detect(log *slog.Logger) *Info {
-	info := &Info{}
+func detectNetInfo(log *slog.Logger) *NetInfo {
+	info := &NetInfo{}
 
 	info.LANIP = detectLANIP(log)
 	info.ExternalIP = detectExternalIP(log)

@@ -12,7 +12,7 @@ import (
 	"net"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/pkg/tlsutil"
+	"github.com/warsmite/gamejanitor/utilities/tlsutil"
 	pb "github.com/warsmite/gamejanitor/worker/proto"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"

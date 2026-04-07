@@ -28,8 +28,7 @@ import (
 	gjproxy "github.com/warsmite/gamejanitor/proxy"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/pkg/netinfo"
-	"github.com/warsmite/gamejanitor/pkg/tlsutil"
+	"github.com/warsmite/gamejanitor/utilities/tlsutil"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 )
 
@@ -352,7 +351,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		// so the controller can dial back with a valid address and matching TLS SAN.
 		advertiseHost := cfg.Bind
 		if advertiseHost == "0.0.0.0" || advertiseHost == "::" || advertiseHost == "" {
-			netInfo := netinfo.Detect(logger)
+			netInfo := detectNetInfo(logger)
 			if netInfo.LANIP != "" {
 				advertiseHost = netInfo.LANIP
 			} else {

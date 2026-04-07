@@ -18,7 +18,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/agent"
@@ -133,7 +132,7 @@ func runRegistrationLoop(ctx context.Context, cfg config.Config, workerID string
 
 	for ctx.Err() == nil {
 		// Re-detect IPs each attempt so we recover if network wasn't ready at startup
-		netInfo := netinfo.Detect(logger)
+		netInfo := detectNetInfo(logger)
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
 		if cfg.AdvertiseAddress != "" {
 			ownAddr = cfg.AdvertiseAddress

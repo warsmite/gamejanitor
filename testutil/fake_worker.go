@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/utilities/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 

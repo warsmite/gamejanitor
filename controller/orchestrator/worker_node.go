@@ -9,7 +9,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/pkg/validate"
+	"github.com/warsmite/gamejanitor/utilities/validate"
 )
 
 // WorkerNodeStore is the persistence interface for worker node operations.

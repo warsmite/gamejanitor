@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/pkg/validate"
+	"github.com/warsmite/gamejanitor/utilities/validate"
 )
 
 // Store defines the persistence methods settings needs.

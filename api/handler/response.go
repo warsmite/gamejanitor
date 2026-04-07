@@ -10,7 +10,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/pkg/validate"
+	"github.com/warsmite/gamejanitor/utilities/validate"
 )
 
 // Pagination and file size limits — inlined from deleted constants/ package.

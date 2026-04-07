@@ -7,7 +7,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/utilities/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 

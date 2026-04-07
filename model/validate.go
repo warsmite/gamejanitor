@@ -3,7 +3,7 @@ package model
 import (
 	"strings"
 
-	"github.com/warsmite/gamejanitor/pkg/validate"
+	"github.com/warsmite/gamejanitor/utilities/validate"
 )
 
 // ValidateCreate checks fields required for gameserver creation.

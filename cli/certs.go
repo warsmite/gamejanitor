@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/pkg/tlsutil"
+	"github.com/warsmite/gamejanitor/utilities/tlsutil"
 	"github.com/spf13/cobra"
 )
 
