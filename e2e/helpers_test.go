@@ -38,7 +38,7 @@ func createGameserver(t *testing.T, h *Harness, env map[string]string) gsInfo {
 
 	t.Cleanup(func() {
 		// Best-effort cleanup: stop then delete
-		if resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil); err == nil {
+		if resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil); err == nil {
 			resp.Body.Close()
 		}
 		h.WaitForStatus(gs.ID, "stopped", 30*time.Second)
@@ -54,7 +54,7 @@ func createGameserver(t *testing.T, h *Harness, env map[string]string) gsInfo {
 // Uses a 5-minute timeout to accommodate real games under parallel contention.
 func startAndWaitRunning(t *testing.T, h *Harness, gsID string) {
 	t.Helper()
-	resp, err := h.PostJSON("/api/gameservers/"+gsID+"/start", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gsID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.NoError(t, h.WaitForStatus(gsID, "running", 5*time.Minute),
@@ -64,7 +64,7 @@ func startAndWaitRunning(t *testing.T, h *Harness, gsID string) {
 // stopAndWaitStopped stops a gameserver and waits for "stopped" status.
 func stopAndWaitStopped(t *testing.T, h *Harness, gsID string) {
 	t.Helper()
-	resp, err := h.PostJSON("/api/gameservers/"+gsID+"/stop", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gsID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.NoError(t, h.WaitForStatus(gsID, "stopped", time.Minute),

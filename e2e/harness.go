@@ -143,7 +143,7 @@ func warmImage(t *testing.T) {
 		return
 	}
 
-	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	if resp != nil {
 		resp.Body.Close()
 	}
@@ -153,7 +153,7 @@ func warmImage(t *testing.T) {
 	}
 
 	// Stop and delete
-	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, _ = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	if resp != nil {
 		resp.Body.Close()
 	}

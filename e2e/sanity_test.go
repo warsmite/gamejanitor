@@ -78,7 +78,7 @@ func TestE2E_RunningServer_APISanity(t *testing.T) {
 	})
 
 	t.Run("send_command", func(t *testing.T) {
-		resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/command", map[string]any{
+		resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/command", map[string]any{
 			"command": "test",
 		})
 		require.NoError(t, err)

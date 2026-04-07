@@ -147,20 +147,25 @@ func NewRouter(opts RouterOptions) *Router {
 		r.Route("/gameservers", func(r chi.Router) {
 			r.Get("/", gameserverHandlers.List)
 			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermGameserverCreate)).Post("/", gameserverHandlers.Create)
-			r.With(requireAdmin).Post("/bulk", gameserverHandlers.BulkAction)
+			r.With(requireAdmin).Post("/actions/bulk", gameserverHandlers.BulkAction)
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)
 				r.With(requireAccess).Patch("/", gameserverHandlers.Update)
 				r.With(requireDelete).Delete("/", gameserverHandlers.Delete)
-				r.With(requireStart).Post("/start", gameserverHandlers.Start)
-				r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
-				r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
-				r.With(requireUpdateGame).Post("/update-game", gameserverHandlers.UpdateServerGame)
-				r.With(requireReinstall).Post("/reinstall", gameserverHandlers.Reinstall)
-				r.With(requireArchive).Post("/archive", gameserverHandlers.Archive)
-				r.With(requireUnarchive).Post("/unarchive", gameserverHandlers.Unarchive)
-				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
-				r.With(requireRegenSFTP).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
+
+				r.Route("/actions", func(r chi.Router) {
+					r.With(requireStart).Post("/start", gameserverHandlers.Start)
+					r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
+					r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
+					r.With(requireUpdateGame).Post("/update-game", gameserverHandlers.UpdateServerGame)
+					r.With(requireReinstall).Post("/reinstall", gameserverHandlers.Reinstall)
+					r.With(requireArchive).Post("/archive", gameserverHandlers.Archive)
+					r.With(requireUnarchive).Post("/unarchive", gameserverHandlers.Unarchive)
+					r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
+					r.With(requireRegenSFTP).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
+					r.With(requireCommands).Post("/command", gameserverHandlers.SendCommand)
+				})
+
 				r.With(requireAccess).Get("/operation", gameserverHandlers.OperationStream)
 				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
@@ -168,7 +173,6 @@ func NewRouter(opts RouterOptions) *Router {
 				r.With(requireLogs).Get("/logs", gameserverHandlers.Logs)
 				r.With(requireLogs).Get("/logs/sessions", gameserverHandlers.LogSessions)
 				r.With(requireLogs).Get("/logs/stream", gameserverHandlers.StreamLogs)
-				r.With(requireCommands).Post("/command", gameserverHandlers.SendCommand)
 
 				r.Route("/schedules", func(r chi.Router) {
 					r.With(requireScheduleRead).Get("/", scheduleHandlers.List)

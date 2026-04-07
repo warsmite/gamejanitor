@@ -30,7 +30,7 @@ func TestE2E_ParallelStarts_NoDuplicatePorts(t *testing.T) {
 		wg.Add(1)
 		go func(id string) {
 			defer wg.Done()
-			resp, err := h.PostJSON("/api/gameservers/"+id+"/start", nil)
+			resp, err := h.PostJSON("/api/gameservers/"+id+"/actions/start", nil)
 			if err == nil {
 				resp.Body.Close()
 			}
@@ -63,7 +63,7 @@ func TestE2E_DoubleStart_Noop(t *testing.T) {
 	startAndWaitRunning(t, h, gs.ID)
 
 	// Second start should not error
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Less(t, resp.StatusCode, 500, "double start should not 500")
@@ -83,7 +83,7 @@ func TestE2E_DoubleStop_Noop(t *testing.T) {
 	stopAndWaitStopped(t, h, gs.ID)
 
 	// Second stop should not error
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Less(t, resp.StatusCode, 500, "double stop should not 500")

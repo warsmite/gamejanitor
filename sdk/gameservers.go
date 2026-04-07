@@ -92,7 +92,7 @@ func (s *GameserverService) Delete(ctx context.Context, id string) error {
 // Start starts a gameserver.
 func (s *GameserverService) Start(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/start", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/start", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -101,7 +101,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (*Gameserver, 
 // Stop stops a gameserver.
 func (s *GameserverService) Stop(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/stop", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/stop", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -110,7 +110,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (*Gameserver, e
 // Restart restarts a gameserver.
 func (s *GameserverService) Restart(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/restart", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/restart", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -119,7 +119,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) (*Gameserver
 // UpdateGame triggers a game update/reinstall on the gameserver.
 func (s *GameserverService) UpdateGame(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/update-game", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/update-game", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -128,7 +128,7 @@ func (s *GameserverService) UpdateGame(ctx context.Context, id string) (*Gameser
 // Reinstall reinstalls the game on the gameserver.
 func (s *GameserverService) Reinstall(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/reinstall", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/reinstall", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -137,7 +137,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (*Gameserv
 // Archive stops and archives a gameserver to storage, freeing worker resources.
 func (s *GameserverService) Archive(ctx context.Context, id string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/archive", nil, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/archive", nil, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -150,7 +150,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, nodeID str
 		body = map[string]string{"node_id": nodeID}
 	}
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/unarchive", body, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/unarchive", body, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -159,7 +159,7 @@ func (s *GameserverService) Unarchive(ctx context.Context, id string, nodeID str
 // Migrate moves a gameserver to a different worker node.
 func (s *GameserverService) Migrate(ctx context.Context, id string, nodeID string) (*Gameserver, error) {
 	var gs Gameserver
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/migrate", &MigrateRequest{NodeID: nodeID}, &gs); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/migrate", &MigrateRequest{NodeID: nodeID}, &gs); err != nil {
 		return nil, err
 	}
 	return &gs, nil
@@ -168,7 +168,7 @@ func (s *GameserverService) Migrate(ctx context.Context, id string, nodeID strin
 // BulkAction performs a lifecycle action on multiple gameservers.
 func (s *GameserverService) BulkAction(ctx context.Context, req *BulkActionRequest) ([]BulkActionResult, error) {
 	var results []BulkActionResult
-	if err := s.client.post(ctx, "/api/gameservers/bulk", req, &results); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/actions/bulk", req, &results); err != nil {
 		return nil, err
 	}
 	return results, nil
@@ -177,7 +177,7 @@ func (s *GameserverService) BulkAction(ctx context.Context, req *BulkActionReque
 // RegenerateSFTPPassword generates a new SFTP password for the gameserver.
 func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, id string) (*RegenerateSFTPPasswordResponse, error) {
 	var resp RegenerateSFTPPasswordResponse
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/regenerate-sftp-password", nil, &resp); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/regenerate-sftp-password", nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -217,7 +217,7 @@ func (s *GameserverService) Logs(ctx context.Context, id string, tail int) (*Log
 // SendCommand sends a console command to a running gameserver.
 func (s *GameserverService) SendCommand(ctx context.Context, id string, command string) (*SendCommandResponse, error) {
 	var resp SendCommandResponse
-	if err := s.client.post(ctx, "/api/gameservers/"+id+"/command", &SendCommandRequest{Command: command}, &resp); err != nil {
+	if err := s.client.post(ctx, "/api/gameservers/"+id+"/actions/command", &SendCommandRequest{Command: command}, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

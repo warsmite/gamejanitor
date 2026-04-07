@@ -59,13 +59,13 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 	resp.Body.Close()
 
 	// 4. Start it
-	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/start", "", nil)
+	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/actions/start", "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
 
 	// 5. Stop it
-	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/stop", "", nil)
+	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/actions/stop", "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
@@ -148,7 +148,7 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 		[]string{auth.PermGameserverStart, auth.PermGameserverStop}, []string{gsID})
 
 	// 6. Operator can start
-	req, _ = http.NewRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", nil)
+	req, _ = http.NewRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/actions/start", nil)
 	req.Header.Set("Authorization", "Bearer "+operatorToken)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)

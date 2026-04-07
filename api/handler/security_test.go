@@ -135,7 +135,7 @@ func TestSecurity_StartEndpoint_RequiresCorrectPermission(t *testing.T) {
 		[]string{auth.PermGameserverFilesRead}, nil)
 
 	// Try to start — should be forbidden
-	req = authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", wrongPermToken, nil)
+	req = authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/actions/start", wrongPermToken, nil)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()

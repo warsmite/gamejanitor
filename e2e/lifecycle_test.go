@@ -37,7 +37,7 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	assert.NotEmpty(t, gs.SFTPPassword, "create response should include SFTP password")
 
 	// Start
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -55,7 +55,7 @@ func TestE2E_Lifecycle_CreateStartStopDelete(t *testing.T) {
 	assert.True(t, fetched.Installed, "installed flag should be set after install phase")
 
 	// Stop
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -90,19 +90,19 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 	require.NoError(t, DecodeData(resp, &gs))
 
 	// First start — installs
-	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Stop
-	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", time.Minute))
 
 	// Second start — should skip install phase (gs.Installed is true)
-	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Cleanup
-	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	h.WaitForStatus(gs.ID, "stopped", time.Minute)
 	h.Delete("/api/gameservers/" + gs.ID)
 }
@@ -125,7 +125,7 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 	// Start sequentially — concurrent starts can drop events due to the
 	// non-blocking event bus (documented in TESTING_BUGS.md)
 	for _, id := range gsIDs {
-		h.PostJSON("/api/gameservers/"+id+"/start", nil)
+		h.PostJSON("/api/gameservers/"+id+"/actions/start", nil)
 		require.NoError(t, h.WaitForStatus(id, "running", 2*time.Minute))
 	}
 
@@ -165,7 +165,7 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 
 	// Cleanup
 	for _, id := range gsIDs {
-		h.PostJSON("/api/gameservers/"+id+"/stop", nil)
+		h.PostJSON("/api/gameservers/"+id+"/actions/stop", nil)
 		h.WaitForStatus(id, "stopped", time.Minute)
 		h.Delete("/api/gameservers/" + id)
 	}
@@ -183,7 +183,7 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 	require.NoError(t, DecodeData(resp, &gs))
 
 	// Start so the volume exists and has data
-	h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
 	// Write a file via API
@@ -204,7 +204,7 @@ func TestE2E_Files_WriteAndRead(t *testing.T) {
 	assert.Contains(t, string(body), "hello from e2e")
 
 	// Cleanup
-	h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	h.WaitForStatus(gs.ID, "stopped", time.Minute)
 	h.Delete("/api/gameservers/" + gs.ID)
 }

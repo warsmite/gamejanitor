@@ -91,7 +91,7 @@ func runSmokeTest(t *testing.T, gameID string) {
 	t.Logf("created gameserver %s", gs.ID)
 
 	// Start
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -113,7 +113,7 @@ func runSmokeTest(t *testing.T, gameID string) {
 	assert.Equal(t, "running", fetched.Status)
 
 	// Stop
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 

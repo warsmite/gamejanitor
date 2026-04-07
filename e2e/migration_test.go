@@ -46,7 +46,7 @@ func TestE2E_Migration_RunningServer_MigratesAndAutoStarts(t *testing.T) {
 	})
 
 	// Start and wait for running
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -71,7 +71,7 @@ func TestE2E_Migration_RunningServer_MigratesAndAutoStarts(t *testing.T) {
 
 	// Migrate
 	t.Logf("migrating from %s to %s", sourceNode, targetNode)
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/migrate", map[string]string{
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/migrate", map[string]string{
 		"node_id": targetNode,
 	})
 	require.NoError(t, err)
@@ -131,12 +131,12 @@ func TestE2E_Migration_StoppedServer_StaysStopped(t *testing.T) {
 	})
 
 	// Start then stop — so we have files on disk
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
 
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.NoError(t, h.WaitForStatus(gs.ID, "stopped", time.Minute))
@@ -151,7 +151,7 @@ func TestE2E_Migration_StoppedServer_StaysStopped(t *testing.T) {
 	}
 
 	t.Logf("migrating stopped server from %s to %s", sourceNode, targetNode)
-	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/migrate", map[string]string{
+	resp, err = h.PostJSON("/api/gameservers/"+gs.ID+"/actions/migrate", map[string]string{
 		"node_id": targetNode,
 	})
 	require.NoError(t, err)

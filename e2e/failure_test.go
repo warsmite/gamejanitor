@@ -47,7 +47,7 @@ func TestE2E_Crash_BeforeReady(t *testing.T) {
 		"TEST_BEHAVIOR": "crash-before-ready",
 	}))
 
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -66,7 +66,7 @@ func TestE2E_InstallFailure_RecoversOnRetry(t *testing.T) {
 		"TEST_INSTALL_BEHAVIOR": "fail",
 	}))
 
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -96,7 +96,7 @@ func TestE2E_Stop_IgnoresSigterm_EventuallyKilled(t *testing.T) {
 	}))
 	startAndWaitRunning(t, h, gs.ID)
 
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/stop", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 

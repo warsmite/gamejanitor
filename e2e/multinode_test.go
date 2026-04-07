@@ -122,7 +122,7 @@ func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
 	t.Logf("gameserver created: %s on node %s", gs.ID, gs.NodeID)
 
 	// --- Start gameserver ---
-	resp = postJSON(t, baseURL+"/api/gameservers/"+gs.ID+"/start", nil)
+	resp = postJSON(t, baseURL+"/api/gameservers/"+gs.ID+"/actions/start", nil)
 	resp.Body.Close()
 
 	require.NoError(t, waitForStatus(t, baseURL, gs.ID, "running", 60*time.Second),
@@ -130,7 +130,7 @@ func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
 	t.Logf("gameserver running on remote worker")
 
 	// --- Stop gameserver ---
-	resp = postJSON(t, baseURL+"/api/gameservers/"+gs.ID+"/stop", nil)
+	resp = postJSON(t, baseURL+"/api/gameservers/"+gs.ID+"/actions/stop", nil)
 	resp.Body.Close()
 
 	require.NoError(t, waitForStatus(t, baseURL, gs.ID, "stopped", 30*time.Second))

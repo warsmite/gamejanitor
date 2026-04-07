@@ -168,23 +168,23 @@ func TestPermissions_Enforcement(t *testing.T) {
 		// Action permission enforcement
 		{
 			name: "Start_Allowed", permission: auth.PermGameserverStart,
-			method: "POST", pathSuffix: "/start", wantStatus: http.StatusAccepted,
+			method: "POST", pathSuffix: "/actions/start", wantStatus: http.StatusAccepted,
 		},
 		{
 			name: "Start_Denied", permission: auth.PermGameserverStop,
-			method: "POST", pathSuffix: "/start", wantStatus: http.StatusForbidden,
+			method: "POST", pathSuffix: "/actions/start", wantStatus: http.StatusForbidden,
 		},
 		{
 			name: "UpdateGame_Allowed", permission: auth.PermGameserverUpdateGame,
-			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusAccepted,
+			method: "POST", pathSuffix: "/actions/update-game", wantStatus: http.StatusAccepted,
 		},
 		{
 			name: "UpdateGame_Denied", permission: auth.PermGameserverStart,
-			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusForbidden,
+			method: "POST", pathSuffix: "/actions/update-game", wantStatus: http.StatusForbidden,
 		},
 		{
 			name: "Reinstall_Denied", permission: auth.PermGameserverStart,
-			method: "POST", pathSuffix: "/reinstall", wantStatus: http.StatusForbidden,
+			method: "POST", pathSuffix: "/actions/reinstall", wantStatus: http.StatusForbidden,
 		},
 		{
 			name: "Delete_Denied", permission: auth.PermGameserverStart,
@@ -192,7 +192,7 @@ func TestPermissions_Enforcement(t *testing.T) {
 		},
 		{
 			name: "RegenerateSFTP_Denied", permission: auth.PermGameserverStart,
-			method: "POST", pathSuffix: "/regenerate-sftp-password", wantStatus: http.StatusForbidden,
+			method: "POST", pathSuffix: "/actions/regenerate-sftp-password", wantStatus: http.StatusForbidden,
 		},
 
 		// Read access scoping

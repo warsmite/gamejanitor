@@ -83,7 +83,7 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	require.NotEmpty(t, adminGsID)
 
 	t.Cleanup(func() {
-		h.AuthPost("/api/gameservers/"+adminGsID+"/stop", adminToken, nil)
+		h.AuthPost("/api/gameservers/"+adminGsID+"/actions/stop", adminToken, nil)
 		req, _ := http.NewRequest("DELETE", h.BaseURL+"/api/gameservers/"+adminGsID, nil)
 		req.Header.Set("Authorization", "Bearer "+adminToken)
 		http.DefaultClient.Do(req)
@@ -184,7 +184,7 @@ func TestE2E_Permissions_FullFlow(t *testing.T) {
 	creatorGsID := creatorGsResult.ID
 
 	t.Cleanup(func() {
-		h.AuthPost("/api/gameservers/"+creatorGsID+"/stop", adminToken, nil)
+		h.AuthPost("/api/gameservers/"+creatorGsID+"/actions/stop", adminToken, nil)
 		req, _ := http.NewRequest("DELETE", h.BaseURL+"/api/gameservers/"+creatorGsID, nil)
 		req.Header.Set("Authorization", "Bearer "+adminToken)
 		http.DefaultClient.Do(req)

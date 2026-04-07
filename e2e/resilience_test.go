@@ -21,7 +21,7 @@ func TestE2E_SlowReady_EventuallyRunning(t *testing.T) {
 		"READY_DELAY_SECONDS": "3",
 	}))
 
-	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/start", nil)
+	resp, err := h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 
