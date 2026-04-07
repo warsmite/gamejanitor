@@ -279,9 +279,11 @@ func (h *Harness) AuthPatch(path, token string, body any) (*http.Response, error
 // WaitForStatus polls until the gameserver reaches the target status.
 // Fails fast if the status reaches a terminal state that can't transition
 // to the target (e.g. waiting for "running" but status becomes "error").
+// On failure, dumps the full gameserver state for debugging.
 func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var lastStatus string
+	var statusHistory []string
 	for time.Now().Before(deadline) {
 		resp, err := h.Get("/api/gameservers/" + gsID)
 		if err != nil {
@@ -299,23 +301,39 @@ func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration
 		if gs.Status == targetStatus {
 			return nil
 		}
-		lastStatus = gs.Status
+		if gs.Status != lastStatus {
+			statusHistory = append(statusHistory, gs.Status)
+			lastStatus = gs.Status
+		}
 
 		// Fail fast on terminal states that can't reach the target
 		if targetStatus == "running" && (gs.Status == "error" || gs.Status == "stopped") {
-			reason := gs.ErrorReason
-			if reason == "" {
-				reason = "no error reason"
-			}
-			return fmt.Errorf("gameserver %s reached terminal status %q (wanted %q): %s", gsID, gs.Status, targetStatus, reason)
+			return fmt.Errorf("gameserver %s reached terminal status %q (wanted %q): %s\n  status history: %v\n  state: %s",
+				gsID, gs.Status, targetStatus, gs.ErrorReason, statusHistory, h.dumpGameserver(gsID))
 		}
 		if targetStatus == "stopped" && gs.Status == "error" {
-			return fmt.Errorf("gameserver %s reached %q instead of %q: %s", gsID, gs.Status, targetStatus, gs.ErrorReason)
+			return fmt.Errorf("gameserver %s reached %q instead of %q: %s\n  status history: %v\n  state: %s",
+				gsID, gs.Status, targetStatus, gs.ErrorReason, statusHistory, h.dumpGameserver(gsID))
 		}
 
 		time.Sleep(250 * time.Millisecond)
 	}
-	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q (last seen: %q)", gsID, targetStatus, lastStatus)
+	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q (last seen: %q)\n  status history: %v\n  state: %s",
+		gsID, targetStatus, lastStatus, statusHistory, h.dumpGameserver(gsID))
+}
+
+// dumpGameserver fetches the full gameserver state for debugging failed waits.
+func (h *Harness) dumpGameserver(gsID string) string {
+	resp, err := h.Get("/api/gameservers/" + gsID)
+	if err != nil {
+		return fmt.Sprintf("(failed to fetch: %v)", err)
+	}
+	var raw json.RawMessage
+	if err := DecodeData(resp, &raw); err != nil {
+		return fmt.Sprintf("(failed to decode: %v)", err)
+	}
+	return string(raw)
+}
 }
 
 func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
