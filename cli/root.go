@@ -69,7 +69,6 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(genWorkerCertCmd)
 	rootCmd.AddCommand(installCmd)
-	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(initConfigCmd)
 	rootCmd.AddCommand(clusterCmd)
 
