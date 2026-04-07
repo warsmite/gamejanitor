@@ -155,7 +155,8 @@ func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 		Pagination:   p,
 	})
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to list events")
+		h.log.Error("listing event history", "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, events)

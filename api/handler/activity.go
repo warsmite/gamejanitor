@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/warsmite/gamejanitor/model"
@@ -14,10 +15,11 @@ type EventStore interface {
 type ActivityHandlers struct {
 	store   EventStore
 	gsQuery GameserverQuerier
+	log     *slog.Logger
 }
 
-func NewActivityHandlers(store EventStore, gsQuery GameserverQuerier) *ActivityHandlers {
-	return &ActivityHandlers{store: store, gsQuery: gsQuery}
+func NewActivityHandlers(store EventStore, gsQuery GameserverQuerier, log *slog.Logger) *ActivityHandlers {
+	return &ActivityHandlers{store: store, gsQuery: gsQuery, log: log}
 }
 
 // List returns events, optionally filtered by gameserver_id, type, or worker_id.
@@ -52,7 +54,8 @@ func (h *ActivityHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.store.ListEvents(filter)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to list events")
+		h.log.Error("listing activity", "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if events == nil {

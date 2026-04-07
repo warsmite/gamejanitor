@@ -60,7 +60,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	gameservers, err := h.gameserverSvc.ListGameservers(r.Context(), filter)
 	if err != nil {
 		h.log.Error("listing gameservers for status", "error", err)
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 

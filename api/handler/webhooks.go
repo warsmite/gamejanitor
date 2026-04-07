@@ -22,6 +22,7 @@ func NewWebhookHandlers(svc *webhook.WebhookEndpointService, log *slog.Logger) *
 func (h *WebhookHandlers) List(w http.ResponseWriter, r *http.Request) {
 	views, err := h.svc.List()
 	if err != nil {
+		h.log.Error("listing webhooks", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -29,8 +30,10 @@ func (h *WebhookHandlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	view, err := h.svc.Get(chi.URLParam(r, "webhookId"))
+	id := chi.URLParam(r, "webhookId")
+	view, err := h.svc.Get(id)
 	if err != nil {
+		h.log.Error("getting webhook", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -57,6 +60,7 @@ func (h *WebhookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.Create(req.URL, req.Description, req.Secret, req.Events, enabled)
 	if err != nil {
+		h.log.Error("creating webhook", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -64,6 +68,7 @@ func (h *WebhookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "webhookId")
 	var req struct {
 		Description *string  `json:"description"`
 		URL         *string  `json:"url"`
@@ -76,8 +81,9 @@ func (h *WebhookHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := h.svc.Update(chi.URLParam(r, "webhookId"), req.Description, req.URL, req.Secret, req.Events, req.Enabled)
+	view, err := h.svc.Update(id, req.Description, req.URL, req.Secret, req.Events, req.Enabled)
 	if err != nil {
+		h.log.Error("updating webhook", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -85,7 +91,9 @@ func (h *WebhookHandlers) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.Delete(chi.URLParam(r, "webhookId")); err != nil {
+	id := chi.URLParam(r, "webhookId")
+	if err := h.svc.Delete(id); err != nil {
+		h.log.Error("deleting webhook", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -93,6 +101,7 @@ func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "webhookId")
 	limit := PaginationDefaultLimit
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= PaginationMaxLimit {
@@ -100,8 +109,9 @@ func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	views, err := h.svc.ListDeliveries(chi.URLParam(r, "webhookId"), r.URL.Query().Get("state"), limit)
+	views, err := h.svc.ListDeliveries(id, r.URL.Query().Get("state"), limit)
 	if err != nil {
+		h.log.Error("listing webhook deliveries", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -109,8 +119,10 @@ func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandlers) Test(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.Test(chi.URLParam(r, "webhookId"))
+	id := chi.URLParam(r, "webhookId")
+	result, err := h.svc.Test(id)
 	if err != nil {
+		h.log.Error("testing webhook", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

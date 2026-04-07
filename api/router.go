@@ -101,7 +101,7 @@ func NewRouter(opts RouterOptions) *Router {
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.AuthSvc, opts.Log)
 	webhookHandlers := handler.NewWebhookHandlers(opts.WebhookSvc, opts.Log)
 	modHandlers := handler.NewModHandlers(opts.ModSvc, opts.Log)
-	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.GameserverQuerier)
+	activityHandlers := handler.NewActivityHandlers(opts.ActivityStore, opts.GameserverQuerier, opts.Log)
 
 	ac := opts.GameserverQuerier
 	requireAdmin := RequireAdmin(opts.SettingsSvc)

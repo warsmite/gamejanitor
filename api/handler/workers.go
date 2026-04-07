@@ -21,6 +21,7 @@ func NewWorkerHandlers(svc *orchestrator.WorkerNodeService, log *slog.Logger) *W
 func (h *WorkerHandlers) List(w http.ResponseWriter, r *http.Request) {
 	views, err := h.svc.List()
 	if err != nil {
+		h.log.Error("listing workers", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -28,8 +29,10 @@ func (h *WorkerHandlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WorkerHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	view, err := h.svc.Get(chi.URLParam(r, "workerID"))
+	id := chi.URLParam(r, "workerID")
+	view, err := h.svc.Get(id)
 	if err != nil {
+		h.log.Error("getting worker", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -46,6 +49,7 @@ func (h *WorkerHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.Update(r.Context(), workerID, &req); err != nil {
+		h.log.Error("updating worker", "id", workerID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -53,6 +57,7 @@ func (h *WorkerHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("worker updated via API", "worker", workerID)
 	view, err := h.svc.Get(workerID)
 	if err != nil {
+		h.log.Error("getting worker after update", "id", workerID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
