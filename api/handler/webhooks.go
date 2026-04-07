@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/go-chi/chi/v5"
@@ -102,14 +101,8 @@ func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "webhookId")
-	limit := PaginationDefaultLimit
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= PaginationMaxLimit {
-			limit = n
-		}
-	}
-
-	views, err := h.svc.ListDeliveries(id, r.URL.Query().Get("state"), limit)
+	p := parsePagination(r)
+	views, err := h.svc.ListDeliveries(id, r.URL.Query().Get("state"), p.Limit)
 	if err != nil {
 		h.log.Error("listing webhook deliveries", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

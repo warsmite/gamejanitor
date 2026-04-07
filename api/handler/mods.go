@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/warsmite/gamejanitor/controller/mod"
@@ -55,10 +54,9 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := q.Get("q")
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = PaginationDefaultModLimit
+	p := parsePagination(r)
+	if p.Limit == PaginationDefaultLimit {
+		p.Limit = PaginationDefaultModLimit
 	}
 
 	opts := mod.SearchOptions{
@@ -67,7 +65,7 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 		Sort:    q.Get("sort"),
 	}
 
-	results, total, err := h.svc.Search(r.Context(), gsID, category, query, opts, offset, limit)
+	results, total, err := h.svc.Search(r.Context(), gsID, category, query, opts, p.Offset, p.Limit)
 	if err != nil {
 		h.log.Error("searching mods", "gameserver", gsID, "category", category, "query", query, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -77,8 +75,8 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, map[string]any{
 		"results": results,
 		"total":   total,
-		"offset":  offset,
-		"limit":   limit,
+		"offset":  p.Offset,
+		"limit":   p.Limit,
 	})
 }
 

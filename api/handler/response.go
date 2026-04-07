@@ -58,8 +58,9 @@ func respondError(w http.ResponseWriter, statusCode int, message string) {
 }
 
 // parsePagination extracts optional limit/offset from query params.
+// Defaults to PaginationDefaultLimit when limit is not specified or invalid.
 func parsePagination(r *http.Request) model.Pagination {
-	var p model.Pagination
+	p := model.Pagination{Limit: PaginationDefaultLimit}
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			p.Limit = min(n, PaginationMaxLimit)

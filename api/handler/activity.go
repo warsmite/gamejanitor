@@ -26,10 +26,6 @@ func NewActivityHandlers(store EventStore, gsQuery GameserverQuerier, log *slog.
 // Non-admin tokens only see events for gameservers they own or have grants on.
 func (h *ActivityHandlers) List(w http.ResponseWriter, r *http.Request) {
 	p := parsePagination(r)
-	if p.Limit <= 0 {
-		p.Limit = PaginationDefaultLimit
-	}
-
 	filter := model.EventFilter{
 		Pagination: p,
 	}

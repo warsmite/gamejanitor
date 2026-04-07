@@ -118,10 +118,6 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 
 func (h *EventHandlers) History(w http.ResponseWriter, r *http.Request) {
 	p := parsePagination(r)
-	if p.Limit <= 0 {
-		p.Limit = PaginationDefaultLimit
-	}
-
 	allowedIDs := visibleGameserverIDs(r, h.visibility)
 
 	// If a specific gameserver_id is requested, verify it's in the allowed set
