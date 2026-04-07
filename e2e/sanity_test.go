@@ -114,7 +114,7 @@ func TestE2E_RunningServer_APISanity(t *testing.T) {
 	})
 
 	t.Run("activity", func(t *testing.T) {
-		resp, err := h.Get("/api/activity?gameserver_id=" + gs.ID)
+		resp, err := h.Get("/api/events/history?gameserver_id=" + gs.ID)
 		require.NoError(t, err)
 
 		var events []struct {
