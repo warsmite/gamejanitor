@@ -26,12 +26,11 @@ import (
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/warning"
 	gjproxy "github.com/warsmite/gamejanitor/proxy"
-	"github.com/warsmite/gamejanitor/db"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
-	"github.com/warsmite/gamejanitor/store"
 )
 
 var serveCmd = &cobra.Command{
@@ -174,14 +173,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	logger.Info("opening database", "path", cfg.DBPath)
-	database, err := db.Open(cfg.DBPath)
+	database, err := store.Open(cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer database.Close()
 
 	logger.Info("running migrations")
-	if err := db.Migrate(database); err != nil {
+	if err := store.Migrate(database); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 

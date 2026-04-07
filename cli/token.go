@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/spf13/cobra"
 )
@@ -69,12 +68,12 @@ func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
 		return nil, nil, fmt.Errorf("creating data directory: %w", err)
 	}
 
-	database, err := db.Open(dbPath)
+	database, err := store.Open(dbPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening database at %s: %w", dbPath, err)
 	}
 
-	if err := db.Migrate(database); err != nil {
+	if err := store.Migrate(database); err != nil {
 		database.Close()
 		return nil, nil, fmt.Errorf("running migrations: %w", err)
 	}

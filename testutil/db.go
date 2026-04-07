@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/warsmite/gamejanitor/db"
+	"github.com/warsmite/gamejanitor/store"
 )
 
 // NewTestDB returns an in-memory SQLite database with all migrations applied.
@@ -24,7 +24,7 @@ func NewTestDB(t *testing.T) *sql.DB {
 	database.SetMaxOpenConns(1)
 	database.SetMaxIdleConns(1)
 
-	if err := db.Migrate(database); err != nil {
+	if err := store.Migrate(database); err != nil {
 		database.Close()
 		t.Fatalf("running migrations on test database: %v", err)
 	}
