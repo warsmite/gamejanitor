@@ -163,7 +163,8 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	gs, _ := h.svc.GetGameserver(id)
+	respondAccepted(w, gs)
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {
@@ -214,11 +215,12 @@ func (h *GameserverHandlers) Unarchive(w http.ResponseWriter, r *http.Request) {
 	if err := h.ops.Submit(id, model.OpUnarchive, actor, func(ctx context.Context, _ operation.ProgressFunc) error {
 		return h.lifecycle.Unarchive(ctx, id, body.NodeID)
 	}); err != nil {
+		h.log.Error("unarchiving gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	gs, _ := h.svc.GetGameserver(id)
-	respondOK(w, gs)
+	respondAccepted(w, gs)
 }
 
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
@@ -239,10 +241,12 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 	if err := h.ops.Submit(id, model.OpMigrate, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
 		return h.lifecycle.MigrateGameserver(ctx, id, body.NodeID, onProgress)
 	}); err != nil {
+		h.log.Error("migrating gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	gs, _ := h.svc.GetGameserver(id)
+	respondAccepted(w, gs)
 }
 
 func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +338,7 @@ func (h *GameserverHandlers) submitAction(w http.ResponseWriter, r *http.Request
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondOK(w, gs)
+	respondAccepted(w, gs)
 }
 
 type queryInfo struct {

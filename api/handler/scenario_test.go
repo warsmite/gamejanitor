@@ -61,13 +61,13 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 	// 4. Start it
 	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/start", "", nil)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
 
 	// 5. Stop it
 	resp, err = http.Post(api.Server.URL+"/api/gameservers/"+gsID+"/stop", "", nil)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
 
 	// Wait for stop to complete before deleting (operations are async)
@@ -152,7 +152,7 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+operatorToken)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 	resp.Body.Close()
 
 	// 7. Operator cannot delete

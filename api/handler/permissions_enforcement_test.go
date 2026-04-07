@@ -168,7 +168,7 @@ func TestPermissions_Enforcement(t *testing.T) {
 		// Action permission enforcement
 		{
 			name: "Start_Allowed", permission: auth.PermGameserverStart,
-			method: "POST", pathSuffix: "/start", wantStatus: http.StatusOK,
+			method: "POST", pathSuffix: "/start", wantStatus: http.StatusAccepted,
 		},
 		{
 			name: "Start_Denied", permission: auth.PermGameserverStop,
@@ -176,7 +176,7 @@ func TestPermissions_Enforcement(t *testing.T) {
 		},
 		{
 			name: "UpdateGame_Allowed", permission: auth.PermGameserverUpdateGame,
-			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusOK,
+			method: "POST", pathSuffix: "/update-game", wantStatus: http.StatusAccepted,
 		},
 		{
 			name: "UpdateGame_Denied", permission: auth.PermGameserverStart,
