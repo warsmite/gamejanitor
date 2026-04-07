@@ -1,4 +1,4 @@
-package status
+package gameserver
 
 import (
 	"github.com/warsmite/gamejanitor/controller"

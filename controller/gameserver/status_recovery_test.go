@@ -1,4 +1,4 @@
-package status_test
+package gameserver_test
 
 import (
 	"context"
@@ -9,18 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/controller"
-	"github.com/warsmite/gamejanitor/controller/status"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
 // newTestStatusManager creates a StatusManager wired to the test ServiceBundle.
-func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *status.StatusManager {
+func newTestStatusManager(t *testing.T, svc *testutil.ServiceBundle) *gameserver.StatusManager {
 	t.Helper()
 	s := store.New(svc.DB)
 	log := testutil.TestLogger()
-	sm := status.NewStatusManager(
+	sm := gameserver.NewStatusManager(
 		s,
 		svc.Broadcaster,
 		svc.QuerySvc,

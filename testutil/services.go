@@ -43,8 +43,8 @@ type ServiceBundle struct {
 	AuthSvc       *auth.AuthService
 	ModSvc        *mod.ModService
 	BackupStorage backup.Storage
-	StatusSub     *status.StatusSubscriber
-	StatusMgr     *status.StatusManager
+	StatusSub     *gameserver.StatusSubscriber
+	StatusMgr     *gameserver.StatusManager
 	Runner        *gameserver.Runner
 }
 

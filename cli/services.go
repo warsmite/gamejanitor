@@ -37,8 +37,8 @@ type Services struct {
 	Scheduler       *schedule.Scheduler
 	ScheduleSvc     *schedule.ScheduleService
 	AuthSvc         *auth.AuthService
-	StatusMgr       *status.StatusManager
-	StatusSub       *status.StatusSubscriber
+	StatusMgr       *gameserver.StatusManager
+	StatusSub       *gameserver.StatusSubscriber
 	EventHistorySvc *event.EventHistoryService
 	EventPersister  *event.EventPersister
 	WebhookWorker   *webhook.WebhookWorker
@@ -117,10 +117,10 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	scheduler := schedule.NewScheduler(db, backupSvc, lifecycleSvc, consoleSvc, runner, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, runner, logger)
+	statusMgr := gameserver.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, runner, logger)
 	gameserverSvc.SetStatusProvider(statusMgr)
 	lifecycleSvc.SetStatusProvider(statusMgr)
-	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
+	statusSub := gameserver.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
 	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)
 	eventPersister := event.NewEventPersister(db, broadcaster, logger)
