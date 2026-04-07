@@ -160,11 +160,11 @@ func (h *AuthHandlers) RotateToken(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tokenId")
 	token, err := h.authSvc.GetToken(id)
 	if err != nil || token == nil {
-		respondError(w, 404, "token not found")
+		respondError(w, http.StatusNotFound, "token not found")
 		return
 	}
 	if token.Role != "worker" {
-		respondError(w, 400, "only worker tokens can be rotated")
+		respondError(w, http.StatusBadRequest, "only worker tokens can be rotated")
 		return
 	}
 	rawToken, newToken, err := h.authSvc.RotateWorkerToken(token.Name)
