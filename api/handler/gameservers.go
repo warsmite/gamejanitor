@@ -372,23 +372,30 @@ func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type statsResponse struct {
+	CPUPercent      float64 `json:"cpu_percent"`
+	MemoryUsageMB   int     `json:"memory_usage_mb"`
+	MemoryLimitMB   int     `json:"memory_limit_mb"`
+	NetRxBytes      int64   `json:"net_rx_bytes"`
+	NetTxBytes      int64   `json:"net_tx_bytes"`
+	VolumeSizeBytes int64   `json:"volume_size_bytes"`
+	StorageLimitMB  *int    `json:"storage_limit_mb,omitempty"`
+}
+
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Serve from poller cache if available (instant, no runtime query)
 	if cached := h.statsPoller.GetCachedStats(id); cached != nil {
-		resp := map[string]any{
-			"cpu_percent":       cached.CPUPercent,
-			"memory_usage_mb":   cached.MemoryUsageMB,
-			"memory_limit_mb":   cached.MemoryLimitMB,
-			"net_rx_bytes":      cached.NetRxBytes,
-			"net_tx_bytes":      cached.NetTxBytes,
-			"volume_size_bytes": cached.VolumeSizeBytes,
-		}
-		if cached.StorageLimitMB != nil {
-			resp["storage_limit_mb"] = *cached.StorageLimitMB
-		}
-		respondOK(w, resp)
+		respondOK(w, statsResponse{
+			CPUPercent:      cached.CPUPercent,
+			MemoryUsageMB:   cached.MemoryUsageMB,
+			MemoryLimitMB:   cached.MemoryLimitMB,
+			NetRxBytes:      cached.NetRxBytes,
+			NetTxBytes:      cached.NetTxBytes,
+			VolumeSizeBytes: cached.VolumeSizeBytes,
+			StorageLimitMB:  cached.StorageLimitMB,
+		})
 		return
 	}
 
@@ -396,20 +403,19 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.lifecycle.GetGameserverStats(r.Context(), id)
 	if err != nil {
 		h.log.Warn("failed to get gameserver stats", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), "failed to get gameserver stats")
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
-	resp := map[string]any{
-		"cpu_percent":       stats.CPUPercent,
-		"memory_usage_mb":   stats.MemoryUsageMB,
-		"memory_limit_mb":   stats.MemoryLimitMB,
-		"volume_size_bytes": stats.VolumeSizeBytes,
-	}
-	if stats.StorageLimitMB != nil {
-		resp["storage_limit_mb"] = *stats.StorageLimitMB
-	}
-	respondOK(w, resp)
+	respondOK(w, statsResponse{
+		CPUPercent:      stats.CPUPercent,
+		MemoryUsageMB:   stats.MemoryUsageMB,
+		MemoryLimitMB:   stats.MemoryLimitMB,
+		NetRxBytes:      stats.NetRxBytes,
+		NetTxBytes:      stats.NetTxBytes,
+		VolumeSizeBytes: stats.VolumeSizeBytes,
+		StorageLimitMB:  stats.StorageLimitMB,
+	})
 }
 
 // OperationStream is an SSE endpoint that streams real-time operation state
