@@ -1,4 +1,4 @@
-package integration_test
+package gameserver_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
