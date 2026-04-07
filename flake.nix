@@ -473,40 +473,25 @@
             go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@" 2>&1 | tee "$LOG_DIR/test-output.log"
             EXIT=''${PIPESTATUS[0]}
 
-            # Dump events table — structured audit log of everything that happened
-            ssh sleepy 'sudo sqlite3 -header -column /var/lib/gamejanitor/gamejanitor.db "SELECT datetime(created_at, '\''localtime'\'') as time, type, substr(gameserver_id, 1, 8) as gs, worker_id, data FROM events ORDER BY created_at"' > "$LOG_DIR/events.log" 2>&1 || true
+            # Dump events via API — structured audit log of everything that happened
+            curl -s "http://sleepy:8080/api/events/history?limit=500" > "$LOG_DIR/events.json" 2>&1 || true
 
-            # Snapshot cluster state after tests
-            curl -s http://sleepy:8080/api/workers 2>/dev/null | ${pkgs.python3}/bin/python3 -c "
-import sys,json
-try:
-  data=json.load(sys.stdin).get('data',[])
-  for w in data: print(f\"  {w['id'][:20]:20} {w['status']:8} gs={w.get('gameserver_count',0)}\")
-except: pass
-" > "$LOG_DIR/cluster-state.log" 2>&1
-            curl -s http://sleepy:8080/api/gameservers 2>/dev/null | ${pkgs.python3}/bin/python3 -c "
-import sys,json
-try:
-  data=json.load(sys.stdin).get('data',[])
-  for g in data: print(f\"  {g['id'][:8]} {g['status']:12} node={str(g.get('node_id',''))[:20]} op={g.get('operation',{}).get('phase','') if g.get('operation') else '-'}\")
-except: pass
-" >> "$LOG_DIR/cluster-state.log" 2>&1
+            # Snapshot cluster state after tests (raw JSON — grep/jq as needed)
+            curl -s http://sleepy:8080/api/workers > "$LOG_DIR/workers.json" 2>&1 || true
+            curl -s http://sleepy:8080/api/gameservers > "$LOG_DIR/gameservers.json" 2>&1 || true
 
             kill $PID_SLEEPY $PID_DOPEY $PID_GRUMPY 2>/dev/null
             wait $PID_SLEEPY $PID_DOPEY $PID_GRUMPY 2>/dev/null
 
             echo ""
             echo "=== E2E LOGS: $LOG_DIR ==="
-            echo "  Test output:  $LOG_DIR/test-output.log"
-            echo "  Controller:   $LOG_DIR/sleepy.log"
-            echo "  Worker dopey: $LOG_DIR/dopey.log"
-            echo "  Worker grumpy: $LOG_DIR/grumpy.log"
-            echo "  Cluster state: $LOG_DIR/cluster-state.log"
+            ls -1 "$LOG_DIR"/ | sed 's/^/  /'
             if [ $EXIT -ne 0 ]; then
               echo ""
-              echo "Useful:"
-              echo "  grep 'error\|WARN\|unexpected\|EOF without' $LOG_DIR/*.log"
-              echo "  grep '<gameserver-id>' $LOG_DIR/*.log"
+              echo "Debug:"
+              echo "  grep '<gs-id>' $LOG_DIR/*.log"
+              echo "  grep 'error\|WARN\|unexpected' $LOG_DIR/*.log"
+              echo "  cat $LOG_DIR/events.log | grep '<gs-id>'"
             fi
             exit $EXIT
           '';

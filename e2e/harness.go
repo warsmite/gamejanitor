@@ -334,7 +334,6 @@ func (h *Harness) dumpGameserver(gsID string) string {
 	}
 	return string(raw)
 }
-}
 
 func (h *Harness) GetGameserver(t *testing.T, gsID string) (status string, nodeID string) {
 	t.Helper()
