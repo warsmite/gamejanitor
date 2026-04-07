@@ -473,6 +473,9 @@
             go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-10m}" -parallel "''${TEST_PARALLEL:-3}" -v ./e2e/ "$@" 2>&1 | tee "$LOG_DIR/test-output.log"
             EXIT=''${PIPESTATUS[0]}
 
+            # Dump events table — structured audit log of everything that happened
+            ssh sleepy 'sudo sqlite3 -header -column /var/lib/gamejanitor/gamejanitor.db "SELECT datetime(created_at, '\''localtime'\'') as time, type, substr(gameserver_id, 1, 8) as gs, worker_id, data FROM events ORDER BY created_at"' > "$LOG_DIR/events.log" 2>&1 || true
+
             # Snapshot cluster state after tests
             curl -s http://sleepy:8080/api/workers 2>/dev/null | ${pkgs.python3}/bin/python3 -c "
 import sys,json
