@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/warsmite/gamejanitor/controller/console"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker/logparse"
 	"github.com/go-chi/chi/v5"
@@ -203,7 +203,7 @@ func (h *GameserverHandlers) LogSessions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if sessions == nil {
-		sessions = []console.LogSession{}
+		sessions = []gameserver.LogSession{}
 	}
 	respondOK(w, sessions)
 }

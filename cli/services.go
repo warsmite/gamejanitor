@@ -8,7 +8,6 @@ import (
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller/backup"
-	"github.com/warsmite/gamejanitor/controller/console"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/file"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
@@ -33,7 +32,7 @@ type Services struct {
 	LifecycleSvc    *lifecycle.Service
 	QuerySvc        *status.QueryService
 	StatsPoller     *status.StatsPoller
-	ConsoleSvc      *console.Service
+	ConsoleSvc      *gameserver.ConsoleService
 	FileSvc         *file.Service
 	BackupSvc       *backup.BackupService
 	Scheduler       *schedule.Scheduler
@@ -98,7 +97,7 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		}
 		return 0
 	})
-	consoleSvc := console.NewService(db, dispatcher, gameStore, logger)
+	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
 	fileSvc := file.NewService(db, dispatcher, logger)
 
 	// Backup storage
