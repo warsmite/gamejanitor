@@ -1,4 +1,4 @@
-package operation
+package gameserver
 
 import (
 	"context"
@@ -27,20 +27,13 @@ func ActivityIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-// EventRecorder abstracts event persistence and gameserver status updates.
-type EventRecorder interface {
-	CreateEvent(e *model.Event) error
-	GetGameserver(id string) (*model.Gameserver, error)
-	UpdateGameserver(gs *model.Gameserver) error
-}
-
 // ActivityTracker manages operation lifecycle via events and gameserver status.
 type ActivityTracker struct {
-	store EventRecorder
+	store Store
 	log   *slog.Logger
 }
 
-func NewActivityTracker(store EventRecorder, log *slog.Logger) *ActivityTracker {
+func NewActivityTracker(store Store, log *slog.Logger) *ActivityTracker {
 	return &ActivityTracker{store: store, log: log}
 }
 

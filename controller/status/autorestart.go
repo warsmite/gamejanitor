@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/model"
 )
 
@@ -42,7 +42,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver, reason strin
 	m.workerStateMu.Unlock()
 
 	if m.runner != nil {
-		if err := m.runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "system"}, func(ctx context.Context, _ operation.ProgressFunc) error {
+		if err := m.runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "system"}, func(ctx context.Context, _ gameserver.ProgressFunc) error {
 			return m.restartFunc(ctx, gs.ID)
 		}); err != nil {
 			m.log.Error("auto-restart rejected by operation guard", "gameserver", gs.ID, "attempt", count, "error", err)

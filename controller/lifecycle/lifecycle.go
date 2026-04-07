@@ -11,7 +11,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
@@ -22,7 +22,7 @@ import (
 // Start validates preconditions and starts a gameserver. Blocks until the
 // gameserver is running or an error occurs. Resets the crash counter so
 // auto-restart gets a fresh retry budget.
-func (s *Service) Start(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+func (s *Service) Start(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
 	if s.statusProvider != nil {
 		s.statusProvider.ResetCrashCount(id)
 	}
@@ -38,7 +38,7 @@ func (s *Service) RestartAfterCrash(ctx context.Context, id string) error {
 
 // startInstance performs the full start sequence: validate → auto-migrate if
 // needed → download depot → pull image → install phase → start instance.
-func (s *Service) startInstance(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+func (s *Service) startInstance(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -453,7 +453,7 @@ func (s *Service) stopInstance(ctx context.Context, id string) error {
 }
 
 // Restart stops a running gameserver and starts it again. Blocks until complete.
-func (s *Service) Restart(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+func (s *Service) Restart(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -483,7 +483,7 @@ func (s *Service) Restart(ctx context.Context, id string, onProgress operation.P
 
 // UpdateServerGame stops the gameserver, pulls the latest image, runs the
 // update-server script, and restarts. Blocks until complete.
-func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -582,7 +582,7 @@ func (s *Service) UpdateServerGame(ctx context.Context, id string, onProgress op
 
 // Reinstall stops the gameserver, wipes the volume, and performs a fresh install.
 // Blocks until complete.
-func (s *Service) Reinstall(ctx context.Context, id string, onProgress operation.ProgressFunc) error {
+func (s *Service) Reinstall(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(id)
 	if err != nil {
 		return err
@@ -755,7 +755,7 @@ func (s *Service) waitForInstanceExit(ctx context.Context, w worker.Worker, inst
 }
 
 // reportProgress calls onProgress if non-nil.
-func reportProgress(onProgress operation.ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
+func reportProgress(onProgress gameserver.ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
 	if onProgress != nil {
 		onProgress(phase, progress)
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 	"github.com/warsmite/gamejanitor/worker"
@@ -31,7 +31,7 @@ func TestRace_StartStopStart(t *testing.T) {
 	actor := event.Actor{Type: "test"}
 
 	// First start — through the runner (async) like the real API handler
-	err := svc.Runner.Submit(gs.ID, model.OpStart, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+	err := svc.Runner.Submit(gs.ID, model.OpStart, actor, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Start(ctx, gs.ID, onProgress)
 	})
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestRace_StartStopStart(t *testing.T) {
 	require.NotNil(t, fetched.InstanceID, "should have an instance after start")
 
 	// Stop — through the runner
-	err = svc.Runner.Submit(gs.ID, model.OpStop, actor, func(ctx context.Context, _ operation.ProgressFunc) error {
+	err = svc.Runner.Submit(gs.ID, model.OpStop, actor, func(ctx context.Context, _ gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Stop(ctx, gs.ID)
 	})
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestRace_StartStopStart(t *testing.T) {
 	assert.Nil(t, fetched.OperationType, "operation_type should be cleared after stop")
 
 	// Second start — should succeed, not be rejected by operation guard
-	err = svc.Runner.Submit(gs.ID, model.OpStart, actor, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+	err = svc.Runner.Submit(gs.ID, model.OpStart, actor, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Start(ctx, gs.ID, onProgress)
 	})
 	require.NoError(t, err, "second start after stop should be accepted by operation guard")

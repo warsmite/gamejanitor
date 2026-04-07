@@ -9,14 +9,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 // MigrateGameserver validates the migration request and transfers the gameserver
 // to the target node. Stops the gameserver if running, transfers volume data via
 // the backup store, and optionally restarts. Blocks until complete.
-func (s *Service) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string, onProgress operation.ProgressFunc) error {
+func (s *Service) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string, onProgress gameserver.ProgressFunc) error {
 	gs, err := s.getGameserverWithStatus(gameserverID)
 	if err != nil {
 		return err

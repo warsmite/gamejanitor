@@ -1,4 +1,4 @@
-package operation
+package gameserver
 
 import (
 	"context"
@@ -16,13 +16,6 @@ type ProgressFunc func(phase model.OperationPhase, progress *model.OperationProg
 // OperationFunc is the work function passed to Submit.
 type OperationFunc func(ctx context.Context, onProgress ProgressFunc) error
 
-// RunnerStore is the minimal store interface the runner needs to set desired
-// state synchronously before spawning the operation goroutine.
-type RunnerStore interface {
-	GetGameserver(id string) (*model.Gameserver, error)
-	UpdateGameserver(gs *model.Gameserver) error
-}
-
 // Runner manages the lifecycle of async operations. It owns the operation guard
 // (preventing concurrent operations), activity tracking (DB events), progress
 // reporting, and the background goroutine. Used at the HTTP boundary to return
@@ -30,12 +23,12 @@ type RunnerStore interface {
 type Runner struct {
 	activity *ActivityTracker
 	tracker  *Tracker
-	store    RunnerStore
+	store    Store
 	log      *slog.Logger
 	wg       sync.WaitGroup
 }
 
-func NewRunner(activity *ActivityTracker, tracker *Tracker, store RunnerStore, log *slog.Logger) *Runner {
+func NewRunner(activity *ActivityTracker, tracker *Tracker, store Store, log *slog.Logger) *Runner {
 	return &Runner{activity: activity, tracker: tracker, store: store, log: log}
 }
 

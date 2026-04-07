@@ -14,7 +14,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
-	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -48,7 +47,7 @@ type ServiceBundle struct {
 	BackupStorage backup.Storage
 	StatusSub     *status.StatusSubscriber
 	StatusMgr     *status.StatusManager
-	Runner        *operation.Runner
+	Runner        *gameserver.Runner
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
@@ -21,7 +21,7 @@ func TestActivity_StartCreatesEvent(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	err := svc.Runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+	err := svc.Runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Start(ctx, gs.ID, onProgress)
 	})
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestActivity_MutexRejectsConcurrent(t *testing.T) {
 	require.NoError(t, store.New(svc.DB).UpdateGameserver(gs))
 
 	// Submit through the runner — should be rejected by the operation guard
-	err := svc.Runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+	err := svc.Runner.Submit(gs.ID, model.OpStart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Start(ctx, gs.ID, onProgress)
 	})
 	require.Error(t, err)
@@ -76,7 +76,7 @@ func TestActivity_StopBypassesMutex(t *testing.T) {
 	require.NoError(t, store.New(svc.DB).UpdateGameserver(fetched))
 
 	// Stop should still work despite the running operation (stop bypasses the guard)
-	err := svc.Runner.Submit(gs.ID, model.OpStop, event.Actor{Type: "test"}, func(ctx context.Context, _ operation.ProgressFunc) error {
+	err := svc.Runner.Submit(gs.ID, model.OpStop, event.Actor{Type: "test"}, func(ctx context.Context, _ gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Stop(ctx, gs.ID)
 	})
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestActivity_RestartCreatesOneEvent(t *testing.T) {
 	// Clear events from the start
 	svc.DB.Exec("DELETE FROM events")
 
-	err := svc.Runner.Submit(gs.ID, model.OpRestart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+	err := svc.Runner.Submit(gs.ID, model.OpRestart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 		return svc.LifecycleSvc.Restart(ctx, gs.ID, onProgress)
 	})
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestActivity_BackupBlocksStart(t *testing.T) {
 	// Check if operation is set
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	if fetched.OperationType != nil {
-		err = svc.Runner.Submit(gs.ID, model.OpRestart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress operation.ProgressFunc) error {
+		err = svc.Runner.Submit(gs.ID, model.OpRestart, event.Actor{Type: "test"}, func(ctx context.Context, onProgress gameserver.ProgressFunc) error {
 			return svc.LifecycleSvc.Restart(ctx, gs.ID, onProgress)
 		})
 		assert.Error(t, err, "restart should be rejected while backup is running")

@@ -1,4 +1,4 @@
-package operation
+package gameserver
 
 import (
 	"log/slog"

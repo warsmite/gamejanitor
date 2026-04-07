@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/operation"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
@@ -34,7 +34,7 @@ type Store interface {
 // GameserverLifecycle is a narrow interface for gameserver operations needed by backup.
 type GameserverLifecycle interface {
 	Stop(ctx context.Context, id string) error
-	Start(ctx context.Context, id string, onProgress operation.ProgressFunc) error
+	Start(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error
 	GetGameserver(id string) (*model.Gameserver, error)
 }
 

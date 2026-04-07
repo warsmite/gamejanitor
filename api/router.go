@@ -18,7 +18,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
-	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/controller/webhook"
@@ -46,8 +45,8 @@ type RouterOptions struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	WebhookSvc       *webhook.WebhookEndpointService
 	EventHistorySvc  *event.EventHistoryService
-	Runner           *operation.Runner
-	OperationTracker *operation.Tracker
+	Runner           *gameserver.Runner
+	OperationTracker *gameserver.Tracker
 	StatsHistory     handler.StatsHistoryQuerier
 	GameserverQuerier handler.GameserverQuerier
 	Broadcaster      *event.EventBus

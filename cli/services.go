@@ -15,7 +15,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/lifecycle"
 	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/controller/placement"
-	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -49,8 +48,8 @@ type Services struct {
 	WorkerNodeSvc   *orchestrator.WorkerNodeService
 	ModSvc          *mod.ModService
 	BackupStorage   backup.Storage
-	ActivityTracker *operation.ActivityTracker
-	Runner          *operation.Runner
+	ActivityTracker *gameserver.ActivityTracker
+	Runner          *gameserver.Runner
 }
 
 // InitServicesOpts configures optional overrides for service initialization.
@@ -78,13 +77,13 @@ func InitServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}
 
 	// Activity + operation tracking (shared infrastructure)
-	activityTracker := operation.NewActivityTracker(db, logger)
-	operationTracker := operation.NewTracker(broadcaster, logger)
+	activityTracker := gameserver.NewActivityTracker(db, logger)
+	operationTracker := gameserver.NewTracker(broadcaster, logger)
 
 	// Placement service (shared between gameserver CRUD and lifecycle)
 	placementSvc := placement.NewService(db, dispatcher, settingsSvc, logger)
 
-	runner := operation.NewRunner(activityTracker, operationTracker, db, logger)
+	runner := gameserver.NewRunner(activityTracker, operationTracker, db, logger)
 
 	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, cfg.SFTPPort, logger)
 	gameserverSvc.SetOperationTracker(operationTracker)

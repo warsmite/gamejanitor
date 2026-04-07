@@ -16,7 +16,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller/operation"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/placement"
 	"github.com/warsmite/gamejanitor/controller/settings"
@@ -48,6 +47,7 @@ type Store interface {
 	SumResourcesByToken(tokenID string) (memoryMB int, cpu float64, storageMB int, err error)
 	ListGameserverIDsByToken(tokenID string) ([]string, error)
 	ListGrantedGameserverIDs(tokenID string) ([]string, error)
+	CreateEvent(e *model.Event) error
 }
 
 // StatusProvider derives the current display status for a gameserver from runtime state.
@@ -73,11 +73,11 @@ type GameserverService struct {
 	backupStore    BackupStore
 	dataDir        string
 	placement      *placement.Service
-	operations     *operation.Tracker
+	operations     *Tracker
 	sftpPort       int
 }
 
-func (s *GameserverService) SetOperationTracker(tracker *operation.Tracker) {
+func (s *GameserverService) SetOperationTracker(tracker *Tracker) {
 	s.operations = tracker
 }
 
