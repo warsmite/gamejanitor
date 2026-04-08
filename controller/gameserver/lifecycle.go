@@ -54,6 +54,12 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 		return nil
 	}
 
+	// Set desired_state=running immediately so DeriveStatus reflects intent.
+	// Must happen before any heavy work (depot download, image pull) so that
+	// a concurrent stop can detect and override it.
+	gs.DesiredState = "running"
+	s.store.UpdateGameserver(gs)
+
 	// Clear stale error/worker state only when we're actually going to start.
 	// Must be after the guard — ClearError wipes the worker state cache, and
 	// calling it on an already-running server would lose the "running" state.
@@ -100,11 +106,7 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 		}
 	}
 
-	// Set desired state immediately so DeriveStatus reflects intent
-	gs.DesiredState = "running"
-	s.store.UpdateGameserver(gs)
-
-	// Re-read for the heavy work
+	// Re-read to pick up any concurrent changes (e.g. stop requested while start was validating)
 	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -112,6 +114,12 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 	if gs == nil {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
+	if gs.DesiredState == "stopped" {
+		s.log.Info("gameserver was stopped concurrently, aborting start", "gameserver", id)
+		return nil
+	}
+	// desired_state is set by the Runner synchronously before this goroutine starts.
+	// Don't overwrite it here — a concurrent stop may have changed it.
 
 	game = s.gameStore.GetGame(gs.GameID)
 	if game == nil {
@@ -344,8 +352,19 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 		return fmt.Errorf("creating instance for gameserver %s: %w", id, err)
 	}
 
+	// Re-read before saving instance ID — a concurrent stop may have changed desired_state
+	gs, err = s.store.GetGameserver(id)
+	if err != nil || gs == nil {
+		w.RemoveInstance(ctx, instanceID)
+		return fmt.Errorf("re-reading gameserver %s before saving instance: %w", id, err)
+	}
+	if gs.DesiredState == "stopped" {
+		s.log.Info("gameserver was stopped while instance was being created, cleaning up", "gameserver", id)
+		w.RemoveInstance(ctx, instanceID)
+		return nil
+	}
+
 	gs.InstanceID = &instanceID
-	gs.DesiredState = "running"
 	gs.AppliedConfig = gs.SnapshotConfig()
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		w.RemoveInstance(ctx, instanceID)

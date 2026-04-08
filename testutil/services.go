@@ -158,6 +158,7 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 	svc.Registry.Register(nodeID, fw, info)
 
 	t.Cleanup(func() {
+		svc.Runner.Wait()
 		svc.Registry.Unregister(nodeID)
 	})
 

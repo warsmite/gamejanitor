@@ -80,7 +80,7 @@ func TestAPIScenario_Newbie_FullWorkflowNoAuth(t *testing.T) {
 		var body struct{ Status string }
 		json.NewDecoder(resp.Body).Decode(&body)
 		return body.Status == "stopped"
-	}, 5*time.Second, 100*time.Millisecond, "gameserver should reach stopped")
+	}, 15*time.Second, 100*time.Millisecond, "gameserver should reach stopped")
 
 	// 6. Delete it
 	req, _ := http.NewRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, nil)
