@@ -93,6 +93,7 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		}
 		return 0
 	})
+	manager.SetPollers(statsPoller, querySvc)
 	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
 	fileSvc := file.NewService(db, dispatcher, logger)
 

@@ -38,6 +38,8 @@ type Manager struct {
 	placement   *cluster.PlacementService
 	backupStore    BackupStore
 	modReconciler  ModReconciler
+	statsPoller    Poller
+	querySvc       Poller
 	sftpPort       int
 	dataDir        string
 	log            *slog.Logger
@@ -76,6 +78,14 @@ func NewManager(
 		log:           log,
 		workerCancels: make(map[string]context.CancelFunc),
 	}
+}
+
+// SetPollers wires stats and query pollers. Called during composition after
+// the poller services are constructed. Polling is started when a gameserver
+// reaches running state and stopped when it leaves.
+func (m *Manager) SetPollers(statsPoller, querySvc Poller) {
+	m.statsPoller = statsPoller
+	m.querySvc = querySvc
 }
 
 // SetModReconciler sets the mod reconciler on all current and future gameservers.
@@ -661,17 +671,28 @@ func (m *Manager) OnWorkerOffline(nodeID string) {
 	}
 	m.workerMu.Unlock()
 
-	// Clear worker from all gameservers on this node
+	// Clear worker from all gameservers on this node and stop polling them
+	var affectedIDs []string
 	m.mu.RLock()
-	for _, gs := range m.gameservers {
+	for id, gs := range m.gameservers {
 		gs.mu.Lock()
 		if gs.nodeID != nil && *gs.nodeID == nodeID {
 			gs.worker = nil
 			gs.process = nil
+			affectedIDs = append(affectedIDs, id)
 		}
 		gs.mu.Unlock()
 	}
 	m.mu.RUnlock()
+
+	for _, id := range affectedIDs {
+		if m.statsPoller != nil {
+			m.statsPoller.StopPolling(id)
+		}
+		if m.querySvc != nil {
+			m.querySvc.StopPolling(id)
+		}
+	}
 
 	m.bus.Publish(event.NewEvent(event.EventWorkerDisconnected, "", event.SystemActor, &event.WorkerActionData{
 		WorkerID: nodeID,
@@ -749,6 +770,24 @@ func (m *Manager) RouteProcessEvent(update worker.InstanceStateUpdate) {
 	}
 
 	gs.HandleProcessEvent(update)
+
+	// Start/stop polling based on the new state.
+	switch update.State {
+	case worker.StateRunning:
+		if m.statsPoller != nil {
+			m.statsPoller.StartPolling(gsID)
+		}
+		if m.querySvc != nil {
+			m.querySvc.StartPolling(gsID)
+		}
+	case worker.StateExited:
+		if m.statsPoller != nil {
+			m.statsPoller.StopPolling(gsID)
+		}
+		if m.querySvc != nil {
+			m.querySvc.StopPolling(gsID)
+		}
+	}
 }
 
 // RecoverAll loads all gameservers from the DB, creates LiveGameserver objects,
@@ -842,6 +881,12 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 		gs.process = &processState{State: worker.StateRunning}
 		gs.startedAt = &info.StartedAt
 		gs.mu.Unlock()
+		if m.statsPoller != nil {
+			m.statsPoller.StartPolling(gs.id)
+		}
+		if m.querySvc != nil {
+			m.querySvc.StartPolling(gs.id)
+		}
 	case "exited", "dead", "created":
 		m.log.Info("instance is not running, clearing", "gameserver", gs.id, "state", info.State)
 

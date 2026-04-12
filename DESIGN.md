@@ -10,18 +10,16 @@ The core design principle: **each gameserver is a runtime object in the controll
 
 ### Worker
 
-Runs processes and manages data. Knows nothing about "gameservers" — operates on containers, volumes, and files.
+Runs processes and manages data. Knows nothing about "gameservers" — operates on containers, volumes, and files. Responsibilities span four areas:
 
-Four interfaces:
+- **Instances**: create, start, stop, kill, inspect, exec, stream logs, collect stats
+- **Volumes**: create, remove, backup (tar stream out), restore (tar stream in), size
+- **Files**: read, write, list, delete, rename, download within a volume
+- **Depot**: download game files (Steam/other), prepare game scripts, cache management
 
-| Interface | Responsibility |
-|-----------|---------------|
-| **Instances** | Create, start, stop, kill, inspect, exec, stream logs, collect stats |
-| **Volumes** | Create, remove, backup (tar stream out), restore (tar stream in), size |
-| **Files** | Read, write, list, delete, rename, download within a volume |
-| **Depot** | Download game files (Steam/other), prepare game scripts, cache management |
+Currently implemented as a single `Worker` interface (~34 methods). Splitting into focused interfaces is tracked as tech debt — the monolithic interface works but consumers that only need files or volumes depend on everything.
 
-A `Worker` composes all four. `SandboxWorker` implements them locally using bubblewrap, slirp4netns, and systemd scopes. `RemoteWorker` wraps the same interfaces over gRPC.
+`SandboxWorker` implements the interface locally using bubblewrap, slirp4netns, and systemd scopes. `RemoteWorker` wraps the same interface over gRPC.
 
 Workers push instance lifecycle events (started, ready, exited) via a persistent gRPC stream. The controller never polls for process state.
 
@@ -156,9 +154,13 @@ Tracks worker health via heartbeats. Workers register with capabilities and reso
 
 ### Watcher
 
-Connects to each worker's instance event gRPC stream. One goroutine per connected worker. Routes events to the Manager for delivery to the correct gameserver object.
+The Manager owns per-worker watch goroutines — one per connected worker — reading the instance event gRPC stream and routing events to the correct gameserver object.
 
-On stream error (worker disconnect, network issue): clears the worker from the registry, triggering the offline callback. The next heartbeat will re-register and re-establish the stream.
+On stream error, the Manager actively verifies the worker is still reachable via a short-timeout health check RPC:
+- Reachable → stream died but worker is alive, restart the watch goroutine
+- Unreachable → mark worker offline immediately (don't wait for heartbeat timeout)
+
+This gives ~3s detection of worker death instead of the 30s heartbeat timeout, while tolerating transient stream failures.
 
 ### Stats Poller
 
@@ -323,11 +325,16 @@ For gameserver actions, the handler calls the gameserver object's method directl
 ### Worker Disconnect
 
 ```
-1. Registry detects heartbeat timeout → fires onWorkerOffline callback
-2. Manager: iterate gameservers on that node → gs.ClearWorker()
-3. Each gs: lock, set worker=nil, stop polling
-4. Status is now "unreachable" (worker==nil in the status check)
-5. Publish worker.disconnected event and status_changed per gameserver
+1. Stream error detected → Manager actively verifies via health-check RPC
+2a. Reachable → restart watch goroutine (just a stream blip)
+2b. Unreachable → Registry.SetOffline, fires onWorkerOffline callback
+3. Manager: iterate gameservers on that node → clear worker reference + process state
+4. Stop stats/query polling for affected gameservers
+5. Status becomes "unreachable" (worker==nil in the Status() check)
+6. Publish worker.disconnected event
+
+Gameservers are NOT migrated — their data lives on the dead worker's disk.
+When the worker reconnects, gameservers are re-associated and recovery runs.
 ```
 
 ### Worker Reconnect

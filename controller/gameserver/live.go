@@ -76,6 +76,13 @@ type processState struct {
 	ExitCode int
 }
 
+// Poller abstracts start/stop polling for stats and query services.
+// Implemented by cluster.StatsPoller and cluster.QueryService.
+type Poller interface {
+	StartPolling(gameserverID string)
+	StopPolling(gameserverID string)
+}
+
 // LiveGameserver is the runtime object for a single gameserver. It owns its own
 // lifecycle, status derivation, and operation tracking. One exists per gameserver
 // in the Manager's map for the lifetime of the process (or until deleted).
