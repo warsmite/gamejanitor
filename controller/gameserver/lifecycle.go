@@ -20,61 +20,33 @@ import (
 // preconditions synchronously, then spawns a goroutine to do the actual
 // download/install/start work. Returns nil immediately on success.
 func (g *LiveGameserver) Start(ctx context.Context) error {
+	// Pre-submit checks that are specific to Start: archived and already-running.
 	g.mu.Lock()
-
-	if g.operation != nil {
-		g.mu.Unlock()
-		return fmt.Errorf("operation %s already in progress", g.operation.Type)
-	}
 	if g.desiredState == "archived" {
 		g.mu.Unlock()
 		return controller.ErrBadRequest("cannot start archived gameserver")
-	}
-	if g.worker == nil {
-		g.mu.Unlock()
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
 	}
 	if g.process != nil && g.process.State == worker.StateRunning {
 		g.mu.Unlock()
 		return nil
 	}
-
+	// Reset user intent + crash state before submitting. If submit rejects
+	// (operation already in progress), the desired_state update is reverted
+	// implicitly by the caller retrying later.
 	g.desiredState = "running"
 	g.store.SetDesiredState(g.id, "running")
 	g.errorReason = ""
 	g.store.ClearErrorReason(g.id)
 	g.crashCount = 0
-
-	g.operation = &model.Operation{Type: model.OpStart, Phase: model.PhaseDownloadingGame}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
 	g.mu.Unlock()
 
-	go g.doStart(opCtx)
-	return nil
-}
-
-func (g *LiveGameserver) doStart(ctx context.Context) {
-	defer func() {
-		g.mu.Lock()
-		g.cancelOp = nil
-		done := g.opDone
-		g.opDone = nil
-		g.mu.Unlock()
-		if done != nil {
-			close(done)
-		}
-	}()
-
-	if err := g.executeStart(ctx); err != nil {
-		g.log.Error("start failed", "gameserver", g.id, "error", err)
-		g.clearOperation()
-		return
-	}
-	// On success: don't clear the operation. StartInstance returns immediately
-	// after launching the process — the worker event stream delivers StateRunning
-	// when the ready pattern matches. HandleProcessEvent clears the operation then.
+	return g.submitOperation(operationOpts{
+		opType:         model.OpStart,
+		initialPhase:   model.PhaseDownloadingGame,
+		requireWorker:  true,
+		errorPrefix:    "", // executeStart sets its own errors via setError
+		clearOnSuccess: false,
+	}, g.executeStart)
 }
 
 // executeStart performs the full start sequence: depot download, image pull,
@@ -416,91 +388,30 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 // Restart stops the gameserver (if running) and starts it again. The entire
 // sequence runs in a background goroutine.
 func (g *LiveGameserver) Restart(ctx context.Context) error {
-	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return fmt.Errorf("operation %s already in progress", g.operation.Type)
-	}
-	if g.worker == nil {
-		g.mu.Unlock()
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
-	}
-	g.operation = &model.Operation{Type: model.OpRestart, Phase: model.PhaseStopping}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
-	g.mu.Unlock()
-
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.stopIfRunning(opCtx); err != nil {
-			g.log.Error("restart stop phase failed", "error", err)
-			g.clearOperation()
-			return
+	return g.submitOperation(operationOpts{
+		opType:         model.OpRestart,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  true,
+		errorPrefix:    "Restart failed",
+		clearOnSuccess: false,
+	}, func(ctx context.Context) error {
+		if err := g.stopIfRunning(ctx); err != nil {
+			return err
 		}
-
-		if err := g.executeStart(opCtx); err != nil {
-			if opCtx.Err() == nil {
-				g.setError(fmt.Sprintf("Restart failed: %v", err))
-			}
-			g.clearOperation()
-		}
-		// On success: HandleProcessEvent clears the operation when worker reports ready
-	}()
-
-	return nil
+		return g.executeStart(ctx)
+	})
 }
 
 // UpdateServerGame stops the gameserver, pulls the latest image, runs the
 // update-server script, and restarts. Runs in a background goroutine.
 func (g *LiveGameserver) UpdateServerGame(ctx context.Context) error {
-	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return fmt.Errorf("operation %s already in progress", g.operation.Type)
-	}
-	if g.worker == nil {
-		g.mu.Unlock()
-		return controller.ErrUnavailablef("worker unavailable")
-	}
-	g.operation = &model.Operation{Type: model.OpUpdate, Phase: model.PhaseStopping}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
-	g.mu.Unlock()
-
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.executeUpdateGame(opCtx); err != nil {
-			if opCtx.Err() == nil {
-				g.setError(fmt.Sprintf("Game update failed: %v", err))
-			}
-			g.clearOperation()
-		}
-		// On success: HandleProcessEvent clears the operation when worker reports ready
-	}()
-
-	return nil
+	return g.submitOperation(operationOpts{
+		opType:         model.OpUpdate,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  true,
+		errorPrefix:    "", // executeUpdateGame sets its own errors
+		clearOnSuccess: false,
+	}, g.executeUpdateGame)
 }
 
 func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
@@ -578,43 +489,13 @@ func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
 // Reinstall stops the gameserver, wipes its volume, and performs a fresh
 // install+start. Runs in a background goroutine.
 func (g *LiveGameserver) Reinstall(ctx context.Context) error {
-	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return fmt.Errorf("operation %s already in progress", g.operation.Type)
-	}
-	if g.worker == nil {
-		g.mu.Unlock()
-		return controller.ErrUnavailablef("worker unavailable")
-	}
-	g.operation = &model.Operation{Type: model.OpReinstall, Phase: model.PhaseStopping}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
-	g.mu.Unlock()
-
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.executeReinstall(opCtx); err != nil {
-			if opCtx.Err() == nil {
-				g.setError(fmt.Sprintf("Reinstall failed: %v", err))
-			}
-			g.clearOperation()
-		}
-		// On success: HandleProcessEvent clears the operation when worker reports ready
-	}()
-
-	return nil
+	return g.submitOperation(operationOpts{
+		opType:         model.OpReinstall,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  true,
+		errorPrefix:    "Reinstall failed",
+		clearOnSuccess: false,
+	}, g.executeReinstall)
 }
 
 func (g *LiveGameserver) executeReinstall(ctx context.Context) error {

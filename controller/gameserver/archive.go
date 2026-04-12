@@ -20,10 +20,6 @@ import (
 // removes the instance and volume from the worker, and marks it as archived.
 func (g *LiveGameserver) Archive(ctx context.Context) error {
 	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
-	}
 	if g.desiredState == "archived" {
 		g.mu.Unlock()
 		return controller.ErrConflictf("gameserver %s is already archived", g.id)
@@ -32,35 +28,15 @@ func (g *LiveGameserver) Archive(ctx context.Context) error {
 		g.mu.Unlock()
 		return controller.ErrBadRequest("backup storage is not configured, cannot archive")
 	}
-
-	g.operation = &model.Operation{Type: model.OpArchive, Phase: model.PhaseStopping}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
 	g.mu.Unlock()
 
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.executeArchive(opCtx); err != nil {
-			g.log.Error("archive failed", "error", err)
-			g.mu.Lock()
-			g.setErrorLocked(fmt.Sprintf("Archive failed: %v", err))
-			g.mu.Unlock()
-		}
-		g.clearOperation()
-	}()
-
-	return nil
+	return g.submitOperation(operationOpts{
+		opType:         model.OpArchive,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  true,
+		errorPrefix:    "Archive failed",
+		clearOnSuccess: true, // Archive is terminal — no running state to wait for
+	}, g.executeArchive)
 }
 
 func (g *LiveGameserver) executeArchive(ctx context.Context) error {
@@ -171,10 +147,6 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 // If targetNodeID is empty, auto-selects via placement ranking.
 func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) error {
 	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
-	}
 	if g.desiredState != "archived" {
 		g.mu.Unlock()
 		return controller.ErrConflictf("gameserver %s is not archived", g.id)
@@ -183,35 +155,19 @@ func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) err
 		g.mu.Unlock()
 		return controller.ErrBadRequest("backup storage is not configured, cannot unarchive")
 	}
-
-	g.operation = &model.Operation{Type: model.OpUnarchive, Phase: model.PhaseRestoringBackup}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
 	g.mu.Unlock()
 
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.executeUnarchive(opCtx, targetNodeID); err != nil {
-			g.log.Error("unarchive failed", "error", err)
-			g.mu.Lock()
-			g.setErrorLocked(fmt.Sprintf("Unarchive failed: %v", err))
-			g.mu.Unlock()
-		}
-		g.clearOperation()
-	}()
-
-	return nil
+	// requireWorker=false because unarchive ASSIGNS a worker (the gameserver
+	// starts with no node, unarchive picks one).
+	return g.submitOperation(operationOpts{
+		opType:         model.OpUnarchive,
+		initialPhase:   model.PhaseRestoringBackup,
+		requireWorker:  false,
+		errorPrefix:    "Unarchive failed",
+		clearOnSuccess: true, // Unarchive leaves the gameserver stopped, not running
+	}, func(ctx context.Context) error {
+		return g.executeUnarchive(ctx, targetNodeID)
+	})
 }
 
 func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID string) error {
@@ -324,12 +280,8 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 // is backed up from the source, restored on the target, and then removed from
 // the source. If the gameserver was running, it is restarted on the target.
 func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error {
+	// Synchronous pre-validation before submitting the operation.
 	g.mu.Lock()
-	if g.operation != nil {
-		g.mu.Unlock()
-		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
-	}
-
 	currentNodeID := ""
 	if g.nodeID != nil {
 		currentNodeID = *g.nodeID
@@ -342,93 +294,55 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 		g.mu.Unlock()
 		return controller.ErrBadRequest("gameserver has no current node, cannot migrate")
 	}
-
 	memoryNeeded := g.memoryLimitMB
 	cpuNeeded := g.cpuLimit
 	storageNeeded := ptrIntOr0(g.storageLimitMB)
 	nodeTags := g.nodeTags
-
-	g.operation = &model.Operation{Type: model.OpMigrate, Phase: model.PhaseStopping}
-	opCtx, cancel := context.WithCancel(context.Background())
-	g.cancelOp = cancel
-	g.opDone = make(chan struct{})
 	g.mu.Unlock()
 
-	// abortMigrate tears down the operation state set above when validation fails.
-	abortMigrate := func() {
-		g.clearOperation()
-		g.mu.Lock()
-		g.cancelOp = nil
-		done := g.opDone
-		g.opDone = nil
-		g.mu.Unlock()
-		if done != nil {
-			close(done)
-		}
-	}
-
-	// Pre-validate target before spawning goroutine
 	if _, err := g.dispatcher.SelectWorkerByNodeID(targetNodeID); err != nil {
-		abortMigrate()
 		return controller.ErrUnavailablef("target worker unavailable: %v", err)
 	}
-
-	// Validate node tags match
 	if !nodeTags.IsEmpty() {
 		targetNode, err := g.store.GetWorkerNode(targetNodeID)
 		if err != nil || targetNode == nil {
-			abortMigrate()
 			return controller.ErrNotFoundf("target node %s not found", targetNodeID)
 		}
 		if !targetNode.Tags.HasAll(nodeTags) {
-			abortMigrate()
 			return controller.ErrBadRequestf("target node %s missing required tags: %v", targetNodeID, nodeTags)
 		}
 	}
-
-	// Check capacity on target (excluding this gameserver since it's moving)
 	if err := g.placement.CheckWorkerLimitsExcluding(targetNodeID, memoryNeeded, cpuNeeded, storageNeeded, g.id); err != nil {
-		abortMigrate()
 		return err
 	}
-
-	// Verify source worker is online
 	if g.dispatcher.WorkerFor(g.id) == nil {
-		abortMigrate()
 		return controller.ErrUnavailable("source worker is offline, cannot migrate")
 	}
 
-	go func() {
-		defer func() {
-			g.mu.Lock()
-			g.cancelOp = nil
-			done := g.opDone
-			g.opDone = nil
-			g.mu.Unlock()
-			if done != nil {
-				close(done)
-			}
-		}()
-
-		if err := g.executeMigrate(opCtx, targetNodeID); err != nil {
-			g.log.Error("migration failed", "error", err)
-			g.mu.Lock()
-			g.setErrorLocked(fmt.Sprintf("Migration failed: %v", err))
-			g.mu.Unlock()
-			g.clearOperation()
+	// clearOnSuccess=false: Migrate may end in either "running" (wasRunning=true,
+	// HandleProcessEvent clears the operation) or "stopped" (wasRunning=false,
+	// we need to clear here). executeMigrate returns nil in both cases; we
+	// inspect state afterward to decide whether to clear.
+	return g.submitOperation(operationOpts{
+		opType:         model.OpMigrate,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  false, // source worker was checked above; executeMigrate validates again
+		errorPrefix:    "Migration failed",
+		clearOnSuccess: false,
+	}, func(ctx context.Context) error {
+		if err := g.executeMigrate(ctx, targetNodeID); err != nil {
+			return err
 		}
-		// On success: if wasRunning, executeMigrate called executeStart and
-		// HandleProcessEvent will clear the operation. If not wasRunning,
-		// we need to clear it here.
+		// On success: if the gameserver is not running, clear the operation
+		// (migrate-stopped path). If it is running, HandleProcessEvent cleared it.
 		g.mu.Lock()
 		if g.operation != nil && g.process == nil {
 			g.operation = nil
 			g.notifyWatchersLocked(nil)
 		}
 		g.mu.Unlock()
-	}()
-
-	return nil
+		return nil
+	})
 }
 
 func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string) error {

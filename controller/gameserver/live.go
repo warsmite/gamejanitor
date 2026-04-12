@@ -440,6 +440,79 @@ func (g *LiveGameserver) setErrorLocked(reason string) {
 	}))
 }
 
+// operationOpts configures how submitOperation handles an operation.
+type operationOpts struct {
+	// opType is the operation type (e.g. model.OpStart).
+	opType string
+	// initialPhase is the operation's starting phase.
+	initialPhase model.OperationPhase
+	// requireWorker controls whether submitOperation checks g.worker != nil
+	// before accepting. Operations that don't need a worker (unarchive placing
+	// onto a different node) should set this false.
+	requireWorker bool
+	// errorPrefix is prepended to error messages when the operation fails.
+	// Empty means the operation is expected to set errors itself via setError.
+	errorPrefix string
+	// clearOnSuccess controls whether to clear the operation when fn returns nil.
+	// Lifecycle operations that end in "starting" leave the operation active
+	// until HandleProcessEvent observes StateRunning — they set this false.
+	// Terminal operations (stop, archive) set this true.
+	clearOnSuccess bool
+}
+
+// submitOperation is the common goroutine harness for lifecycle operations.
+// It validates preconditions, sets up the operation state, spawns a goroutine
+// that runs fn, and handles cleanup (cancelOp, opDone, error reasons).
+//
+// On cancellation (context cancelled mid-flight), no error reason is set —
+// the caller that triggered the cancellation (typically Stop) handles that path.
+func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context.Context) error) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return fmt.Errorf("operation %s already in progress", g.operation.Type)
+	}
+	if opts.requireWorker && g.worker == nil {
+		g.mu.Unlock()
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
+	}
+
+	g.operation = &model.Operation{Type: opts.opType, Phase: opts.initialPhase}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		err := fn(opCtx)
+		if err != nil {
+			g.log.Error("operation failed", "type", opts.opType, "error", err)
+			if opCtx.Err() == nil && opts.errorPrefix != "" {
+				g.setError(fmt.Sprintf("%s: %v", opts.errorPrefix, err))
+			}
+			g.clearOperation()
+			return
+		}
+		if opts.clearOnSuccess {
+			g.clearOperation()
+		}
+		// Otherwise: HandleProcessEvent clears the operation when worker reports ready
+	}()
+
+	return nil
+}
+
 // setPhase updates the current operation's phase and notifies watchers.
 func (g *LiveGameserver) setPhase(phase model.OperationPhase) {
 	g.mu.Lock()
