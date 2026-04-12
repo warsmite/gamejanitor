@@ -22,6 +22,7 @@
   const isRunning = $derived(gameserver.status === 'running');
   const isStopped = $derived(gameserver.status === 'stopped');
   const isArchived = $derived(gameserver.desired_state === 'archived');
+  const isUnreachable = $derived(gameserver.status === 'unreachable');
 
   const memPercent = $derived(
     stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0
@@ -104,16 +105,16 @@
           Unarchive
         </button>
       {:else if isStopped}
-        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }}>
+        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }} disabled={isUnreachable}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
           Start
         </button>
       {:else}
-        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); onaction?.('stop'); }}>
+        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); onaction?.('stop'); }} disabled={isUnreachable}>
           <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
           Stop
         </button>
-        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); onaction?.('restart'); }}>
+        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); onaction?.('restart'); }} disabled={isUnreachable}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
           Restart
         </button>

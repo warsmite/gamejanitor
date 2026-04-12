@@ -92,6 +92,7 @@
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
   const isArchived = $derived(gameserver?.desired_state === 'archived');
+  const isUnreachable = $derived(gameserver?.status === 'unreachable');
   const isTransitioning = $derived(() => {
     const s = gameserver?.status;
     return s === 'starting' || s === 'installing' || s === 'stopping';
@@ -232,26 +233,26 @@
             {/if}
           {:else if isStopped}
             {#if can('gameserver.start')}
-              <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning() || !!operation}>
+              <button class="btn-action start" onclick={() => handleAction('start')} disabled={isTransitioning() || !!operation || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
                 Start
               </button>
             {/if}
             {#if can('gameserver.archive')}
-              <button class="btn-action stop" onclick={() => handleAction('archive')} disabled={!!operation}>
+              <button class="btn-action stop" onclick={() => handleAction('archive')} disabled={!!operation || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3A1.5 1.5 0 0 0 2 4.5V5h12v-.5A1.5 1.5 0 0 0 12.5 3h-9zM2 7v6.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V7H2zm5 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1A.5.5 0 0 1 7 9z"/></svg>
                 Archive
               </button>
             {/if}
           {:else}
             {#if can('gameserver.stop')}
-              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={gameserver?.status === 'stopping'}>
+              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={gameserver?.status === 'stopping' || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
                 Stop
               </button>
             {/if}
             {#if can('gameserver.restart')}
-              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={gameserver?.status === 'stopping'}>
+              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={gameserver?.status === 'stopping' || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
                 Restart
               </button>

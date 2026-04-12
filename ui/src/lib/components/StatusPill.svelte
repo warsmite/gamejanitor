@@ -6,7 +6,8 @@
     status === 'stopped' ? 'stopped' :
     status === 'archived' ? 'archived' :
     status === 'error' ? 'error' :
-    'starting' // installing, starting, started, stopping
+    status === 'unreachable' ? 'unreachable' :
+    'starting' // installing, starting, stopping
   );
 </script>
 
@@ -38,6 +39,9 @@
 
   .archived { background: rgba(139,92,246,0.08); color: rgb(167,139,250); border: 1px solid rgba(139,92,246,0.12); }
   .archived .dot { background: rgb(167,139,250); }
+
+  .unreachable { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
+  .unreachable .dot { background: var(--danger); animation: pulse 2s ease-in-out infinite; }
 
   @keyframes pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
