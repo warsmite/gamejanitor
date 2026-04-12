@@ -27,7 +27,7 @@ func TestCatchUp_MissedBackup_ExecutesOnce(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Create a backup schedule via the service so it gets an ID and is persisted
@@ -100,7 +100,7 @@ func TestCatchUp_MissedRestart_Skipped(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Create restart and command schedules
@@ -177,7 +177,7 @@ func TestCatchUp_NotMissed_NoAction(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	sched := &model.Schedule{

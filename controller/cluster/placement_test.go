@@ -29,7 +29,7 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 		Env:           model.Env{"REQUIRED_VAR": "x"},
 		NodeID:        testutil.StrPtr("worker-1"),
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err := svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	// Now create another — worker-2 has 100% headroom vs worker-1's 50%
@@ -39,7 +39,7 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 		MemoryLimitMB: 1024,
 		Env:           model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.NoError(t, err)
 	require.NotNil(t, gs2.NodeID)
 	assert.Equal(t, "worker-2", *gs2.NodeID)
@@ -60,7 +60,7 @@ func TestPlacement_TagFiltering(t *testing.T) {
 		NodeTags: model.Labels{"hardware": "gpu"},
 		Env:      model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 	require.NotNil(t, gs.NodeID)
 	assert.Equal(t, "worker-gpu", *gs.NodeID)
@@ -83,7 +83,7 @@ func TestPlacement_CordonedWorkerSkipped(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err = svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 	require.NotNil(t, gs.NodeID)
 	assert.Equal(t, "worker-active", *gs.NodeID)
@@ -105,7 +105,7 @@ func TestPortAllocation_ContiguousBlock(t *testing.T) {
 		PortMode: "auto",
 		Env:      model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Verify the allocated ports
@@ -135,7 +135,7 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 		PortMode: "auto",
 		Env:      model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err := svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	gs2 := &model.Gameserver{
@@ -144,7 +144,7 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 		PortMode: "auto",
 		Env:      model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.Error(t, err, "should fail when ports are exhausted")
 }
 
@@ -162,7 +162,7 @@ func TestPlacement_CapacityOverflow(t *testing.T) {
 		MemoryLimitMB: 2048,
 		Env:           model.Env{"REQUIRED_VAR": "hello"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err, "should reject gameserver exceeding node capacity")
 }
 
@@ -180,7 +180,7 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 		Name: "First", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err := svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	// Range is full — second create should fail
@@ -188,18 +188,18 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 		Name: "Second", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.Error(t, err, "range should be full")
 
 	// Delete first gameserver — frees the ports
-	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs1.ID))
+	require.NoError(t, svc.Manager.Delete(ctx, gs1.ID))
 
 	// Now the same range should work again
 	gs3 := &model.Gameserver{
 		Name: "Third", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs3)
+	_, err = svc.Manager.Create(ctx, gs3)
 	require.NoError(t, err, "ports should be reusable after delete")
 }
 
@@ -219,7 +219,7 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 			Name: "Fill-" + string(rune('A'+i)), GameID: testutil.TestGameID, PortMode: "auto",
 			Env: model.Env{"REQUIRED_VAR": "v"},
 		}
-		_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+		_, err := svc.Manager.Create(ctx, gs)
 		require.NoError(t, err, "gameserver %d should fit", i)
 
 		for _, p := range gs.Ports {
@@ -235,7 +235,7 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 		Name: "Overflow", GameID: testutil.TestGameID, PortMode: "auto",
 		Env: model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs6)
+	_, err := svc.Manager.Create(ctx, gs6)
 	require.Error(t, err)
 }
 
@@ -265,7 +265,7 @@ func TestPortAllocation_ConcurrentCreates(t *testing.T) {
 				Name: "Concurrent", GameID: testutil.TestGameID, PortMode: "auto",
 				Env: model.Env{"REQUIRED_VAR": "v"},
 			}
-			_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+			_, err := svc.Manager.Create(ctx, gs)
 			errs[idx] = err
 			if err == nil {
 				gameservers[idx] = gs

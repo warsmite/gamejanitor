@@ -35,17 +35,17 @@ func TestPermissions_OwnerSeesOwnGameserver(t *testing.T) {
 
 	// Owner creates a gameserver
 	gs := &model.Gameserver{Name: "My Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ownerCtx, gs)
+	_, err := svc.Manager.Create(ownerCtx, gs)
 	require.NoError(t, err)
 
 	// Owner sees it
-	list, err := svc.GameserverSvc.ListGameservers(ownerCtx, model.GameserverFilter{})
+	list, err := svc.Manager.List(ownerCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gs.ID, list[0].ID)
 
 	// Admin also sees it
-	list, err = svc.GameserverSvc.ListGameservers(adminCtx, model.GameserverFilter{})
+	list, err = svc.Manager.List(adminCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 }
@@ -59,7 +59,7 @@ func TestPermissions_NonOwnerWithoutGrantCannotSee(t *testing.T) {
 
 	// Owner creates a gameserver
 	gs := &model.Gameserver{Name: "Private Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ownerCtx, gs)
+	_, err := svc.Manager.Create(ownerCtx, gs)
 	require.NoError(t, err)
 
 	// Another user token with no grants
@@ -69,7 +69,7 @@ func TestPermissions_NonOwnerWithoutGrantCannotSee(t *testing.T) {
 	otherCtx := auth.SetTokenInContext(testutil.TestContext(), otherToken)
 
 	// Other user sees nothing
-	list, err := svc.GameserverSvc.ListGameservers(otherCtx, model.GameserverFilter{})
+	list, err := svc.Manager.List(otherCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 0)
 }
@@ -82,15 +82,15 @@ func TestPermissions_OwnerHasAllPermissions(t *testing.T) {
 	ownerCtx, _ := ownerContext(t, svc, true)
 
 	gs := &model.Gameserver{Name: "Owner Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ownerCtx, gs)
+	_, err := svc.Manager.Create(ownerCtx, gs)
 	require.NoError(t, err)
 
 	// Owner can update name (no grant needed — ownership gives all permissions)
 	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
-	err = svc.GameserverSvc.UpdateGameserver(ownerCtx, update)
+	err = svc.Manager.UpdateConfig(ownerCtx, update)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed", fetched.Name)
 }
@@ -106,7 +106,7 @@ func TestPermissions_GrantedUserSeesGameserver(t *testing.T) {
 
 	// Admin creates a gameserver
 	gs := &model.Gameserver{Name: "Shared Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(adminCtx, gs)
+	_, err := svc.Manager.Create(adminCtx, gs)
 	require.NoError(t, err)
 
 	// Create a user token and grant it access
@@ -122,7 +122,7 @@ func TestPermissions_GrantedUserSeesGameserver(t *testing.T) {
 	granteeCtx := auth.SetTokenInContext(testutil.TestContext(), granteeValidated)
 
 	// Grantee sees the server
-	list, err := svc.GameserverSvc.ListGameservers(granteeCtx, model.GameserverFilter{})
+	list, err := svc.Manager.List(granteeCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gs.ID, list[0].ID)
@@ -136,7 +136,7 @@ func TestPermissions_EmptyGrantMeansFullAccess(t *testing.T) {
 	db := store.New(svc.DB)
 
 	gs := &model.Gameserver{Name: "Full Access Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(adminCtx, gs)
+	_, err := svc.Manager.Create(adminCtx, gs)
 	require.NoError(t, err)
 
 	// Grant with empty perms = full access
@@ -153,10 +153,10 @@ func TestPermissions_EmptyGrantMeansFullAccess(t *testing.T) {
 
 	// Grantee can update name (full access)
 	update := &model.Gameserver{ID: gs.ID, Name: "Renamed by grantee"}
-	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.Manager.UpdateConfig(granteeCtx, update)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed by grantee", fetched.Name)
 }
@@ -169,7 +169,7 @@ func TestPermissions_GrantedUserBlockedFromUngrantedPermission(t *testing.T) {
 	db := store.New(svc.DB)
 
 	gs := &model.Gameserver{Name: "Limited Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(adminCtx, gs)
+	_, err := svc.Manager.Create(adminCtx, gs)
 	require.NoError(t, err)
 
 	// Grant only env permission
@@ -186,12 +186,12 @@ func TestPermissions_GrantedUserBlockedFromUngrantedPermission(t *testing.T) {
 
 	// Grantee can update env
 	update := &model.Gameserver{ID: gs.ID, Env: model.Env{"REQUIRED_VAR": "new"}}
-	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.Manager.UpdateConfig(granteeCtx, update)
 	require.NoError(t, err)
 
 	// Grantee cannot update name (not in grant)
 	update = &model.Gameserver{ID: gs.ID, Name: "Blocked"}
-	err = svc.GameserverSvc.UpdateGameserver(granteeCtx, update)
+	err = svc.Manager.UpdateConfig(granteeCtx, update)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing permission")
 }
@@ -206,7 +206,7 @@ func TestPermissions_CanCreateTrue_AllowsCreation(t *testing.T) {
 	ctx, _ := ownerContext(t, svc, true)
 
 	gs := &model.Gameserver{Name: "Created", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 	assert.NotEmpty(t, gs.ID)
 }
@@ -222,11 +222,10 @@ func TestPermissions_CanCreateFalse_BlocksCreation(t *testing.T) {
 	ctx := auth.SetTokenInContext(testutil.TestContext(), token)
 
 	gs := &model.Gameserver{Name: "Blocked", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err = svc.Manager.Create(ctx, gs)
 	// Note: creation permission is checked at the HTTP middleware level (RequireClusterPermission),
-	// not in the service. At the service level, any token can call CreateGameserver — the middleware
+	// not in the service. At the service level, any token can call Create — the middleware
 	// gates access. So this test verifies the token gets created_by_token_id set correctly.
-	// The HTTP-level test is in the handler tests.
 	require.NoError(t, err)
 	assert.Equal(t, token.ID, *gs.CreatedByTokenID)
 }
@@ -247,16 +246,16 @@ func TestPermissions_QuotaMaxGameservers_Enforced(t *testing.T) {
 
 	// Create two gameservers — should work
 	gs1 := &model.Gameserver{Name: "GS1", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err = svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	gs2 := &model.Gameserver{Name: "GS2", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.NoError(t, err)
 
 	// Third should fail
 	gs3 := &model.Gameserver{Name: "GS3", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs3)
+	_, err = svc.Manager.Create(ctx, gs3)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "quota exceeded")
 }
@@ -275,12 +274,12 @@ func TestPermissions_QuotaMaxMemory_Enforced(t *testing.T) {
 
 	// Create with 3GB — should work
 	gs1 := &model.Gameserver{Name: "GS1", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}, MemoryLimitMB: 3072}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err = svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	// Create with 2GB — total 5GB, exceeds 4GB quota
 	gs2 := &model.Gameserver{Name: "GS2", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}, MemoryLimitMB: 2048}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "quota exceeded")
 }
@@ -299,7 +298,7 @@ func TestPermissions_NilQuota_Unlimited(t *testing.T) {
 	// Create several — all should work
 	for i := 0; i < 5; i++ {
 		gs := &model.Gameserver{Name: "GS", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-		_, err = svc.GameserverSvc.CreateGameserver(ctx, gs)
+		_, err = svc.Manager.Create(ctx, gs)
 		require.NoError(t, err)
 	}
 }
@@ -314,10 +313,10 @@ func TestPermissions_CreatedByTokenID_SetOnCreate(t *testing.T) {
 	ctx, token := ownerContext(t, svc, true)
 
 	gs := &model.Gameserver{Name: "Owned", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	require.NotNil(t, fetched.CreatedByTokenID)
 	assert.Equal(t, token.ID, *fetched.CreatedByTokenID)
@@ -334,10 +333,10 @@ func TestPermissions_AdminCreate_SetsCreatedByTokenID(t *testing.T) {
 	ctx := auth.SetTokenInContext(testutil.TestContext(), adminToken)
 
 	gs := &model.Gameserver{Name: "Admin Created", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	require.NotNil(t, fetched.CreatedByTokenID)
 	assert.Equal(t, adminToken.ID, *fetched.CreatedByTokenID)
@@ -352,7 +351,7 @@ func TestPermissions_GrantsPersistedViaPatch(t *testing.T) {
 
 	// Admin creates a gameserver
 	gs := &model.Gameserver{Name: "Grant Persist", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(adminCtx, gs)
+	_, err := svc.Manager.Create(adminCtx, gs)
 	require.NoError(t, err)
 
 	// Create a user token
@@ -364,7 +363,7 @@ func TestPermissions_GrantsPersistedViaPatch(t *testing.T) {
 		ID:     gs.ID,
 		Grants: model.GrantMap{granteeToken.ID: {auth.PermGameserverStart}},
 	}
-	err = svc.GameserverSvc.UpdateGameserver(adminCtx, update)
+	err = svc.Manager.UpdateConfig(adminCtx, update)
 	require.NoError(t, err)
 
 	// Verify grants persisted
@@ -385,10 +384,10 @@ func TestPermissions_NoToken_CreatedByTokenIDNil(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "No Auth", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Nil(t, fetched.CreatedByTokenID)
 }

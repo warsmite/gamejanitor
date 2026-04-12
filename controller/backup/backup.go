@@ -3,7 +3,6 @@ package backup
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
-	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/controller/cluster"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
@@ -34,15 +32,8 @@ type Store interface {
 // GameserverLifecycle is a narrow interface for gameserver operations needed by backup.
 type GameserverLifecycle interface {
 	Stop(ctx context.Context, id string) error
-	Start(ctx context.Context, id string, onProgress gameserver.ProgressFunc) error
+	Start(ctx context.Context, id string) error
 	GetGameserver(id string) (*model.Gameserver, error)
-}
-
-// ActivityTracker records the lifecycle of long-running activities.
-type ActivityTracker interface {
-	Start(gameserverID, workerID, activityType string, actor json.RawMessage, data json.RawMessage) (string, error)
-	Complete(activityID string)
-	Fail(activityID string, reason error)
 }
 
 // maxConcurrentBackups limits how many backup/restore operations can run simultaneously.
@@ -58,41 +49,12 @@ type BackupService struct {
 	storage       Storage
 	settingsSvc   *settings.SettingsService
 	broadcaster   *event.EventBus
-	activity      ActivityTracker
 	log           *slog.Logger
 	sem           chan struct{} // concurrency limiter for backup/restore goroutines
 }
 
 func (s *BackupService) Storage() Storage {
 	return s.storage
-}
-
-func (s *BackupService) SetActivityTracker(tracker ActivityTracker) {
-	s.activity = tracker
-}
-
-func (s *BackupService) startActivity(gsID, workerID, activityType string, data json.RawMessage) string {
-	if s.activity == nil {
-		return ""
-	}
-	activityID, err := s.activity.Start(gsID, workerID, activityType, nil, data)
-	if err != nil {
-		s.log.Warn("failed to start activity tracking", "type", activityType, "error", err)
-		return ""
-	}
-	return activityID
-}
-
-func (s *BackupService) completeActivity(gameserverID string) {
-	if s.activity != nil && gameserverID != "" {
-		s.activity.Complete(gameserverID)
-	}
-}
-
-func (s *BackupService) failActivityRecord(gameserverID string, reason error) {
-	if s.activity != nil && gameserverID != "" {
-		s.activity.Fail(gameserverID, reason)
-	}
 }
 
 func NewBackupService(store Store, dispatcher *cluster.Dispatcher, gameserverSvc GameserverLifecycle, gameStore *games.GameStore, storage Storage, settingsSvc *settings.SettingsService, broadcaster *event.EventBus, log *slog.Logger) *BackupService {
@@ -213,17 +175,12 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}
 	queueCancel()
 
-	workerID := ""
-	if gs.NodeID != nil {
-		workerID = *gs.NodeID
-	}
-	backupMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
-	s.startActivity(gameserverID, workerID, model.OpBackup, backupMetaJSON)
+	s.log.Info("backup operation started", "gameserver", gameserverID, "backup", backupID)
 
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
-		s.failActivityRecord(gameserverID, fmt.Errorf("worker unavailable"))
+		s.log.Error("worker unavailable during backup", "gameserver", gameserverID)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, "worker unavailable for backup")
 		return
 	}
@@ -242,7 +199,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	// Get tar stream from volume
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
-		s.failActivityRecord(gameserverID, err)
+		s.log.Error("backup operation failed", "gameserver", gameserverID, "error", err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("backing up volume: %v", err))
 		return
 	}
@@ -269,13 +226,13 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}()
 
 	if err := s.storage.Save(ctx, gameserverID, backupID, pr); err != nil {
-		s.failActivityRecord(gameserverID, err)
+		s.log.Error("backup operation failed", "gameserver", gameserverID, "error", err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("saving to store: %v", err))
 		return
 	}
 	if compressErr != nil {
 		s.storage.Delete(ctx, gameserverID, backupID)
-		s.failActivityRecord(gameserverID, compressErr)
+		s.log.Error("backup compression failed", "gameserver", gameserverID, "error", compressErr)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, compressErr.Error())
 		return
 	}
@@ -293,7 +250,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		}
 	}
 
-	s.completeActivity(gameserverID)
+	s.log.Info("backup operation completed", "gameserver", gameserverID)
 	s.log.Info("backup completed", "gameserver", gameserverID, "backup", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
@@ -346,8 +303,8 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
 	}
-	restoreMetaJSON, _ := json.Marshal(map[string]string{"backup_id": backupID})
-	s.startActivity(gs.ID, workerID, model.OpRestore, restoreMetaJSON)
+	_ = workerID // used for logging context
+
 
 	s.log.Info("restore initiated", "backup", backupID, "gameserver", gs.ID, "was_running", wasRunning)
 
@@ -379,9 +336,9 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	opSucceeded := false
 	defer func() {
 		if opSucceeded {
-			s.completeActivity(gameserverID)
+			s.log.Info("backup operation completed", "gameserver", gameserverID)
 		} else {
-			s.failActivityRecord(gameserverID, fmt.Errorf("restore failed"))
+			s.log.Error("restore operation failed", "gameserver", gameserverID)
 		}
 	}()
 
@@ -431,7 +388,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 
 	if wasRunning {
 		s.log.Info("restarting gameserver after restore", "gameserver", gameserverID)
-		if err := s.gameserverSvc.Start(ctx, gameserverID, nil); err != nil {
+		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
 			s.log.Error("failed to restart after restore", "gameserver", gameserverID, "error", err)
 			s.broadcaster.Publish(event.NewSystemEvent(event.EventGameserverError, gameserverID, &event.ErrorData{Reason: fmt.Sprintf("Restart after restore failed: %v", err)}))
 		}

@@ -30,8 +30,7 @@ type ServiceBundle struct {
 	Dispatcher    *cluster.Dispatcher
 	Broadcaster   *event.EventBus
 	SettingsSvc   *settings.SettingsService
-	GameserverSvc *gameserver.GameserverService
-	LifecycleSvc  *gameserver.LifecycleService
+	Manager       *gameserver.Manager
 	QuerySvc      *cluster.QueryService
 	StatsPoller   *cluster.StatsPoller
 	ConsoleSvc    *gameserver.ConsoleService
@@ -42,9 +41,6 @@ type ServiceBundle struct {
 	AuthSvc       *auth.AuthService
 	ModSvc        *mod.ModService
 	BackupStorage backup.Storage
-	StatusSub     *gameserver.StatusSubscriber
-	StatusMgr     *gameserver.StatusManager
-	Runner        *gameserver.Runner
 }
 
 // NewTestServices wires all services with a real in-memory DB, fake workers, and real event bus.
@@ -77,8 +73,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		Dispatcher:    dispatcher,
 		Broadcaster:   svcs.Broadcaster,
 		SettingsSvc:   svcs.SettingsSvc,
-		GameserverSvc: svcs.GameserverSvc,
-		LifecycleSvc:  svcs.LifecycleSvc,
+		Manager:       svcs.Manager,
 		QuerySvc:      svcs.QuerySvc,
 		StatsPoller:   svcs.StatsPoller,
 		ConsoleSvc:    svcs.ConsoleSvc,
@@ -89,37 +84,10 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		AuthSvc:       svcs.AuthSvc,
 		ModSvc:        svcs.ModSvc,
 		BackupStorage: svcs.BackupStorage,
-		StatusSub:     svcs.StatusSub,
-		StatusMgr:     svcs.StatusMgr,
-		Runner:        svcs.Runner,
 	}
 
 	t.Cleanup(func() {
 		svcs.QuerySvc.StopAll()
-	})
-
-	return svc
-}
-
-// NewTestServicesWithSubscribers is like NewTestServices but also starts the async
-// event subscribers (StatusSubscriber). Use this for tests that need to verify
-// status derivation from lifecycle events.
-// Subscribers are stopped on test cleanup.
-func NewTestServicesWithSubscribers(t *testing.T) *ServiceBundle {
-	t.Helper()
-	svc := NewTestServices(t)
-
-	svc.GameserverSvc.SetStatusProvider(svc.StatusMgr)
-	svc.LifecycleSvc.SetStatusProvider(svc.StatusMgr)
-
-	ctx := TestContext()
-	svc.StatusMgr.Start(ctx)
-	svc.StatusSub.Start(ctx)
-
-	t.Cleanup(func() {
-		svc.QuerySvc.StopAll()
-		svc.StatusSub.Stop()
-		svc.StatusMgr.Stop()
 	})
 
 	return svc
@@ -158,7 +126,6 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 	svc.Registry.Register(nodeID, fw, info)
 
 	t.Cleanup(func() {
-		svc.Runner.Wait()
 		svc.Registry.Unregister(nodeID)
 	})
 

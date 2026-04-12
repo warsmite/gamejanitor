@@ -31,8 +31,8 @@ type Gameserver struct {
 	CPUEnforced    bool            `json:"cpu_enforced"`
 	InstanceID    *string         `json:"instance_id"`
 	VolumeName     string          `json:"volume_name"`
-	Status         string          `json:"status"`         // derived at read time, not persisted
-	ErrorReason    string          `json:"error_reason"`   // derived at read time, not persisted
+	Status         string          `json:"status"`         // populated by Snapshot, not scanned from DB
+	ErrorReason    string          `json:"error_reason"`
 	Operation      *Operation      `json:"operation,omitempty"`
 	PortMode       string          `json:"port_mode"`
 	NodeID         *string         `json:"node_id"`
@@ -47,8 +47,6 @@ type Gameserver struct {
 	ConnectionAddress  *string         `json:"connection_address"`
 	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
 	DesiredState       string          `json:"desired_state"`  // stopped, running, archived
-	OperationType      *string         `json:"operation_type"`   // current running operation (start, stop, backup, etc.), nil when idle
-	OperationID        *string         `json:"operation_id"`     // event ID of the operation start
 	CreatedByTokenID   *string         `json:"created_by_token_id,omitempty"`
 	Grants             GrantMap        `json:"grants"`
 	RestartRequired    bool            `json:"restart_required"`          // derived, not stored

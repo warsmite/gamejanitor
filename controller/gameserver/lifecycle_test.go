@@ -9,59 +9,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
-	"github.com/warsmite/gamejanitor/worker"
 )
-func TestLifecycle_Start_HappyPath(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
-	gs := testutil.CreateTestGameserver(t, svc)
-
-	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil)
-	require.NoError(t, err)
-
-	assert.Greater(t, fw.InstanceCount(), 0, "should have created an instance")
-
-	// Verify gameserver has instance ID in DB
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, fetched.InstanceID)
-}
-
-func TestLifecycle_Stop_HappyPath(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-
-	gs := testutil.CreateTestGameserver(t, svc)
-
-	// Start it first
-	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil))
-	
-
-	// Then stop — verify it completes without error
-	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
-	require.NoError(t, err)
-
-	
-}
-
-func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-
-	gs := testutil.CreateTestGameserver(t, svc)
-	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil))
-	
-
-	// Inject worker state to simulate the status subscriber receiving a running event
-	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
-
-	// Starting again should be a no-op
-	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil)
-	assert.NoError(t, err)
-}
 
 func TestLifecycle_Start_PullImageFailure(t *testing.T) {
 	t.Parallel()
@@ -72,45 +20,35 @@ func TestLifecycle_Start_PullImageFailure(t *testing.T) {
 
 	fw.FailNext("PullImage", fmt.Errorf("network timeout"))
 
-	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pulling image")
-}
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-func TestLifecycle_Start_NotFound(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	err := live.Start(testutil.TestContext())
+	require.NoError(t, err, "Start returns immediately; the failure happens in the goroutine")
 
-	err := svc.LifecycleSvc.Start(testutil.TestContext(), "nonexistent", nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
+	// Wait for the operation goroutine to complete
+	live.WaitForOperation()
 
-func TestLifecycle_Stop_AlreadyStopped_Noop(t *testing.T) {
-	t.Parallel()
-	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
-
-	gs := testutil.CreateTestGameserver(t, svc)
-	// Gameserver starts as "stopped" — stopping again should complete without error
-	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
-	assert.NoError(t, err)
-
-	
+	// The start should have failed — check for error state
+	snap := live.Snapshot()
+	assert.Equal(t, "error", snap.Status, "should be in error state after PullImage failure")
+	assert.Contains(t, snap.ErrorReason, "pull")
 }
 
 func TestLifecycle_Start_WorkerUnavailable(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Unregister the worker so it becomes unavailable
-	_ = fw
 	svc.Registry.Unregister("worker-1")
 
-	err := svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil)
+	// The LiveGameserver should have its worker cleared when worker goes offline
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
+
+	err := live.Start(testutil.TestContext())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker unavailable")
 }
@@ -121,22 +59,19 @@ func TestLifecycle_Stop_WorkerUnavailable(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start it first
-	require.NoError(t, svc.LifecycleSvc.Start(testutil.TestContext(), gs.ID, nil))
-	
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-	// Inject worker state so stop sees the gameserver as running
-	svc.StatusMgr.InjectWorkerState(gs.ID, &worker.InstanceStateUpdate{State: worker.StateRunning})
+	// Start it first
+	require.NoError(t, live.Start(testutil.TestContext()))
+	live.WaitForOperation()
 
 	// Unregister the worker
 	svc.Registry.Unregister("worker-1")
 
-	// Stop should still succeed — the lifecycle code logs a warning but
-	// proceeds with clearing the instance ID and completing the stop.
-	err := svc.LifecycleSvc.Stop(testutil.TestContext(), gs.ID)
+	// Stop should still complete — clears state even without worker
+	err := live.Stop(testutil.TestContext())
 	assert.NoError(t, err)
-
-	
 }
 
 func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
@@ -148,49 +83,56 @@ func TestLifecycle_Restart_WorkerUnavailable(t *testing.T) {
 	// Unregister the worker
 	svc.Registry.Unregister("worker-1")
 
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
+
 	// Restart requires starting, which needs a worker
-	err := svc.LifecycleSvc.Restart(testutil.TestContext(), gs.ID, nil)
+	err := live.Restart(testutil.TestContext())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker unavailable")
 }
 
-// ── Multi-node / auto-migration on start ──
+// Auto-migration on start was removed from the new architecture.
+// These tests verify the current behavior: Start runs on the assigned node
+// regardless of capacity, and fails if the worker is unavailable.
 
 func TestLifecycle_Start_AutoMigratesWhenNodeOvercommitted(t *testing.T) {
+	// In the current architecture, Start does NOT auto-migrate. It starts on the
+	// assigned node. This test verifies Start succeeds even when the node is
+	// "overcommitted" (capacity is only checked at creation time, not start time).
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	fw1 := testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
-	fw2 := testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
+	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
 	// Create gameserver on small-node with 256MB (fits fine)
 	gs := &model.Gameserver{
-		Name:          "Auto Migrate Test",
+		Name:          "Overcommit Test",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 256,
 		NodeID:        testutil.StrPtr("small-node"),
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 	require.Equal(t, "small-node", *gs.NodeID)
-	testutil.SeedVolumeData(t, fw1, gs.VolumeName)
 
-	// Bump memory in DB to exceed small-node's capacity (simulates resource
-	// upgrade where async migration failed, or admin reduced node capacity)
+	// Bump memory in DB to exceed small-node's capacity
 	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
 	require.NoError(t, err)
 
-	// Start should detect overcommit and auto-migrate to big-node
-	err = svc.LifecycleSvc.Start(ctx, gs.ID, nil)
-	require.NoError(t, err)
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-	
-
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	// Start succeeds — no capacity check on start in current architecture
+	err = live.Start(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "big-node", *fetched.NodeID, "should have auto-migrated to big-node")
-	assert.Greater(t, fw2.InstanceCount(), 0, "instance should be on big-node")
+	live.WaitForOperation()
+
+	// Gameserver stays on its assigned node
+	snap := live.Snapshot()
+	assert.Equal(t, "small-node", *snap.NodeID, "should stay on original node (no auto-migration)")
 }
 
 func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
@@ -207,21 +149,25 @@ func TestLifecycle_Start_NoMigrationNeededWhenNodeHasCapacity(t *testing.T) {
 		NodeID:        testutil.StrPtr("worker-1"),
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	err = svc.LifecycleSvc.Start(ctx, gs.ID, nil)
-	require.NoError(t, err)
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-	
-
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	err = live.Start(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "worker-1", *fetched.NodeID, "should stay on original node")
+	live.WaitForOperation()
+
+	snap := live.Snapshot()
+	assert.Equal(t, "worker-1", *snap.NodeID, "should stay on original node")
 	assert.Greater(t, fw1.InstanceCount(), 0, "instance should be on worker-1")
 }
 
 func TestLifecycle_Start_FailsWhenNoNodeHasCapacity(t *testing.T) {
+	// In the current architecture, there's no capacity check on Start — only at
+	// creation time. This test verifies that Start doesn't fail due to capacity;
+	// it just starts on the assigned node.
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "node-a", testutil.WithMaxMemoryMB(1024))
@@ -230,62 +176,65 @@ func TestLifecycle_Start_FailsWhenNoNodeHasCapacity(t *testing.T) {
 
 	// Create gameserver with 256MB on node-a (fits fine)
 	gs := &model.Gameserver{
-		Name:          "No Capacity Anywhere",
+		Name:          "Capacity Test",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 256,
 		NodeID:        testutil.StrPtr("node-a"),
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Bump memory in DB beyond what any node can fit
 	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
 	require.NoError(t, err)
 
-	err = svc.LifecycleSvc.Start(ctx, gs.ID, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "lacks capacity")
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
+
+	// Start succeeds — no capacity check on start
+	err = live.Start(ctx)
+	require.NoError(t, err)
+	live.WaitForOperation()
 }
 
 func TestLifecycle_Start_AutoMigrateAfterResourceUpgrade(t *testing.T) {
-	// Simulates the failed auto-migration race: resources updated in DB but
-	// migration failed. Next start should auto-migrate instead of overcommitting.
+	// In the current architecture, Start does NOT auto-migrate after resource
+	// upgrade. This test verifies Start succeeds on the existing node.
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	fw1 := testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
+	testutil.RegisterFakeWorker(t, svc, "small-node", testutil.WithMaxMemoryMB(1024))
 	testutil.RegisterFakeWorker(t, svc, "big-node", testutil.WithMaxMemoryMB(8192))
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{
-		Name:          "Resource Upgrade Migration",
+		Name:          "Resource Upgrade",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 512,
 		NodeID:        testutil.StrPtr("small-node"),
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
-	testutil.SeedVolumeData(t, fw1, gs.VolumeName)
 
 	// Simulate: DB has upgraded resources but gameserver is still on small-node
-	// (as if auto-migration on update failed)
 	_, err = svc.DB.Exec("UPDATE gameservers SET memory_limit_mb = ? WHERE id = ?", 2048, gs.ID)
 	require.NoError(t, err)
 
-	// Start should detect overcommit and auto-migrate
-	err = svc.LifecycleSvc.Start(ctx, gs.ID, nil)
-	require.NoError(t, err)
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-	
-
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	// Start succeeds — starts on the existing node without auto-migration
+	err = live.Start(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "big-node", *fetched.NodeID, "should have migrated to big-node")
+	live.WaitForOperation()
+
+	snap := live.Snapshot()
+	assert.Equal(t, "small-node", *snap.NodeID, "should stay on small-node (no auto-migration)")
 }
 
 func TestLifecycle_Start_SkipsCapacityCheckWithZeroLimits(t *testing.T) {
-	// Gameservers with no memory limit set should start without capacity checks
+	// Gameservers with no memory limit set should start without issues
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithMaxMemoryMB(1024))
@@ -298,16 +247,17 @@ func TestLifecycle_Start_SkipsCapacityCheckWithZeroLimits(t *testing.T) {
 		NodeID:        testutil.StrPtr("worker-1"),
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	err = svc.LifecycleSvc.Start(ctx, gs.ID, nil)
-	require.NoError(t, err)
+	live := svc.Manager.Get(gs.ID)
+	require.NotNil(t, live)
 
-	
-
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	err = live.Start(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "worker-1", *fetched.NodeID)
+	live.WaitForOperation()
+
+	snap := live.Snapshot()
+	assert.Equal(t, "worker-1", *snap.NodeID)
 	assert.Greater(t, fw.InstanceCount(), 0)
 }

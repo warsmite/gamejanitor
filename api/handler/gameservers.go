@@ -18,19 +18,16 @@ type StatsHistoryQuerier interface {
 }
 
 type GameserverHandlers struct {
-	svc          *gameserver.GameserverService
-	lifecycle    *gameserver.LifecycleService
+	manager      *gameserver.Manager
 	consoleSvc   *gameserver.ConsoleService
 	querySvc     *cluster.QueryService
 	statsPoller  *cluster.StatsPoller
 	statsHistory StatsHistoryQuerier
-	ops          *gameserver.Runner
-	tracker      *gameserver.Tracker
 	log          *slog.Logger
 }
 
-func NewGameserverHandlers(svc *gameserver.GameserverService, lifecycleSvc *gameserver.LifecycleService, consoleSvc *gameserver.ConsoleService, querySvc *cluster.QueryService, statsPoller *cluster.StatsPoller, statsHistory StatsHistoryQuerier, ops *gameserver.Runner, tracker *gameserver.Tracker, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, lifecycle: lifecycleSvc, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, ops: ops, tracker: tracker, log: log}
+func NewGameserverHandlers(manager *gameserver.Manager, consoleSvc *gameserver.ConsoleService, querySvc *cluster.QueryService, statsPoller *cluster.StatsPoller, statsHistory StatsHistoryQuerier, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{manager: manager, consoleSvc: consoleSvc, querySvc: querySvc, statsPoller: statsPoller, statsHistory: statsHistory, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +49,7 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	gameservers, err := h.svc.ListGameservers(r.Context(), filter)
+	gameservers, err := h.manager.List(r.Context(), filter)
 	if err != nil {
 		h.log.Error("listing gameservers", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -67,17 +64,12 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	gs, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
+	gs := h.manager.Get(id)
 	if gs == nil {
 		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
 		return
 	}
-	respondOK(w, gs)
+	respondOK(w, gs.Snapshot())
 }
 
 func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -87,32 +79,30 @@ func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawPassword, err := h.svc.CreateGameserver(r.Context(), &gs)
+	rawPassword, err := h.manager.Create(r.Context(), &gs)
 	if err != nil {
 		h.log.Error("creating gameserver", "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
-	// Re-fetch so DeriveStatus populates the status field
-	fetched, err := h.svc.GetGameserver(gs.ID)
-	if err != nil || fetched == nil {
-		h.log.Error("fetching gameserver after create", "error", err)
+	created := h.manager.Get(gs.ID)
+	if created == nil {
+		h.log.Error("gameserver not found after create", "id", gs.ID)
 		respondError(w, http.StatusInternalServerError, "failed to fetch created gameserver")
 		return
 	}
 
-	// Include the raw SFTP password in the create response only (show once)
 	type createResponse struct {
 		model.Gameserver
 		SFTPPassword string `json:"sftp_password"`
 	}
-	respondCreated(w, createResponse{Gameserver: *fetched, SFTPPassword: rawPassword})
+	respondCreated(w, createResponse{Gameserver: created.Snapshot(), SFTPPassword: rawPassword})
 }
 
 func (h *GameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	rawPassword, err := h.svc.RegenerateSFTPPassword(r.Context(), id)
+	rawPassword, err := h.manager.RegenerateSFTPPassword(r.Context(), id)
 	if err != nil {
 		h.log.Error("regenerating sftp password", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -132,17 +122,15 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	gs.ID = id
 
-	if err := h.svc.UpdateGameserver(r.Context(), &gs); err != nil {
+	if err := h.manager.UpdateConfig(r.Context(), &gs); err != nil {
 		h.log.Error("updating gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	// Re-read from DB to get final state with derived fields
-	updated, err := h.svc.GetGameserver(id)
-	if err != nil {
-		h.log.Error("getting gameserver after update", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+	updated := h.manager.Get(id)
+	if updated == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
 		return
 	}
-	respondOK(w, updated)
+	respondOK(w, updated.Snapshot())
 }

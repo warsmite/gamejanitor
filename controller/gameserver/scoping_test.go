@@ -1,13 +1,13 @@
 package gameserver_test
 
 import (
-	"github.com/warsmite/gamejanitor/controller/auth"
 	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -29,11 +29,11 @@ func TestScoping_Backup_CrossAccess_Blocked(t *testing.T) {
 
 	// Create two gameservers
 	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
+	_, err := svc.Manager.Create(ctx, gsA)
 	require.NoError(t, err)
 
 	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
+	_, err = svc.Manager.Create(ctx, gsB)
 	require.NoError(t, err)
 
 	// Create backup on GS-A
@@ -69,11 +69,11 @@ func TestScoping_Schedule_CrossAccess_Blocked(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
+	_, err := svc.Manager.Create(ctx, gsA)
 	require.NoError(t, err)
 
 	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
+	_, err = svc.Manager.Create(ctx, gsB)
 	require.NoError(t, err)
 
 	// Create schedule on GS-A
@@ -110,24 +110,24 @@ func TestScoping_ListGameservers_TokenScoped(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
+	_, err := svc.Manager.Create(ctx, gsA)
 	require.NoError(t, err)
 
 	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
+	_, err = svc.Manager.Create(ctx, gsB)
 	require.NoError(t, err)
 
 	// Scoped token for GS-A only
 	scopedCtx := scopedContext(t, svc, []string{"gameserver.start"}, []string{gsA.ID})
 
 	// List with scoped context — only sees GS-A
-	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{})
+	list, err := svc.Manager.List(scopedCtx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gsA.ID, list[0].ID)
 
 	// List with unscoped context — sees both
-	list, err = svc.GameserverSvc.ListGameservers(ctx, model.GameserverFilter{})
+	list, err = svc.Manager.List(ctx, model.GameserverFilter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 }
@@ -139,21 +139,21 @@ func TestScoping_ListGameservers_IDsIntersectsTokenScope(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
+	_, err := svc.Manager.Create(ctx, gsA)
 	require.NoError(t, err)
 
 	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
+	_, err = svc.Manager.Create(ctx, gsB)
 	require.NoError(t, err)
 
 	// Token scoped to GS-A, but requesting GS-B via ?ids= — should get empty
 	scopedCtx := scopedContext(t, svc, []string{"gameserver.start"}, []string{gsA.ID})
-	list, err := svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{IDs: []string{gsB.ID}})
+	list, err := svc.Manager.List(scopedCtx, model.GameserverFilter{IDs: []string{gsB.ID}})
 	require.NoError(t, err)
 	assert.Len(t, list, 0)
 
 	// Token scoped to GS-A, requesting GS-A via ?ids= — should get GS-A
-	list, err = svc.GameserverSvc.ListGameservers(scopedCtx, model.GameserverFilter{IDs: []string{gsA.ID}})
+	list, err = svc.Manager.List(scopedCtx, model.GameserverFilter{IDs: []string{gsA.ID}})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, gsA.ID, list[0].ID)

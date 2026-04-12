@@ -28,8 +28,7 @@ type RouterOptions struct {
 	Role            string // "standalone", "controller", "controller+worker"
 	LogPath         string
 	GameStore       *games.GameStore
-	GameserverSvc   *gameserver.GameserverService
-	LifecycleSvc    *gameserver.LifecycleService
+	Manager         *gameserver.Manager
 	ConsoleSvc      *gameserver.ConsoleService
 	FileSvc         *file.Service
 	ScheduleSvc     *schedule.ScheduleService
@@ -42,8 +41,6 @@ type RouterOptions struct {
 	WorkerNodeSvc   *cluster.WorkerNodeService
 	WebhookSvc       *webhook.WebhookEndpointService
 	EventHistorySvc  *event.EventHistoryService
-	Runner           *gameserver.Runner
-	OperationTracker *gameserver.Tracker
 	StatsHistory     handler.StatsHistoryQuerier
 	GameserverQuerier handler.GameserverQuerier
 	Broadcaster      *event.EventBus
@@ -84,7 +81,7 @@ func NewRouter(opts RouterOptions) *Router {
 
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
-	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.LifecycleSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Runner, opts.OperationTracker, opts.Log)
+	gameserverHandlers := handler.NewGameserverHandlers(opts.Manager, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.StatsHistory, opts.Log)
 	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, opts.EventHistorySvc, opts.GameserverQuerier, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)

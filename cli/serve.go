@@ -201,12 +201,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// --- 3. Background services ---
 
-	svcs.StatusMgr.Start(ctx)
-	defer svcs.StatusMgr.Stop()
-
-	svcs.StatusSub.Start(ctx)
-	defer svcs.StatusSub.Stop()
-
 	svcs.EventPersister.Start(ctx)
 	defer svcs.EventPersister.Stop()
 
@@ -399,7 +393,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 		proxyMgr := gjproxy.NewManager(cfg.Bind, logger)
-		proxySub := gjproxy.NewSubscriber(proxyMgr, svcs.GameserverSvc, svcs.Broadcaster, localNodeID, logger)
+		proxySub := gjproxy.NewSubscriber(proxyMgr, svcs.Manager, svcs.Broadcaster, localNodeID, logger)
 		defer proxySub.Stop()
 		proxySub.SyncExisting(ctx)
 		logger.Info("game proxy enabled", "bind", cfg.Bind, "local_node", localNodeID)
@@ -409,18 +403,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	registry.StartReaper(ctx, logger)
 
-	// Reconcile gameserver status with instance reality on startup.
-	// Online workers get checked immediately; offline workers' gameservers
-	// are marked unreachable and recovered when the worker reconnects.
-	if err := svcs.StatusMgr.RecoverOnStartup(ctx); err != nil {
-		logger.Error("failed to recover gameserver status on startup", "error", err)
-	}
-
-	// Clear any operations still in-progress from a previous crash.
-	if cleared, err := db.ClearStaleOperations(); err != nil {
-		logger.Error("failed to clear stale operations", "error", err)
-	} else if cleared > 0 {
-		logger.Warn("cleared stale operations from previous run", "count", cleared)
+	// Load all gameservers and reconcile with worker reality.
+	if err := svcs.Manager.RecoverAll(ctx); err != nil {
+		logger.Error("failed to recover gameserver state on startup", "error", err)
 	}
 
 	// --- 7. HTTP, SFTP, and listen ---
@@ -430,8 +415,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Role:              role,
 		LogPath:           logPath,
 		GameStore:         gameStore,
-		GameserverSvc:     svcs.GameserverSvc,
-		LifecycleSvc:      svcs.LifecycleSvc,
+		Manager:           svcs.Manager,
 		ConsoleSvc:        svcs.ConsoleSvc,
 		FileSvc:           svcs.FileSvc,
 		ScheduleSvc:       svcs.ScheduleSvc,
@@ -443,8 +427,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WorkerNodeSvc:     svcs.WorkerNodeSvc,
 		WebhookSvc:        svcs.WebhookSvc,
 		EventHistorySvc:   svcs.EventHistorySvc,
-		Runner:            svcs.Runner,
-		OperationTracker:  svcs.Runner.Tracker(),
 		StatsHistory:      db.GameserverStatsStore,
 		GameserverQuerier: db.GameserverStore,
 		Broadcaster:       svcs.Broadcaster,

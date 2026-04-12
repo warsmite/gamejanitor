@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 type Harness struct {
 	BaseURL string
 	t       *testing.T
+	events  *eventStream
 }
 
 // --- Shared local instance (one per test suite) ---
@@ -53,6 +55,8 @@ func Start(t *testing.T) *Harness {
 	h := &Harness{BaseURL: url, t: t}
 	h.waitForReady(t)
 	h.waitForWorker(t)
+	h.events = newEventStream(url)
+	t.Cleanup(func() { h.events.Stop() })
 	return h
 }
 
@@ -182,6 +186,8 @@ func startSerial(t *testing.T) *Harness {
 	h := &Harness{BaseURL: url, t: t}
 	h.waitForReady(t)
 	h.waitForWorker(t)
+	h.events = newEventStream(url)
+	t.Cleanup(func() { h.events.Stop() })
 	return h
 }
 
@@ -274,11 +280,81 @@ func (h *Harness) AuthPatch(path, token string, body any) (*http.Response, error
 
 // --- Status helpers ---
 
-// WaitForStatus polls until the gameserver reaches the target status.
-// Fails fast if the status reaches a terminal state that can't transition
-// to the target (e.g. waiting for "running" but status becomes "error").
-// On failure, dumps the full gameserver state for debugging.
+// WaitForStatus waits for a gameserver to reach the target status by listening
+// to the SSE event stream. First checks the current status (the gameserver may
+// already be in the target state), then subscribes for status_changed events.
+// Falls back to polling if no event stream is available (e.g. warmup harness).
+// Fails fast on terminal states that can't reach the target.
 func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration) error {
+	if h.events == nil {
+		return h.waitForStatusPoll(gsID, targetStatus, timeout)
+	}
+
+	// Register listener BEFORE checking current status. This closes the race
+	// where the event fires between the status check and the listen registration.
+	ch, unlisten := h.events.Listen(gsID, func(ev sseEvent) bool {
+		return ev.Type == "gameserver.status_changed" ||
+			ev.Type == "gameserver.ready" ||
+			ev.Type == "gameserver.error"
+	})
+	defer unlisten()
+
+	// Check current state — it may already be at the target.
+	if status, _ := h.currentStatus(gsID); status == targetStatus {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var statusHistory []string
+	for {
+		select {
+		case ev := <-ch:
+			statusHistory = append(statusHistory, ev.Status)
+
+			if ev.Status == targetStatus {
+				return nil
+			}
+
+			// Fail fast on terminal states
+			if targetStatus == "running" && (ev.Status == "error" || ev.Status == "stopped") {
+				return fmt.Errorf("gameserver %s reached terminal status %q (wanted %q): %s\n  status history: %v\n  state: %s",
+					gsID, ev.Status, targetStatus, ev.ErrorReason, statusHistory, h.dumpGameserver(gsID))
+			}
+			if targetStatus == "stopped" && ev.Status == "error" {
+				return fmt.Errorf("gameserver %s reached %q instead of %q: %s\n  status history: %v\n  state: %s",
+					gsID, ev.Status, targetStatus, ev.ErrorReason, statusHistory, h.dumpGameserver(gsID))
+			}
+
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for gameserver %s to reach status %q\n  status history: %v\n  state: %s",
+				gsID, targetStatus, statusHistory, h.dumpGameserver(gsID))
+		}
+	}
+}
+
+// currentStatus fetches the current gameserver status from the API.
+func (h *Harness) currentStatus(gsID string) (string, error) {
+	resp, err := h.Get("/api/gameservers/" + gsID)
+	if err != nil {
+		return "", err
+	}
+	var gs struct {
+		Status    string `json:"status"`
+		Operation any    `json:"operation"`
+	}
+	if err := DecodeData(resp, &gs); err != nil {
+		return "", err
+	}
+	if gs.Operation != nil {
+		return "", nil // operation in progress, don't report status yet
+	}
+	return gs.Status, nil
+}
+
+// waitForStatusPoll is the polling fallback when no SSE stream is available.
+func (h *Harness) waitForStatusPoll(gsID, targetStatus string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var lastStatus string
 	var statusHistory []string
@@ -289,32 +365,25 @@ func (h *Harness) WaitForStatus(gsID, targetStatus string, timeout time.Duration
 			continue
 		}
 		var gs struct {
-			Status        string  `json:"status"`
-			ErrorReason   string  `json:"error_reason"`
-			OperationType *string `json:"operation_type"`
+			Status      string `json:"status"`
+			ErrorReason string `json:"error_reason"`
+			Operation   any    `json:"operation"`
 		}
 		if err := DecodeData(resp, &gs); err != nil {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		}
-		if gs.Status == targetStatus && gs.OperationType == nil {
+		if gs.Status == targetStatus && gs.Operation == nil {
 			return nil
 		}
 		if gs.Status != lastStatus {
 			statusHistory = append(statusHistory, gs.Status)
 			lastStatus = gs.Status
 		}
-
-		// Fail fast on terminal states that can't reach the target
 		if targetStatus == "running" && (gs.Status == "error" || gs.Status == "stopped") {
 			return fmt.Errorf("gameserver %s reached terminal status %q (wanted %q): %s\n  status history: %v\n  state: %s",
 				gsID, gs.Status, targetStatus, gs.ErrorReason, statusHistory, h.dumpGameserver(gsID))
 		}
-		if targetStatus == "stopped" && gs.Status == "error" {
-			return fmt.Errorf("gameserver %s reached %q instead of %q: %s\n  status history: %v\n  state: %s",
-				gsID, gs.Status, targetStatus, gs.ErrorReason, statusHistory, h.dumpGameserver(gsID))
-		}
-
 		time.Sleep(250 * time.Millisecond)
 	}
 	return fmt.Errorf("timed out waiting for gameserver %s to reach status %q (last seen: %q)\n  status history: %v\n  state: %s",

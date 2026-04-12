@@ -73,7 +73,7 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fallback: live fetch (poller not running yet)
-	stats, err := h.lifecycle.GetGameserverStats(r.Context(), id)
+	stats, err := h.manager.GetGameserverStats(r.Context(), id)
 	if err != nil {
 		h.log.Warn("failed to get gameserver stats", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
@@ -108,11 +108,16 @@ func (h *GameserverHandlers) OperationStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch, unwatch := h.tracker.Watch(id)
+	gs := h.manager.Get(id)
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+	ch, unwatch := gs.Watch()
 	defer unwatch()
 
 	// Send the current state immediately so the client doesn't start blank
-	current := h.tracker.GetOperation(id)
+	current := gs.GetOperation()
 	data, _ := json.Marshal(current)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	flusher.Flush()
@@ -174,7 +179,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reader, err := h.lifecycle.GetInstanceLogs(r.Context(), id, tail)
+	reader, err := h.manager.GetInstanceLogs(r.Context(), id, tail)
 	if err != nil {
 		// Fall back to historical logs from volume
 		lines, histErr := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, 0, tail)

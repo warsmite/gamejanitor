@@ -204,16 +204,10 @@ func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds
 	c.state = "stopped"
 	w.mu.Unlock()
 
-	// No "die" event here. In a real runtime, exit events are emitted for all container
-	// exits (expected and unexpected). StatusManager distinguishes them by checking
-	// if the gameserver is in "stopping" state. But because the lifecycle publishes
-	// InstanceStoppingEvent and the StatusSubscriber processes it asynchronously,
-	// there's a race window where "die" arrives before the subscriber has set
-	// "stopping" — causing a false "unexpected death" error.
-	//
-	// The lifecycle code handles expected stops by publishing InstanceStoppedEvent
-	// directly. The "die" event path is only needed for crash detection (unexpected
-	// exits). Use SimulateCrash() to test that path explicitly.
+	// No exit event here. Expected stops are handled by the lifecycle code
+	// (LiveGameserver.doStop clears the process state directly). The exit event
+	// path is only for crash detection (unexpected exits). Use SimulateCrash()
+	// to test that path explicitly.
 
 	return nil
 }

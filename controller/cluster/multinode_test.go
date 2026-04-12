@@ -172,7 +172,7 @@ func TestWorkerDisconnect_GameserverBecomesUnreachable(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Worker goes offline — dispatched operations should fail
@@ -198,7 +198,7 @@ func TestCapacity_CreateFailsWhenWorkerFull(t *testing.T) {
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 		MemoryLimitMB: 512,
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err := svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	// Second gameserver needs 600MB — total would be 1112MB > 1024MB limit
@@ -208,7 +208,7 @@ func TestCapacity_CreateFailsWhenWorkerFull(t *testing.T) {
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 		MemoryLimitMB: 600,
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	assert.Error(t, err, "should fail when worker memory limit exceeded")
 	assert.Contains(t, err.Error(), "memory limit")
 }
@@ -235,7 +235,7 @@ func TestConcurrentCreates_NoPortConflict(t *testing.T) {
 				GameID: testutil.TestGameID,
 				Env:    model.Env{"REQUIRED_VAR": "v"},
 			}
-			_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+			_, err := svc.Manager.Create(ctx, gs)
 			mu.Lock()
 			errs[idx] = err
 			if err == nil {
@@ -281,7 +281,7 @@ func TestPortRange_WorkerSpecificRange(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Ports should be within the worker's range

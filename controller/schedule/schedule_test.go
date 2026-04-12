@@ -18,7 +18,7 @@ func TestSchedule_Create_HappyPath(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	sched := &model.Schedule{
@@ -41,7 +41,7 @@ func TestSchedule_Create_InvalidCron(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	sched := &model.Schedule{
@@ -63,7 +63,7 @@ func TestSchedule_List_ByGameserver(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	for _, name := range []string{"sched-1", "sched-2"} {
@@ -86,7 +86,7 @@ func TestSchedule_Delete_HappyPath(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	sched := &model.Schedule{
@@ -110,7 +110,7 @@ func TestSchedule_Create_InvalidType(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	gs := &model.Gameserver{Name: "Type Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	sched := &model.Schedule{

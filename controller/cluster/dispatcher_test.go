@@ -26,7 +26,7 @@ func TestDispatcher_WorkerFor(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	w := svc.Dispatcher.WorkerFor(gs.ID)

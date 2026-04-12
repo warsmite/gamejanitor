@@ -38,7 +38,7 @@ func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *model.Gameserver {
 		GameID: TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "test-value"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(TestContext(), gs)
+	_, err := svc.Manager.Create(TestContext(), gs)
 	if err != nil {
 		t.Fatalf("creating test gameserver: %v", err)
 	}

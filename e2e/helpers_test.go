@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -186,20 +187,42 @@ func waitForStatusOneOf(h *Harness, gsID string, statuses []string, timeout time
 	for _, s := range statuses {
 		target[s] = true
 	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		resp, err := h.Get("/api/gameservers/" + gsID)
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
+
+	if h.events == nil {
+		// Polling fallback
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			resp, err := h.Get("/api/gameservers/" + gsID)
+			if err == nil {
+				var gs struct{ Status string `json:"status"` }
+				if DecodeData(resp, &gs) == nil && target[gs.Status] {
+					return gs.Status, nil
+				}
+			}
+			time.Sleep(250 * time.Millisecond)
 		}
-		var gs struct{ Status string `json:"status"` }
-		if err := DecodeData(resp, &gs); err == nil && target[gs.Status] {
-			return gs.Status, nil
-		}
-		time.Sleep(500 * time.Millisecond)
+		return "", fmt.Errorf("timed out waiting for gameserver %s to reach one of %v", gsID, statuses)
 	}
-	return "", fmt.Errorf("timed out waiting for gameserver %s to reach one of %v", gsID, statuses)
+
+	ch, unlisten := h.events.Listen(gsID, func(ev sseEvent) bool {
+		return ev.Type == "gameserver.status_changed" && target[ev.Status]
+	})
+	defer unlisten()
+
+	// Check current state after registering listener
+	if status, _ := h.currentStatus(gsID); target[status] {
+		return status, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	select {
+	case ev := <-ch:
+		return ev.Status, nil
+	case <-ctx.Done():
+		return "", fmt.Errorf("timed out waiting for gameserver %s to reach one of %v", gsID, statuses)
+	}
 }
 
 // testGameEnv returns the game env from the harness with optional overrides.
@@ -216,11 +239,13 @@ func testGameEnv(h *Harness, overrides map[string]string) map[string]string {
 }
 
 // waitForOperationComplete waits for an operation to appear on the gameserver
-// and then waits for it to clear. This handles the race where async operations
-// (like restore) are launched in a goroutine and operation_type isn't set
-// immediately — polling for nil too early would return before the operation starts.
+// and then waits for it to clear.
 func waitForOperationComplete(t *testing.T, h *Harness, gsID string, opType string) {
 	t.Helper()
+
+	type opJSON struct {
+		Type string `json:"type"`
+	}
 
 	// Phase 1: wait for the operation to appear
 	require.Eventually(t, func() bool {
@@ -229,12 +254,12 @@ func waitForOperationComplete(t *testing.T, h *Harness, gsID string, opType stri
 			return false
 		}
 		var gs struct {
-			OperationType *string `json:"operation_type"`
+			Operation *opJSON `json:"operation"`
 		}
 		if err := DecodeData(resp, &gs); err != nil {
 			return false
 		}
-		return gs.OperationType != nil && *gs.OperationType == opType
+		return gs.Operation != nil && gs.Operation.Type == opType
 	}, 30*time.Second, 250*time.Millisecond, "operation %q should appear on gameserver", opType)
 
 	// Phase 2: wait for it to clear
@@ -244,12 +269,12 @@ func waitForOperationComplete(t *testing.T, h *Harness, gsID string, opType stri
 			return false
 		}
 		var gs struct {
-			OperationType *string `json:"operation_type"`
+			Operation *opJSON `json:"operation"`
 		}
 		if err := DecodeData(resp, &gs); err != nil {
 			return false
 		}
-		return gs.OperationType == nil
+		return gs.Operation == nil
 	}, 2*time.Minute, 500*time.Millisecond, "operation should complete")
 }
 

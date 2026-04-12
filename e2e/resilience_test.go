@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -89,12 +90,12 @@ func TestE2E_Backup_RunningServer_RestoreVerifiesData(t *testing.T) {
 	writeFile(t, h, gs1.ID, "/data/backup-marker.txt", "overwritten")
 
 	// Restore the backup to the same gameserver (async operation).
+	// Poll the actual outcome — the restored file content — rather than
+	// tracking operation state. This tests what matters.
 	restoreBackup(t, h, gs1.ID, backup.ID)
-	waitForOperationComplete(t, h, gs1.ID, "restore")
-
-	// Verify the marker file survived the round-trip
-	content := readFile(t, h, gs1.ID, "/data/backup-marker.txt")
-	assert.Contains(t, content, marker,
-		"marker file should survive backup/restore round-trip")
+	require.Eventually(t, func() bool {
+		content := readFile(t, h, gs1.ID, "/data/backup-marker.txt")
+		return strings.Contains(content, marker)
+	}, 60*time.Second, 500*time.Millisecond, "marker file should survive backup/restore round-trip")
 	t.Logf("backup round-trip verified: marker file intact")
 }

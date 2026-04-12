@@ -6,156 +6,113 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/utilities/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// Start validates preconditions and starts a gameserver. Blocks until the
-// gameserver is running or an error occurs. Resets the crash counter so
-// auto-restart gets a fresh retry budget.
-func (s *LifecycleService) Start(ctx context.Context, id string, onProgress ProgressFunc) error {
-	if s.statusProvider != nil {
-		s.statusProvider.ResetCrashCount(id)
-	}
-	return s.startInstance(ctx, id, onProgress)
-}
+// Start transitions the gameserver to the running state. It validates
+// preconditions synchronously, then spawns a goroutine to do the actual
+// download/install/start work. Returns nil immediately on success.
+func (g *LiveGameserver) Start(ctx context.Context) error {
+	g.mu.Lock()
 
-// RestartAfterCrash is called by the auto-restart system. Unlike Start(),
-// it does NOT reset the crash counter — the counter must accumulate across
-// retries so the 3-attempt limit works.
-func (s *LifecycleService) RestartAfterCrash(ctx context.Context, id string) error {
-	return s.startInstance(ctx, id, nil)
-}
-
-// startInstance performs the full start sequence: validate → auto-migrate if
-// needed → download depot → pull image → install phase → start instance.
-func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgress ProgressFunc) error {
-	gs, err := s.store.GetGameserver(id)
-	if err != nil {
-		return err
+	if g.operation != nil {
+		g.mu.Unlock()
+		return fmt.Errorf("operation %s already in progress", g.operation.Type)
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
+	if g.desiredState == "archived" {
+		g.mu.Unlock()
+		return controller.ErrBadRequest("cannot start archived gameserver")
 	}
-
-	// Skip if an instance is already running. Check the actual runtime state
-	// (instance ID + desired state), not the derived display status — the display
-	// status may reflect the runner's initial operation phase rather than reality.
-	if gs.InstanceID != nil && gs.DesiredState == "running" {
-		s.log.Info("gameserver already active, skipping start", "gameserver", id)
+	if g.worker == nil {
+		g.mu.Unlock()
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
+	}
+	if g.instanceID != nil && g.desiredState == "running" {
+		g.mu.Unlock()
 		return nil
 	}
 
-	// Set desired_state=running immediately so DeriveStatus reflects intent.
-	// Must happen before any heavy work (depot download, image pull) so that
-	// a concurrent stop can detect and override it.
-	gs.DesiredState = "running"
-	s.store.UpdateGameserver(gs)
+	g.desiredState = "running"
+	g.store.SetDesiredState(g.id, "running")
+	g.errorReason = ""
+	g.store.ClearErrorReason(g.id)
+	g.crashCount = 0
 
-	// Clear stale error/worker state only when we're actually going to start.
-	// Must be after the guard — ClearError wipes the worker state cache, and
-	// calling it on an already-running server would lose the "running" state.
-	if s.statusProvider != nil {
-		s.statusProvider.ClearError(id)
-	}
+	g.operation = &model.Operation{Type: model.OpStart, Phase: model.PhaseDownloadingGame}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
 
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
-	}
+	go g.doStart(opCtx)
+	return nil
+}
 
-	w := s.dispatcher.WorkerFor(id)
-	if w == nil {
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
-	}
-
-	// Check if assigned node can fit this gameserver's resources.
-	// If not, auto-migrate to a node that can before starting.
-	if gs.NodeID != nil && *gs.NodeID != "" {
-		limitErr := s.placement.CheckWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
-		if limitErr != nil {
-			s.log.Warn("assigned node cannot fit gameserver resources, attempting auto-migration",
-				"gameserver", id, "node_id", *gs.NodeID, "error", limitErr)
-
-			foundNode, findErr := s.placement.FindNodeWithCapacity(gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.NodeTags, *gs.NodeID)
-			if findErr != nil {
-				return fmt.Errorf("cannot start: node %s lacks capacity and no other node can fit %d MB / %.1f CPU", *gs.NodeID, gs.MemoryLimitMB, gs.CPULimit)
-			}
-
-			s.log.Info("auto-migrating before start", "gameserver", id, "from_node", *gs.NodeID, "to_node", foundNode)
-			if err := s.doMigrate(ctx, id, foundNode); err != nil {
-				return fmt.Errorf("auto-migration before start failed: %w", err)
-			}
-
-			gs, err = s.store.GetGameserver(id)
-			if err != nil || gs == nil {
-				return fmt.Errorf("reloading gameserver after migration: %w", err)
-			}
-			w = s.dispatcher.WorkerFor(id)
-			if w == nil {
-				return controller.ErrUnavailablef("worker unavailable after migration for gameserver %s", id)
-			}
+func (g *LiveGameserver) doStart(ctx context.Context) {
+	defer func() {
+		g.mu.Lock()
+		g.cancelOp = nil
+		done := g.opDone
+		g.opDone = nil
+		g.mu.Unlock()
+		if done != nil {
+			close(done)
 		}
-	}
+	}()
 
-	// Re-read to pick up any concurrent changes (e.g. stop requested while start was validating)
-	gs, err = s.store.GetGameserver(id)
-	if err != nil {
-		return err
+	if err := g.executeStart(ctx); err != nil {
+		g.log.Error("start failed", "gameserver", g.id, "error", err)
+		g.clearOperation()
+		return
 	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
-	}
-	if gs.DesiredState == "stopped" {
-		s.log.Info("gameserver was stopped concurrently, aborting start", "gameserver", id)
-		return nil
-	}
-	// desired_state is set by the Runner synchronously before this goroutine starts.
-	// Don't overwrite it here — a concurrent stop may have changed it.
+	// On success: don't clear the operation. StartInstance returns immediately
+	// after launching the process — the worker event stream delivers StateRunning
+	// when the ready pattern matches. HandleProcessEvent clears the operation then.
+}
 
-	game = s.gameStore.GetGame(gs.GameID)
+// executeStart performs the full start sequence: depot download, image pull,
+// install phase (if needed), and instance creation.
+func (g *LiveGameserver) executeStart(ctx context.Context) error {
+	game := g.gameStore.GetGame(g.gameID)
 	if game == nil {
-		return fmt.Errorf("game %s not found for gameserver %s", gs.GameID, id)
+		g.setError("Game not found: " + g.gameID)
+		return fmt.Errorf("game %s not found", g.gameID)
 	}
 
-	w = s.dispatcher.WorkerFor(id)
+	w := g.getWorker()
 	if w == nil {
-		s.setError(id, "Worker became unavailable during start.")
-		return fmt.Errorf("worker unavailable for gameserver %s", id)
+		g.setError("Worker unavailable.")
+		return fmt.Errorf("worker unavailable for gameserver %s", g.id)
 	}
 
-	// Download game files via Steam depot downloader for all Steam games.
+	// Download game files via Steam depot if the game requires it.
 	var depotDir string
 	depotAppID := game.DepotAppID()
 	if depotAppID != 0 {
 		accountName := ""
 		refreshToken := ""
-
 		if game.SteamLogin.RequiresAuth() {
-			accountName = s.settingsSvc.GetString(settings.SettingSteamAccountName)
-			refreshToken = s.settingsSvc.GetString(settings.SettingSteamRefreshToken)
+			accountName = g.settingsSvc.GetString(settings.SettingSteamAccountName)
+			refreshToken = g.settingsSvc.GetString(settings.SettingSteamRefreshToken)
 			if refreshToken == "" {
-				s.setError(id, "This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.")
+				g.setError("This game requires a linked Steam account. Run 'gamejanitor steam login' to configure.")
 				return fmt.Errorf("game %s requires Steam auth but no credentials configured", game.ID)
 			}
 		}
 
-		s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotDownloading, id, &event.DepotDownloadingData{
-			AppID: depotAppID,
-		}))
-		reportProgress(onProgress, model.PhaseDownloadingGame, nil)
+		g.bus.Publish(event.NewSystemEvent(event.EventDepotDownloading, g.id, &event.DepotDownloadingData{AppID: depotAppID}))
+		g.setPhase(model.PhaseDownloadingGame)
 
 		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken, func(p worker.DepotProgress) {
 			if p.TotalBytes > 0 {
-				reportProgress(onProgress, model.PhaseDownloadingGame, &model.OperationProgress{
+				g.setProgress(model.OperationProgress{
 					Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
 					CompletedBytes: p.CompletedBytes,
 					TotalBytes:     p.TotalBytes,
@@ -163,81 +120,83 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 			}
 		})
 		if depotErr != nil {
-			s.setError(id, "Failed to download game files from Steam.")
-			return fmt.Errorf("depot download for gameserver %s: %w", id, depotErr)
+			g.setError("Failed to download game files from Steam.")
+			return fmt.Errorf("depot download: %w", depotErr)
 		}
 
 		depotDir = depotResult.DepotDir
 
 		if depotResult.Cached {
-			s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotCached, id, &event.DepotCachedData{
-				AppID: depotAppID,
-			}))
+			g.bus.Publish(event.NewSystemEvent(event.EventDepotCached, g.id, &event.DepotCachedData{AppID: depotAppID}))
 		} else {
-			s.broadcaster.Publish(event.NewSystemEvent(event.EventDepotComplete, id, &event.DepotCompleteData{
-				AppID:           depotAppID,
-				BytesDownloaded: depotResult.BytesDownloaded,
+			g.bus.Publish(event.NewSystemEvent(event.EventDepotComplete, g.id, &event.DepotCompleteData{
+				AppID: depotAppID, BytesDownloaded: depotResult.BytesDownloaded,
 			}))
 		}
 	}
 
-	// Pull image
-	reportProgress(onProgress, model.PhasePullingImage, nil)
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Pull the OCI image.
+	g.setPhase(model.PhasePullingImage)
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+
+	gs := g.toModelGameserver()
+
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
 		if p.TotalBytes > 0 {
-			reportProgress(onProgress, model.PhasePullingImage, &model.OperationProgress{
+			g.setProgress(model.OperationProgress{
 				Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
 				CompletedBytes: p.CompletedBytes,
 				TotalBytes:     p.TotalBytes,
 			})
 		}
 	}); err != nil {
-		s.setError(id, "Failed to pull game image. Check your internet connection.")
-		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
+		g.setError("Failed to pull game image. Check your internet connection.")
+		return fmt.Errorf("pulling image: %w", err)
 	}
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulled, id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulled, g.id, nil))
 
-	// Merge env vars
-	env, err := mergeEnv(game, gs)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	env, err := mergeEnv(game, &gs)
 	if err != nil {
-		s.setError(id, "Failed to configure environment variables.")
-		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
+		g.setError("Failed to configure environment variables.")
+		return fmt.Errorf("merging env: %w", err)
 	}
 
-	// Parse port bindings
-	ports, err := parseGameserverPorts(gs)
+	ports, err := parseGameserverPorts(&gs)
 	if err != nil {
-		s.setError(id, "Invalid port configuration.")
-		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
+		g.setError("Invalid port configuration.")
+		return fmt.Errorf("parsing ports: %w", err)
 	}
 
-	// Prepare game scripts on the target worker
-	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
+	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, g.gameID, g.id)
 	if err != nil {
-		s.setError(id, "Failed to extract game scripts.")
-		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
+		g.setError("Failed to extract game scripts.")
+		return fmt.Errorf("preparing scripts: %w", err)
 	}
 
-	// Copy depot files into the volume on the host (outside the instance).
-	if depotDir != "" && !gs.Installed {
-		s.log.Info("copying depot to volume", "gameserver", id, "depot", depotDir)
-		if err := w.CopyDepotToVolume(ctx, depotDir, gs.VolumeName); err != nil {
-			s.setError(id, "Failed to copy game files to volume.")
-			return fmt.Errorf("copying depot to volume for gameserver %s: %w", id, err)
+	// Copy depot files into volume on first install (before the container runs).
+	if depotDir != "" && !g.isInstalled() {
+		g.log.Info("copying depot to volume", "depot", depotDir)
+		if err := w.CopyDepotToVolume(ctx, depotDir, g.volumeName); err != nil {
+			g.setError("Failed to copy game files to volume.")
+			return fmt.Errorf("copying depot to volume: %w", err)
 		}
 	}
 
-	// Reconcile mods — ensure DB-tracked mods exist on the volume before starting.
-	if s.modReconciler != nil {
-		if err := s.modReconciler.Reconcile(ctx, id); err != nil {
-			s.log.Warn("mod reconciliation had errors, continuing with start", "gameserver", id, "error", err)
+	if g.modReconciler != nil {
+		if err := g.modReconciler.Reconcile(ctx, g.id); err != nil {
+			g.log.Warn("mod reconciliation had errors, continuing", "error", err)
 		}
 	}
 
-	binds := []string{
-		scriptDir + ":/scripts:ro",
-	}
+	binds := []string{scriptDir + ":/scripts:ro"}
 	if defaultsDir != "" {
 		binds = append(binds, defaultsDir+":/defaults:ro")
 	}
@@ -245,515 +204,518 @@ func (s *LifecycleService) startInstance(ctx context.Context, id string, onProgr
 		binds = append(binds, depotDir+":/depot:ro")
 	}
 
-	// Remove old instance if exists (stale from prior run/crash).
-	instanceName := naming.InstanceName(id)
-	if gs.InstanceID != nil {
-		oldID := *gs.InstanceID
-		gs.InstanceID = nil
-		if err := s.store.UpdateGameserver(gs); err != nil {
-			s.log.Warn("failed to clear old instance ID", "gameserver", id, "error", err)
-		}
-		if err := w.RemoveInstance(ctx, oldID); err != nil {
-			s.log.Warn("failed to remove old instance by id", "gameserver", id, "error", err)
-		}
+	// Clean up any stale instance from a previous run.
+	instanceName := naming.InstanceName(g.id)
+	g.mu.Lock()
+	var oldInstanceID string
+	if g.instanceID != nil {
+		oldInstanceID = *g.instanceID
+		g.instanceID = nil
 	}
-	if err := w.RemoveInstance(ctx, instanceName); err != nil {
-		s.log.Debug("no stale instance to remove by name", "name", instanceName)
+	g.mu.Unlock()
+	if oldInstanceID != "" {
+		g.store.SetInstanceID(g.id, nil)
+		w.RemoveInstance(ctx, oldInstanceID)
 	}
+	w.RemoveInstance(ctx, instanceName)
 
-	// Install phase — runs install-server in a short-lived instance, then marks installed
-	if !gs.Installed {
-		reportProgress(onProgress, model.PhaseInstalling, nil)
+	// Install phase — run install-server script if not yet installed.
+	if !g.isInstalled() {
+		g.setPhase(model.PhaseInstalling)
 
-		s.rotateConsoleLogs(w, gs.VolumeName)
-		s.copyDefaults(w, gs.VolumeName, defaultsDir)
+		rotateConsoleLogs(w, g.volumeName)
+		copyDefaults(w, g.volumeName, defaultsDir)
 
-		installName := naming.InstallInstanceName(id)
+		installName := naming.InstallInstanceName(g.id)
 		w.RemoveInstance(ctx, installName)
 
-		s.log.Info("running install phase", "gameserver", id)
+		g.log.Info("running install phase")
 		installID, installErr := w.CreateInstance(ctx, worker.InstanceOptions{
 			Name:          installName,
 			Image:         game.ResolveImage(map[string]string(gs.Env)),
 			Env:           env,
 			Ports:         ports,
-			VolumeName:    gs.VolumeName,
-			MemoryLimitMB: gs.MemoryLimitMB,
-			CPULimit:      gs.CPULimit,
-			CPUEnforced:   gs.CPUEnforced,
+			VolumeName:    g.volumeName,
+			MemoryLimitMB: g.memoryLimitMB,
+			CPULimit:      g.cpuLimit,
+			CPUEnforced:   g.cpuEnforced,
 			Binds:         binds,
 			Entrypoint:    []string{"/bin/sh", "-c", "/scripts/install-server"},
 		})
 		if installErr != nil {
-			s.setError(id, userFriendlyError("Failed to create install instance", installErr))
-			return fmt.Errorf("creating install instance for gameserver %s: %w", id, installErr)
+			g.setError(userFriendlyError("Failed to create install instance", installErr))
+			return fmt.Errorf("creating install instance: %w", installErr)
 		}
 
 		if installErr = w.StartInstance(ctx, installID, ""); installErr != nil {
 			w.RemoveInstance(ctx, installID)
-			s.setError(id, userFriendlyError("Failed to start install instance", installErr))
-			return fmt.Errorf("starting install instance for gameserver %s: %w", id, installErr)
+			g.setError(userFriendlyError("Failed to start install instance", installErr))
+			return fmt.Errorf("starting install instance: %w", installErr)
 		}
 
-		exitCode, installErr := s.waitForInstanceExit(ctx, w, installID)
+		exitCode, installErr := waitForInstanceExit(ctx, w, installID)
 
-		// Copy install output to the volume's console log
+		// Capture install output for the console log.
 		if logReader, logErr := w.InstanceLogs(ctx, installID, 0, false); logErr == nil {
 			logData, _ := io.ReadAll(logReader)
 			logReader.Close()
 			if len(logData) > 0 {
-				logPath := ".gamejanitor/logs/console.log"
-				w.WriteFile(ctx, gs.VolumeName, logPath, logData, 0644)
+				w.WriteFile(ctx, g.volumeName, ".gamejanitor/logs/console.log", logData, 0644)
 			}
 			if exitCode != 0 || installErr != nil {
 				out := string(logData)
 				if len(out) > 500 {
 					out = out[len(out)-500:]
 				}
-				s.log.Error("install phase failed", "gameserver", id, "exit_code", exitCode, "output", out)
+				g.log.Error("install phase failed", "exit_code", exitCode, "output", out)
 			}
 		}
 
 		w.RemoveInstance(ctx, installID)
 
 		if installErr != nil {
-			s.setError(id, "Install phase failed.")
-			return fmt.Errorf("install phase for gameserver %s: %w", id, installErr)
+			g.setError("Install phase failed.")
+			return fmt.Errorf("install phase: %w", installErr)
 		}
 		if exitCode != 0 {
-			s.setError(id, fmt.Sprintf("Install script failed with exit code %d.", exitCode))
-			return fmt.Errorf("install-server exited with code %d for gameserver %s", exitCode, id)
+			g.setError(fmt.Sprintf("Install script failed with exit code %d.", exitCode))
+			return fmt.Errorf("install-server exited with code %d", exitCode)
 		}
 
-		gs.Installed = true
-		if err := s.store.UpdateGameserver(gs); err != nil {
-			return fmt.Errorf("marking gameserver %s as installed: %w", id, err)
-		}
-		s.log.Info("install phase complete", "gameserver", id)
+		g.mu.Lock()
+		g.installed = true
+		g.store.UpdateGameserver(g.toModelGameserverLocked())
+		g.mu.Unlock()
+		g.log.Info("install phase complete")
 	}
 
-	// Start phase
-	reportProgress(onProgress, model.PhaseStarting, nil)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Start the game server instance.
+	g.setPhase(model.PhaseStarting)
 
 	instanceID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:          instanceName,
 		Image:         game.ResolveImage(map[string]string(gs.Env)),
 		Env:           env,
 		Ports:         ports,
-		VolumeName:    gs.VolumeName,
-		MemoryLimitMB: gs.MemoryLimitMB,
-		CPULimit:      gs.CPULimit,
-		CPUEnforced:   gs.CPUEnforced,
+		VolumeName:    g.volumeName,
+		MemoryLimitMB: g.memoryLimitMB,
+		CPULimit:      g.cpuLimit,
+		CPUEnforced:   g.cpuEnforced,
 		Binds:         binds,
 		Entrypoint:    []string{"/bin/sh", "-c", "exec /scripts/start-server"},
 	})
 	if err != nil {
-		s.setError(id, userFriendlyError("Failed to create instance", err))
-		return fmt.Errorf("creating instance for gameserver %s: %w", id, err)
+		g.setError(userFriendlyError("Failed to create instance", err))
+		return fmt.Errorf("creating instance: %w", err)
 	}
 
-	// Re-read before saving instance ID — a concurrent stop may have changed desired_state
-	gs, err = s.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		w.RemoveInstance(ctx, instanceID)
-		return fmt.Errorf("re-reading gameserver %s before saving instance: %w", id, err)
-	}
-	if gs.DesiredState == "stopped" {
-		s.log.Info("gameserver was stopped while instance was being created, cleaning up", "gameserver", id)
-		w.RemoveInstance(ctx, instanceID)
-		return nil
+	if ctx.Err() != nil {
+		w.RemoveInstance(context.Background(), instanceID)
+		return ctx.Err()
 	}
 
-	gs.InstanceID = &instanceID
-	gs.AppliedConfig = gs.SnapshotConfig()
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		w.RemoveInstance(ctx, instanceID)
-		return err
+	g.mu.Lock()
+	g.instanceID = &instanceID
+	g.appliedConfig = &model.AppliedConfig{
+		Env:           g.env,
+		MemoryLimitMB: g.memoryLimitMB,
+		CPULimit:      g.cpuLimit,
+		CPUEnforced:   g.cpuEnforced,
 	}
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceCreating, id, nil))
+	g.store.UpdateGameserver(g.toModelGameserverLocked())
+	g.mu.Unlock()
+
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.id, nil))
 
 	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
-		s.setError(id, userFriendlyError("Failed to start instance", err))
-		return fmt.Errorf("starting instance for gameserver %s: %w", id, err)
+		g.setError(userFriendlyError("Failed to start instance", err))
+		return fmt.Errorf("starting instance: %w", err)
 	}
 
-	if s.statusProvider != nil {
-		s.statusProvider.SetRunning(id)
-	}
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStarted, id, nil))
-
-	s.log.Info("gameserver started", "gameserver", id, "instance_id", instanceID[:12])
+	// StartInstance returns immediately — the process is starting but not yet ready.
+	// The worker watches logs for the ready pattern and emits StateRunning when matched.
+	// HandleProcessEvent will set process state and clear the operation.
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.id, nil))
+	g.log.Info("instance started, waiting for ready", "instance_id", instanceID[:12])
 	return nil
 }
 
-// Stop validates preconditions and stops a running gameserver. Blocks until
-// the instance is stopped and removed.
-func (s *LifecycleService) Stop(ctx context.Context, id string) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
-		return err
-	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
-	}
+// Stop transitions the gameserver to the stopped state. If an operation is in
+// progress, it cancels it first and waits for the goroutine to finish.
+func (g *LiveGameserver) Stop(ctx context.Context) error {
+	g.mu.Lock()
 
-	if gs.Status == controller.StatusStopped || gs.Status == controller.StatusError {
-		s.log.Info("gameserver already stopped, skipping stop", "gameserver", id, "status", gs.Status)
+	if g.instanceID == nil && g.process == nil && g.operation == nil {
+		g.mu.Unlock()
 		return nil
 	}
 
-	// Clear runtime state BEFORE sending SIGTERM. The sandbox exit watcher fires
-	// the "die" event almost immediately — if the runtime state still says "running",
-	// the status manager treats it as an unexpected death.
-	if s.statusProvider != nil {
-		s.statusProvider.SetStopped(id)
+	if g.cancelOp != nil {
+		g.cancelOp()
 	}
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
+	done := g.opDone
+	g.mu.Unlock()
 
-	return s.stopInstance(ctx, id)
+	if done != nil {
+		<-done
+	}
+
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopping, g.id, nil))
+	return g.doStop(ctx)
 }
 
-// stopInstance performs the raw stop work without validation or status updates.
-// Used by Stop, Restart, Archive, Migrate, UpdateServerGame, and Reinstall.
-func (s *LifecycleService) stopInstance(ctx context.Context, id string) error {
-	gs, err := s.store.GetGameserver(id)
-	if err != nil {
-		return fmt.Errorf("re-reading gameserver %s for stop: %w", id, err)
-	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
-	}
+// doStop performs the raw stop work: executes stop-server script, stops and
+// removes the instance, and clears runtime state.
+func (g *LiveGameserver) doStop(ctx context.Context) error {
+	g.mu.Lock()
+	instanceID := g.instanceID
+	w := g.worker
+	g.mu.Unlock()
 
-	if gs.InstanceID != nil {
-		w := s.dispatcher.WorkerFor(id)
-		if w == nil {
-			s.log.Warn("worker unavailable during stop, skipping instance cleanup", "gameserver", id)
-		} else {
-			execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
-			_, _, _, execErr := w.Exec(execCtx, *gs.InstanceID, []string{"/scripts/stop-server"})
-			execCancel()
-			if execErr != nil {
-				s.log.Info("stop-server script not available or failed, proceeding with instance stop", "gameserver", id, "error", execErr)
-			}
+	if instanceID != nil && w != nil {
+		// Best-effort graceful stop via game script.
+		execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
+		_, _, _, execErr := w.Exec(execCtx, *instanceID, []string{"/scripts/stop-server"})
+		execCancel()
+		if execErr != nil {
+			g.log.Info("stop-server script not available or failed", "error", execErr)
+		}
 
-			stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
-			if err := w.StopInstance(stopCtx, *gs.InstanceID, 10); err != nil {
-				s.log.Warn("failed to stop instance gracefully", "gameserver", id, "error", err)
-			}
-			stopCancel()
-			if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
-				s.log.Warn("failed to remove instance", "gameserver", id, "error", err)
-			}
+		stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := w.StopInstance(stopCtx, *instanceID, 10); err != nil {
+			g.log.Warn("failed to stop instance gracefully", "error", err)
+		}
+		stopCancel()
+
+		if err := w.RemoveInstance(ctx, *instanceID); err != nil {
+			g.log.Warn("failed to remove instance", "error", err)
 		}
 	}
 
-	gs, err = s.store.GetGameserver(id)
-	if err != nil {
-		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
-	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found after stop", id)
-	}
-	gs.InstanceID = nil
-	gs.DesiredState = "stopped"
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		return err
-	}
+	g.mu.Lock()
+	g.instanceID = nil
+	g.desiredState = "stopped"
+	g.process = nil
+	g.errorReason = ""
+	gsModel := g.toModelGameserverLocked()
+	g.mu.Unlock()
 
-	// Clear any worker state that was re-injected by the exit event during stop.
-	if s.statusProvider != nil {
-		s.statusProvider.SetStopped(id)
-	}
-
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopped, id, nil))
-	s.log.Info("gameserver stopped", "gameserver", id)
+	g.store.UpdateGameserver(gsModel)
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopped, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
+		Status: controller.StatusStopped,
+	}))
+	g.log.Info("gameserver stopped")
 	return nil
 }
 
-// Restart stops a running gameserver and starts it again. Blocks until complete.
-func (s *LifecycleService) Restart(ctx context.Context, id string, onProgress ProgressFunc) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
-		return err
+// Restart stops the gameserver (if running) and starts it again. The entire
+// sequence runs in a background goroutine.
+func (g *LiveGameserver) Restart(ctx context.Context) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return fmt.Errorf("operation %s already in progress", g.operation.Type)
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
+	if g.worker == nil {
+		g.mu.Unlock()
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
 	}
+	g.operation = &model.Operation{Type: model.OpRestart, Phase: model.PhaseStopping}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
 
-	w := s.dispatcher.WorkerFor(id)
-	if w == nil {
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
-	}
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
 
-	if gs.Status != controller.StatusStopped && gs.Status != controller.StatusError {
-		if s.statusProvider != nil {
-			s.statusProvider.SetStopped(id)
+		if err := g.stopIfRunning(opCtx); err != nil {
+			g.log.Error("restart stop phase failed", "error", err)
+			g.clearOperation()
+			return
 		}
-		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
 
-		if err := s.stopInstance(ctx, id); err != nil {
-			return fmt.Errorf("stopping gameserver for restart: %w", err)
+		if err := g.executeStart(opCtx); err != nil {
+			if opCtx.Err() == nil {
+				g.setError(fmt.Sprintf("Restart failed: %v", err))
+			}
+			g.clearOperation()
 		}
-	}
+		// On success: HandleProcessEvent clears the operation when worker reports ready
+	}()
 
-	return s.startInstance(ctx, id, onProgress)
+	return nil
 }
 
 // UpdateServerGame stops the gameserver, pulls the latest image, runs the
-// update-server script, and restarts. Blocks until complete.
-func (s *LifecycleService) UpdateServerGame(ctx context.Context, id string, onProgress ProgressFunc) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
+// update-server script, and restarts. Runs in a background goroutine.
+func (g *LiveGameserver) UpdateServerGame(ctx context.Context) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return fmt.Errorf("operation %s already in progress", g.operation.Type)
+	}
+	if g.worker == nil {
+		g.mu.Unlock()
+		return controller.ErrUnavailablef("worker unavailable")
+	}
+	g.operation = &model.Operation{Type: model.OpUpdate, Phase: model.PhaseStopping}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		if err := g.executeUpdateGame(opCtx); err != nil {
+			if opCtx.Err() == nil {
+				g.setError(fmt.Sprintf("Game update failed: %v", err))
+			}
+			g.clearOperation()
+		}
+		// On success: HandleProcessEvent clears the operation when worker reports ready
+	}()
+
+	return nil
+}
+
+func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
+	game := g.gameStore.GetGame(g.gameID)
+	if game == nil {
+		g.setError("Game not found")
+		return fmt.Errorf("game %s not found", g.gameID)
+	}
+
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+	if err := g.stopIfRunning(ctx); err != nil {
+		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return err
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
-	}
 
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return controller.ErrNotFoundf("game %s not found", gs.GameID)
-	}
-
-	s.log.Info("updating game for gameserver", "gameserver", id, "game", game.ID)
-
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
-
-	if gs.Status != controller.StatusStopped {
-		if s.statusProvider != nil {
-			s.statusProvider.SetStopped(id)
-		}
-		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
-
-		if err := s.stopInstance(ctx, id); err != nil {
-			s.setError(id, controller.OperationFailedReason("Game update failed", err))
-			return fmt.Errorf("stopping gameserver for update: %w", err)
-		}
-	}
-
-	w := s.dispatcher.WorkerFor(id)
+	w := g.getWorker()
 	if w == nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", fmt.Errorf("worker unavailable")))
-		return fmt.Errorf("worker unavailable for gameserver %s", id)
+		g.setError(controller.OperationFailedReason("Game update failed", fmt.Errorf("worker unavailable")))
+		return fmt.Errorf("worker unavailable")
 	}
 
-	gs, err = s.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		return fmt.Errorf("re-reading gameserver %s after stop for update: %w", id, err)
-	}
+	gs := g.toModelGameserver()
 
-	// Pull latest image
 	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), nil); err != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", err))
+		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
-	// Prepare scripts
-	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
+	scriptDir, _, err := w.PrepareGameScripts(ctx, g.gameID, g.id)
 	if err != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", err))
-		return fmt.Errorf("preparing scripts for update: %w", err)
-	}
-	updateBinds := []string{scriptDir + ":/scripts:ro"}
-
-	env, err := mergeEnv(game, gs)
-	if err != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", err))
-		return fmt.Errorf("merging env for update: %w", err)
+		g.setError(controller.OperationFailedReason("Game update failed", err))
+		return fmt.Errorf("preparing scripts: %w", err)
 	}
 
-	// Run update-server in a short-lived instance
-	tempName := naming.UpdateInstanceName(id)
+	env, err := mergeEnv(game, &gs)
+	if err != nil {
+		g.setError(controller.OperationFailedReason("Game update failed", err))
+		return err
+	}
+
+	tempName := naming.UpdateInstanceName(g.id)
 	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
 		Image:      game.ResolveImage(map[string]string(gs.Env)),
 		Env:        env,
-		VolumeName: gs.VolumeName,
-		Binds:      updateBinds,
+		VolumeName: g.volumeName,
+		Binds:      []string{scriptDir + ":/scripts:ro"},
 		Entrypoint: []string{"/bin/sh", "-c", "/scripts/update-server"},
 	})
 	if err != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", err))
-		return fmt.Errorf("creating temp instance for update: %w", err)
+		g.setError(controller.OperationFailedReason("Game update failed", err))
+		return fmt.Errorf("creating update instance: %w", err)
 	}
 	defer w.RemoveInstance(ctx, tempID)
 
 	if err := w.StartInstance(ctx, tempID, ""); err != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", err))
-		return fmt.Errorf("starting temp instance for update: %w", err)
+		g.setError(controller.OperationFailedReason("Game update failed", err))
+		return fmt.Errorf("starting update instance: %w", err)
 	}
 
-	exitCode, waitErr := s.waitForInstanceExit(ctx, w, tempID)
+	exitCode, waitErr := waitForInstanceExit(ctx, w, tempID)
 	if waitErr != nil {
-		s.setError(id, controller.OperationFailedReason("Game update failed", waitErr))
-		return fmt.Errorf("waiting for update-server: %w", waitErr)
+		g.setError(controller.OperationFailedReason("Game update failed", waitErr))
+		return waitErr
 	}
 	if exitCode != 0 {
-		s.log.Error("update-server failed", "gameserver", id, "exit_code", exitCode)
-		s.setError(id, controller.OperationFailedReason("Game update failed", fmt.Errorf("exit code %d", exitCode)))
+		g.setError(controller.OperationFailedReason("Game update failed", fmt.Errorf("exit code %d", exitCode)))
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
-	s.log.Info("game updated, restarting gameserver", "gameserver", id)
-	return s.startInstance(ctx, id, onProgress)
+	g.log.Info("game updated, starting")
+	return g.executeStart(ctx)
 }
 
-// Reinstall stops the gameserver, wipes the volume, and performs a fresh install.
-// Blocks until complete.
-func (s *LifecycleService) Reinstall(ctx context.Context, id string, onProgress ProgressFunc) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
+// Reinstall stops the gameserver, wipes its volume, and performs a fresh
+// install+start. Runs in a background goroutine.
+func (g *LiveGameserver) Reinstall(ctx context.Context) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return fmt.Errorf("operation %s already in progress", g.operation.Type)
+	}
+	if g.worker == nil {
+		g.mu.Unlock()
+		return controller.ErrUnavailablef("worker unavailable")
+	}
+	g.operation = &model.Operation{Type: model.OpReinstall, Phase: model.PhaseStopping}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		if err := g.executeReinstall(opCtx); err != nil {
+			if opCtx.Err() == nil {
+				g.setError(fmt.Sprintf("Reinstall failed: %v", err))
+			}
+			g.clearOperation()
+		}
+		// On success: HandleProcessEvent clears the operation when worker reports ready
+	}()
+
+	return nil
+}
+
+func (g *LiveGameserver) executeReinstall(ctx context.Context) error {
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+
+	if err := g.stopIfRunning(ctx); err != nil {
+		g.setError(controller.OperationFailedReason("Reinstall failed", err))
 		return err
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
-	}
 
-	s.log.Info("reinstalling gameserver (full wipe)", "gameserver", id)
-
-	s.broadcaster.Publish(event.NewSystemEvent(event.EventImagePulling, id, nil))
-
-	if gs.Status != controller.StatusStopped {
-		if s.statusProvider != nil {
-			s.statusProvider.SetStopped(id)
-		}
-		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
-
-		if err := s.stopInstance(ctx, id); err != nil {
-			s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
-			return fmt.Errorf("stopping gameserver for reinstall: %w", err)
-		}
-	}
-
-	w := s.dispatcher.WorkerFor(id)
+	w := g.getWorker()
 	if w == nil {
-		s.setError(id, controller.OperationFailedReason("Reinstall failed", fmt.Errorf("worker unavailable")))
-		return fmt.Errorf("worker unavailable for gameserver %s", id)
+		g.setError(controller.OperationFailedReason("Reinstall failed", fmt.Errorf("worker unavailable")))
+		return fmt.Errorf("worker unavailable")
 	}
 
-	gs, err = s.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		return fmt.Errorf("re-reading gameserver %s after stop for reinstall: %w", id, err)
+	g.mu.Lock()
+	g.installed = false
+	g.store.UpdateGameserver(g.toModelGameserverLocked())
+	g.mu.Unlock()
+
+	if err := w.RemoveVolume(ctx, g.volumeName); err != nil {
+		g.setError(controller.OperationFailedReason("Reinstall failed", err))
+		return err
+	}
+	if err := w.CreateVolume(ctx, g.volumeName); err != nil {
+		g.setError(controller.OperationFailedReason("Reinstall failed", err))
+		return err
 	}
 
-	gs.Installed = false
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		s.setError(id, controller.OperationFailedReason("Reinstall failed", fmt.Errorf("clearing installed flag")))
-		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
-	}
-
-	// Wipe all data
-	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-		s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
-		return fmt.Errorf("removing volume for reinstall: %w", err)
-	}
-	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
-		s.setError(id, controller.OperationFailedReason("Reinstall failed", err))
-		return fmt.Errorf("recreating volume for reinstall: %w", err)
-	}
-
-	s.log.Info("volume wiped, starting fresh install", "gameserver", id)
-	return s.startInstance(ctx, id, onProgress)
+	g.log.Info("volume wiped, starting fresh install")
+	return g.executeStart(ctx)
 }
 
-func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
-	env := make(map[string]string)
-	systemKeys := make(map[string]bool)
+// --- Helper methods ---
 
-	for _, d := range game.DefaultEnv {
-		env[d.Key] = d.Default
-		if d.System {
-			systemKeys[d.Key] = true
-		}
-	}
-
-	for k, v := range gs.Env {
-		if !systemKeys[k] {
-			env[k] = v
-		}
-	}
-
-	ports := gs.Ports
-	gamePortToHost := make(map[string]int)
-	for _, gp := range game.DefaultPorts {
-		for _, p := range ports {
-			if p.Name == gp.Name {
-				gamePortToHost[strconv.Itoa(gp.Port)] = int(p.HostPort)
-				break
-			}
-		}
-	}
-	for _, d := range game.DefaultEnv {
-		if !d.System {
-			continue
-		}
-		if hp, ok := gamePortToHost[d.Default]; ok {
-			env[d.Key] = strconv.Itoa(hp)
-		}
-	}
-
-	if gs.MemoryLimitMB > 0 {
-		env["MEMORY_LIMIT_MB"] = strconv.Itoa(gs.MemoryLimitMB)
-	}
-
-	result := make([]string, 0, len(env))
-	for k, v := range env {
-		result = append(result, k+"="+v)
-	}
-	return result, nil
+// getWorker returns the current worker reference (thread-safe read).
+func (g *LiveGameserver) getWorker() worker.Worker {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.worker
 }
 
-func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
-	bindings := make([]worker.PortBinding, len(gs.Ports))
-	for i, p := range gs.Ports {
-		bindings[i] = worker.PortBinding{
-			HostPort:     int(p.HostPort),
-			InstancePort: int(p.InstancePort),
-			Protocol:     p.Protocol,
-		}
-	}
-	return bindings, nil
+// isInstalled returns the installed flag (thread-safe read).
+func (g *LiveGameserver) isInstalled() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.installed
 }
 
-func (s *LifecycleService) rotateConsoleLogs(w worker.Worker, volumeName string) {
-	ctx := context.Background()
-	logDir := ".gamejanitor/logs"
-	w.CreateDirectory(ctx, volumeName, logDir)
-
-	for i := 2; i >= 0; i-- {
-		from := fmt.Sprintf("%s/console.log.%d", logDir, i)
-		to := fmt.Sprintf("%s/console.log.%d", logDir, i+1)
-		w.RenamePath(ctx, volumeName, from, to)
-	}
-	w.RenamePath(ctx, volumeName, logDir+"/console.log", logDir+"/console.log.0")
+// toModelGameserver creates a model.Gameserver from the live state. Acquires g.mu.
+func (g *LiveGameserver) toModelGameserver() model.Gameserver {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return *g.toModelGameserverLocked()
 }
 
-func (s *LifecycleService) copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
-	if defaultsDir == "" {
-		return
-	}
-	ctx := context.Background()
-	entries, err := os.ReadDir(defaultsDir)
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		destPath := "/" + entry.Name()
-		if _, err := w.ReadFile(ctx, volumeName, destPath); err == nil {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(defaultsDir, entry.Name()))
-		if err != nil {
-			continue
-		}
-		w.WriteFile(ctx, volumeName, destPath, data, 0644)
+// toModelGameserverLocked creates a model.Gameserver from the live state.
+// Caller must hold g.mu.
+func (g *LiveGameserver) toModelGameserverLocked() *model.Gameserver {
+	return &model.Gameserver{
+		ID:                 g.id,
+		Name:               g.name,
+		GameID:             g.gameID,
+		Ports:              g.ports,
+		Env:                g.env,
+		MemoryLimitMB:      g.memoryLimitMB,
+		CPULimit:           g.cpuLimit,
+		CPUEnforced:        g.cpuEnforced,
+		InstanceID:         g.instanceID,
+		VolumeName:         g.volumeName,
+		PortMode:           g.portMode,
+		NodeID:             g.nodeID,
+		SFTPUsername:        g.sftpUsername,
+		HashedSFTPPassword: g.hashedSFTPPassword,
+		Installed:          g.installed,
+		BackupLimit:        g.backupLimit,
+		StorageLimitMB:     g.storageLimitMB,
+		NodeTags:           g.nodeTags,
+		AutoRestart:        g.autoRestart,
+		ConnectionAddress:  g.connectionAddress,
+		AppliedConfig:      g.appliedConfig,
+		DesiredState:       g.desiredState,
+		ErrorReason:        g.errorReason,
+		CreatedByTokenID:   g.createdByTokenID,
+		Grants:             g.grants,
+		CreatedAt:          g.createdAt,
+		UpdatedAt:          g.updatedAt,
 	}
 }
 
-func (s *LifecycleService) waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
+// setError acquires g.mu and sets the error reason, persists it, and publishes
+// an error event.
+func (g *LiveGameserver) setError(reason string) {
+	g.mu.Lock()
+	g.setErrorLocked(reason)
+	g.mu.Unlock()
+}
+
+// waitForInstanceExit polls instance state until it exits or the context is cancelled.
+func waitForInstanceExit(ctx context.Context, w worker.Worker, instanceID string) (int, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -772,9 +734,44 @@ func (s *LifecycleService) waitForInstanceExit(ctx context.Context, w worker.Wor
 	}
 }
 
-// reportProgress calls onProgress if non-nil.
-func reportProgress(onProgress ProgressFunc, phase model.OperationPhase, progress *model.OperationProgress) {
-	if onProgress != nil {
-		onProgress(phase, progress)
+// rotateConsoleLogs rotates .gamejanitor/logs/console.log through .0 → .1 → .2 → .3,
+// keeping the last 4 log files.
+func rotateConsoleLogs(w worker.Worker, volumeName string) {
+	ctx := context.Background()
+	logDir := ".gamejanitor/logs"
+	w.CreateDirectory(ctx, volumeName, logDir)
+	for i := 2; i >= 0; i-- {
+		from := fmt.Sprintf("%s/console.log.%d", logDir, i)
+		to := fmt.Sprintf("%s/console.log.%d", logDir, i+1)
+		w.RenamePath(ctx, volumeName, from, to)
+	}
+	w.RenamePath(ctx, volumeName, logDir+"/console.log", logDir+"/console.log.0")
+}
+
+// copyDefaults copies default config files from the game definition into the
+// volume root, skipping any files that already exist.
+func copyDefaults(w worker.Worker, volumeName string, defaultsDir string) {
+	if defaultsDir == "" {
+		return
+	}
+	ctx := context.Background()
+	entries, err := os.ReadDir(defaultsDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		destPath := "/" + entry.Name()
+		// Skip if file already exists in the volume.
+		if _, err := w.ReadFile(ctx, volumeName, destPath); err == nil {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(defaultsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		w.WriteFile(ctx, volumeName, destPath, data, 0644)
 	}
 }

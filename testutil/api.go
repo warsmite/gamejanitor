@@ -23,7 +23,7 @@ type TestAPI struct {
 func NewTestAPI(t *testing.T) *TestAPI {
 	t.Helper()
 
-	svc := NewTestServicesWithSubscribers(t)
+	svc := NewTestServices(t)
 
 	cfg := config.Config{
 		Bind:       "127.0.0.1",
@@ -39,8 +39,7 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		Role:              "controller+worker",
 		LogPath:           "",
 		GameStore:         svc.GameStore,
-		GameserverSvc:     svc.GameserverSvc,
-		LifecycleSvc:      svc.LifecycleSvc,
+		Manager:           svc.Manager,
 		ConsoleSvc:        svc.ConsoleSvc,
 		FileSvc:           svc.FileSvc,
 		ScheduleSvc:       svc.ScheduleSvc,
@@ -52,8 +51,6 @@ func NewTestAPI(t *testing.T) *TestAPI {
 		WorkerNodeSvc:     cluster.NewWorkerNodeService(db, svc.Registry, svc.Broadcaster, log),
 		WebhookSvc:        webhook.NewWebhookEndpointService(db, log),
 		EventHistorySvc:   event.NewEventHistoryService(db),
-		Runner:            svc.Runner,
-		OperationTracker:  svc.Runner.Tracker(),
 		GameserverQuerier: db.GameserverStore,
 		Broadcaster:       svc.Broadcaster,
 		ModSvc:            svc.ModSvc,

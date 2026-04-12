@@ -1,12 +1,12 @@
 package gameserver_test
 
 import (
-	"github.com/warsmite/gamejanitor/controller/settings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/testutil"
 )
@@ -23,7 +23,7 @@ func TestResourceEnforcement_MemoryExceedsNodeLimit(t *testing.T) {
 		MemoryLimitMB: 2048,
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "memory limit")
 }
@@ -40,7 +40,7 @@ func TestResourceEnforcement_CPUExceedsNodeLimit(t *testing.T) {
 		CPULimit: 4.0,
 		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CPU limit")
 }
@@ -58,7 +58,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 		MemoryLimitMB: 2048,
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	_, err := svc.Manager.Create(ctx, gs1)
 	require.NoError(t, err)
 
 	// Second gameserver wants 2048MB — cumulative 4096 > 3000 limit
@@ -68,7 +68,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 		MemoryLimitMB: 2048,
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	_, err = svc.Manager.Create(ctx, gs2)
 	require.Error(t, err, "cumulative allocation should exceed node limit")
 }
 
@@ -87,7 +87,7 @@ func TestResourceEnforcement_RequireMemoryLimitSetting(t *testing.T) {
 		MemoryLimitMB: 0,
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "memory_limit_mb must be > 0")
 }
@@ -107,7 +107,7 @@ func TestResourceEnforcement_RequireCPULimitSetting(t *testing.T) {
 		CPULimit: 0,
 		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cpu_limit must be > 0")
 }
@@ -125,7 +125,7 @@ func TestResourceEnforcement_RequireStorageLimitSetting(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "storage_limit_mb must be > 0")
 }
@@ -141,10 +141,10 @@ func TestResourceEnforcement_ZeroMemoryMeansUnlimited(t *testing.T) {
 		MemoryLimitMB: 0,
 		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
-	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
+	fetched, err := svc.Manager.GetGameserver(gs.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 0, fetched.MemoryLimitMB, "0 should mean unlimited, not overridden to recommended")
 }

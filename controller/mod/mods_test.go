@@ -254,7 +254,7 @@ func createTestGameserver(t *testing.T, ctx context.Context, svc *testutil.Servi
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "yes"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 	return gs
 }

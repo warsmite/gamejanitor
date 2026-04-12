@@ -25,7 +25,7 @@ func TestBackup_DeleteDuringBackup_NoPanic(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	// Start backup — returns immediately, goroutine runs async
@@ -37,7 +37,7 @@ func TestBackup_DeleteDuringBackup_NoPanic(t *testing.T) {
 	testutil.WaitForBackupCompletion(t, svc, backup.ID)
 
 	// Now delete the gameserver — backup goroutine is done, no operation guard conflict
-	err = svc.GameserverSvc.DeleteGameserver(ctx, gs.ID)
+	err = svc.Manager.Delete(ctx, gs.ID)
 	require.NoError(t, err)
 
 	// Backup record should be gone (cascaded delete) or completed
@@ -63,7 +63,7 @@ func TestBackup_TwoSimultaneous_BothComplete(t *testing.T) {
 		GameID: testutil.TestGameID,
 		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
-	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.Manager.Create(ctx, gs)
 	require.NoError(t, err)
 
 	b1, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "backup-1")

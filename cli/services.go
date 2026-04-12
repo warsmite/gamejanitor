@@ -25,8 +25,7 @@ import (
 type Services struct {
 	Broadcaster     *event.EventBus
 	SettingsSvc     *settings.SettingsService
-	GameserverSvc   *gameserver.GameserverService
-	LifecycleSvc    *gameserver.LifecycleService
+	Manager         *gameserver.Manager
 	QuerySvc        *cluster.QueryService
 	StatsPoller     *cluster.StatsPoller
 	ConsoleSvc      *gameserver.ConsoleService
@@ -35,8 +34,6 @@ type Services struct {
 	Scheduler       *schedule.Scheduler
 	ScheduleSvc     *schedule.ScheduleService
 	AuthSvc         *auth.AuthService
-	StatusMgr       *gameserver.StatusManager
-	StatusSub       *gameserver.StatusSubscriber
 	EventHistorySvc *event.EventHistoryService
 	EventPersister  *event.EventPersister
 	WebhookWorker   *webhook.WebhookWorker
@@ -44,13 +41,11 @@ type Services struct {
 	WorkerNodeSvc   *cluster.WorkerNodeService
 	ModSvc          *mod.ModService
 	BackupStorage   backup.Storage
-	ActivityTracker *gameserver.ActivityTracker
-	Runner          *gameserver.Runner
 }
 
 // InitServicesOpts configures optional overrides for service initialization.
 type InitServicesOpts struct {
-// BackupStorage overrides the backup storage backend. Nil uses config-based detection.
+	// BackupStorage overrides the backup storage backend. Nil uses config-based detection.
 	BackupStorage backup.Storage
 	// SkipConfigApply skips applying config file settings to DB. Used in tests.
 	SkipConfigApply bool
@@ -72,30 +67,8 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		settingsSvc.ApplyConfig(cfg.Settings)
 	}
 
-	// Activity + operation tracking (shared infrastructure)
-	activityTracker := gameserver.NewActivityTracker(db, logger)
-	operationTracker := gameserver.NewTracker(broadcaster, logger)
-
-	// Placement service (shared between gameserver CRUD and lifecycle)
+	// Placement service (shared between gameserver creation and lifecycle)
 	placementSvc := cluster.NewPlacementService(db, dispatcher, settingsSvc, logger)
-
-	runner := gameserver.NewRunner(activityTracker, operationTracker, db, logger)
-
-	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, cfg.SFTPPort, logger)
-	gameserverSvc.SetOperationTracker(operationTracker)
-
-	lifecycleSvc := gameserver.NewLifecycleService(db, dispatcher, broadcaster, settingsSvc, gameStore, placementSvc, cfg.DataDir, logger)
-
-	querySvc := cluster.NewQueryService(db, broadcaster, gameStore, logger)
-	statsPoller := cluster.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
-	statsPoller.SetPlayerCountFn(func(gsID string) int {
-		if q := querySvc.GetQueryData(gsID); q != nil {
-			return q.PlayersOnline
-		}
-		return 0
-	})
-	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
-	fileSvc := file.NewService(db, dispatcher, logger)
 
 	// Backup storage
 	var backupStorage backup.Storage
@@ -109,17 +82,24 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		}
 	}
 
-	lifecycleSvc.SetBackupStore(backupStorage)
-	backupSvc := backup.NewBackupService(db, dispatcher, lifecycleSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
-	backupSvc.SetActivityTracker(activityTracker)
-	scheduler := schedule.NewScheduler(db, backupSvc, lifecycleSvc, consoleSvc, runner, broadcaster, logger)
+	// Gameserver manager — the core aggregate holder
+	manager := gameserver.NewManager(db, dispatcher, registry, broadcaster, settingsSvc, gameStore, placementSvc, backupStorage, cfg.DataDir, cfg.SFTPPort, logger)
+
+	querySvc := cluster.NewQueryService(db, broadcaster, gameStore, logger)
+	statsPoller := cluster.NewStatsPoller(db, dispatcher, broadcaster, db.GameserverStatsStore, logger)
+	statsPoller.SetPlayerCountFn(func(gsID string) int {
+		if q := querySvc.GetQueryData(gsID); q != nil {
+			return q.PlayersOnline
+		}
+		return 0
+	})
+	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
+	fileSvc := file.NewService(db, dispatcher, logger)
+
+	backupSvc := backup.NewBackupService(db, dispatcher, manager, gameStore, backupStorage, settingsSvc, broadcaster, logger)
+	scheduler := schedule.NewScheduler(db, backupSvc, manager, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := gameserver.NewStatusManager(db, broadcaster, querySvc, statsPoller, dispatcher, registry, lifecycleSvc.RestartAfterCrash, runner, logger)
-	gameserverSvc.SetStatusProvider(statusMgr)
-	lifecycleSvc.SetStatusProvider(statusMgr)
-	statusSub := gameserver.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
-	statusSub.SetOperationClearer(operationTracker)
 	eventHistorySvc := event.NewEventHistoryService(db)
 	eventPersister := event.NewEventPersister(db, broadcaster, logger)
 	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
@@ -134,8 +114,7 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 	optionsRegistry := games.NewOptionsRegistry(logger)
 	modSvc := mod.NewModService(db, fileSvc, gameStore, optionsRegistry, broadcaster, logger)
 
-	// Register mod catalogs — stateless query engines, game-specific config
-	// (uMod category, Workshop appID) comes from game YAML via CatalogFilters.Extra
+	// Register mod catalogs
 	modSvc.RegisterCatalog("modrinth", mod.NewModrinthCatalog(logger.With("catalog", "modrinth")))
 	modSvc.RegisterCatalog("umod", mod.NewUmodCatalog(logger.With("catalog", "umod")))
 	modSvc.RegisterCatalog("workshop", mod.NewWorkshopCatalog(settingsSvc, logger.With("catalog", "workshop")))
@@ -146,13 +125,17 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		}
 		return netutil.ValidateExternalURL(rawURL)
 	})
-	lifecycleSvc.SetModReconciler(modSvc)
+
+	// Set mod reconciler on manager so lifecycle start calls it
+	manager.SetModReconciler(modSvc)
+
+	// Register worker lifecycle callbacks
+	registry.SetCallbacks(manager.OnWorkerOnline, manager.OnWorkerOffline)
 
 	return &Services{
 		Broadcaster:     broadcaster,
 		SettingsSvc:     settingsSvc,
-		GameserverSvc:   gameserverSvc,
-		LifecycleSvc:    lifecycleSvc,
+		Manager:         manager,
 		QuerySvc:        querySvc,
 		StatsPoller:     statsPoller,
 		ConsoleSvc:      consoleSvc,
@@ -161,8 +144,6 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		Scheduler:       scheduler,
 		ScheduleSvc:     scheduleSvc,
 		AuthSvc:         authSvc,
-		StatusMgr:       statusMgr,
-		StatusSub:       statusSub,
 		EventHistorySvc: eventHistorySvc,
 		EventPersister:  eventPersister,
 		WebhookWorker:   webhookWorker,
@@ -170,8 +151,6 @@ func InitServices(database *sql.DB, dispatcher *cluster.Dispatcher, registry *cl
 		WorkerNodeSvc:   workerNodeSvc,
 		ModSvc:          modSvc,
 		BackupStorage:   backupStorage,
-		ActivityTracker: activityTracker,
-		Runner:          runner,
 	}, nil
 }
 
@@ -192,4 +171,3 @@ func initBackupStorage(cfg config.Config, logger *slog.Logger) (backup.Storage, 
 
 	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)
 }
-

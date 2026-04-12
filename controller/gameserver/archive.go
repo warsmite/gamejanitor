@@ -5,50 +5,86 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/utilities/naming"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // Archive stops the gameserver, backs up its volume to archive storage,
-// removes the instance and volume, and marks it as archived. Blocks until complete.
-func (s *LifecycleService) Archive(ctx context.Context, id string) error {
-	gs, err := s.getGameserverWithStatus(id)
-	if err != nil {
-		return err
+// removes the instance and volume from the worker, and marks it as archived.
+func (g *LiveGameserver) Archive(ctx context.Context) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
+	if g.desiredState == "archived" {
+		g.mu.Unlock()
+		return controller.ErrConflictf("gameserver %s is already archived", g.id)
 	}
-	if gs.IsArchived() {
-		return controller.ErrConflictf("gameserver %s is already archived", id)
-	}
-	if s.backupStore == nil {
+	if g.backupStore == nil {
+		g.mu.Unlock()
 		return controller.ErrBadRequest("backup storage is not configured, cannot archive")
 	}
 
+	g.operation = &model.Operation{Type: model.OpArchive, Phase: model.PhaseStopping}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		if err := g.executeArchive(opCtx); err != nil {
+			g.log.Error("archive failed", "error", err)
+			g.mu.Lock()
+			g.setErrorLocked(fmt.Sprintf("Archive failed: %v", err))
+			g.mu.Unlock()
+		}
+		g.clearOperation()
+	}()
+
+	return nil
+}
+
+func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 	// Stop if running
-	if gs.Status != controller.StatusStopped {
-		if s.statusProvider != nil {
-			s.statusProvider.SetStopped(id)
-		}
-		s.broadcaster.Publish(event.NewSystemEvent(event.EventInstanceStopping, id, nil))
-
-		if err := s.stopInstance(ctx, id); err != nil {
-			return fmt.Errorf("stopping gameserver before archive: %w", err)
-		}
+	if err := g.stopIfRunning(ctx); err != nil {
+		return fmt.Errorf("stopping gameserver before archive: %w", err)
 	}
 
-	w := s.dispatcher.WorkerFor(id)
+	g.setPhase(model.PhaseCreatingBackup)
+
+	g.mu.Lock()
+	w := g.worker
+	volumeName := g.volumeName
+	instanceID := g.instanceID
+	g.mu.Unlock()
+
 	if w == nil {
-		return fmt.Errorf("worker unavailable for gameserver %s", id)
+		return fmt.Errorf("worker unavailable, cannot archive")
 	}
 
-	// Backup volume to archive storage (gzipped tar)
-	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
+	// Back up volume to archive storage
+	tarReader, err := w.BackupVolume(ctx, volumeName)
 	if err != nil {
-		return fmt.Errorf("backing up volume for archive: %w", err)
+		return fmt.Errorf("backing up volume: %w", err)
 	}
 
 	pr, pw := io.Pipe()
@@ -56,7 +92,7 @@ func (s *LifecycleService) Archive(ctx context.Context, id string) error {
 	go func() {
 		gzWriter := gzip.NewWriter(pw)
 		if _, err := io.Copy(gzWriter, tarReader); err != nil {
-			compressErr = fmt.Errorf("compressing archive: %w", err)
+			compressErr = fmt.Errorf("compressing archive data: %w", err)
 			gzWriter.Close()
 			pw.CloseWithError(compressErr)
 			tarReader.Close()
@@ -71,87 +107,144 @@ func (s *LifecycleService) Archive(ctx context.Context, id string) error {
 		pw.Close()
 	}()
 
-	if err := s.backupStore.SaveArchive(ctx, id, pr); err != nil {
+	if err := g.backupStore.SaveArchive(ctx, g.id, pr); err != nil {
 		return fmt.Errorf("saving archive to store: %w", err)
 	}
 	if compressErr != nil {
-		s.backupStore.DeleteArchive(ctx, id)
+		g.backupStore.DeleteArchive(ctx, g.id)
 		return compressErr
 	}
 
-	s.log.Info("archive saved to store", "gameserver", id)
-
-	// Remove instance and volume from worker
-	if gs.InstanceID != nil {
-		if err := w.RemoveInstance(ctx, *gs.InstanceID); err != nil {
-			s.log.Warn("failed to remove instance during archive", "gameserver", id, "error", err)
+	// Remove instance if it exists
+	if instanceID != nil {
+		if err := w.RemoveInstance(ctx, *instanceID); err != nil {
+			g.log.Warn("failed to remove instance during archive", "instance_id", *instanceID, "error", err)
 		}
 	}
-	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-		s.log.Warn("failed to remove volume during archive", "gameserver", id, "error", err)
+	// Also try by name in case instance_id is stale
+	instanceName := naming.InstanceName(g.id)
+	if err := w.RemoveInstance(ctx, instanceName); err != nil {
+		g.log.Debug("no instance to remove by name during archive", "name", instanceName)
 	}
 
-	// Update gameserver record
-	gs.DesiredState = "archived"
-	gs.InstanceID = nil
-	gs.NodeID = nil
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		return fmt.Errorf("updating gameserver as archived: %w", err)
+	// Remove volume from worker
+	if err := w.RemoveVolume(ctx, volumeName); err != nil {
+		g.log.Warn("failed to remove volume during archive", "volume", volumeName, "error", err)
 	}
 
-	s.log.Info("gameserver archived", "gameserver", id)
+	// Update state to archived
+	g.mu.Lock()
+	g.desiredState = "archived"
+	g.instanceID = nil
+	g.nodeID = nil
+	g.worker = nil
+	g.process = nil
+	g.errorReason = ""
+	g.mu.Unlock()
+
+	// Persist to DB
+	dbGS, err := g.store.GetGameserver(g.id)
+	if err != nil {
+		return fmt.Errorf("loading gameserver from DB for archive update: %w", err)
+	}
+	if dbGS == nil {
+		return fmt.Errorf("gameserver %s not found in DB", g.id)
+	}
+	dbGS.DesiredState = "archived"
+	dbGS.InstanceID = nil
+	dbGS.NodeID = nil
+	dbGS.ErrorReason = ""
+	if err := g.store.UpdateGameserver(dbGS); err != nil {
+		return fmt.Errorf("persisting archive state: %w", err)
+	}
+
+	g.log.Info("gameserver archived")
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverArchive, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
+		Status: controller.StatusArchived,
+	}))
+
 	return nil
 }
 
-// Unarchive restores an archived gameserver's volume from archive storage onto
-// the target node (or auto-selected node). Blocks until complete.
-func (s *LifecycleService) Unarchive(ctx context.Context, id string, targetNodeID string) error {
-	gs, err := s.store.GetGameserver(id)
-	if err != nil {
-		return err
+// Unarchive restores a gameserver from archive storage onto a target node.
+// If targetNodeID is empty, auto-selects via placement ranking.
+func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
 	}
-	if gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
+	if g.desiredState != "archived" {
+		g.mu.Unlock()
+		return controller.ErrConflictf("gameserver %s is not archived", g.id)
 	}
-	if !gs.IsArchived() {
-		return controller.ErrConflictf("gameserver %s is not archived", id)
-	}
-	if s.backupStore == nil {
+	if g.backupStore == nil {
+		g.mu.Unlock()
 		return controller.ErrBadRequest("backup storage is not configured, cannot unarchive")
 	}
 
-	// Pick a node
-	var nodeID string
-	if targetNodeID != "" {
-		nodeID = targetNodeID
-	} else {
-		candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
-		if len(candidates) == 0 {
-			return controller.ErrUnavailable("no workers available for placement")
+	g.operation = &model.Operation{Type: model.OpUnarchive, Phase: model.PhaseRestoringBackup}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		if err := g.executeUnarchive(opCtx, targetNodeID); err != nil {
+			g.log.Error("unarchive failed", "error", err)
+			g.mu.Lock()
+			g.setErrorLocked(fmt.Sprintf("Unarchive failed: %v", err))
+			g.mu.Unlock()
 		}
-		nodeID = candidates[0].NodeID
+		g.clearOperation()
+	}()
+
+	return nil
+}
+
+func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID string) error {
+	// Select target node
+	if targetNodeID == "" {
+		g.mu.Lock()
+		nodeTags := g.nodeTags
+		g.mu.Unlock()
+
+		candidates := g.dispatcher.RankWorkersForPlacement(nodeTags)
+		if len(candidates) == 0 {
+			return fmt.Errorf("no workers available for unarchive placement")
+		}
+		targetNodeID = candidates[0].NodeID
+		g.log.Info("auto-selected node for unarchive", "node_id", targetNodeID)
 	}
 
-	w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
-	if err != nil || w == nil {
-		return controller.ErrUnavailablef("worker %s unavailable", nodeID)
+	targetWorker, err := g.dispatcher.SelectWorkerByNodeID(targetNodeID)
+	if err != nil {
+		return fmt.Errorf("target worker unavailable: %w", err)
 	}
 
-	gs.DesiredState = "stopped"
-	gs.NodeID = &nodeID
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		return fmt.Errorf("updating gameserver desired state for unarchive: %w", err)
+	g.mu.Lock()
+	volumeName := g.volumeName
+	g.mu.Unlock()
+
+	// Create volume on target
+	if err := targetWorker.CreateVolume(ctx, volumeName); err != nil {
+		return fmt.Errorf("creating volume on target: %w", err)
 	}
 
-	actor := event.ActorFromContext(ctx)
-
-	// Create volume on target node
-	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
-		return fmt.Errorf("creating volume for unarchive: %w", err)
-	}
-
-	// Restore archive to volume
-	reader, err := s.backupStore.LoadArchive(ctx, id)
+	// Load archive from store and decompress into volume
+	reader, err := g.backupStore.LoadArchive(ctx, g.id)
 	if err != nil {
 		return fmt.Errorf("loading archive from store: %w", err)
 	}
@@ -162,44 +255,392 @@ func (s *LifecycleService) Unarchive(ctx context.Context, id string, targetNodeI
 		return fmt.Errorf("decompressing archive: %w", err)
 	}
 
-	if err := w.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
+	if err := targetWorker.RestoreVolume(ctx, volumeName, gzReader); err != nil {
 		gzReader.Close()
 		reader.Close()
-		return fmt.Errorf("restoring archive to volume: %w", err)
+		return fmt.Errorf("restoring volume from archive: %w", err)
 	}
 	gzReader.Close()
 	reader.Close()
 
-	// Re-read to avoid stale data
-	gs, err = s.store.GetGameserver(id)
+	// Reallocate ports if port_uniqueness is "node" (ports may conflict on new node)
+	g.mu.Lock()
+	gameID := g.gameID
+	gsID := g.id
+	g.mu.Unlock()
+
+	if g.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
+		game := g.gameStore.GetGame(gameID)
+		if game != nil {
+			newPorts, err := g.placement.ReallocatePorts(game, targetNodeID, gsID)
+			if err != nil {
+				g.log.Warn("failed to reallocate ports during unarchive, keeping existing", "error", err)
+			} else if newPorts != nil {
+				g.mu.Lock()
+				g.ports = newPorts
+				g.mu.Unlock()
+			}
+		}
+	}
+
+	// Update state
+	g.mu.Lock()
+	g.desiredState = "stopped"
+	g.nodeID = &targetNodeID
+	g.worker = targetWorker
+	g.errorReason = ""
+	g.mu.Unlock()
+
+	// Persist to DB
+	dbGS, err := g.store.GetGameserver(g.id)
 	if err != nil {
-		return err
+		return fmt.Errorf("loading gameserver from DB for unarchive update: %w", err)
 	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found after restore", id)
+	if dbGS == nil {
+		return fmt.Errorf("gameserver %s not found in DB", g.id)
+	}
+	dbGS.DesiredState = "stopped"
+	dbGS.NodeID = &targetNodeID
+	dbGS.ErrorReason = ""
+
+	g.mu.Lock()
+	dbGS.Ports = g.ports
+	g.mu.Unlock()
+
+	if err := g.store.UpdateGameserver(dbGS); err != nil {
+		return fmt.Errorf("persisting unarchive state: %w", err)
 	}
 
-	// Reallocate ports if using per-node port scope
-	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
-		game := s.gameStore.GetGame(gs.GameID)
-		if game == nil {
-			return fmt.Errorf("game %s not found", gs.GameID)
-		}
-		newPorts, err := s.placement.ReallocatePorts(game, nodeID, "")
-		if err != nil {
-			return fmt.Errorf("allocating ports on target node: %w", err)
-		}
-		gs.Ports = newPorts
-	}
-
-	if err := s.store.UpdateGameserver(gs); err != nil {
-		return fmt.Errorf("updating gameserver after unarchive: %w", err)
-	}
-
-	s.broadcaster.Publish(event.NewEvent(event.EventGameserverUnarchive, gs.ID, actor, &event.GameserverActionData{
-		Gameserver: gs,
+	g.log.Info("gameserver unarchived", "node_id", targetNodeID)
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverUnarchive, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
+		Status: controller.StatusStopped,
 	}))
 
-	s.log.Info("gameserver unarchived", "gameserver", id, "node", nodeID)
 	return nil
+}
+
+// Migrate moves a gameserver from its current node to a target node. The volume
+// is backed up from the source, restored on the target, and then removed from
+// the source. If the gameserver was running, it is restarted on the target.
+func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error {
+	g.mu.Lock()
+	if g.operation != nil {
+		g.mu.Unlock()
+		return controller.ErrConflictf("operation %s already in progress", g.operation.Type)
+	}
+
+	currentNodeID := ""
+	if g.nodeID != nil {
+		currentNodeID = *g.nodeID
+	}
+	if currentNodeID == targetNodeID {
+		g.mu.Unlock()
+		return controller.ErrBadRequestf("gameserver is already on node %s", targetNodeID)
+	}
+	if currentNodeID == "" {
+		g.mu.Unlock()
+		return controller.ErrBadRequest("gameserver has no current node, cannot migrate")
+	}
+
+	memoryNeeded := g.memoryLimitMB
+	cpuNeeded := g.cpuLimit
+	storageNeeded := ptrIntOr0(g.storageLimitMB)
+	nodeTags := g.nodeTags
+
+	g.operation = &model.Operation{Type: model.OpMigrate, Phase: model.PhaseStopping}
+	opCtx, cancel := context.WithCancel(context.Background())
+	g.cancelOp = cancel
+	g.opDone = make(chan struct{})
+	g.mu.Unlock()
+
+	// abortMigrate tears down the operation state set above when validation fails.
+	abortMigrate := func() {
+		g.clearOperation()
+		g.mu.Lock()
+		g.cancelOp = nil
+		done := g.opDone
+		g.opDone = nil
+		g.mu.Unlock()
+		if done != nil {
+			close(done)
+		}
+	}
+
+	// Pre-validate target before spawning goroutine
+	if _, err := g.dispatcher.SelectWorkerByNodeID(targetNodeID); err != nil {
+		abortMigrate()
+		return controller.ErrUnavailablef("target worker unavailable: %v", err)
+	}
+
+	// Validate node tags match
+	if !nodeTags.IsEmpty() {
+		targetNode, err := g.store.GetWorkerNode(targetNodeID)
+		if err != nil || targetNode == nil {
+			abortMigrate()
+			return controller.ErrNotFoundf("target node %s not found", targetNodeID)
+		}
+		if !targetNode.Tags.HasAll(nodeTags) {
+			abortMigrate()
+			return controller.ErrBadRequestf("target node %s missing required tags: %v", targetNodeID, nodeTags)
+		}
+	}
+
+	// Check capacity on target (excluding this gameserver since it's moving)
+	if err := g.placement.CheckWorkerLimitsExcluding(targetNodeID, memoryNeeded, cpuNeeded, storageNeeded, g.id); err != nil {
+		abortMigrate()
+		return err
+	}
+
+	// Verify source worker is online
+	if g.dispatcher.WorkerFor(g.id) == nil {
+		abortMigrate()
+		return controller.ErrUnavailable("source worker is offline, cannot migrate")
+	}
+
+	go func() {
+		defer func() {
+			g.mu.Lock()
+			g.cancelOp = nil
+			done := g.opDone
+			g.opDone = nil
+			g.mu.Unlock()
+			if done != nil {
+				close(done)
+			}
+		}()
+
+		if err := g.executeMigrate(opCtx, targetNodeID); err != nil {
+			g.log.Error("migration failed", "error", err)
+			g.mu.Lock()
+			g.setErrorLocked(fmt.Sprintf("Migration failed: %v", err))
+			g.mu.Unlock()
+			g.clearOperation()
+		}
+		// On success: if wasRunning, executeMigrate called executeStart and
+		// HandleProcessEvent will clear the operation. If not wasRunning,
+		// we need to clear it here.
+		g.mu.Lock()
+		if g.operation != nil && g.process == nil {
+			g.operation = nil
+			g.notifyWatchersLocked(nil)
+		}
+		g.mu.Unlock()
+	}()
+
+	return nil
+}
+
+func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string) error {
+	// Record whether the gameserver was running so we can restart after migration
+	g.mu.Lock()
+	wasRunning := g.process != nil && g.process.State == worker.StateRunning
+	volumeName := g.volumeName
+	gameID := g.gameID
+	g.mu.Unlock()
+
+	// Stop if running
+	if err := g.stopIfRunning(ctx); err != nil {
+		return fmt.Errorf("stopping gameserver before migration: %w", err)
+	}
+
+	g.setPhase(model.PhaseMigrating)
+
+	sourceWorker := g.dispatcher.WorkerFor(g.id)
+	if sourceWorker == nil {
+		return fmt.Errorf("source worker went offline during migration")
+	}
+
+	targetWorker, err := g.dispatcher.SelectWorkerByNodeID(targetNodeID)
+	if err != nil {
+		return fmt.Errorf("target worker unavailable: %w", err)
+	}
+
+	// Back up volume from source
+	migrationID := uuid.New().String()
+	tarReader, err := sourceWorker.BackupVolume(ctx, volumeName)
+	if err != nil {
+		return fmt.Errorf("backing up volume from source: %w", err)
+	}
+
+	pr, pw := io.Pipe()
+	var compressErr error
+	go func() {
+		gzWriter := gzip.NewWriter(pw)
+		if _, err := io.Copy(gzWriter, tarReader); err != nil {
+			compressErr = fmt.Errorf("compressing migration data: %w", err)
+			gzWriter.Close()
+			pw.CloseWithError(compressErr)
+			tarReader.Close()
+			return
+		}
+		tarReader.Close()
+		if err := gzWriter.Close(); err != nil {
+			compressErr = fmt.Errorf("closing gzip writer: %w", err)
+			pw.CloseWithError(compressErr)
+			return
+		}
+		pw.Close()
+	}()
+
+	// Store migration data temporarily via the backup store
+	if err := g.backupStore.Save(ctx, g.id, migrationID, pr); err != nil {
+		return fmt.Errorf("saving migration data: %w", err)
+	}
+	if compressErr != nil {
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return compressErr
+	}
+
+	// Create volume on target and restore
+	if err := targetWorker.CreateVolume(ctx, volumeName); err != nil {
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return fmt.Errorf("creating volume on target: %w", err)
+	}
+
+	reader, err := g.backupStore.Load(ctx, g.id, migrationID)
+	if err != nil {
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return fmt.Errorf("loading migration data: %w", err)
+	}
+
+	gzReader, err := gzip.NewReader(reader)
+	if err != nil {
+		reader.Close()
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return fmt.Errorf("decompressing migration data: %w", err)
+	}
+
+	if err := targetWorker.RestoreVolume(ctx, volumeName, gzReader); err != nil {
+		gzReader.Close()
+		reader.Close()
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return fmt.Errorf("restoring volume on target: %w", err)
+	}
+	gzReader.Close()
+	reader.Close()
+
+	// Verify the target volume has data
+	targetSize, err := targetWorker.VolumeSize(ctx, volumeName)
+	if err != nil {
+		g.log.Warn("failed to check target volume size after migration", "error", err)
+	} else if targetSize == 0 {
+		g.backupStore.Delete(ctx, g.id, migrationID)
+		return fmt.Errorf("target volume is empty after restore, aborting migration")
+	}
+
+	// Reallocate ports if port_uniqueness is "node"
+	if g.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
+		game := g.gameStore.GetGame(gameID)
+		if game != nil {
+			newPorts, err := g.placement.ReallocatePorts(game, targetNodeID, g.id)
+			if err != nil {
+				g.log.Warn("failed to reallocate ports during migration, keeping existing", "error", err)
+			} else if newPorts != nil {
+				g.mu.Lock()
+				g.ports = newPorts
+				g.mu.Unlock()
+			}
+		}
+	}
+
+	// Update state to target node
+	g.mu.Lock()
+	g.nodeID = &targetNodeID
+	g.worker = targetWorker
+	g.mu.Unlock()
+
+	// Persist to DB
+	dbGS, err := g.store.GetGameserver(g.id)
+	if err != nil {
+		return fmt.Errorf("loading gameserver from DB for migration update: %w", err)
+	}
+	if dbGS == nil {
+		return fmt.Errorf("gameserver %s not found in DB", g.id)
+	}
+	dbGS.NodeID = &targetNodeID
+
+	g.mu.Lock()
+	dbGS.Ports = g.ports
+	g.mu.Unlock()
+
+	if err := g.store.UpdateGameserver(dbGS); err != nil {
+		return fmt.Errorf("persisting migration state: %w", err)
+	}
+
+	// Clean up: remove volume from source, delete migration data
+	if err := sourceWorker.RemoveVolume(ctx, volumeName); err != nil {
+		g.log.Warn("failed to remove volume from source after migration", "volume", volumeName, "error", err)
+	}
+	if err := g.backupStore.Delete(ctx, g.id, migrationID); err != nil {
+		g.log.Warn("failed to clean up migration data", "migration_id", migrationID, "error", err)
+	}
+
+	g.log.Info("gameserver migrated", "target_node_id", targetNodeID)
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverMigrate, g.id, nil))
+
+	// Restart on target if it was running before migration.
+	// Call executeStart directly — we're already inside the migrate operation goroutine.
+	// HandleProcessEvent will clear the operation when the worker reports ready.
+	if wasRunning {
+		g.log.Info("restarting gameserver on target after migration")
+		if err := g.executeStart(ctx); err != nil {
+			g.log.Error("failed to restart after migration", "error", err)
+			g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{
+				Reason: fmt.Sprintf("Restart after migration failed: %v", err),
+			}))
+			return err
+		}
+		return nil // operation cleared by HandleProcessEvent
+	}
+
+	return nil
+}
+
+// stopIfRunning stops the gameserver if it has a running instance.
+// Returns nil if the gameserver is already stopped or has no instance.
+func (g *LiveGameserver) stopIfRunning(ctx context.Context) error {
+	g.mu.Lock()
+	w := g.worker
+	instanceID := g.instanceID
+	g.mu.Unlock()
+
+	if w == nil || instanceID == nil {
+		return nil
+	}
+
+	// Run stop-server script to flush world state before killing
+	execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
+	_, _, _, execErr := w.Exec(execCtx, *instanceID, []string{"/scripts/stop-server"})
+	execCancel()
+	if execErr != nil {
+		g.log.Info("stop-server script not available or failed, proceeding", "error", execErr)
+	}
+
+	stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer stopCancel()
+	if err := w.StopInstance(stopCtx, *instanceID, 10); err != nil {
+		g.log.Warn("failed to stop instance", "instance_id", *instanceID, "error", err)
+	}
+
+	if err := w.RemoveInstance(ctx, *instanceID); err != nil {
+		g.log.Debug("failed to remove instance after stop", "instance_id", *instanceID, "error", err)
+	}
+
+	g.mu.Lock()
+	g.instanceID = nil
+	g.process = nil
+	g.startedAt = nil
+	g.mu.Unlock()
+
+	g.store.SetInstanceID(g.id, nil)
+
+	return nil
+}
+
+func ptrIntOr0(p *int) int {
+	if p != nil {
+		return *p
+	}
+	return 0
 }
