@@ -3,7 +3,9 @@
 package e2e
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,6 +65,26 @@ func TestE2E_RunningServer_APISanity(t *testing.T) {
 
 		assert.GreaterOrEqual(t, stats.CPUPercent, 0.0, "cpu should be non-negative")
 		assert.GreaterOrEqual(t, stats.MemoryUsageMB, 0.0, "memory should be non-negative")
+	})
+
+	t.Run("stats_polling_fires", func(t *testing.T) {
+		// The /stats endpoint has a live-fetch fallback, so it returns data
+		// even if polling is broken. This test verifies that polling is actually
+		// running by subscribing to the event bus for gameserver.stats events.
+		ch, unlisten := h.events.Listen(gs.ID, func(ev sseEvent) bool {
+			return ev.Type == "gameserver.stats"
+		})
+		defer unlisten()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		select {
+		case <-ch:
+			// Got a stats event — polling is working
+		case <-ctx.Done():
+			t.Fatal("no gameserver.stats event within 15s — stats polling is not running")
+		}
 	})
 
 	t.Run("logs", func(t *testing.T) {
