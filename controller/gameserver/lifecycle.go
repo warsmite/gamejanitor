@@ -34,7 +34,7 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 		g.mu.Unlock()
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
 	}
-	if g.instanceID != nil && g.desiredState == "running" {
+	if g.process != nil && g.process.State == worker.StateRunning {
 		g.mu.Unlock()
 		return nil
 	}

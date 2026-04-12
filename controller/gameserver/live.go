@@ -326,6 +326,13 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 			g.operation = nil
 			g.notifyWatchersLocked(nil)
 		}
+		// Clear instanceID — the ID points to an exited instance that should not
+		// block a subsequent Start from running (which would otherwise see a
+		// non-nil instanceID and short-circuit).
+		if g.instanceID != nil {
+			g.instanceID = nil
+			g.store.SetInstanceID(g.id, nil)
+		}
 	}
 }
 

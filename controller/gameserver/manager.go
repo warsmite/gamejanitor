@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
@@ -681,8 +682,11 @@ func (m *Manager) OnWorkerOffline(nodeID string) {
 
 // watchWorkerEvents starts a goroutine that watches instance state updates from
 // a worker and routes them to the correct LiveGameserver. On stream error, the
-// worker connection is cleared from the registry so the next heartbeat
-// re-establishes both the gRPC connection and the event stream.
+// controller actively verifies whether the worker is still reachable:
+//   - If verification succeeds (the stream died but the worker is alive),
+//     restart the watch goroutine.
+//   - If verification fails, mark the worker offline immediately — don't wait
+//     for the 30s heartbeat timeout.
 func (m *Manager) watchWorkerEvents(ctx context.Context, label string, w worker.Worker) {
 	updateCh, errCh := w.WatchInstanceStates(ctx)
 
@@ -696,8 +700,8 @@ func (m *Manager) watchWorkerEvents(ctx context.Context, label string, w worker.
 				if !ok {
 					return
 				}
-				m.log.Warn("instance state watcher stream broke, forcing worker re-registration on next heartbeat", "worker", label, "error", err)
-				m.registry.ClearWorker(label)
+				m.log.Warn("instance state watcher stream broke, verifying worker health", "worker", label, "error", err)
+				m.handleStreamBreak(ctx, label, w)
 				return
 			case update, ok := <-updateCh:
 				if !ok {
@@ -707,6 +711,24 @@ func (m *Manager) watchWorkerEvents(ctx context.Context, label string, w worker.
 			}
 		}
 	}()
+}
+
+// handleStreamBreak verifies whether a worker is still reachable after a stream
+// error. If the worker responds to a health-check RPC, restart the watch loop.
+// If not, mark the worker offline so gameservers don't show stale "running" status.
+func (m *Manager) handleStreamBreak(ctx context.Context, label string, w worker.Worker) {
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	_, err := w.GetAllInstanceStates(pingCtx)
+	if err == nil {
+		m.log.Info("worker still reachable after stream break, restarting watch", "worker", label)
+		m.watchWorkerEvents(ctx, label, w)
+		return
+	}
+
+	m.log.Warn("worker unreachable after stream break, marking offline", "worker", label, "error", err)
+	m.registry.SetOffline(label)
 }
 
 // RouteProcessEvent maps a worker instance state update to the correct
