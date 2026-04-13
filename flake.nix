@@ -412,11 +412,6 @@
             echo "Done: ./gamejanitor"
           '';
 
-          test = pkgs.writeShellScriptBin "test" ''
-            update-vendor-hash
-            exec go test ./... "$@"
-          '';
-
           test-all = pkgs.writeShellScriptBin "test-all" ''
             update-vendor-hash
             exec go test -tags integration ./... "$@"
@@ -546,7 +541,6 @@
             vendor-check
             loc
             cleanup
-            test
             test-all
             test-race
             test-e2e
