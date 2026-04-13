@@ -15,7 +15,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/controller/cluster"
-	"github.com/warsmite/gamejanitor/utilities/tlsutil"
+	"github.com/warsmite/gamejanitor/util/tlsutil"
 	pb "github.com/warsmite/gamejanitor/worker/proto"
 
 	"github.com/shirou/gopsutil/v4/disk"

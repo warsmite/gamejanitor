@@ -17,7 +17,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/utilities/netutil"
+	"github.com/warsmite/gamejanitor/util/netutil"
 	"github.com/warsmite/gamejanitor/store"
 )
 

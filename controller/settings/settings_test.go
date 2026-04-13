@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/testutil"
-	"github.com/warsmite/gamejanitor/utilities/validate"
+	"github.com/warsmite/gamejanitor/util/validate"
 )
 
 func TestSettings_GetDefaults(t *testing.T) {

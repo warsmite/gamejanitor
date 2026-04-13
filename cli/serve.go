@@ -27,7 +27,7 @@ import (
 	gjproxy "github.com/warsmite/gamejanitor/proxy"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/utilities/tlsutil"
+	"github.com/warsmite/gamejanitor/util/tlsutil"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 )
 

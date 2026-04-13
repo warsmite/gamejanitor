@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/utilities/naming"
+	"github.com/warsmite/gamejanitor/util/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
