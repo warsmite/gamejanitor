@@ -1,9 +1,14 @@
 FROM ubuntu:24.04
 
+# Skip docs, man pages, locales, and info files to shave ~100MB off the image.
+# Applied before apt-get install so packages drop these paths on unpack.
+RUN printf 'path-exclude=/usr/share/doc/*\npath-exclude=/usr/share/man/*\npath-exclude=/usr/share/locale/*\npath-exclude=/usr/share/info/*\n' \
+    > /etc/dpkg/dpkg.cfg.d/01_nodoc
+
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl wget bash procps jq ca-certificates unzip strace \
+        curl wget bash procps jq ca-certificates unzip \
         lib32gcc-s1 lib32stdc++6 libicu74 \
         openjdk-8-jre-headless \
         openjdk-17-jre-headless \
