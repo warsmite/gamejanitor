@@ -46,7 +46,7 @@ echo "[start-server] wrote PalWorldSettings.ini"
 
 echo "[start-server] starting Palworld dedicated server"
 cd /data/server
-exec ./PalServer.sh \
+exec run-gameserver ./PalServer.sh \
     -port="$GAME_PORT" \
     -useperfthreads \
     -NoAsyncLoadingThread \

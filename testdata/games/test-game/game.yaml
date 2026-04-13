@@ -15,7 +15,6 @@ query:
   supports: [players]
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 512
   ready_pattern: 'Server is ready'
   env:

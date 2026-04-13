@@ -87,7 +87,7 @@ fi
 
 echo "[start-server] starting ARK dedicated server"
 cd /data/server
-exec ./ShooterGame/Binaries/Linux/ShooterGameServer \
+exec run-gameserver ./ShooterGame/Binaries/Linux/ShooterGameServer \
     "${MAP}?listen?SessionName=${SESSION_NAME}?ServerAdminPassword=${ADMIN_PASSWORD}${PASSWORD_PARAM}?Port=${GAME_PORT}?QueryPort=${QUERY_PORT}?RCONPort=${RCON_PORT}?RCONEnabled=True?MaxPlayers=${MAX_PLAYERS}" \
     -server \
     -log \

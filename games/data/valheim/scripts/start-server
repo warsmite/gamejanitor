@@ -34,7 +34,7 @@ export SteamAppId=892970
 
 echo "[start-server] starting Valheim dedicated server"
 cd /data/server
-exec ./valheim_server.x86_64 \
+exec run-gameserver ./valheim_server.x86_64 \
     -name "$SERVER_NAME" \
     -port "$GAME_PORT" \
     -world "$WORLD_NAME" \

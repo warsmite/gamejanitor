@@ -33,7 +33,7 @@ ln -sfn /data/saves "$SAVE_DIR"
 
 echo "[start-server] starting Satisfactory dedicated server"
 cd /data/server
-exec ./FactoryServer.sh \
+exec run-gameserver ./FactoryServer.sh \
     -Port="$GAME_PORT" \
     -ReliablePort="$RELIABLE_PORT" \
     "-ini:Game:[/Script/Engine.GameSession]:MaxPlayers=${MAX_PLAYERS}" \

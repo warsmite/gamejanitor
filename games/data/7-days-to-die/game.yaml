@@ -21,7 +21,6 @@ query:
   supports: [players, rules, keywords]
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'GameServer.Init successful'
   disabled_capabilities: []

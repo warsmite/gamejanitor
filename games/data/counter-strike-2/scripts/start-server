@@ -42,7 +42,7 @@ fi
 /scripts/install-workshop-mods 730
 
 echo "[start-server] starting CS2 dedicated server"
-exec ./game/bin/linuxsteamrt64/cs2 -dedicated \
+exec run-gameserver ./game/bin/linuxsteamrt64/cs2 -dedicated \
     -port "$GAME_PORT" \
     +hostname "$HOSTNAME" \
     +game_type "$GAME_TYPE" \

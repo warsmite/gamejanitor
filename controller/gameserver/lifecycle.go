@@ -117,7 +117,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 
 	gs := g.toModelGameserver()
 
-	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), func(p worker.PullProgress) {
+	if err := w.PullImage(ctx, game.BaseImage, func(p worker.PullProgress) {
 		if p.TotalBytes > 0 {
 			g.setProgress(model.OperationProgress{
 				Percent:        float64(p.CompletedBytes) / float64(p.TotalBytes) * 100,
@@ -204,7 +204,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		g.log.Info("running install phase")
 		installID, installErr := w.CreateInstance(ctx, worker.InstanceOptions{
 			Name:          installName,
-			Image:         game.ResolveImage(map[string]string(gs.Env)),
+			Image:         game.BaseImage,
 			Env:           env,
 			Ports:         ports,
 			VolumeName:    g.volumeName,
@@ -270,7 +270,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 
 	instanceID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:          instanceName,
-		Image:         game.ResolveImage(map[string]string(gs.Env)),
+		Image:         game.BaseImage,
 		Env:           env,
 		Ports:         ports,
 		VolumeName:    g.volumeName,
@@ -435,7 +435,7 @@ func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
 
 	gs := g.toModelGameserver()
 
-	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env)), nil); err != nil {
+	if err := w.PullImage(ctx, game.BaseImage, nil); err != nil {
 		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
@@ -455,7 +455,7 @@ func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
 	tempName := naming.UpdateInstanceName(g.id)
 	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
-		Image:      game.ResolveImage(map[string]string(gs.Env)),
+		Image:      game.BaseImage,
 		Env:        env,
 		VolumeName: g.volumeName,
 		Binds:      []string{scriptDir + ":/scripts:ro"},

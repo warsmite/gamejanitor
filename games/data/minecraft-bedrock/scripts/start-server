@@ -40,4 +40,4 @@ export LD_LIBRARY_PATH=/data/server
 cd /data/server
 
 echo "[start-server] starting Bedrock server"
-exec run-server ./bedrock_server < <(tail -f "$FIFO")
+exec run-gameserver ./bedrock_server < <(tail -f "$FIFO")

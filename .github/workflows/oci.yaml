@@ -1,0 +1,28 @@
+name: Build and push runtime OCI image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "oci/**"
+      - ".github/workflows/oci.yaml"
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: oci
+          push: true
+          tags: ghcr.io/warsmite/gamejanitor/runtime:latest

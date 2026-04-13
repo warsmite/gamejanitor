@@ -43,15 +43,11 @@ type DynamicOptions struct {
 	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
-// RuntimeConfig controls image variant resolution.
-// Static images set Image directly. Dynamic resolution (e.g., Minecraft → Java version)
-// uses a named Resolver that maps env values to image tags.
-type RuntimeConfig struct {
-	Image        string            `yaml:"image,omitempty" json:"image,omitempty"`
-	Resolver     string            `yaml:"resolver,omitempty" json:"resolver,omitempty"`
-	DefaultImage string            `yaml:"default_image,omitempty" json:"default_image,omitempty"`
-	Images       map[string]string `yaml:"images,omitempty" json:"images,omitempty"`
-}
+// DefaultImage is the OCI image used for all built-in games unless a game
+// explicitly overrides it. Built from oci/Dockerfile — bundles Ubuntu + Steam
+// runtime + rcon + all supported JDKs + .NET. Custom game defs may set
+// InstanceConfig.Image to override.
+const DefaultImage = "ghcr.io/warsmite/gamejanitor/runtime"
 
 // ModsConfig defines the full mod system configuration for a game.
 // Version/loader pickers and mod categories are all declared here.
@@ -115,24 +111,24 @@ type Assets struct {
 // Game is the runtime representation of a game with instance support.
 // Gamejanitor services use this type — fields are flattened from GameDef.Instance
 // for ergonomic access (game.BaseImage instead of game.Instance.Image).
+// BaseImage is always populated — falls back to DefaultImage when the yaml omits it.
 type Game struct {
-	ID                   string        `json:"id"`
-	Name                 string        `json:"name"`
-	Aliases              []string      `json:"aliases,omitempty"`
-	Description          string        `json:"description,omitempty"`
+	ID                   string         `json:"id"`
+	Name                 string         `json:"name"`
+	Aliases              []string       `json:"aliases,omitempty"`
+	Description          string         `json:"description,omitempty"`
 	AppID                uint32         `json:"app_id,omitempty"`
 	ServerAppID          uint32         `json:"server_app_id,omitempty"`
 	SteamLogin           SteamLoginType `json:"steam_login,omitempty"`
 	BaseImage            string         `json:"base_image"`
-	Runtime              RuntimeConfig `json:"runtime,omitempty"`
-	IconPath             string        `json:"icon_path"`
-	DefaultPorts         []Port        `json:"default_ports"`
-	DefaultEnv           []EnvVar      `json:"default_env"`
-	RecommendedMemoryMB  int           `json:"recommended_memory_mb"`
-	ReadyPattern         string        `json:"ready_pattern,omitempty"`
-	DisabledCapabilities []string      `json:"disabled_capabilities"`
-	Mods                 ModsConfig    `json:"mods,omitempty"`
-	Query                *QueryConfig  `json:"query,omitempty"`
+	IconPath             string         `json:"icon_path"`
+	DefaultPorts         []Port         `json:"default_ports"`
+	DefaultEnv           []EnvVar       `json:"default_env"`
+	RecommendedMemoryMB  int            `json:"recommended_memory_mb"`
+	ReadyPattern         string         `json:"ready_pattern,omitempty"`
+	DisabledCapabilities []string       `json:"disabled_capabilities"`
+	Mods                 ModsConfig     `json:"mods,omitempty"`
+	Query                *QueryConfig   `json:"query,omitempty"`
 }
 
 // DepotAppID returns the app ID to use for depot downloads.
@@ -309,9 +305,9 @@ func defToGame(def *GameDef) *Game {
 		mods.Categories = []ModCategoryDef{}
 	}
 
-	runtime := RuntimeConfig{}
-	if c.Runtime != nil {
-		runtime = *c.Runtime
+	image := c.Image
+	if image == "" {
+		image = DefaultImage
 	}
 
 	aliases := def.Aliases
@@ -327,8 +323,7 @@ func defToGame(def *GameDef) *Game {
 		AppID:                def.AppID,
 		ServerAppID:          def.ServerAppID,
 		SteamLogin:           def.SteamLogin,
-		BaseImage:            c.Image,
-		Runtime:              runtime,
+		BaseImage:            image,
 		RecommendedMemoryMB:  c.RecommendedMemoryMB,
 		ReadyPattern:         c.ReadyPattern,
 		DefaultPorts:         ports,

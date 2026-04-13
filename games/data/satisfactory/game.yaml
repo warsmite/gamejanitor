@@ -19,7 +19,6 @@ ports:
 # No query section — Satisfactory has no standard query protocol
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Server API listening on'
   disabled_capabilities: ["command", "save"]

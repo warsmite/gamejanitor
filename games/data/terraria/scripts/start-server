@@ -51,4 +51,4 @@ fi
 export DOTNET_BUNDLE_EXTRACT_BASE_DIR="${DOTNET_BUNDLE_EXTRACT_BASE_DIR:-/tmp/.dotnet}"
 
 echo "[start-server] starting TShock server"
-exec run-server /data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO")
+exec run-gameserver /data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO")

@@ -47,10 +47,16 @@ update_property "rcon.password" "${RCON_PASSWORD}"                 "$PROPS"
 echo "[start-server] config: gamemode=${GAMEMODE:-survival} difficulty=${DIFFICULTY:-normal} max_players=${MAX_PLAYERS:-20} port=${SERVER_PORT:-25565}"
 echo "[start-server] updated server.properties and eula.txt"
 
-# Java version is resolved by the controller via image variants —
-# this container has exactly one JDK on the PATH.
-JAVA_BIN="java"
-echo "[start-server] using $(java -version 2>&1 | head -1)"
+# JDK version was resolved at install time from the Mojang manifest
+# and persisted to /data/.java-version. Fall back to 21 if missing (fresh volumes,
+# legacy installs) — 21 runs all current stable Minecraft versions.
+JAVA_VERSION=$(cat /data/.java-version 2>/dev/null || echo 21)
+JAVA_BIN="/opt/java/${JAVA_VERSION}/bin/java"
+if [ ! -x "$JAVA_BIN" ]; then
+    echo "[start-server] ERROR: JDK ${JAVA_VERSION} not available in image at $JAVA_BIN"
+    exit 1
+fi
+echo "[start-server] using $("$JAVA_BIN" -version 2>&1 | head -1) (JDK $JAVA_VERSION)"
 
 # Calculate JVM heap from MEMORY_LIMIT_MB (leave ~15% for GC overhead)
 MEMORY_LIMIT_MB="${MEMORY_LIMIT_MB:-1024}"
@@ -121,4 +127,4 @@ case "$MODLOADER" in
 esac
 
 echo "[start-server] starting Minecraft server (modloader=$MODLOADER, jar=$SERVER_JAR)"
-exec run-server "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m "${AIKAR_FLAGS[@]}" -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")
+exec run-gameserver "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m "${AIKAR_FLAGS[@]}" -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")

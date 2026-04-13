@@ -17,7 +17,6 @@ query:
   notes: "Player list limited to server's sample (usually 12 max)"
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/java17
   recommended_memory_mb: 2048
   ready_pattern: 'Done \(\d+\.\d+s\)! For help, type "help"'
   disabled_capabilities: []
@@ -154,14 +153,6 @@ instance:
     - key: SAVE_TIMEOUT_SECONDS
       default: "5"
       system: true
-  runtime:
-    resolver: minecraft-java
-    default_image: ghcr.io/warsmite/gamejanitor/java17
-    images:
-      java8: ghcr.io/warsmite/gamejanitor/java8
-      java17: ghcr.io/warsmite/gamejanitor/java17
-      java21: ghcr.io/warsmite/gamejanitor/java21
-      java25: ghcr.io/warsmite/gamejanitor/java25
 
   mods:
     version_env: MINECRAFT_VERSION

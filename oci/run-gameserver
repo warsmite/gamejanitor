@@ -1,6 +1,6 @@
 #!/bin/bash
-# Wraps a game server binary with process group cleanup.
-# Usage: run-server ./binary [args...]
+# Wraps a gameserver binary with process-group cleanup.
+# Usage: run-gameserver ./binary [args...]
 #
 # Ensures that when the game process exits (crash or clean shutdown),
 # all background processes (tail -f, tee, etc.) are killed so the

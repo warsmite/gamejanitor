@@ -59,7 +59,7 @@ export LD_LIBRARY_PATH="/data/server:${LD_LIBRARY_PATH}"
 cd /data/server
 
 echo "[start-server] starting 7 Days to Die dedicated server"
-exec ./7DaysToDieServer.x86_64 \
+exec run-gameserver ./7DaysToDieServer.x86_64 \
     -configfile="$CONFIG" \
     -logfile /dev/stdout \
     -quit \

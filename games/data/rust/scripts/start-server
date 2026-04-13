@@ -57,7 +57,7 @@ fi
 
 echo "[start-server] starting Rust dedicated server"
 cd /data/server
-exec ./RustDedicated -batchmode \
+exec run-gameserver ./RustDedicated -batchmode \
     +server.port "$SERVER_PORT" \
     +server.hostname "$SERVER_HOSTNAME" \
     +server.maxplayers "$SERVER_MAXPLAYERS" \

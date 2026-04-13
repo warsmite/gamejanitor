@@ -28,7 +28,6 @@ query:
       version: VERSION_s
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 8192
   ready_pattern: 'Setting breakpad minidump AppID'
   disabled_capabilities: []

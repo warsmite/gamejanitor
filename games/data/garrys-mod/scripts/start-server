@@ -55,7 +55,7 @@ fi
 # Tail console.log to stdout in background so the runtime captures it
 (while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done; tail -f -n +1 "$CONSOLE_LOG") &
 
-exec run-server ./srcds_linux -game garrysmod \
+exec run-gameserver ./srcds_linux -game garrysmod \
     -ip 0.0.0.0 \
     -port "$GAME_PORT" \
     -norestart \

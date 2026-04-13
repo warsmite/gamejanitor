@@ -24,13 +24,19 @@ if [ -z "$VERSION_URL" ] || [ "$VERSION_URL" = "null" ]; then
     exit 1
 fi
 
-# Fetch per-version metadata (needed for server JAR download URL)
+# Fetch per-version metadata (needed for server JAR download URL and Java version)
 VERSION_META=$(curl -fsSL "$VERSION_URL")
 
-# Java version is resolved by the controller via image variants —
-# this container has exactly one JDK on the PATH.
-JAVA_BIN="java"
-echo "[install-server] using $(java -version 2>&1 | head -1)"
+# Resolve required JDK from Mojang manifest (falls back to 8 for pre-javaVersion versions).
+# Persisted to /data so start-server and update-server pick the same JDK without refetching.
+JAVA_VERSION=$(echo "$VERSION_META" | jq -r '.javaVersion.majorVersion // 8')
+echo "$JAVA_VERSION" > /data/.java-version
+JAVA_BIN="/opt/java/${JAVA_VERSION}/bin/java"
+if [ ! -x "$JAVA_BIN" ]; then
+    echo "[install-server] ERROR: JDK ${JAVA_VERSION} not available in image at $JAVA_BIN"
+    exit 1
+fi
+echo "[install-server] using $("$JAVA_BIN" -version 2>&1 | head -1) (JDK $JAVA_VERSION)"
 
 install_vanilla() {
     SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')

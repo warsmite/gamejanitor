@@ -18,7 +18,6 @@ query:
   supports: [players, rules, keywords]
 
 instance:
-  image: ghcr.io/warsmite/gamejanitor/base
   recommended_memory_mb: 1024
   ready_pattern: 'gameserver Steam ID'
   disabled_capabilities: []

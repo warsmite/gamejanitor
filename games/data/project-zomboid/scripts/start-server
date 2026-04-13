@@ -56,7 +56,7 @@ echo "[start-server] JVM heap: ${HEAP}m (from ${MEMORY_LIMIT_MB:-4096}m limit)"
 # for Java detection. This mirrors what start-server.sh does internally.
 export LD_LIBRARY_PATH="/data/server/linux64:/data/server/natives:${LD_LIBRARY_PATH}"
 
-exec "$JAVA" \
+exec run-gameserver "$JAVA" \
     -Djava.awt.headless=true \
     -Dzomboid.steam=1 \
     -Dzomboid.znetlog=1 \

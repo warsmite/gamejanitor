@@ -65,16 +65,16 @@ type EOSQueryConfig struct {
 	Attributes      map[string]string `yaml:"attributes,omitempty" json:"attributes,omitempty"`
 }
 
-// InstanceConfig holds fields only needed by gamejanitor for running game servers.
+// InstanceConfig holds fields only needed by gamejanitor for running gameservers.
 // Query-only games (most gjq games) omit this section entirely.
+// Image is optional — when omitted, DefaultImage is used (the common case).
 type InstanceConfig struct {
-	Image                string         `yaml:"image" json:"image"`
-	Runtime              *RuntimeConfig `yaml:"runtime,omitempty" json:"runtime,omitempty"`
-	ReadyPattern         string         `yaml:"ready_pattern,omitempty" json:"ready_pattern,omitempty"`
-	RecommendedMemoryMB  int            `yaml:"recommended_memory_mb,omitempty" json:"recommended_memory_mb,omitempty"`
-	DisabledCapabilities []string       `yaml:"disabled_capabilities,omitempty" json:"disabled_capabilities,omitempty"`
-	Env                  []EnvVar       `yaml:"env,omitempty" json:"env,omitempty"`
-	Mods                 ModsConfig     `yaml:"mods,omitempty" json:"mods,omitempty"`
+	Image                string     `yaml:"image,omitempty" json:"image,omitempty"`
+	ReadyPattern         string     `yaml:"ready_pattern,omitempty" json:"ready_pattern,omitempty"`
+	RecommendedMemoryMB  int        `yaml:"recommended_memory_mb,omitempty" json:"recommended_memory_mb,omitempty"`
+	DisabledCapabilities []string   `yaml:"disabled_capabilities,omitempty" json:"disabled_capabilities,omitempty"`
+	Env                  []EnvVar   `yaml:"env,omitempty" json:"env,omitempty"`
+	Mods                 ModsConfig `yaml:"mods,omitempty" json:"mods,omitempty"`
 }
 
 // HasCapability returns true if the capability is NOT disabled.
@@ -120,9 +120,9 @@ func (d *GameDef) HasQuery() bool {
 	return d.Query != nil && d.Query.Protocol != ""
 }
 
-// HasInstance returns true if this game has instance support.
+// HasInstance returns true if this game has instance support (can be run, not just queried).
 func (d *GameDef) HasInstance() bool {
-	return d.Instance != nil && d.Instance.Image != ""
+	return d.Instance != nil
 }
 
 // ── Registry — shared game lookup used by all consumers ──
