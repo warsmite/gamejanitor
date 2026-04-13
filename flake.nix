@@ -29,7 +29,7 @@
             pname = "gamejanitor";
             version = "0.1.0";
             src = ./.;
-            vendorHash = "sha256-78LRlSfi63fi2RwT5kusSFgBGuGEicDa6xwqRH+yeRY=";
+            vendorHash = "sha256-aeWeLQI0A+K3avUMXPKowcSD5xFpdFyHNl7m+jBco9w=";
             env.CGO_ENABLED = "0";
 
             # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
@@ -60,9 +60,10 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
+            update-vendor-hash
             rm -rf ui/dist 2>/dev/null || { chmod -R u+w ui/dist && rm -rf ui/dist; }
             (cd ui && npm run build)
-            go run -mod=mod . serve -d /tmp/gamejanitor-data 
+            go run -mod=mod . serve -d /tmp/gamejanitor-data
           '';
 
           # Deploy to homelab — build binary + UI, ship to all nodes, restart services.
@@ -86,8 +87,7 @@
                           echo "Fast mode — skipping UI build"
                         fi
 
-                        echo "Syncing vendor..."
-                        go mod vendor
+                        update-vendor-hash
 
                         echo "Building binary..."
                         CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
@@ -233,34 +233,14 @@
             exec go run . "$@"
           '';
 
-          # TODO: migrate to ghcr.io/gamejanitor when going public
           build-image = pkgs.writeShellScriptBin "build-image" ''
-            image="$1"
-            if [ -z "$image" ]; then
-              echo "Usage: build-image <base|java8|java17|java21|java25|dotnet>"
-              exit 1
-            fi
-            docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
+            docker build -t "ghcr.io/warsmite/gamejanitor/runtime" "oci/"
           '';
 
           push-image = pkgs.writeShellScriptBin "push-image" ''
-            image="$1"
-            if [ -z "$image" ]; then
-              echo "Usage: push-image <base|java8|java17|java21|java25|dotnet>"
-              exit 1
-            fi
-            echo "Building and pushing $image..."
-            docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
-            docker push "ghcr.io/warsmite/gamejanitor/$image"
-          '';
-
-          push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
-            # Build order matters: base must be built first since others depend on it
-            for image in base java8 java17 java21 java25 dotnet; do
-              echo "Building and pushing $image..."
-              docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
-              docker push "ghcr.io/warsmite/gamejanitor/$image"
-            done
+            echo "Building and pushing runtime image..."
+            docker build -t "ghcr.io/warsmite/gamejanitor/runtime" "oci/"
+            docker push "ghcr.io/warsmite/gamejanitor/runtime"
           '';
 
           # Multi-node dev — runs controller + worker as separate processes.
@@ -268,6 +248,7 @@
           # proto mismatches, registration bugs, and multi-node code paths.
           dev-multi = pkgs.writeShellScriptBin "dev-multi" ''
             set -e
+            update-vendor-hash
             echo "Building UI..."
             rm -rf ui/dist 2>/dev/null || { chmod -R u+w ui/dist && rm -rf ui/dist; }
             (cd ui && npm run build)
@@ -380,11 +361,38 @@
               -d "/tmp/gamejanitor-worker-$PORT" "''${EXTRA_ARGS[@]}" "''${@:4}"
           '';
 
+          # Sync vendor/ with go.mod and keep flake.nix's vendorHash matching vendor/.
+          # Silent no-op when nothing changed — safe to prepend to dev/build/test scripts
+          # so the user never has to remember this step after editing games/ or sdk/.
           update-vendor-hash = pkgs.writeShellScriptBin "update-vendor-hash" ''
             go mod vendor
             HASH=$(nix hash path --type sha256 vendor/)
-            sed -i "s|vendorHash = \".*\"|vendorHash = \"$HASH\"|" flake.nix
-            echo "Updated vendorHash to $HASH"
+            CURRENT=$(grep -oP '(?<=vendorHash = ")[^"]+' flake.nix | head -1)
+            if [ "$HASH" != "$CURRENT" ]; then
+              sed -i "s|vendorHash = \".*\"|vendorHash = \"$HASH\"|" flake.nix
+              echo "Updated vendorHash: $CURRENT -> $HASH"
+            fi
+          '';
+
+          # Read-only sibling for CI: fails if vendor/ or vendorHash is out of sync.
+          # Runs `go mod vendor` (mutating), then verifies the working tree is clean.
+          vendor-check = pkgs.writeShellScriptBin "vendor-check" ''
+            set -e
+            go mod vendor
+            HASH=$(nix hash path --type sha256 vendor/)
+            CURRENT=$(grep -oP '(?<=vendorHash = ")[^"]+' flake.nix | head -1)
+            if [ "$HASH" != "$CURRENT" ]; then
+              echo "vendor-check: vendorHash out of sync."
+              echo "  flake.nix: $CURRENT"
+              echo "  vendor/:   $HASH"
+              echo "Fix with: update-vendor-hash"
+              exit 1
+            fi
+            if ! git diff --quiet vendor/ 2>/dev/null; then
+              echo "vendor-check: vendor/ out of sync with go.mod. Fix with: update-vendor-hash"
+              git diff --stat vendor/ | head -10
+              exit 1
+            fi
           '';
 
           gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
@@ -395,6 +403,7 @@
 
           build = pkgs.writeShellScriptBin "build" ''
             set -e
+            update-vendor-hash
             echo "Building UI..."
             cd ui && npm run build && cd ..
             echo "Building Go binary..."
@@ -404,18 +413,22 @@
           '';
 
           test = pkgs.writeShellScriptBin "test" ''
+            update-vendor-hash
             exec go test ./... "$@"
           '';
 
           test-all = pkgs.writeShellScriptBin "test-all" ''
+            update-vendor-hash
             exec go test -tags integration ./... "$@"
           '';
 
           test-race = pkgs.writeShellScriptBin "test-race" ''
+            update-vendor-hash
             exec CGO_ENABLED=1 go test -race ./... "$@"
           '';
 
           test-e2e = pkgs.writeShellScriptBin "test-e2e" ''
+            update-vendor-hash
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e . || exit 1
             echo "Running e2e tests..."
@@ -423,6 +436,7 @@
           '';
 
           test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
+            update-vendor-hash
             if [ -n "$1" ] && [[ "$1" != -* ]]; then
               export SMOKE_GAME="$1"
               shift
@@ -435,6 +449,7 @@
 
           test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
             set -e
+            update-vendor-hash
             go test -coverprofile=/tmp/gamejanitor-coverage.out ./... "$@"
             echo ""
             echo "=== Per-package coverage ==="
@@ -523,12 +538,12 @@
             build
             build-image
             push-image
-            push-all-images
             dev-multi
             dev-controller
             dev-worker
             gen-proto
             update-vendor-hash
+            vendor-check
             loc
             cleanup
             test
