@@ -328,10 +328,16 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		}))
 
 	case worker.StateExited:
-		// Determine if this exit was unexpected
+		// Classify the exit. It is expected (not a crash) when:
+		//   - the user asked for the gameserver to stop (desiredState != "running")
+		//   - a delete is in progress (OpDelete intentionally kills the instance)
+		// Both skip handleUnexpectedDeath so auto-restart doesn't fight the
+		// intentional action.
+		intentional := g.desiredState != "running" ||
+			(g.operation != nil && g.operation.Type == model.OpDelete)
 		wasRunningOrStarting := g.process != nil && (g.process.State == worker.StateRunning || g.process.State == worker.StateStarting)
 		operationWasActive := g.operation != nil
-		if wasRunningOrStarting || operationWasActive {
+		if !intentional && (wasRunningOrStarting || operationWasActive) {
 			g.handleUnexpectedDeath(update.ExitCode, update.StartedAt)
 		}
 		// Clear any active operation — the process died
@@ -548,17 +554,26 @@ func (g *LiveGameserver) setProgress(progress model.OperationProgress) {
 	g.notifyWatchersLocked(g.operation)
 }
 
-// BeginDelete marks the gameserver as being deleted so the UI can show a
-// "Deleting..." state during teardown. Unlike other operations, delete is
-// driven by Manager.Delete (which needs to remove the live object and DB row
-// on completion), so it bypasses submitOperation.
-func (g *LiveGameserver) BeginDelete() error {
+// BeginDelete cancels any in-flight operation, waits for its goroutine to
+// exit, and then marks the gameserver as being deleted. OpDelete must be set
+// before any worker teardown so that process-exit events arriving during
+// RemoveInstance aren't mistaken for unexpected crashes (which would trigger
+// auto-restart and fight the delete). Unlike other operations, delete bypasses
+// submitOperation because Manager.Delete owns the lifecycle and needs to
+// remove the live object and DB row on completion.
+func (g *LiveGameserver) BeginDelete() {
 	g.mu.Lock()
-	if g.operation != nil {
-		op := g.operation.Type
-		g.mu.Unlock()
-		return fmt.Errorf("cannot begin delete: operation %s in progress", op)
+	if g.cancelOp != nil {
+		g.cancelOp()
 	}
+	done := g.opDone
+	g.mu.Unlock()
+
+	if done != nil {
+		<-done
+	}
+
+	g.mu.Lock()
 	g.operation = &model.Operation{Type: model.OpDelete, Phase: model.PhaseDeleting}
 	op := g.operation
 	g.mu.Unlock()
@@ -570,7 +585,6 @@ func (g *LiveGameserver) BeginDelete() error {
 		Status: controller.StatusDeleting,
 	}))
 	g.notifyWatchersLocked(op)
-	return nil
 }
 
 // CancelDelete clears the deleting operation, used when Manager.Delete fails

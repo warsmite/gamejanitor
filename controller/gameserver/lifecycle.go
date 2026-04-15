@@ -344,6 +344,12 @@ func (g *LiveGameserver) Stop(ctx context.Context) error {
 // removes the instance, and clears runtime state.
 func (g *LiveGameserver) doStop(ctx context.Context) error {
 	g.mu.Lock()
+	// Flip desiredState to "stopped" before any worker calls. HandleProcessEvent
+	// consults desiredState when classifying StateExited — if we waited until
+	// after the worker calls, an exit event arriving mid-stop would look like
+	// an unexpected crash and trigger auto-restart on auto_restart=true servers.
+	g.desiredState = "stopped"
+	g.store.UpdateGameserver(g.toModelGameserverLocked())
 	instanceID := g.instanceID
 	w := g.worker
 	g.mu.Unlock()

@@ -202,12 +202,18 @@ func (w *FakeWorker) StopInstance(ctx context.Context, id string, timeoutSeconds
 		return fmt.Errorf("instance %s not found", id)
 	}
 	c.state = "stopped"
+	name := c.name
 	w.mu.Unlock()
 
-	// No exit event here. Expected stops are handled by the lifecycle code
-	// (LiveGameserver.doStop clears the process state directly). The exit event
-	// path is only for crash detection (unexpected exits). Use SimulateCrash()
-	// to test that path explicitly.
+	// Match real SandboxWorker: emit StateExited on every process termination,
+	// graceful or not. The OS doesn't distinguish; neither should the fake.
+	// HandleProcessEvent's desiredState/operation check is what classifies the
+	// exit, not the presence of the event.
+	w.events <- worker.InstanceStateUpdate{
+		InstanceID:   id,
+		InstanceName: name,
+		State:        worker.StateExited,
+	}
 
 	return nil
 }

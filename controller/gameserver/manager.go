@@ -327,8 +327,12 @@ func (m *Manager) Create(ctx context.Context, gs *model.Gameserver) (string, err
 	return rawPassword, nil
 }
 
-// Delete stops a gameserver (cancelling any in-progress operation), tears down
-// infrastructure, removes the DB record, and removes it from the in-memory map.
+// Delete cancels any in-progress operation, tears down infrastructure (killing
+// the instance without a graceful stop — the data is going away anyway),
+// removes the DB record, and removes the gameserver from the in-memory map.
+// Delete deliberately skips the stop-server script and graceful-stop timeout:
+// they'd only serve to flush world state we're about to erase, and running
+// them creates a race with auto-restart when the process exits.
 func (m *Manager) Delete(ctx context.Context, id string) error {
 	m.mu.RLock()
 	live := m.gameservers[id]
@@ -340,19 +344,11 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 
 	m.log.Info("deleting gameserver", "id", id)
 
-	// Stop the live object — this cancels any in-progress operation (migrate restart,
-	// start, etc.) and waits for it to finish before proceeding with teardown.
-	if err := live.Stop(ctx); err != nil {
-		m.log.Warn("stop during delete had error, proceeding", "gameserver", id, "error", err)
-	}
-	live.WaitForOperation()
-
-	// Mark the live object as deleting so the UI shows a "Deleting..." state
-	// during teardown (which can take seconds for large volumes). Cleared only
-	// if teardown fails before we remove the record from the map.
-	if err := live.BeginDelete(); err != nil {
-		return err
-	}
+	// Mark as deleting BEFORE any worker calls. BeginDelete also cancels any
+	// in-flight operation and waits for it to exit. Setting OpDelete up front
+	// makes process-exit events arriving during RemoveInstance be treated as
+	// expected (no auto-restart).
+	live.BeginDelete()
 	deleteCompleted := false
 	defer func() {
 		if !deleteCompleted {
@@ -360,7 +356,6 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 		}
 	}()
 
-	// Re-read from DB for current state after stop
 	gs, err := m.store.GetGameserver(id)
 	if err != nil || gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found", id)

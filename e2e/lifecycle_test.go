@@ -171,6 +171,44 @@ func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
 	}
 }
 
+// TestE2E_Lifecycle_DeleteWhileRunning_AutoRestart is a regression test for the
+// case where deleting a running gameserver with auto_restart=true would race
+// against the auto-restart handler and leave the gameserver alive. The real
+// worker emits StateExited asynchronously when the process dies, so this can
+// only be caught against a live sandbox — FakeWorker doesn't reproduce it.
+func TestE2E_Lifecycle_DeleteWhileRunning_AutoRestart(t *testing.T) {
+	h := Start(t)
+
+	resp, err := h.PostJSON("/api/gameservers", map[string]any{
+		"name":         "Delete While Running",
+		"game_id":      h.GameID(),
+		"env":          h.GameEnv(),
+		"auto_restart": true,
+	})
+	require.NoError(t, err)
+	var gs struct{ ID string }
+	require.NoError(t, DecodeData(resp, &gs))
+
+	h.PostJSON("/api/gameservers/"+gs.ID+"/actions/start", nil)
+	require.NoError(t, h.WaitForStatus(gs.ID, "running", 2*time.Minute))
+
+	// Delete while running — must NOT trigger an auto-restart.
+	resp, err = h.Delete("/api/gameservers/" + gs.ID)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, 202, resp.StatusCode)
+
+	// Gameserver must actually be deleted, not bounced back to running.
+	require.Eventually(t, func() bool {
+		r, err := h.Get("/api/gameservers/" + gs.ID)
+		if err != nil {
+			return false
+		}
+		defer r.Body.Close()
+		return r.StatusCode == 404
+	}, 60*time.Second, 500*time.Millisecond, "gameserver should be deleted, not auto-restarted")
+}
+
 func TestE2E_Files_WriteAndRead(t *testing.T) {
 	h := Start(t)
 
