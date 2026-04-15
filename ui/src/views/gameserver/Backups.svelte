@@ -7,9 +7,11 @@
 
   // Read backups from store — SSE keeps them updated
   const gsState = $derived(gameserverStore.getState(id));
+  const gameserver = $derived(gsState?.gameserver);
   const backups = $derived(gsState?.backups ?? []);
   const loading = $derived(gsState?.backups === null);
   let creating = $state(false);
+  let globalMaxBackups = $state(0);
 
   const totalSize = $derived(
     backups
@@ -17,10 +19,20 @@
       .reduce((sum, b) => sum + b.size_bytes, 0)
   );
 
-  onMount(() => {
+  // Per-server override takes precedence; 0 means "use global default".
+  const effectiveLimit = $derived(gameserver?.backup_limit || globalMaxBackups);
+  const usingGlobal = $derived(!gameserver?.backup_limit);
+
+  onMount(async () => {
     // Trigger lazy load if not already loaded
     if (gsState?.backups === null) {
       gameserverStore.loadBackups(id);
+    }
+    try {
+      const resp = await api.settings.get();
+      if (resp?.settings?.max_backups) globalMaxBackups = resp.settings.max_backups;
+    } catch (e) {
+      console.warn('Backups: failed to load settings', e);
     }
   });
 
@@ -75,7 +87,11 @@
 
 <div class="backups-toolbar">
   <span class="backups-info">
-    {backups.length} backup{backups.length !== 1 ? 's' : ''}
+    {#if effectiveLimit > 0}
+      {backups.length} / {effectiveLimit} backup{effectiveLimit !== 1 ? 's' : ''}{#if usingGlobal} <span class="limit-hint">(global)</span>{/if}
+    {:else}
+      {backups.length} backup{backups.length !== 1 ? 's' : ''}
+    {/if}
     {#if totalSize > 0} · {formatSize(totalSize)} total{/if}
   </span>
   <button class="btn-solid" onclick={createBackup} disabled={creating} style="font-size:0.82rem; padding:8px 16px;">
@@ -143,6 +159,7 @@
   .backups-info {
     font-size: 0.78rem; color: var(--text-tertiary); font-family: var(--font-mono);
   }
+  .limit-hint { opacity: 0.55; }
 
   .backup-panel {
     background: var(--bg-surface);
