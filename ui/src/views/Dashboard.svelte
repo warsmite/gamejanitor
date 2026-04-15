@@ -106,7 +106,6 @@
           connectionAddress={gameserverStore.connectionAddress(gs.id)}
           iconPath={game?.icon_path || ''}
           gameName={game?.name || gs.game_id}
-          logLines={state?.logLines?.slice(-4) ?? []}
           onaction={(action) => handleAction(gs.id, action as any)}
         />
       {/each}
