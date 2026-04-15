@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Gameserver, GameserverStats, QueryData } from '$lib/api';
   import { navigate } from '$lib/router';
+  import { gameserverStore } from '$lib/stores';
   import GameIcon from './GameIcon.svelte';
   import StatusPill from './StatusPill.svelte';
   import CopyBlock from './CopyBlock.svelte';
@@ -21,6 +22,16 @@
   const isStopped = $derived(gameserver.status === 'stopped');
   const isArchived = $derived(gameserver.desired_state === 'archived');
   const isUnreachable = $derived(gameserver.status === 'unreachable');
+
+  const can = (p: string) => gameserverStore.canOnGameserver(p, gameserver.id);
+  const canConsole = $derived(can('gameserver.logs'));
+  const canFiles = $derived(can('gameserver.files.read'));
+  const canBackups = $derived(can('backup.read'));
+  const canSettings = $derived(
+    can('gameserver.configure.name') || can('gameserver.configure.env') ||
+    can('gameserver.configure.resources') || can('gameserver.configure.ports') ||
+    can('gameserver.configure.auto-restart')
+  );
 
   const memPercent = $derived(
     stats ? Math.round((stats.memory_usage_mb / stats.memory_limit_mb) * 100) : 0
@@ -111,10 +122,18 @@
     </div>
     {#if !isArchived}
       <div class="shortcuts">
-        <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
-        <a href="/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
-        <a href="/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
-        <a href="/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
+        {#if canConsole}
+          <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>
+        {/if}
+        {#if canFiles}
+          <a href="/gameservers/{gameserver.id}/files" class="sc" onclick={(e) => e.stopPropagation()}>Files</a>
+        {/if}
+        {#if canBackups}
+          <a href="/gameservers/{gameserver.id}/backups" class="sc" onclick={(e) => e.stopPropagation()}>Backups</a>
+        {/if}
+        {#if canSettings}
+          <a href="/gameservers/{gameserver.id}/settings" class="sc" onclick={(e) => e.stopPropagation()}>Settings</a>
+        {/if}
       </div>
     {/if}
   </div>
