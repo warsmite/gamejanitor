@@ -77,16 +77,6 @@ func (p *EventPersister) persist(event WebhookEvent) {
 		return
 	}
 
-	// Skip events already persisted by trackActivity/recordInstant to avoid duplicates.
-	// Those are action events (gameserver.start, gameserver.create, etc.) published
-	// from within the gameserver service after writing to the events table.
-	// GameserverActionData carries a full Gameserver object — that's the marker.
-	if e, ok := event.(Event); ok {
-		if _, isAction := e.Data.(*GameserverActionData); isAction {
-			return
-		}
-	}
-
 	gsID := event.EventGameserverID()
 	var gsIDPtr *string
 	if gsID != "" {
