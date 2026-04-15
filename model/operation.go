@@ -14,6 +14,7 @@ const (
 	PhaseUpdatingGame    OperationPhase = "updating_game"
 	PhaseReinstalling    OperationPhase = "reinstalling"
 	PhaseMigrating       OperationPhase = "migrating"
+	PhaseDeleting        OperationPhase = "deleting"
 )
 
 // OperationProgress carries optional progress data within a phase.

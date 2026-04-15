@@ -192,6 +192,12 @@ func (g *LiveGameserver) ID() string {
 
 // Status derives the display status from runtime state. Must be called with g.mu held.
 func (g *LiveGameserver) Status() string {
+	// Delete is destructive and user-initiated — show it unconditionally,
+	// even for archived or unreachable gameservers, so users see their action took effect.
+	if g.operation != nil && g.operation.Phase == model.PhaseDeleting {
+		return controller.StatusDeleting
+	}
+
 	if g.desiredState == "archived" {
 		return controller.StatusArchived
 	}
@@ -540,6 +546,37 @@ func (g *LiveGameserver) setProgress(progress model.OperationProgress) {
 	}
 	g.operation.Progress = &progress
 	g.notifyWatchersLocked(g.operation)
+}
+
+// BeginDelete marks the gameserver as being deleted so the UI can show a
+// "Deleting..." state during teardown. Unlike other operations, delete is
+// driven by Manager.Delete (which needs to remove the live object and DB row
+// on completion), so it bypasses submitOperation.
+func (g *LiveGameserver) BeginDelete() error {
+	g.mu.Lock()
+	if g.operation != nil {
+		op := g.operation.Type
+		g.mu.Unlock()
+		return fmt.Errorf("cannot begin delete: operation %s in progress", op)
+	}
+	g.operation = &model.Operation{Type: model.OpDelete, Phase: model.PhaseDeleting}
+	op := g.operation
+	g.mu.Unlock()
+
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
+		Operation: op,
+	}))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
+		Status: controller.StatusDeleting,
+	}))
+	g.notifyWatchersLocked(op)
+	return nil
+}
+
+// CancelDelete clears the deleting operation, used when Manager.Delete fails
+// mid-flight and the gameserver continues to exist.
+func (g *LiveGameserver) CancelDelete() {
+	g.clearOperation()
 }
 
 // clearOperation clears the current operation and notifies watchers.

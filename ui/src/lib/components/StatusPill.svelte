@@ -7,6 +7,7 @@
     status === 'archived' ? 'archived' :
     status === 'error' ? 'error' :
     status === 'unreachable' ? 'unreachable' :
+    status === 'deleting' ? 'deleting' :
     'starting' // installing, starting, stopping
   );
 </script>
@@ -42,6 +43,9 @@
 
   .unreachable { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
   .unreachable .dot { background: var(--danger); animation: pulse 2s ease-in-out infinite; }
+
+  .deleting { background: rgba(239,68,68,0.08); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
+  .deleting .dot { background: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
 
   @keyframes pulse {
     0%, 100% { transform: scale(1); opacity: 1; }

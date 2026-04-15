@@ -7,6 +7,7 @@ const (
 	StatusStarting    = "starting"
 	StatusRunning     = "running"
 	StatusStopping    = "stopping"
+	StatusDeleting    = "deleting"
 	StatusError       = "error"
 	StatusUnreachable = "unreachable" // Worker disconnected — actual instance state unknown
 	StatusArchived    = "archived"

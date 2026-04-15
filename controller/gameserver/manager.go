@@ -347,6 +347,19 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	}
 	live.WaitForOperation()
 
+	// Mark the live object as deleting so the UI shows a "Deleting..." state
+	// during teardown (which can take seconds for large volumes). Cleared only
+	// if teardown fails before we remove the record from the map.
+	if err := live.BeginDelete(); err != nil {
+		return err
+	}
+	deleteCompleted := false
+	defer func() {
+		if !deleteCompleted {
+			live.CancelDelete()
+		}
+	}()
+
 	// Re-read from DB for current state after stop
 	gs, err := m.store.GetGameserver(id)
 	if err != nil || gs == nil {
@@ -409,6 +422,7 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	delete(m.gameservers, id)
 	m.mu.Unlock()
 
+	deleteCompleted = true
 	return nil
 }
 

@@ -26,6 +26,7 @@ export const phaseLabels: Record<string, string> = {
   'updating_game': 'Updating...',
   'reinstalling': 'Reinstalling...',
   'migrating': 'Migrating...',
+  'deleting': 'Deleting...',
 };
 
 class GameserverStore {
