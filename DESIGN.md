@@ -17,9 +17,9 @@ Runs processes and manages data. Knows nothing about "gameservers" — operates 
 - **Files**: read, write, list, delete, rename, download within a volume
 - **Depot**: download game files (Steam/other), prepare game scripts, cache management
 
-Currently implemented as a single `Worker` interface (~34 methods). Splitting into focused interfaces is tracked as tech debt — the monolithic interface works but consumers that only need files or volumes depend on everything.
+The `Worker` interface is composed of focused sub-interfaces (`InstanceManager`, `VolumeManager`, `FileManager`, `ScriptManager`, `DepotManager`, `StateWatcher`).
 
-`SandboxWorker` implements the interface locally using bubblewrap, slirp4netns, and systemd scopes. `RemoteWorker` wraps the same interface over gRPC.
+`LocalWorker` implements the interface locally using crun (OCI runtime) with host networking and systemd scopes for lifecycle. `RemoteWorker` wraps the same interface over gRPC.
 
 Workers push instance lifecycle events (started, ready, exited) via a persistent gRPC stream. The controller never polls for process state.
 
@@ -401,7 +401,7 @@ Construction order — no circular dependencies, no post-construction setters:
 
 ## Single Binary, Three Modes
 
-- **No flags** (standalone): controller + local worker. Manager creates a local SandboxWorker registered in the registry.
+- **No flags** (standalone): controller + local worker. Manager creates a local LocalWorker registered in the registry.
 - **`--controller --worker=false`**: controller only. Workers connect via gRPC and register in the registry. Manager assigns gameservers to remote workers.
 - **`--worker --controller=false`**: worker agent only. Runs the gRPC server, connects to the controller, executes commands. No database, no web UI, no domain logic.
 
