@@ -333,12 +333,11 @@ func (gs *Gameserver) Start() *Action {
 	return &Action{gs: gs, kind: "start"}
 }
 
-// Stop triggers the stop action. Stop is currently synchronous on the
-// backend (the HTTP handler blocks until the graceful stop completes or
-// force-kill timeout fires), so the context budget must be generous.
+// Stop triggers the stop action. Stop returns 202 immediately; the actual
+// teardown runs in the operation goroutine on the controller.
 func (gs *Gameserver) Stop() *Action {
 	gs.env.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, err := gs.env.sdk.Gameservers.Stop(ctx, gs.id)
 	require.NoError(gs.env.t, err, "stop %s", gs.id)

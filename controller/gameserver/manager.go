@@ -327,12 +327,15 @@ func (m *Manager) Create(ctx context.Context, gs *model.Gameserver) (string, err
 	return rawPassword, nil
 }
 
-// Delete cancels any in-progress operation, tears down infrastructure (killing
-// the instance without a graceful stop — the data is going away anyway),
-// removes the DB record, and removes the gameserver from the in-memory map.
-// Delete deliberately skips the stop-server script and graceful-stop timeout:
-// they'd only serve to flush world state we're about to erase, and running
-// them creates a race with auto-restart when the process exits.
+// Delete submits a delete operation on the gameserver. Returns nil once the
+// operation is accepted — the actual teardown (worker cleanup, DB delete,
+// backup store cleanup) runs in the operation goroutine and the gameserver
+// disappears from the manager map via the onSuccess hook.
+//
+// Delete has the highest operation priority, so it preempts anything in flight
+// including Stop. The stop-server script and graceful-stop timeout are
+// deliberately skipped: the data is going away anyway, and running them would
+// race with auto-restart on unexpected process exit.
 func (m *Manager) Delete(ctx context.Context, id string) error {
 	m.mu.RLock()
 	live := m.gameservers[id]
@@ -344,81 +347,19 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 
 	m.log.Info("deleting gameserver", "id", id)
 
-	// Mark as deleting BEFORE any worker calls. BeginDelete also cancels any
-	// in-flight operation and waits for it to exit. Setting OpDelete up front
-	// makes process-exit events arriving during RemoveInstance be treated as
-	// expected (no auto-restart).
-	live.BeginDelete()
-	deleteCompleted := false
-	defer func() {
-		if !deleteCompleted {
-			live.CancelDelete()
+	return live.Delete(ctx, func(ctx context.Context) error {
+		// Remove the live object from the map first so subsequent lookups
+		// return 404 even while the scripts-dir cleanup is running.
+		m.mu.Lock()
+		delete(m.gameservers, id)
+		m.mu.Unlock()
+
+		gsDir := filepath.Join(m.dataDir, "gameservers", id)
+		if err := os.RemoveAll(gsDir); err != nil {
+			m.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
 		}
-	}()
-
-	gs, err := m.store.GetGameserver(id)
-	if err != nil || gs == nil {
-		return controller.ErrNotFoundf("gameserver %s not found", id)
-	}
-
-	// Archived servers have no volume or instance on a worker — skip infrastructure cleanup
-	if !gs.IsArchived() {
-		w := m.dispatcher.WorkerFor(id)
-		if w == nil {
-			m.log.Warn("worker unavailable during delete, skipping infrastructure cleanup", "gameserver", id)
-		} else {
-			// Clean up any remaining instance by name
-			instanceName := naming.InstanceName(id)
-			if err := w.RemoveInstance(ctx, instanceName); err != nil {
-				m.log.Debug("no instance to remove by name during delete", "name", instanceName)
-			}
-
-			if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-				m.log.Warn("failed to remove volume during delete", "id", id, "error", err)
-			}
-
-			gsDir := filepath.Join(m.dataDir, "gameservers", id)
-			if err := os.RemoveAll(gsDir); err != nil {
-				m.log.Warn("failed to remove gameserver scripts dir", "id", id, "error", err)
-			}
-		}
-	}
-
-	backups, err := m.store.ListBackups(model.BackupFilter{GameserverID: id})
-	if err != nil {
-		m.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
-	}
-
-	// Publish delete event before removing from DB
-	m.store.PopulateNode(gs)
-	actor := event.ActorFromContext(ctx)
-	m.bus.Publish(event.NewEvent(event.EventGameserverDelete, gs.ID, actor, &event.GameserverActionData{
-		Gameserver: gs,
-	}))
-
-	if err := m.store.DeleteGameserver(id); err != nil {
-		return err
-	}
-
-	// Clean up backup storage files
-	if m.backupStore != nil {
-		for _, b := range backups {
-			if err := m.backupStore.Delete(ctx, id, b.ID); err != nil {
-				m.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
-			}
-		}
-		if err := m.backupStore.DeleteArchive(ctx, id); err != nil {
-			m.log.Warn("failed to remove archive store file", "gameserver", id, "error", err)
-		}
-	}
-
-	// Remove from map
-	m.mu.Lock()
-	delete(m.gameservers, id)
-	m.mu.Unlock()
-
-	deleteCompleted = true
-	return nil
+		return nil
+	})
 }
 
 // UpdateConfig merges provided fields into the existing gameserver and persists.

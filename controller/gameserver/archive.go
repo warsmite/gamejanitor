@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
@@ -523,23 +522,7 @@ func (g *LiveGameserver) stopIfRunning(ctx context.Context) error {
 		return nil
 	}
 
-	// Run stop-server script to flush world state before killing
-	execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
-	_, _, _, execErr := w.Exec(execCtx, *instanceID, []string{"/scripts/stop-server"})
-	execCancel()
-	if execErr != nil {
-		g.log.Info("stop-server script not available or failed, proceeding", "error", execErr)
-	}
-
-	stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
-	defer stopCancel()
-	if err := w.StopInstance(stopCtx, *instanceID, 10); err != nil {
-		g.log.Warn("failed to stop instance", "instance_id", *instanceID, "error", err)
-	}
-
-	if err := w.RemoveInstance(ctx, *instanceID); err != nil {
-		g.log.Debug("failed to remove instance after stop", "instance_id", *instanceID, "error", err)
-	}
+	g.stopInstanceOnWorker(ctx, w, *instanceID)
 
 	g.mu.Lock()
 	g.instanceID = nil

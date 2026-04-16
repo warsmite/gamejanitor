@@ -316,28 +316,28 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	return nil
 }
 
-// Stop transitions the gameserver to the stopped state. If an operation is in
-// progress, it cancels it first and waits for the goroutine to finish.
+// Stop transitions the gameserver to the stopped state. Stop preempts any
+// in-flight lower-priority operation (start/restart/update/…) via the
+// submitOperation harness, then runs doStop in the operation goroutine.
+// Returns nil immediately — the teardown work happens asynchronously.
 func (g *LiveGameserver) Stop(ctx context.Context) error {
 	g.mu.Lock()
-
 	if g.instanceID == nil && g.process == nil && g.operation == nil {
 		g.mu.Unlock()
 		return nil
 	}
-
-	if g.cancelOp != nil {
-		g.cancelOp()
-	}
-	done := g.opDone
 	g.mu.Unlock()
 
-	if done != nil {
-		<-done
-	}
-
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopping, g.id, nil))
-	return g.doStop(ctx)
+	return g.submitOperation(operationOpts{
+		opType:         model.OpStop,
+		initialPhase:   model.PhaseStopping,
+		requireWorker:  false,
+		errorPrefix:    "", // doStop logs errors; it does not fail.
+		clearOnSuccess: true,
+	}, func(ctx context.Context) error {
+		g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopping, g.id, nil))
+		return g.doStop(ctx)
+	})
 }
 
 // doStop performs the raw stop work: executes stop-server script, stops and
@@ -355,23 +355,7 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 	g.mu.Unlock()
 
 	if instanceID != nil && w != nil {
-		// Best-effort graceful stop via game script.
-		execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
-		_, _, _, execErr := w.Exec(execCtx, *instanceID, []string{"/scripts/stop-server"})
-		execCancel()
-		if execErr != nil {
-			g.log.Info("stop-server script not available or failed", "error", execErr)
-		}
-
-		stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
-		if err := w.StopInstance(stopCtx, *instanceID, 10); err != nil {
-			g.log.Warn("failed to stop instance gracefully", "error", err)
-		}
-		stopCancel()
-
-		if err := w.RemoveInstance(ctx, *instanceID); err != nil {
-			g.log.Warn("failed to remove instance", "error", err)
-		}
+		g.stopInstanceOnWorker(ctx, w, *instanceID)
 	}
 
 	g.mu.Lock()
@@ -599,6 +583,89 @@ func (g *LiveGameserver) setError(reason string) {
 	g.mu.Lock()
 	g.setErrorLocked(reason)
 	g.mu.Unlock()
+}
+
+// Delete tears down the gameserver: cancels any in-flight operation, removes
+// the instance and volume from the worker (skipping the stop-server script —
+// the data is going away anyway), deletes the DB record, and cleans up backup
+// storage. Runs in a background goroutine via submitOperation with OpDelete
+// priority (highest), so it preempts everything including Stop.
+//
+// onSuccess runs after the worker/DB teardown succeeds and lets the caller
+// hook in manager-level cleanup (e.g. removing this live object from the map)
+// that must happen while the operation record is still in place.
+func (g *LiveGameserver) Delete(ctx context.Context, onSuccess func(context.Context) error) error {
+	return g.submitOperation(operationOpts{
+		opType:         model.OpDelete,
+		initialPhase:   model.PhaseDeleting,
+		requireWorker:  false, // delete must proceed even if the worker is offline
+		errorPrefix:    "Delete failed",
+		clearOnSuccess: false, // on success the live object is removed from the map; no op to clear
+		onSuccess:      onSuccess,
+	}, g.executeDelete)
+}
+
+// executeDelete performs the raw delete work: worker teardown, DB row removal,
+// backup store cleanup, and publishing the gameserver.delete event. Runs
+// inside the submitOperation goroutine.
+func (g *LiveGameserver) executeDelete(ctx context.Context) error {
+	gs, err := g.store.GetGameserver(g.id)
+	if err != nil || gs == nil {
+		// Already gone from the DB — nothing to tear down.
+		return nil
+	}
+
+	// Archived gameservers have no volume or instance on a worker; skip infra
+	// cleanup. The volume was already removed when the server was archived.
+	if !gs.IsArchived() {
+		w := g.getWorker()
+		if w == nil {
+			g.log.Warn("worker unavailable during delete, skipping infrastructure cleanup", "gameserver", g.id)
+		} else {
+			// Remove the instance by its naming-convention name. This catches
+			// any instance we created even if instanceID was never persisted
+			// (e.g. a crash during Start before the DB write landed).
+			instanceName := naming.InstanceName(g.id)
+			if err := w.RemoveInstance(ctx, instanceName); err != nil {
+				g.log.Debug("no instance to remove by name during delete", "name", instanceName)
+			}
+			if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
+				g.log.Warn("failed to remove volume during delete", "id", g.id, "error", err)
+			}
+		}
+	}
+
+	backups, err := g.store.ListBackups(model.BackupFilter{GameserverID: g.id})
+	if err != nil {
+		g.log.Warn("failed to list backups for store cleanup", "id", g.id, "error", err)
+	}
+
+	if err := g.store.DeleteGameserver(g.id); err != nil {
+		return fmt.Errorf("deleting gameserver record: %w", err)
+	}
+
+	// Publish after the DB delete so subscribers only see "delete" if it
+	// actually happened. Populate node info from the pre-delete model so
+	// consumers get the full context.
+	g.store.PopulateNode(gs)
+	actor := event.ActorFromContext(ctx)
+	g.bus.Publish(event.NewEvent(event.EventGameserverDelete, gs.ID, actor, &event.GameserverActionData{
+		Gameserver: gs,
+	}))
+
+	// Best-effort backup storage cleanup.
+	if g.backupStore != nil {
+		for _, b := range backups {
+			if err := g.backupStore.Delete(ctx, g.id, b.ID); err != nil {
+				g.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
+			}
+		}
+		if err := g.backupStore.DeleteArchive(ctx, g.id); err != nil {
+			g.log.Warn("failed to remove archive store file", "gameserver", g.id, "error", err)
+		}
+	}
+
+	return nil
 }
 
 // waitForInstanceExit polls instance state until it exits or the context is cancelled.

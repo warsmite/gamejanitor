@@ -1,11 +1,9 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
-	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -17,14 +15,12 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
 		return
 	}
-	snapshot := gs.Snapshot()
-	go func() {
-		ctx := event.SetActorInContext(context.Background(), event.ActorFromContext(r.Context()))
-		if err := h.manager.Delete(ctx, id); err != nil {
-			h.log.Error("deleting gameserver", "id", id, "error", err)
-		}
-	}()
-	respondAccepted(w, snapshot)
+	if err := h.manager.Delete(detachedCtx(r), id); err != nil {
+		h.log.Error("deleting gameserver", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondAccepted(w, gs.Snapshot())
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {

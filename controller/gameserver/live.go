@@ -452,6 +452,18 @@ func (g *LiveGameserver) setErrorLocked(reason string) {
 	}))
 }
 
+// opPriority ranks operations for preemption. A submitted op whose priority
+// strictly exceeds the running op's priority cancels it and takes over; equal
+// or lower priority is rejected. Unlisted ops default to 0.
+//
+// Stop interrupts any peer (start/restart/update/…). Delete interrupts everything,
+// including Stop. This encodes the real precedence users expect: "make it stop
+// now" always wins over "make it do X," and "make it go away" always wins over both.
+var opPriority = map[string]int{
+	model.OpStop:   1,
+	model.OpDelete: 2,
+}
+
 // operationOpts configures how submitOperation handles an operation.
 type operationOpts struct {
 	// opType is the operation type (e.g. model.OpStart).
@@ -460,7 +472,7 @@ type operationOpts struct {
 	initialPhase model.OperationPhase
 	// requireWorker controls whether submitOperation checks g.worker != nil
 	// before accepting. Operations that don't need a worker (unarchive placing
-	// onto a different node) should set this false.
+	// onto a different node, delete when the worker is offline) should set this false.
 	requireWorker bool
 	// errorPrefix is prepended to error messages when the operation fails.
 	// Empty means the operation is expected to set errors itself via setError.
@@ -470,30 +482,68 @@ type operationOpts struct {
 	// until HandleProcessEvent observes StateRunning — they set this false.
 	// Terminal operations (stop, archive) set this true.
 	clearOnSuccess bool
+	// onSuccess runs after fn returns nil, before clearOperation. Used for
+	// manager-level cleanup tied to operation completion (e.g. removing the
+	// live object from the manager map on delete). Errors are logged, not
+	// surfaced — the operation has already succeeded.
+	onSuccess func(context.Context) error
 }
 
 // submitOperation is the common goroutine harness for lifecycle operations.
-// It validates preconditions, sets up the operation state, spawns a goroutine
-// that runs fn, and handles cleanup (cancelOp, opDone, error reasons).
+// It validates preconditions (applying preemption rules when a higher-priority
+// op arrives), sets up the operation state, spawns a goroutine that runs fn,
+// and handles cleanup (cancelOp, opDone, error reasons).
 //
 // On cancellation (context cancelled mid-flight), no error reason is set —
-// the caller that triggered the cancellation (typically Stop) handles that path.
+// the caller that triggered the cancellation handles that path.
 func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context.Context) error) error {
-	g.mu.Lock()
-	if g.operation != nil {
+	incoming := opPriority[opts.opType]
+
+	// Preempt-or-reject loop. If a running op has equal-or-higher priority we
+	// reject. If ours is strictly higher, we cancel theirs and wait for its
+	// goroutine to exit, then recheck — another preemption could have slipped
+	// in while we were waiting.
+	for {
+		g.mu.Lock()
+		if g.operation == nil {
+			break
+		}
+		current := opPriority[g.operation.Type]
+		if incoming <= current {
+			existing := g.operation.Type
+			g.mu.Unlock()
+			return controller.ErrConflictf("operation %s already in progress", existing)
+		}
+		cancel := g.cancelOp
+		done := g.opDone
 		g.mu.Unlock()
-		return fmt.Errorf("operation %s already in progress", g.operation.Type)
+		if cancel != nil {
+			cancel()
+		}
+		if done != nil {
+			<-done
+		}
 	}
+	// g.mu held, g.operation == nil.
+
 	if opts.requireWorker && g.worker == nil {
 		g.mu.Unlock()
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
 	}
 
 	g.operation = &model.Operation{Type: opts.opType, Phase: opts.initialPhase}
+	op := g.operation
 	opCtx, cancel := context.WithCancel(context.Background())
 	g.cancelOp = cancel
 	g.opDone = make(chan struct{})
 	g.mu.Unlock()
+
+	// Announce the new operation immediately so watchers and SSE consumers
+	// don't have to wait for the first setPhase.
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
+		Operation: op,
+	}))
+	g.notifyWatchersLocked(op)
 
 	go func() {
 		defer func() {
@@ -515,6 +565,11 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 			}
 			g.clearOperation()
 			return
+		}
+		if opts.onSuccess != nil {
+			if onErr := opts.onSuccess(opCtx); onErr != nil {
+				g.log.Error("operation onSuccess hook failed", "type", opts.opType, "error", onErr)
+			}
 		}
 		if opts.clearOnSuccess {
 			g.clearOperation()
@@ -554,43 +609,27 @@ func (g *LiveGameserver) setProgress(progress model.OperationProgress) {
 	g.notifyWatchersLocked(g.operation)
 }
 
-// BeginDelete cancels any in-flight operation, waits for its goroutine to
-// exit, and then marks the gameserver as being deleted. OpDelete must be set
-// before any worker teardown so that process-exit events arriving during
-// RemoveInstance aren't mistaken for unexpected crashes (which would trigger
-// auto-restart and fight the delete). Unlike other operations, delete bypasses
-// submitOperation because Manager.Delete owns the lifecycle and needs to
-// remove the live object and DB row on completion.
-func (g *LiveGameserver) BeginDelete() {
-	g.mu.Lock()
-	if g.cancelOp != nil {
-		g.cancelOp()
-	}
-	done := g.opDone
-	g.mu.Unlock()
-
-	if done != nil {
-		<-done
+// stopInstanceOnWorker runs the graceful-then-forced teardown on the worker:
+// stop-server script (best effort) → StopInstance with grace → RemoveInstance.
+// Errors are logged and swallowed — callers proceed regardless, because a
+// partial failure here must not leave the gameserver wedged mid-stop.
+func (g *LiveGameserver) stopInstanceOnWorker(ctx context.Context, w worker.Worker, instanceID string) {
+	execCtx, execCancel := context.WithTimeout(ctx, 15*time.Second)
+	_, _, _, execErr := w.Exec(execCtx, instanceID, []string{"/scripts/stop-server"})
+	execCancel()
+	if execErr != nil {
+		g.log.Info("stop-server script not available or failed", "error", execErr)
 	}
 
-	g.mu.Lock()
-	g.operation = &model.Operation{Type: model.OpDelete, Phase: model.PhaseDeleting}
-	op := g.operation
-	g.mu.Unlock()
+	stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
+	if err := w.StopInstance(stopCtx, instanceID, 10); err != nil {
+		g.log.Warn("failed to stop instance gracefully", "error", err)
+	}
+	stopCancel()
 
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
-		Operation: op,
-	}))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-		Status: controller.StatusDeleting,
-	}))
-	g.notifyWatchersLocked(op)
-}
-
-// CancelDelete clears the deleting operation, used when Manager.Delete fails
-// mid-flight and the gameserver continues to exist.
-func (g *LiveGameserver) CancelDelete() {
-	g.clearOperation()
+	if err := w.RemoveInstance(ctx, instanceID); err != nil {
+		g.log.Warn("failed to remove instance", "error", err)
+	}
 }
 
 // clearOperation clears the current operation and notifies watchers.
