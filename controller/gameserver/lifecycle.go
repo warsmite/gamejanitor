@@ -343,6 +343,9 @@ func (g *LiveGameserver) Stop(ctx context.Context) error {
 // doStop performs the raw stop work: executes stop-server script, stops and
 // removes the instance, and clears runtime state.
 func (g *LiveGameserver) doStop(ctx context.Context) error {
+	// Announce the phase so watchers/SSE see the operation is in flight.
+	g.setPhase(model.PhaseStopping)
+
 	g.mu.Lock()
 	// Flip desiredState to "stopped" before any worker calls. HandleProcessEvent
 	// consults desiredState when classifying StateExited — if we waited until
@@ -382,6 +385,7 @@ func (g *LiveGameserver) Restart(ctx context.Context) error {
 		errorPrefix:    "Restart failed",
 		clearOnSuccess: false,
 	}, func(ctx context.Context) error {
+		g.setPhase(model.PhaseStopping)
 		if err := g.stopIfRunning(ctx); err != nil {
 			return err
 		}
@@ -402,6 +406,8 @@ func (g *LiveGameserver) UpdateServerGame(ctx context.Context) error {
 }
 
 func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
+	g.setPhase(model.PhaseStopping)
+
 	game := g.gameStore.GetGame(g.spec.GameID)
 	if game == nil {
 		g.setError("Game not found")
@@ -486,6 +492,7 @@ func (g *LiveGameserver) Reinstall(ctx context.Context) error {
 }
 
 func (g *LiveGameserver) executeReinstall(ctx context.Context) error {
+	g.setPhase(model.PhaseStopping)
 	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.spec.ID, nil))
 
 	if err := g.stopIfRunning(ctx); err != nil {
@@ -583,6 +590,8 @@ func (g *LiveGameserver) Delete(ctx context.Context, onFinish func(context.Conte
 // backup store cleanup, and publishing the gameserver.delete event. Runs
 // inside the submitOperation goroutine.
 func (g *LiveGameserver) executeDelete(ctx context.Context) error {
+	g.setPhase(model.PhaseDeleting)
+
 	gs, err := g.store.GetGameserver(g.spec.ID)
 	if err != nil || gs == nil {
 		// Already gone from the DB — nothing to tear down.

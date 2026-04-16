@@ -178,15 +178,22 @@ func (g *LiveGameserver) Snapshot() model.Gameserver {
 	return gs
 }
 
-// HandleProcessEvent processes an instance state update from the worker.
-// Stale events (wrong instance ID) are silently ignored. The worker's
-// state and ready flags are orthogonal: we map both onto our observed fields.
+// HandleProcessEvent processes an instance state update from the worker. All
+// state mutations happen under g.mu; store writes, bus publishes, and
+// watcher notifications are deferred and executed after the lock is released.
+//
+// Stale events (wrong instance ID) are silently ignored. Worker state and
+// ready flags are orthogonal: both map onto the gameserver's observed fields.
 func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	// Side effects to perform after releasing the lock. Populated while the
+	// lock is held, flushed after we unlock. This is the pattern that keeps
+	// bus publishes and store writes off the hot path of other callers.
+	var se processEventSideEffects
 
-	// Ignore events for stale instances
+	g.mu.Lock()
+
 	if g.spec.InstanceID == nil || update.InstanceID != *g.spec.InstanceID {
+		g.mu.Unlock()
 		return
 	}
 
@@ -194,57 +201,144 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 	case worker.StateRunning:
 		wasReady := g.ready
 		g.setProcessRunningLocked(update)
-		g.spec.ErrorReason = ""
-		g.store.ClearErrorReason(g.spec.ID)
-
+		if g.spec.ErrorReason != "" {
+			g.spec.ErrorReason = ""
+			se.clearError = true
+		}
 		if !g.spec.Installed && update.Installed {
 			g.spec.Installed = true
-			dbGS, err := g.store.GetGameserver(g.spec.ID)
-			if err == nil {
-				dbGS.Installed = true
-				g.store.UpdateGameserver(dbGS)
-			}
+			se.markInstalled = true
 		}
-
-		// A ready transition completes the start operation — the process is up
-		// AND the readiness signal has fired. Process-alive without ready keeps
-		// the operation active.
+		// A ready transition completes the start operation — the process is
+		// up AND the readiness signal has fired. Process-alive without ready
+		// keeps the operation active.
 		if g.ready && !wasReady {
 			if g.operation != nil {
 				g.operation = nil
-				g.notifyWatchers(nil)
-				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{Operation: nil}))
+				se.publishOperationCleared = true
 			}
-			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.spec.ID, nil))
+			se.publishReady = true
 		}
 
 	case worker.StateExited:
-		// Classify the exit. It is expected (not a crash) when:
-		//   - the user asked for the gameserver to stop (desiredState != model.DesiredRunning)
-		//   - a delete is in progress (OpDelete intentionally kills the instance)
-		// Both skip handleUnexpectedDeath so auto-restart doesn't fight the
-		// intentional action.
+		// Classify the exit. It's expected (not a crash) when the user asked
+		// the gameserver to stop (desiredState != running) or a delete is in
+		// progress. Expected exits skip the crash accounting so auto-restart
+		// doesn't fight intentional teardown.
 		intentional := g.spec.DesiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
 		wasRunning := g.processState == model.ProcessRunning
 		operationWasActive := g.operation != nil
+
 		if !intentional && (wasRunning || operationWasActive) {
-			g.handleUnexpectedDeath(update.ExitCode, update.StartedAt)
+			reason := describeExit(update.ExitCode, time.Since(update.StartedAt), nil)
+			g.spec.ErrorReason = reason
+			g.setProcessExitedLocked(update.ExitCode, update.ExitedAt)
+			se.persistErrorReason = reason
+			se.publishInstanceExited = true
+
+			// Auto-restart decision.
+			const maxRestartAttempts = 3
+			if g.spec.AutoRestart != nil && *g.spec.AutoRestart {
+				g.crashCount++
+				if g.crashCount > maxRestartAttempts {
+					g.spec.ErrorReason = fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", g.crashCount, reason)
+					se.persistErrorReason = g.spec.ErrorReason
+					se.publishError = g.spec.ErrorReason
+					se.crashLimitReached = true
+					se.crashCount = g.crashCount
+				} else {
+					// Clear error state so the restart can proceed cleanly.
+					g.spec.ErrorReason = ""
+					g.clearProcessLocked()
+					se.persistErrorReason = ""
+					se.clearError = true
+					se.publishError = reason // surface the crash reason even though we're auto-restarting
+					se.triggerAutoRestart = true
+					se.crashCount = g.crashCount
+				}
+			} else {
+				se.publishError = reason
+			}
 		} else {
 			g.setProcessExitedLocked(update.ExitCode, update.ExitedAt)
 		}
-		// Clear any active operation — the process died
 		if g.operation != nil {
 			g.operation = nil
-			g.notifyWatchers(nil)
+			se.publishOperationCleared = true
 		}
-		// Clear instanceID — the ID points to an exited instance that should not
-		// block a subsequent Start from running (which would otherwise see a
-		// non-nil instanceID and short-circuit).
+		// Clear instanceID — the ID points to an exited instance that should
+		// not block a subsequent Start from running.
 		if g.spec.InstanceID != nil {
 			g.spec.InstanceID = nil
-			g.store.SetInstanceID(g.spec.ID, nil)
+			se.clearInstanceID = true
 		}
+	}
+
+	g.mu.Unlock()
+
+	g.applyProcessEventSideEffects(se)
+}
+
+// processEventSideEffects captures work queued under g.mu that must execute
+// after the lock is released — store writes, bus publishes, and the auto-restart
+// goroutine. Keeping these off the hot path prevents a slow event-bus
+// subscriber or a slow store write from serializing other operations on this
+// gameserver.
+type processEventSideEffects struct {
+	markInstalled           bool
+	clearInstanceID         bool
+	clearError              bool
+	persistErrorReason      string
+	publishOperationCleared bool
+	publishReady            bool
+	publishInstanceExited   bool
+	publishError            string
+	triggerAutoRestart      bool
+	crashLimitReached       bool
+	crashCount              int
+}
+
+func (g *LiveGameserver) applyProcessEventSideEffects(se processEventSideEffects) {
+	if se.clearError {
+		g.store.ClearErrorReason(g.spec.ID)
+	} else if se.persistErrorReason != "" {
+		g.store.SetErrorReason(g.spec.ID, se.persistErrorReason)
+	}
+	if se.markInstalled {
+		if dbGS, err := g.store.GetGameserver(g.spec.ID); err == nil && dbGS != nil {
+			dbGS.Installed = true
+			g.store.UpdateGameserver(dbGS)
+		}
+	}
+	if se.clearInstanceID {
+		g.store.SetInstanceID(g.spec.ID, nil)
+	}
+
+	if se.publishOperationCleared {
+		g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{Operation: nil}))
+		g.notifyWatchers(nil)
+	}
+	if se.publishReady {
+		g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.spec.ID, nil))
+	}
+	if se.publishInstanceExited {
+		g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.spec.ID, nil))
+	}
+	if se.publishError != "" {
+		g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: se.publishError}))
+	}
+
+	if se.crashLimitReached {
+		g.log.Error("auto-restart limit reached", "gameserver", g.spec.ID, "crashes", se.crashCount, "max_restarts", 3)
+	}
+	if se.triggerAutoRestart {
+		g.log.Warn("auto-restarting crashed gameserver", "gameserver", g.spec.ID, "attempt", se.crashCount, "max_restarts", 3)
+		go func() {
+			if err := g.Start(context.Background()); err != nil {
+				g.log.Error("auto-restart failed", "gameserver", g.spec.ID, "error", err)
+			}
+		}()
 	}
 }
 
@@ -306,44 +400,6 @@ func (g *LiveGameserver) ClearWorker() {
 	defer g.mu.Unlock()
 	g.worker = nil
 	g.clearProcessLocked()
-}
-
-// handleUnexpectedDeath handles an instance that exited without a stop operation.
-// Must be called with g.mu held.
-func (g *LiveGameserver) handleUnexpectedDeath(exitCode int, startedAt time.Time) {
-	reason := describeExit(exitCode, time.Since(startedAt), nil)
-	g.spec.ErrorReason = reason
-	g.setProcessExitedLocked(exitCode, time.Time{})
-	g.store.SetErrorReason(g.spec.ID, reason)
-
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.spec.ID, nil))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: reason}))
-
-	if g.spec.AutoRestart == nil || !*g.spec.AutoRestart {
-		return
-	}
-
-	g.crashCount++
-	const maxRestartAttempts = 3
-	if g.crashCount > maxRestartAttempts {
-		g.spec.ErrorReason = fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", g.crashCount, reason)
-		g.store.SetErrorReason(g.spec.ID, g.spec.ErrorReason)
-		g.log.Error("auto-restart limit reached", "gameserver", g.spec.ID, "crashes", g.crashCount, "max_restarts", maxRestartAttempts)
-		return
-	}
-
-	g.log.Warn("auto-restarting crashed gameserver", "gameserver", g.spec.ID, "attempt", g.crashCount, "max_restarts", maxRestartAttempts)
-
-	// Clear error state so the restart can proceed
-	g.spec.ErrorReason = ""
-	g.clearProcessLocked()
-
-	// Start in a new goroutine — we're inside HandleProcessEvent which holds the lock
-	go func() {
-		if err := g.Start(context.Background()); err != nil {
-			g.log.Error("auto-restart failed", "gameserver", g.spec.ID, "error", err)
-		}
-	}()
 }
 
 // describeExit produces a human-readable description of a process exit.
@@ -464,18 +520,14 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 	}
 
 	g.operation = &model.Operation{Type: opts.opType, Phase: opts.initialPhase}
-	op := g.operation
 	opCtx, cancel := context.WithCancel(context.Background())
 	g.cancelOp = cancel
 	g.opDone = make(chan struct{})
 	g.mu.Unlock()
 
-	// Announce the new operation immediately so watchers and SSE consumers
-	// don't have to wait for the first setPhase.
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
-		Operation: op,
-	}))
-	g.notifyWatchers(op)
+	// No install-time publish: the goroutine's fn is responsible for
+	// publishing its phase via setPhase. The first setPhase (typically called
+	// at the top of the execute function) announces the operation to watchers.
 
 	go func() {
 		defer func() {

@@ -38,6 +38,8 @@ func (g *LiveGameserver) Archive(ctx context.Context) error {
 }
 
 func (g *LiveGameserver) executeArchive(ctx context.Context) error {
+	g.setPhase(model.PhaseStopping)
+
 	// Stop if running
 	if err := g.stopIfRunning(ctx); err != nil {
 		return fmt.Errorf("stopping gameserver before archive: %w", err)
@@ -166,6 +168,8 @@ func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) err
 }
 
 func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID string) error {
+	g.setPhase(model.PhaseRestoringBackup)
+
 	// Select target node
 	if targetNodeID == "" {
 		g.mu.Lock()
@@ -338,6 +342,8 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 }
 
 func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string) error {
+	g.setPhase(model.PhaseStopping)
+
 	// Record whether the gameserver was running so we can restart after migration
 	g.mu.Lock()
 	wasRunning := g.processState == model.ProcessRunning
