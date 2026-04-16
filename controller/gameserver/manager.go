@@ -142,7 +142,7 @@ func (m *Manager) List(ctx context.Context, filter model.GameserverFilter) ([]mo
 		if filter.GameID != nil && snap.GameID != *filter.GameID {
 			continue
 		}
-		if filter.Status != nil && snap.Status != *filter.Status {
+		if filter.DesiredState != nil && snap.DesiredState != *filter.DesiredState {
 			continue
 		}
 		if filter.NodeID != nil {
@@ -828,7 +828,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 	case "running":
 		m.log.Info("instance running, populating process state", "gameserver", gs.id)
 		gs.mu.Lock()
-		gs.processState = controller.ProcessRunning
+		gs.processState = model.ProcessRunning
 		// Recovered instances are treated as ready — the worker was accepting
 		// work before we lost it, and we can't re-observe the ready pattern.
 		gs.ready = true

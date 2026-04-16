@@ -221,7 +221,7 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 
 		if actionErr != nil {
 			res.Error = actionErr.Error()
-			res.Status = snap.Status
+			res.Status = string(snap.DesiredState)
 		} else {
 			res.Status = "accepted"
 		}

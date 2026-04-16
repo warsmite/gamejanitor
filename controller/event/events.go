@@ -59,7 +59,6 @@ const (
 	EventScheduleTaskCompleted   = "schedule.task.completed"
 	EventScheduleTaskFailed      = "schedule.task.failed"
 	EventScheduleTaskMissed      = "schedule.task.missed"
-	EventGameserverStatusChanged = "gameserver.status_changed"
 	EventGameserverStats         = "gameserver.stats"
 	EventGameserverQuery         = "gameserver.query"
 	EventGameserverWarning       = "gameserver.warning"
@@ -85,7 +84,6 @@ var AllEventTypes = []string{
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
 	EventWorkerConnected, EventWorkerDisconnected, EventWorkerUpdated,
 	EventScheduleTaskCompleted, EventScheduleTaskFailed, EventScheduleTaskMissed,
-	EventGameserverStatusChanged,
 	EventGameserverStats, EventGameserverQuery,
 	EventGameserverWarning,
 	EventGameserverReachable,
@@ -162,11 +160,6 @@ type OperationData struct {
 
 type ErrorData struct {
 	Reason string `json:"reason"`
-}
-
-type StatusChangedData struct {
-	Status      string `json:"status"`
-	ErrorReason string `json:"error_reason,omitempty"`
 }
 
 type StatsData struct {

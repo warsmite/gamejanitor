@@ -134,9 +134,6 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 
 	g.log.Info("gameserver archived")
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverArchive, g.id, nil))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-		Status: controller.StatusArchived,
-	}))
 
 	return nil
 }
@@ -267,9 +264,6 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 
 	g.log.Info("gameserver unarchived", "node_id", targetNodeID)
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverUnarchive, g.id, nil))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-		Status: controller.StatusStopped,
-	}))
 
 	return nil
 }
@@ -334,7 +328,7 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 		// On success: if the gameserver is not running, clear the operation
 		// (migrate-stopped path). If it is running, HandleProcessEvent cleared it.
 		g.mu.Lock()
-		if g.operation != nil && g.processState == controller.ProcessNone {
+		if g.operation != nil && g.processState == model.ProcessNone {
 			g.operation = nil
 			g.notifyWatchersLocked(nil)
 		}
@@ -346,7 +340,7 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string) error {
 	// Record whether the gameserver was running so we can restart after migration
 	g.mu.Lock()
-	wasRunning := g.processState == controller.ProcessRunning
+	wasRunning := g.processState == model.ProcessRunning
 	volumeName := g.volumeName
 	gameID := g.gameID
 	g.mu.Unlock()

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -114,7 +113,9 @@ func (s *Subscriber) SyncExisting(ctx context.Context) {
 		return
 	}
 	for _, gs := range gameservers {
-		if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarting {
+		// Route any gameserver whose process is alive on a worker. Ready isn't
+		// required — a starting-but-not-ready process still has its ports bound.
+		if gs.ProcessState == model.ProcessRunning {
 			s.addRoutes(gs.ID)
 		}
 	}

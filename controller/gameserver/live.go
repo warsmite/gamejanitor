@@ -120,7 +120,7 @@ type LiveGameserver struct {
 	// Observed process facts — populated by HandleProcessEvent from worker
 	// events. ProcessState and Ready are orthogonal: a Running process is
 	// alive on the worker; Ready is true when the readiness signal fired.
-	processState controller.ProcessState
+	processState model.ProcessState
 	ready        bool
 	startedAt    *time.Time // when processState became Running
 	readyAt      *time.Time // when ready became true
@@ -147,7 +147,7 @@ type LiveGameserver struct {
 
 func newLiveGameserver(gs *model.Gameserver, store Store, bus *event.EventBus, gameStore *games.GameStore, settingsSvc SettingsReader, backupStore BackupStore, dispatcher *cluster.Dispatcher, placement *cluster.PlacementService, log *slog.Logger) *LiveGameserver {
 	return &LiveGameserver{
-		processState:       controller.ProcessNone,
+		processState:       model.ProcessNone,
 		id:                 gs.ID,
 		name:               gs.Name,
 		gameID:             gs.GameID,
@@ -193,63 +193,21 @@ func (g *LiveGameserver) ID() string {
 	return g.id
 }
 
-// Status derives the display status from runtime state. Must be called with g.mu held.
-func (g *LiveGameserver) Status() string {
-	// Delete is destructive and user-initiated — show it unconditionally,
-	// even for archived or unreachable gameservers, so users see their action took effect.
-	if g.operation != nil && g.operation.Phase == model.PhaseDeleting {
-		return controller.StatusDeleting
-	}
-
-	if g.desiredState == model.DesiredArchived {
-		return controller.StatusArchived
-	}
-
-	if g.worker == nil {
-		return controller.StatusUnreachable
-	}
-
-	if g.operation != nil {
-		switch g.operation.Phase {
-		case model.PhasePullingImage, model.PhaseDownloadingGame, model.PhaseInstalling:
-			return controller.StatusInstalling
-		case model.PhaseStopping:
-			return controller.StatusStopping
-		case model.PhaseStarting:
-			return controller.StatusStarting
-		case model.PhaseMigrating:
-			return controller.StatusInstalling
-		case model.PhaseCreatingBackup, model.PhaseRestoringBackup:
-			// Backup operations don't change the display status — fall through
-			// to process-based derivation below.
-		}
-	}
-
-	if g.errorReason != "" {
-		return controller.StatusError
-	}
-
-	if g.processState == controller.ProcessRunning {
-		return controller.StatusRunning
-	}
-
-	return controller.StatusStopped
-}
-
-// Snapshot creates a point-in-time copy of the gameserver as a model.Gameserver.
-// Acquires g.mu internally.
+// Snapshot returns a point-in-time view of the gameserver — spec plus
+// observed primary facts — as a model.Gameserver. Consumers that want a
+// one-word display pill derive it from these fields themselves; the controller
+// does not compress reality into a status enum.
 func (g *LiveGameserver) Snapshot() model.Gameserver {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	gs := model.Gameserver{
+		// Identity + spec
 		ID:                 g.id,
 		Name:               g.name,
 		GameID:             g.gameID,
 		VolumeName:         g.volumeName,
 		DesiredState:       g.desiredState,
-		InstanceID:         g.instanceID,
-		Installed:          g.installed,
 		NodeID:             g.nodeID,
 		Ports:              g.ports,
 		Env:                g.env,
@@ -267,25 +225,27 @@ func (g *LiveGameserver) Snapshot() model.Gameserver {
 		Grants:             g.grants,
 		SFTPUsername:       g.sftpUsername,
 		HashedSFTPPassword: g.hashedSFTPPassword,
-		ErrorReason:        g.errorReason,
 		CreatedAt:          g.createdAt,
 		UpdatedAt:          g.updatedAt,
 
-		// Derived fields
-		Status:    g.Status(),
-		Operation: g.operation,
-		StartedAt: g.startedAt,
+		// Observed — primary facts
+		InstanceID:   g.instanceID,
+		Installed:    g.installed,
+		ErrorReason:  g.errorReason,
+		Operation:    g.operation,
+		ProcessState: g.processState,
+		Ready:        g.ready,
+		WorkerOnline: g.worker != nil,
+		ExitCode:     g.exitCode,
+		StartedAt:    g.startedAt,
+		ReadyAt:      g.readyAt,
+		ExitedAt:     g.exitedAt,
 	}
 
-	// RestartRequired: compare applied config against current config
 	gs.ComputeRestartRequired()
-
-	// ConnectionHost: use override if set, otherwise Manager fills it in
 	if g.connectionAddress != nil && *g.connectionAddress != "" {
 		gs.ConnectionHost = *g.connectionAddress
 	}
-
-	// Populate node info from store
 	g.store.PopulateNode(&gs)
 
 	return gs
@@ -329,9 +289,6 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{Operation: nil}))
 			}
 			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.id, nil))
-			g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-				Status: controller.StatusRunning,
-			}))
 		}
 
 	case worker.StateExited:
@@ -342,7 +299,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		// intentional action.
 		intentional := g.desiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
-		wasRunning := g.processState == controller.ProcessRunning
+		wasRunning := g.processState == model.ProcessRunning
 		operationWasActive := g.operation != nil
 		if !intentional && (wasRunning || operationWasActive) {
 			g.handleUnexpectedDeath(update.ExitCode, update.StartedAt)
@@ -367,7 +324,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 // setProcessRunningLocked records that the worker reports the process as alive.
 // Caller must hold g.mu.
 func (g *LiveGameserver) setProcessRunningLocked(update worker.InstanceStateUpdate) {
-	g.processState = controller.ProcessRunning
+	g.processState = model.ProcessRunning
 	g.ready = update.Ready
 	startedAt := update.StartedAt
 	g.startedAt = &startedAt
@@ -382,7 +339,7 @@ func (g *LiveGameserver) setProcessRunningLocked(update worker.InstanceStateUpda
 // setProcessExitedLocked records that the worker reports the process as terminated.
 // Caller must hold g.mu.
 func (g *LiveGameserver) setProcessExitedLocked(exitCode int, exitedAt time.Time) {
-	g.processState = controller.ProcessExited
+	g.processState = model.ProcessExited
 	g.ready = false
 	g.exitCode = exitCode
 	if !exitedAt.IsZero() {
@@ -398,7 +355,7 @@ func (g *LiveGameserver) setProcessExitedLocked(exitCode int, exitedAt time.Time
 // disconnects, the instance is removed, or we're archiving/stopping.
 // Caller must hold g.mu.
 func (g *LiveGameserver) clearProcessLocked() {
-	g.processState = controller.ProcessNone
+	g.processState = model.ProcessNone
 	g.ready = false
 	g.startedAt = nil
 	g.readyAt = nil
@@ -433,9 +390,7 @@ func (g *LiveGameserver) handleUnexpectedDeath(exitCode int, startedAt time.Time
 	g.store.SetErrorReason(g.id, reason)
 
 	g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.id, nil))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-		Status: controller.StatusError, ErrorReason: reason,
-	}))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{Reason: reason}))
 
 	if g.autoRestart == nil || !*g.autoRestart {
 		return
@@ -500,10 +455,6 @@ func (g *LiveGameserver) setErrorLocked(reason string) {
 	g.errorReason = reason
 	g.store.SetErrorReason(g.id, reason)
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{Reason: reason}))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-		Status:      controller.StatusError,
-		ErrorReason: reason,
-	}))
 }
 
 // opPriority ranks operations for preemption. A submitted op whose priority

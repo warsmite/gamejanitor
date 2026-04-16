@@ -37,8 +37,9 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 	if game := r.URL.Query().Get("game"); game != "" {
 		filter.GameID = &game
 	}
-	if status := r.URL.Query().Get("status"); status != "" {
-		filter.Status = &status
+	if desired := r.URL.Query().Get("desired_state"); desired != "" {
+		ds := model.DesiredState(desired)
+		filter.DesiredState = &ds
 	}
 	if ids := r.URL.Query().Get("ids"); ids != "" {
 		for _, id := range strings.Split(ids, ",") {
