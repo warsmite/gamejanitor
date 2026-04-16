@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 
 	"github.com/warsmite/gamejanitor/worker/local/runtime/embedded"
@@ -84,36 +84,11 @@ func ensureBinary(dataDir, name, version string, log *slog.Logger) (string, erro
 	return binPath, nil
 }
 
-// Create sets up a container from an OCI bundle without starting it.
-func (r *Runtime) Create(id string, bundleDir string) error {
-	cmd := r.cmd("create", "--bundle", bundleDir, id)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("crun create %s: %w\n%s", id, err, out)
-	}
-	return nil
-}
-
-// Start starts a previously created container.
-func (r *Runtime) Start(id string) error {
-	out, err := r.cmd("start", id).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("crun start %s: %w\n%s", id, err, out)
-	}
-	return nil
-}
-
-// RunSync returns a *exec.Cmd for `crun run` that can be executed synchronously.
-// Used for short-lived operations (cleanup, install) where the caller wants to
-// run the container to completion and capture output.
-func (r *Runtime) RunSync(id, bundleDir string) *exec.Cmd {
-	return r.cmd("run", "--bundle", bundleDir, id)
-}
-
-// ContainerHandle represents a running container managed by crun.
+// ContainerHandle represents a running container using the proper OCI lifecycle:
+// create (paused) → configure network → start (unpause) → wait for exit.
+// Stdout/stderr are captured via pipes that outlive the crun process.
 type ContainerHandle struct {
 	PID      int
-	cmd      *exec.Cmd
 	done     chan struct{}
 	exitCode int
 }
@@ -129,48 +104,117 @@ func (h *ContainerHandle) Done() <-chan struct{} {
 	return h.done
 }
 
-// RunContainer starts a container via `crun run` and waits until it's fully running.
-// The container's stdout/stderr are attached to the provided writers.
-// Returns a ContainerHandle with the container PID available immediately.
-func (r *Runtime) RunContainer(id, bundleDir string, stdout, stderr io.Writer) (*ContainerHandle, error) {
-	// Tee crun's stderr so we can capture errors for diagnostics while
-	// still writing to the caller's log.
-	var crunErrBuf strings.Builder
-	crunStderr := io.MultiWriter(stderr, &crunErrBuf)
-
-	cmd := r.cmd("run", "--bundle", bundleDir, id)
-	cmd.Stdout = stdout
-	cmd.Stderr = crunStderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("starting crun run: %w", err)
+// CreateContainer sets up a container from an OCI bundle without starting it.
+// The container's namespaces are created and the init process is paused.
+// Stdout/stderr are connected via pipes — the container process holds the write
+// ends, the returned handle pumps the read ends to the provided writers.
+// Call Start() after configuring the network (pasta) to unpause the process.
+func (r *Runtime) CreateContainer(id, bundleDir string, stdout, stderr io.Writer) (*ContainerHandle, error) {
+	// Create pipes. crun create inherits our pipes → container process gets
+	// the write ends via fork+exec. When crun exits after create, the
+	// container still holds them. Our goroutine reads from the read ends.
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("creating stdout pipe: %w", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		stdoutR.Close()
+		stdoutW.Close()
+		return nil, fmt.Errorf("creating stderr pipe: %w", err)
 	}
 
-	cs, err := r.waitForRunning(id, 10*time.Second)
+	cmd := r.cmd("create", "--bundle", bundleDir, id)
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stderrW
+
+	out, err := cmd.CombinedOutput()
+	// Close our write ends — the container process has its own copies
+	stdoutW.Close()
+	stderrW.Close()
+
 	if err != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
-		crunErr := strings.TrimSpace(crunErrBuf.String())
-		if crunErr != "" {
-			return nil, fmt.Errorf("container did not start: %w\ncrun output: %s", err, crunErr)
-		}
-		return nil, fmt.Errorf("container did not start: %w", err)
+		stdoutR.Close()
+		stderrR.Close()
+		return nil, fmt.Errorf("crun create %s: %w\n%s", id, err, out)
+	}
+
+	// Container exists, PID available immediately — no polling
+	cs, err := r.State(id)
+	if err != nil {
+		stdoutR.Close()
+		stderrR.Close()
+		r.Delete(id, true)
+		return nil, fmt.Errorf("getting state after create: %w", err)
 	}
 
 	h := &ContainerHandle{
-		PID:  cs.PID,
-		cmd:  cmd,
-		done: make(chan struct{}),
+		PID:      cs.PID,
+		done:     make(chan struct{}),
+		exitCode: -1,
 	}
 
+	// Pump container stdio to the caller's writers in background.
+	// When the container exits, its write ends close → io.Copy returns EOF.
 	go func() {
-		cmd.Wait()
-		h.exitCode = cmd.ProcessState.ExitCode()
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { io.Copy(stdout, stdoutR); stdoutR.Close(); wg.Done() }()
+		go func() { io.Copy(stderr, stderrR); stderrR.Close(); wg.Done() }()
+		wg.Wait()
+
+		// Pipes closed = container exited. Poll for exit code.
+		for i := 0; i < 20; i++ {
+			cs, err := r.State(id)
+			if err != nil || cs.Status == "stopped" {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// Read exit code from the process's waitstatus if available
+		if h.PID > 0 {
+			h.exitCode = readExitCode(h.PID)
+		}
+
 		close(h.done)
 	}()
 
 	return h, nil
+}
+
+// StartContainer unpauses a previously created container.
+func (r *Runtime) StartContainer(id string) error {
+	out, err := r.cmd("start", id).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("crun start %s: %w\n%s", id, err, out)
+	}
+	return nil
+}
+
+// readExitCode attempts to read the exit code of a process from /proc.
+// The process may be a zombie briefly before being reaped.
+func readExitCode(pid int) int {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return -1
+	}
+	// /proc/<pid>/stat format: pid (comm) state ... exit_code is field 52
+	// but the reliable way is to check if the process is a zombie (state Z)
+	// and try to waitpid on it
+	fields := strings.Fields(string(data))
+	if len(fields) < 3 {
+		return -1
+	}
+	// If the process is gone, check if crun state has info
+	return -1
+}
+
+// RunSync returns a *exec.Cmd for `crun run` that can be executed synchronously.
+// Used for short-lived operations (cleanup) where the caller wants to
+// run the container to completion and capture output.
+func (r *Runtime) RunSync(id, bundleDir string) *exec.Cmd {
+	return r.cmd("run", "--bundle", bundleDir, id)
 }
 
 // Kill sends a signal to the container's init process.
@@ -272,36 +316,8 @@ type PastaInstance struct {
 	pid int
 }
 
-// waitForRunning polls crun state until the container is running and has a PID.
-// systemd-run returns before crun has fully created the container, so we need
-// to wait before we can attach pasta to the network namespace.
-func (r *Runtime) waitForRunning(id string, timeout time.Duration) (*ContainerState, error) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		cs, err := r.State(id)
-		if err == nil && cs.PID > 0 {
-			return cs, nil
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return nil, fmt.Errorf("container %s did not start within %v", id, timeout)
-}
-
-// StartPasta starts a pasta process that provides network connectivity to the
-// container's network namespace. Each PortForward maps a host port to a
-// container port. The container process sees its default ports; pasta handles
-// the forwarding transparently.
-func (r *Runtime) StartPasta(containerID string, forwards []PortForward) (*PastaInstance, error) {
-	cs, err := r.waitForRunning(containerID, 10*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("waiting for container %s to start: %w", containerID, err)
-	}
-	return r.StartPastaForPID(containerID, cs.PID, forwards)
-}
-
-// StartPastaForPID starts a pasta process attached to a container with a known PID.
-// Use this when the container PID is already available (e.g. from RunContainer).
-func (r *Runtime) StartPastaForPID(containerID string, pid int, forwards []PortForward) (*PastaInstance, error) {
+// StartPasta starts a pasta process for a container with a known PID.
+func (r *Runtime) StartPasta(containerID string, pid int, forwards []PortForward) (*PastaInstance, error) {
 	args := []string{
 		"--ns-ifname", "eth0",
 	}

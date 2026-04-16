@@ -173,14 +173,15 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
-	handle, err := w.rt.RunContainer(id, bundleDir, logWriter, logWriter)
+	// Step 1: Create container (synchronous). Process is paused, namespaces ready.
+	handle, err := w.rt.CreateContainer(id, bundleDir, logWriter, logWriter)
 	if err != nil {
 		logWriter.Close()
-		return fmt.Errorf("starting instance: %w", err)
+		return fmt.Errorf("creating instance: %w", err)
 	}
 
-	// Start pasta for network namespace connectivity + port forwarding.
-	// The container PID is guaranteed valid here — RunContainer waits until running.
+	// Step 2: Attach pasta to the network namespace BEFORE the process starts.
+	// The container PID is available immediately — no polling.
 	var forwards []runtime.PortForward
 	for _, p := range manifest.Ports {
 		forwards = append(forwards, runtime.PortForward{
@@ -191,17 +192,27 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 	var pastaInst *runtime.PastaInstance
 	if len(forwards) > 0 {
-		pi, err := w.rt.StartPastaForPID(id, handle.PID, forwards)
+		pi, err := w.rt.StartPasta(id, handle.PID, forwards)
 		if err != nil {
 			w.log.Error("failed to start pasta, killing container", "id", id, "error", err)
 			w.rt.Kill(id, "SIGKILL")
-			handle.Wait()
-			logWriter.Close()
 			w.rt.Delete(id, true)
+			logWriter.Close()
 			runtime.CleanupBundle(bundleDir)
 			return fmt.Errorf("starting pasta network: %w", err)
 		}
 		pastaInst = pi
+	}
+
+	// Step 3: Start the container (unpause). Network is already working.
+	if err := w.rt.StartContainer(id); err != nil {
+		if pastaInst != nil {
+			pastaInst.Stop()
+		}
+		w.rt.Delete(id, true)
+		logWriter.Close()
+		runtime.CleanupBundle(bundleDir)
+		return fmt.Errorf("starting instance: %w", err)
 	}
 
 	inst := &managedInstance{
