@@ -133,9 +133,14 @@ func (h *ContainerHandle) Done() <-chan struct{} {
 // The container's stdout/stderr are attached to the provided writers.
 // Returns a ContainerHandle with the container PID available immediately.
 func (r *Runtime) RunContainer(id, bundleDir string, stdout, stderr io.Writer) (*ContainerHandle, error) {
+	// Tee crun's stderr so we can capture errors for diagnostics while
+	// still writing to the caller's log.
+	var crunErrBuf strings.Builder
+	crunStderr := io.MultiWriter(stderr, &crunErrBuf)
+
 	cmd := r.cmd("run", "--bundle", bundleDir, id)
 	cmd.Stdout = stdout
-	cmd.Stderr = stderr
+	cmd.Stderr = crunStderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
@@ -146,6 +151,10 @@ func (r *Runtime) RunContainer(id, bundleDir string, stdout, stderr io.Writer) (
 	if err != nil {
 		cmd.Process.Kill()
 		cmd.Wait()
+		crunErr := strings.TrimSpace(crunErrBuf.String())
+		if crunErr != "" {
+			return nil, fmt.Errorf("container did not start: %w\ncrun output: %s", err, crunErr)
+		}
 		return nil, fmt.Errorf("container did not start: %w", err)
 	}
 
