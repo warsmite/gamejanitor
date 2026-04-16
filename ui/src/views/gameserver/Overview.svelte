@@ -3,7 +3,7 @@
   import { api, type Event } from '$lib/api';
   import { gameserverStore, toast } from '$lib/stores';
   import { onGameserverEvent } from '$lib/stores/sse';
-  import { CopyBlock, StatsChart } from '$lib/components';
+  import { CopyBlock, StatsChart, StatePanel } from '$lib/components';
   import { embedded } from '$lib/base';
 
   let { id }: { id: string } = $props();
@@ -158,6 +158,9 @@
         {/each}
       </div>
     </div>
+
+    <!-- State conditions panel -->
+    <StatePanel {gameserver} />
 
     <!-- Query data -->
     <div class="panel">

@@ -9,3 +9,4 @@ export { default as EnvEditor } from './EnvEditor.svelte';
 export { default as ResourceSlider } from './ResourceSlider.svelte';
 export { default as GameserverForm } from './GameserverForm.svelte';
 export { default as StatsChart } from './StatsChart.svelte';
+export { default as StatePanel } from './StatePanel.svelte';
