@@ -23,47 +23,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/warsmite/gamejanitor/model"
 	sdk "github.com/warsmite/gamejanitor/sdk"
 )
-
-// phase derives the one-word display summary from a gameserver snapshot's
-// primary facts. The controller itself no longer produces a status enum —
-// this helper exists so e2e assertions can read in a single check whether a
-// gameserver is "running" / "stopped" / "error" / etc.
-func phase(snap *sdk.Gameserver) string {
-	if snap == nil {
-		return ""
-	}
-	if snap.Operation != nil && snap.Operation.Phase == string(model.PhaseDeleting) {
-		return "deleting"
-	}
-	if snap.DesiredState == string(model.DesiredArchived) {
-		return "archived"
-	}
-	if !snap.WorkerOnline {
-		return "unreachable"
-	}
-	if snap.Operation != nil {
-		switch snap.Operation.Phase {
-		case string(model.PhasePullingImage), string(model.PhaseDownloadingGame), string(model.PhaseInstalling):
-			return "installing"
-		case string(model.PhaseStopping):
-			return "stopping"
-		case string(model.PhaseStarting):
-			return "starting"
-		case string(model.PhaseMigrating):
-			return "installing"
-		}
-	}
-	if snap.ErrorReason != "" {
-		return "error"
-	}
-	if snap.ProcessState == string(model.ProcessRunning) && snap.Ready {
-		return "running"
-	}
-	return "stopped"
-}
 
 // stallTimeout is how long a wait tolerates silence on the event stream
 // before failing. Must be generous enough for the quietest legitimate
@@ -470,25 +431,21 @@ func (a *Action) MustBeError() string {
 	return a.waitForError()
 }
 
-// MustReachOneOf waits for the gameserver's status to become any of the given
-// values (via terminal events). Returns which one was reached. Uses stall
-// detection. Useful for tests like "self-exit should reach error OR stopped".
-func (a *Action) MustReachOneOf(statuses ...string) string {
+// MustReachNonRunningTerminal waits for the gameserver's process to leave a
+// running state and settle at either "stopped" (clean exit) or "error"
+// (unexpected exit). Returns which one was reached. Intended for tests that
+// trigger an action expected to kill the process and want to verify the
+// classification. Does NOT consider "running" a terminal — the test already
+// had the gameserver running before the triggering event.
+func (a *Action) MustReachNonRunningTerminal() string {
 	a.gs.env.t.Helper()
 
 	sub := a.gs.env.stream.subscribe(a.gs.id)
 	defer sub.close()
 
-	targetSet := map[string]bool{}
-	for _, s := range statuses {
-		targetSet[s] = true
-	}
-
-	// Fast path: already at target.
-	if snap := a.gs.Snapshot(); snap != nil && snap.Operation == nil {
-		if p := phase(snap); targetSet[p] {
-			return p
-		}
+	// Fast path: already past the running state.
+	if r := postRunTerminal(a.gs.Snapshot()); r != "" {
+		return r
 	}
 
 	stall := time.NewTimer(stallTimeout)
@@ -498,36 +455,48 @@ func (a *Action) MustReachOneOf(statuses ...string) string {
 		select {
 		case _, ok := <-sub.ch:
 			if !ok {
-				a.gs.env.t.Fatalf("event stream closed while waiting for %v on %s", statuses, a.gs.id)
+				a.gs.env.t.Fatalf("event stream closed while waiting for terminal on %s", a.gs.id)
 				return ""
 			}
 			resetTimer(stall, stallTimeout)
 
-			// Re-read the snapshot on every event — primary signals changed,
-			// so derive the phase from the current observed facts.
-			if snap := a.gs.Snapshot(); snap != nil && snap.Operation == nil {
-				if p := phase(snap); targetSet[p] {
-					return p
-				}
+			if r := postRunTerminal(a.gs.Snapshot()); r != "" {
+				return r
 			}
 
 		case <-stall.C:
-			a.gs.env.t.Fatalf("stall: no events for %s while waiting for one of %v on %s\n%s",
-				stallTimeout, statuses, a.gs.id, a.gs.env.dumpGameserver(a.gs.id))
+			a.gs.env.t.Fatalf("stall: no events for %s while waiting for non-running terminal on %s\n%s",
+				stallTimeout, a.gs.id, a.gs.env.dumpGameserver(a.gs.id))
 			return ""
 		}
 	}
 }
 
-// waitForReady blocks until gameserver.ready fires for this gameserver.
+// postRunTerminal returns "stopped" or "error" if the snapshot represents a
+// resting post-run state, "" otherwise (running, in-operation, or no snapshot).
+func postRunTerminal(s *sdk.Gameserver) string {
+	if s == nil || s.Operation != nil {
+		return ""
+	}
+	if s.ErrorReason != "" {
+		return "error"
+	}
+	if s.ProcessState == "none" || s.ProcessState == "exited" {
+		return "stopped"
+	}
+	return ""
+}
+
+// waitForReady blocks until the gameserver's process is running and the ready
+// signal has fired.
 func (a *Action) waitForReady() {
 	a.gs.env.t.Helper()
 
 	sub := a.gs.env.stream.subscribe(a.gs.id)
 	defer sub.close()
 
-	// Fast path: already running (no operation in flight).
-	if snap := a.gs.Snapshot(); snap != nil && phase(snap) == "running" && snap.Operation == nil {
+	// Fast path: already running and ready, nothing else in flight.
+	if s := a.gs.Snapshot(); s != nil && s.ProcessState == "running" && s.Ready && s.Operation == nil {
 		return
 	}
 
@@ -540,8 +509,8 @@ func (a *Action) waitForStopped() {
 	sub := a.gs.env.stream.subscribe(a.gs.id)
 	defer sub.close()
 
-	// Fast path: already stopped.
-	if snap := a.gs.Snapshot(); snap != nil && phase(snap) == "stopped" && snap.Operation == nil {
+	// Fast path: no instance, no operation.
+	if s := a.gs.Snapshot(); s != nil && s.ProcessState == "none" && s.Operation == nil {
 		return
 	}
 
@@ -572,8 +541,8 @@ func (a *Action) waitForError() string {
 	defer sub.close()
 
 	// Fast path: already in error state.
-	if snap := a.gs.Snapshot(); snap != nil && phase(snap) == "error" {
-		return snap.ErrorReason
+	if s := a.gs.Snapshot(); s != nil && s.ErrorReason != "" {
+		return s.ErrorReason
 	}
 
 	stall := time.NewTimer(stallTimeout)
@@ -652,7 +621,7 @@ func (a *Action) waitForEventType(sub *subscription, target string, targetLabel 
 func (a *Action) MustBeArchived() {
 	a.gs.env.t.Helper()
 	a.waitForSnapshot(func(s *sdk.Gameserver) bool {
-		return s != nil && phase(s) == "archived" && s.Operation == nil
+		return s != nil && s.DesiredState == "archived" && s.Operation == nil
 	}, "archived")
 }
 
@@ -666,12 +635,12 @@ func (a *Action) MustMigrateTo(targetNodeID string) {
 	}, "migrated to "+targetNodeID)
 }
 
-// MustBeUnarchived waits until the gameserver is unarchived (status=stopped,
-// desired_state=stopped, operation cleared).
+// MustBeUnarchived waits until the gameserver is unarchived — desired_state
+// returns to stopped, no process running, no operation in flight.
 func (a *Action) MustBeUnarchived() {
 	a.gs.env.t.Helper()
 	a.waitForSnapshot(func(s *sdk.Gameserver) bool {
-		return s != nil && s.DesiredState == "stopped" && phase(s) == "stopped" && s.Operation == nil
+		return s != nil && s.DesiredState == "stopped" && s.ProcessState == "none" && s.Operation == nil
 	}, "unarchived")
 }
 

@@ -45,6 +45,45 @@ func newTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 }
 
+// gameserverPill derives a one-word display string from a gameserver's
+// primary facts — purely a display concern, so it lives in the CLI. The
+// controller exposes DesiredState + ProcessState + Ready + Operation +
+// ErrorReason + WorkerOnline; we compress them into a pill here for human
+// output.
+func gameserverPill(gs *gamejanitor.Gameserver) string {
+	if gs == nil {
+		return ""
+	}
+	if gs.Operation != nil && gs.Operation.Phase == "deleting" {
+		return "deleting"
+	}
+	if gs.DesiredState == "archived" {
+		return "archived"
+	}
+	if !gs.WorkerOnline {
+		return "unreachable"
+	}
+	if gs.Operation != nil {
+		switch gs.Operation.Phase {
+		case "pulling_image", "downloading_game", "installing":
+			return "installing"
+		case "stopping":
+			return "stopping"
+		case "starting":
+			return "starting"
+		case "migrating":
+			return "migrating"
+		}
+	}
+	if gs.ErrorReason != "" {
+		return "error"
+	}
+	if gs.ProcessState == "running" && gs.Ready {
+		return "running"
+	}
+	return "stopped"
+}
+
 // colorStatus applies color to gameserver status strings.
 // Green=running, yellow=installing/starting/stopping, red=error/crashed, gray=stopped/unknown.
 // Returns the string unchanged when NO_COLOR is set or in JSON mode.

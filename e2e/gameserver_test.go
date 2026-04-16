@@ -54,7 +54,9 @@ func TestGameserver_DoubleStart(t *testing.T) {
 	gs.Start().MustBeRunning()
 	gs.Start() // second start is a safe no-op
 
-	assert.Equal(t, "running", phase(gs.Snapshot()))
+	snap := gs.Snapshot()
+	assert.Equal(t, "running", snap.ProcessState)
+	assert.True(t, snap.Ready)
 }
 
 func TestGameserver_DoubleStop(t *testing.T) {
@@ -65,7 +67,9 @@ func TestGameserver_DoubleStop(t *testing.T) {
 	gs.Stop().MustBeStopped()
 	gs.Stop() // second stop is a safe no-op
 
-	assert.Equal(t, "stopped", phase(gs.Snapshot()))
+	snap := gs.Snapshot()
+	assert.Equal(t, "none", snap.ProcessState)
+	assert.Nil(t, snap.InstanceID)
 }
 
 // --- Ports ---
@@ -155,7 +159,7 @@ func TestGameserver_Stop_AutoRestartRace(t *testing.T) {
 	gs.Stop().MustBeStopped()
 
 	snap := gs.Snapshot()
-	assert.Equal(t, "stopped", phase(snap), "gameserver should stay stopped, not auto-restart")
+	assert.Equal(t, "none", snap.ProcessState, "gameserver should stay stopped, not auto-restart")
 	assert.Empty(t, snap.ErrorReason, "graceful stop should not leave an error")
 }
 
@@ -238,8 +242,8 @@ func TestGameserver_SelfExit(t *testing.T) {
 
 	// Process exits cleanly on its own — should be classified as an error
 	// (unexpected exit), not a graceful stop.
-	status := (&Action{gs: gs, kind: "self-exit"}).MustReachOneOf("error", "stopped")
-	assert.Equal(t, "error", status, "unexpected clean exit should be marked as error")
+	terminal := (&Action{gs: gs, kind: "self-exit"}).MustReachNonRunningTerminal()
+	assert.Equal(t, "error", terminal, "unexpected clean exit should be marked as error")
 }
 
 // --- Slow ready ---
@@ -274,7 +278,9 @@ func TestGameserver_LogFlood_NoOOM(t *testing.T) {
 	// Let it flood for a bit, then verify the controller is still responsive
 	// and the server is still tracked as running.
 	time.Sleep(3 * time.Second)
-	assert.Equal(t, "running", phase(gs.Snapshot()), "gameserver should survive log flood")
+	snap := gs.Snapshot()
+	assert.Equal(t, "running", snap.ProcessState, "gameserver should survive log flood")
+	assert.True(t, snap.Ready, "should still be ready under log pressure")
 
 	// Stop should still work under log pressure.
 	gs.Stop().MustBeStopped()
@@ -294,7 +300,8 @@ func TestGameserver_RunningAPI(t *testing.T) {
 		s := gs.Snapshot()
 		require.NotNil(t, s)
 		assert.Equal(t, gs.ID(), s.ID)
-		assert.Equal(t, "running", phase(s))
+		assert.Equal(t, "running", s.ProcessState)
+		assert.True(t, s.Ready)
 		assert.True(t, s.Installed, "should be installed")
 		assert.NotNil(t, s.NodeID, "should be assigned to a node")
 		assert.NotEmpty(t, s.Ports, "should have ports")

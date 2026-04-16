@@ -5,58 +5,6 @@ import (
 	"time"
 )
 
-// Gameserver display-phase constants. These are derived at read time from
-// primary facts; they are NOT a field on the wire. Use Gameserver.Phase()
-// to compute one.
-const (
-	PhaseDeleting    = "deleting"
-	PhaseArchived    = "archived"
-	PhaseUnreachable = "unreachable"
-	PhaseInstalling  = "installing"
-	PhaseStopping    = "stopping"
-	PhaseStarting    = "starting"
-	PhaseError       = "error"
-	PhaseRunning     = "running"
-	PhaseStopped     = "stopped"
-)
-
-// Phase returns a one-word display summary derived from primary facts. The
-// controller does not emit this — it's a rendering helper for callers that
-// want a single pill string.
-func (gs *Gameserver) Phase() string {
-	if gs == nil {
-		return ""
-	}
-	if gs.Operation != nil && gs.Operation.Phase == "deleting" {
-		return PhaseDeleting
-	}
-	if gs.DesiredState == "archived" {
-		return PhaseArchived
-	}
-	if !gs.WorkerOnline {
-		return PhaseUnreachable
-	}
-	if gs.Operation != nil {
-		switch gs.Operation.Phase {
-		case "pulling_image", "downloading_game", "installing":
-			return PhaseInstalling
-		case "stopping":
-			return PhaseStopping
-		case "starting":
-			return PhaseStarting
-		case "migrating":
-			return PhaseInstalling
-		}
-	}
-	if gs.ErrorReason != "" {
-		return PhaseError
-	}
-	if gs.ProcessState == "running" && gs.Ready {
-		return PhaseRunning
-	}
-	return PhaseStopped
-}
-
 // Gameserver represents a game server instance.
 type Gameserver struct {
 	// Identity + spec
