@@ -75,7 +75,7 @@ var backupsCreateCmd = &cobra.Command{
 			fmt.Println("Creating backup...")
 		}
 
-		err = getClient().Backups.Create(ctx(), gsID, req)
+		_, err = getClient().Backups.Create(ctx(), gsID, req)
 		if err != nil {
 			return exitError(err)
 		}

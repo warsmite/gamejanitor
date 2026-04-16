@@ -21,9 +21,15 @@ func (s *BackupService) List(ctx context.Context, gameserverID string, opts *Lis
 	return backups, nil
 }
 
-// Create triggers a backup for a gameserver. Returns immediately (202 Accepted).
-func (s *BackupService) Create(ctx context.Context, gameserverID string, req *CreateBackupRequest) error {
-	return s.client.post(ctx, "/api/gameservers/"+gameserverID+"/backups", req, nil)
+// Create triggers a backup for a gameserver and returns the pending backup
+// record. The actual backup completes asynchronously — poll List or subscribe
+// to backup.completed / backup.failed events to observe completion.
+func (s *BackupService) Create(ctx context.Context, gameserverID string, req *CreateBackupRequest) (*Backup, error) {
+	var backup Backup
+	if err := s.client.post(ctx, "/api/gameservers/"+gameserverID+"/backups", req, &backup); err != nil {
+		return nil, err
+	}
+	return &backup, nil
 }
 
 // Download returns a reader for the backup archive (tar.gz). Caller must close the reader.
