@@ -123,7 +123,7 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	createCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:instance/proto)")
+	createCmd.Flags().StringSlice("port", nil, "Port mapping (name:port/proto)")
 	createCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	createCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	createCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
@@ -287,7 +287,7 @@ var editCmd = &cobra.Command{
 
 func init() {
 	editCmd.Flags().String("name", "", "Gameserver name")
-	editCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:instance/proto)")
+	editCmd.Flags().StringSlice("port", nil, "Port mapping (name:port/proto)")
 	editCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	editCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	editCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
@@ -339,25 +339,20 @@ func parsePortMappings(flags []string) ([]gamejanitor.PortMapping, error) {
 			f = f[:idx]
 		}
 
-		parts := strings.SplitN(f, ":", 3)
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("invalid port format %q, expected name:host_port:instance_port/protocol", f)
+		parts := strings.SplitN(f, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid port format %q, expected name:port/protocol", f)
 		}
 
-		hostPort, err := strconv.Atoi(parts[1])
+		port, err := strconv.Atoi(parts[1])
 		if err != nil {
-			return nil, fmt.Errorf("invalid host port %q: %w", parts[1], err)
-		}
-		instancePort, err := strconv.Atoi(parts[2])
-		if err != nil {
-			return nil, fmt.Errorf("invalid instance port %q: %w", parts[2], err)
+			return nil, fmt.Errorf("invalid port %q: %w", parts[1], err)
 		}
 
 		ports = append(ports, gamejanitor.PortMapping{
-			Name:          parts[0],
-			HostPort:      hostPort,
-			InstancePort: instancePort,
-			Protocol:      proto,
+			Name:     parts[0],
+			Port:     port,
+			Protocol: proto,
 		})
 	}
 	return ports, nil
@@ -377,9 +372,9 @@ func cliConnectionAddress(connAddr *string, node *gamejanitor.GameserverNode, po
 			}
 		}
 		if ip != "" {
-			return fmt.Sprintf("%s:%d", ip, ports[0].HostPort)
+			return fmt.Sprintf("%s:%d", ip, ports[0].Port)
 		}
-		return fmt.Sprintf("%d", ports[0].HostPort)
+		return fmt.Sprintf("%d", ports[0].Port)
 	}
 	return ""
 }

@@ -166,8 +166,6 @@ type StatsData struct {
 	CPUPercent      float64 `json:"cpu_percent"`
 	MemoryUsageMB   int     `json:"memory_usage_mb"`
 	MemoryLimitMB   int     `json:"memory_limit_mb"`
-	NetRxBytes      int64   `json:"net_rx_bytes"`
-	NetTxBytes      int64   `json:"net_tx_bytes"`
 	VolumeSizeBytes int64   `json:"volume_size_bytes"`
 	StorageLimitMB  *int    `json:"storage_limit_mb"`
 }

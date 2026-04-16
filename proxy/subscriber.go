@@ -71,17 +71,17 @@ func (s *Subscriber) addRoutes(gsID string) {
 	}
 
 	for _, p := range gs.Ports {
-		backend := fmt.Sprintf("%s:%d", gs.Node.LanIP, int(p.HostPort))
+		backend := fmt.Sprintf("%s:%d", gs.Node.LanIP, int(p.Port))
 		protocol := p.Protocol
 		if protocol == "" {
 			protocol = "tcp"
 		}
-		if err := s.manager.Set(int(p.HostPort), Route{
+		if err := s.manager.Set(int(p.Port), Route{
 			GameserverID: gsID,
 			BackendAddr:  backend,
 			Protocol:     protocol,
 		}); err != nil {
-			s.log.Error("proxy: failed to set route", "port", int(p.HostPort), "error", err)
+			s.log.Error("proxy: failed to set route", "port", int(p.Port), "error", err)
 		}
 	}
 }
@@ -92,7 +92,7 @@ func (s *Subscriber) removeRoutes(gsID string) {
 		return
 	}
 	for _, p := range gs.Ports {
-		s.manager.Remove(int(p.HostPort))
+		s.manager.Remove(int(p.Port))
 	}
 }
 

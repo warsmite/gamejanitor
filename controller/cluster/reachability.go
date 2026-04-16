@@ -187,12 +187,12 @@ func (c *ReachabilityChecker) resolveAddress(gs *model.Gameserver) (string, int)
 	port := 0
 	for _, p := range gs.Ports {
 		if p.Name == "game" {
-			port = int(p.HostPort)
+			port = int(p.Port)
 			break
 		}
 	}
 	if port == 0 && len(gs.Ports) > 0 {
-		port = int(gs.Ports[0].HostPort)
+		port = int(gs.Ports[0].Port)
 	}
 
 	// Resolve host — gameserver override first

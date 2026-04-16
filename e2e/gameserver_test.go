@@ -92,15 +92,15 @@ func TestGameserver_Ports_UniquePerServer(t *testing.T) {
 	seen := map[int]bool{}
 	for _, gs := range gss {
 		for _, p := range gs.Snapshot().Ports {
-			assert.False(t, seen[p.HostPort], "port %d assigned to multiple gameservers", p.HostPort)
-			seen[p.HostPort] = true
+			assert.False(t, seen[p.Port], "port %d assigned to multiple gameservers", p.Port)
+			seen[p.Port] = true
 		}
 	}
 
 	// Verify at least one port is actually bound — confirms real port mapping.
 	for _, gs := range gss {
 		for _, p := range gs.Snapshot().Ports {
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", p.HostPort), 2*time.Second)
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", p.Port), 2*time.Second)
 			if err == nil {
 				conn.Close()
 				return // one successful dial is enough
@@ -134,8 +134,8 @@ func TestGameserver_Parallel_UniquePorts(t *testing.T) {
 	seen := map[int]bool{}
 	for _, gs := range gss {
 		for _, p := range gs.Snapshot().Ports {
-			assert.False(t, seen[p.HostPort], "port %d assigned to multiple gameservers", p.HostPort)
-			seen[p.HostPort] = true
+			assert.False(t, seen[p.Port], "port %d assigned to multiple gameservers", p.Port)
+			seen[p.Port] = true
 		}
 	}
 }

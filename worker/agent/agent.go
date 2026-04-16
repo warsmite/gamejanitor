@@ -59,9 +59,8 @@ func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceReques
 	}
 	for _, p := range req.Ports {
 		opts.Ports = append(opts.Ports, worker.PortBinding{
-			HostPort:      int(p.HostPort),
-			InstancePort: int(p.InstancePort),
-			Protocol:      p.Protocol,
+			Port:     int(p.Port),
+			Protocol: p.Protocol,
 		})
 	}
 
@@ -153,8 +152,6 @@ func (a *Agent) InstanceStats(ctx context.Context, req *pb.InstanceStatsRequest)
 		MemoryUsageMb: int32(stats.MemoryUsageMB),
 		MemoryLimitMb: int32(stats.MemoryLimitMB),
 		CpuPercent:    stats.CPUPercent,
-		NetRxBytes:    stats.NetRxBytes,
-		NetTxBytes:    stats.NetTxBytes,
 	}, nil
 }
 

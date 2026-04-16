@@ -748,17 +748,16 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 	bindings := make([]worker.PortBinding, 0, len(gs.Ports))
 	for _, p := range gs.Ports {
-		if int(p.HostPort) <= 0 || int(p.InstancePort) <= 0 {
-			return nil, fmt.Errorf("invalid port mapping: host=%d instance=%d", int(p.HostPort), int(p.InstancePort))
+		if int(p.Port) <= 0 {
+			return nil, fmt.Errorf("invalid port mapping: port=%d", int(p.Port))
 		}
 		protocol := p.Protocol
 		if protocol == "" {
 			protocol = "tcp"
 		}
 		bindings = append(bindings, worker.PortBinding{
-			HostPort:     int(p.HostPort),
-			InstancePort: int(p.InstancePort),
-			Protocol:     protocol,
+			Port:     int(p.Port),
+			Protocol: protocol,
 		})
 	}
 	return bindings, nil

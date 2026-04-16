@@ -1002,10 +1002,9 @@ func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 		gsPorts := make(model.Ports, len(game.DefaultPorts))
 		for i, p := range game.DefaultPorts {
 			gsPorts[i] = model.PortMapping{
-				Name:         p.Name,
-				HostPort:     model.FlexInt(p.Port),
-				InstancePort: model.FlexInt(p.Port),
-				Protocol:     p.Protocol,
+				Name:     p.Name,
+				Port:     model.FlexInt(p.Port),
+				Protocol: p.Protocol,
 			}
 		}
 		gs.Ports = gsPorts

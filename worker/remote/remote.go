@@ -71,9 +71,8 @@ func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceO
 	}
 	for _, p := range opts.Ports {
 		req.Ports = append(req.Ports, &pb.PortBinding{
-			HostPort:      int32(p.HostPort),
-			InstancePort: int32(p.InstancePort),
-			Protocol:      p.Protocol,
+			Port:     int32(p.Port),
+			Protocol: p.Protocol,
 		})
 	}
 
@@ -150,8 +149,6 @@ func (w *RemoteWorker) InstanceStats(ctx context.Context, instanceID string) (*w
 		MemoryUsageMB: int(resp.MemoryUsageMb),
 		MemoryLimitMB: int(resp.MemoryLimitMb),
 		CPUPercent:    resp.CpuPercent,
-		NetRxBytes:    resp.NetRxBytes,
-		NetTxBytes:    resp.NetTxBytes,
 	}, nil
 }
 

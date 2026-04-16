@@ -203,9 +203,6 @@ var statusCmd = &cobra.Command{
 		if err == nil {
 			fmt.Printf("CPU:         %.1f%%\n", stats.CPUPercent)
 			fmt.Printf("Memory:      %s / %s\n", formatMemory(int(stats.MemoryUsageMB)), formatMemory(int(stats.MemoryLimitMB)))
-			if stats.NetRxBytes > 0 || stats.NetTxBytes > 0 {
-				fmt.Printf("Network:     %s rx / %s tx\n", formatBytes(stats.NetRxBytes), formatBytes(stats.NetTxBytes))
-			}
 			fmt.Printf("Storage:     %s\n", formatBytes(stats.VolumeSizeBytes))
 		}
 

@@ -515,24 +515,3 @@ func newTestWorkerWithRecovery(t *testing.T, dataDir string) *LocalWorker {
 	return w
 }
 
-func TestIntegration_NetworkNamespaceSetup(t *testing.T) {
-	skipIfNoBwrap(t)
-
-	dataDir := t.TempDir()
-	log := testLogger()
-	paths, err := resolvePaths(dataDir, log)
-	require.NoError(t, err)
-
-	if !paths.hasNetworkIsolation() {
-		t.Skip("slirp4netns not available")
-	}
-
-	os.MkdirAll(filepath.Join(dataDir, "instances", "test-ns"), 0755)
-
-	si, err := setupNetworkNamespace("test-ns", nil, dataDir, paths, log)
-	require.NoError(t, err)
-	require.NotNil(t, si)
-	assert.Greater(t, si.nsPID, 0)
-
-	stopSlirp(si, log)
-}

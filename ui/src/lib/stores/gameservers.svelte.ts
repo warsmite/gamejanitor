@@ -78,7 +78,7 @@ class GameserverStore {
     const ports = gs.ports || [];
     const gamePort = ports.find((p: any) => p.name === 'game') || ports[0];
     if (!gamePort) return '';
-    return `${gs.connection_host}:${gamePort.host_port}`;
+    return `${gs.connection_host}:${gamePort.port}`;
   }
 
   sftpAddress(id: string): string {
@@ -203,8 +203,6 @@ class GameserverStore {
         cpu_percent: data.cpu_percent,
         memory_usage_mb: data.memory_usage_mb,
         memory_limit_mb: data.memory_limit_mb,
-        net_rx_bytes: data.net_rx_bytes ?? 0,
-        net_tx_bytes: data.net_tx_bytes ?? 0,
         volume_size_bytes: data.volume_size_bytes,
         storage_limit_mb: data.storage_limit_mb,
       });

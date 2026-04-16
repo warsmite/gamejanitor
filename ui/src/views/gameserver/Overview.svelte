@@ -21,10 +21,10 @@
     const gamePort = ports.find((p: any) => p.name === 'game') || ports[0];
     if (!host || !gamePort) return [];
     return ports
-      .filter((p: any) => p !== gamePort && p.host_port !== gamePort.host_port)
+      .filter((p: any) => p !== gamePort && p.port !== gamePort.port)
       .map((p: any) => ({
         label: p.name.charAt(0).toUpperCase() + p.name.slice(1),
-        value: `${host}:${p.host_port}`,
+        value: `${host}:${p.port}`,
       }));
   });
 

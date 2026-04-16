@@ -39,9 +39,8 @@ type InstanceOptions struct {
 }
 
 type PortBinding struct {
-	HostPort      int
-	InstancePort int
-	Protocol      string // "tcp" or "udp"
+	Port     int
+	Protocol string // "tcp" or "udp"
 }
 
 type InstanceInfo struct {
@@ -55,16 +54,12 @@ type InstanceStats struct {
 	MemoryUsageMB int
 	MemoryLimitMB int
 	CPUPercent    float64
-	NetRxBytes    int64
-	NetTxBytes    int64
 }
 
 type GameserverStats struct {
 	MemoryUsageMB   int
 	MemoryLimitMB   int
 	CPUPercent      float64
-	NetRxBytes      int64
-	NetTxBytes      int64
 	VolumeSizeBytes int64
 	StorageLimitMB  *int
 }
@@ -108,8 +103,8 @@ type InstanceStateUpdate struct {
 type GameserverInstance struct {
 	InstanceID   string
 	InstanceName string
-	GameserverID  string // extracted from instance name
-	State         string // running, exited, etc.
+	GameserverID string // extracted from instance name
+	State        string // running, exited, etc.
 }
 
 type FileEntry struct {

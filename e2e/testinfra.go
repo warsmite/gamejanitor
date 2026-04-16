@@ -145,7 +145,6 @@ func freePort(t *testing.T) int {
 // systemd scopes left by previous runs. Called once at local-instance start.
 func cleanupSandboxState() {
 	_ = exec.Command("sh", "-c", "pkill -f 'unshare.*sleep infinity' 2>/dev/null").Run()
-	_ = exec.Command("sh", "-c", "pkill -f slirp4netns 2>/dev/null").Run()
 
 	for _, prefix := range [][]string{{"--user"}, {}} {
 		out, _ := exec.Command("systemctl", append(prefix, "list-units", "--type=scope", "--state=failed", "--no-legend", "--plain")...).Output()

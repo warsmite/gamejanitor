@@ -15,38 +15,15 @@
   const gsState = $derived(gameserverStore.getState(id));
   const liveStats = $derived(gsState?.stats ?? null);
 
-  // Track previous cumulative net bytes for rate computation
-  let prevNetRx = 0;
-  let prevNetTx = 0;
-  let prevNetTs = 0;
-
   // Append live stats to the chart on the 1h view
   $effect(() => {
     if (!liveStats || period !== '1h') return;
-
-    const now = Date.now();
-    let rxRate = 0;
-    let txRate = 0;
-
-    // Compute net rate from consecutive cumulative byte counters
-    if (prevNetTs > 0 && liveStats.net_rx_bytes >= prevNetRx) {
-      const dt = (now - prevNetTs) / 1000;
-      if (dt > 0) {
-        rxRate = (liveStats.net_rx_bytes - prevNetRx) / dt;
-        txRate = (liveStats.net_tx_bytes - prevNetTx) / dt;
-      }
-    }
-    prevNetRx = liveStats.net_rx_bytes;
-    prevNetTx = liveStats.net_tx_bytes;
-    prevNetTs = now;
 
     const point: StatsHistoryPoint = {
       timestamp: new Date().toISOString(),
       cpu_percent: liveStats.cpu_percent ?? 0,
       memory_usage_mb: liveStats.memory_usage_mb ?? 0,
       memory_limit_mb: liveStats.memory_limit_mb ?? 0,
-      net_rx_bytes_per_sec: rxRate,
-      net_tx_bytes_per_sec: txRate,
       volume_size_bytes: liveStats.volume_size_bytes ?? 0,
       players_online: gsState?.query?.players_online ?? 0,
     };
@@ -113,15 +90,11 @@
   const cpuPoints = $derived(scale(data.map(d => d.cpu_percent), H));
   const memPoints = $derived(scale(data.map(d => d.memory_usage_mb), H));
   const storagePoints = $derived(scale(data.map(d => d.volume_size_bytes / (1024 * 1024)), H));
-  const rxPoints = $derived(scale(data.map(d => d.net_rx_bytes_per_sec), H));
-  const txPoints = $derived(scale(data.map(d => d.net_tx_bytes_per_sec), H));
-
   const playerPoints = $derived(scale(data.map(d => d.players_online), H));
 
   const cpuMax = $derived(data.length ? Math.max(...data.map(d => d.cpu_percent), 1) : 100);
   const memMax = $derived(data.length ? Math.max(...data.map(d => d.memory_usage_mb), 1) : 1);
   const memLimit = $derived(data.length && data[0].memory_limit_mb > 0 ? data[0].memory_limit_mb : null);
-  const netMax = $derived(data.length ? Math.max(...data.map(d => Math.max(d.net_rx_bytes_per_sec, d.net_tx_bytes_per_sec)), 1) : 1);
 
   // Hover crosshair x position
   const hoverX = $derived(hoverIndex !== null && data.length > 1
@@ -134,12 +107,6 @@
     const d = new Date(iso);
     if (period === '7d') return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: period === '1h' ? '2-digit' : undefined });
-  }
-
-  function formatBytes(bps: number): string {
-    if (bps < 1024) return `${Math.round(bps)} B/s`;
-    if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
-    return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
   }
 
   function formatMB(mb: number): string {
@@ -267,41 +234,6 @@
         </div>
       </div>
 
-      <!-- Network I/O -->
-      <div class="chart-row">
-        <div class="chart-label-col">
-          <span class="chart-label net">NET</span>
-          <span class="chart-value">
-            {#if hoverData}
-              <span class="net-in">In {formatBytes(hoverData.net_rx_bytes_per_sec)}</span>
-              <span class="net-out">Out {formatBytes(hoverData.net_tx_bytes_per_sec)}</span>
-            {:else if data.length}
-              <span class="net-in">In {formatBytes(data[data.length - 1].net_rx_bytes_per_sec)}</span>
-              <span class="net-out">Out {formatBytes(data[data.length - 1].net_tx_bytes_per_sec)}</span>
-            {:else}
-              —
-            {/if}
-          </span>
-        </div>
-        <div class="chart-svg-wrap">
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none"
-            onmousemove={(e) => handleMouseMove(e, e.currentTarget as SVGSVGElement)}
-            onmouseleave={handleMouseLeave}>
-            {#each gridYs as gy}
-              <line x1="0" y1={gy} x2={W} y2={gy} class="grid-line" />
-            {/each}
-            <path d={polyline(rxPoints)} class="line live" />
-            <path d={polyline(txPoints)} class="line caution" />
-            {#if hoverX !== null}
-              <line x1={hoverX} y1="0" x2={hoverX} y2={H} class="crosshair" />
-              <circle cx={hoverX} cy={rxPoints[hoverIndex!]?.y ?? 0} r="3" class="dot live" />
-              <circle cx={hoverX} cy={txPoints[hoverIndex!]?.y ?? 0} r="3" class="dot caution" />
-            {/if}
-          </svg>
-        </div>
-      </div>
-
       <!-- Players -->
       <div class="chart-row">
         <div class="chart-label-col">
@@ -417,7 +349,6 @@
   .chart-label.cpu { color: var(--accent); }
   .chart-label.mem { color: #8b5cf6; }
   .chart-label.storage { color: var(--text-secondary); }
-  .chart-label.net { color: var(--live); }
   .chart-label.players { color: var(--live); }
 
   .chart-value {
@@ -428,13 +359,6 @@
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
   }
-
-  .net-in, .net-out {
-    display: block;
-    font-size: 0.62rem;
-  }
-  .net-in { color: var(--live); }
-  .net-out { color: var(--caution); }
 
   .chart-svg-wrap {
     flex: 1;

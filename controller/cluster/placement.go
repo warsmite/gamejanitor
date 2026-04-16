@@ -132,10 +132,10 @@ func (p *PlacementService) FindNodeWithCapacity(mem int, cpu float64, storage in
 	return "", fmt.Errorf("no node with sufficient capacity for %d MB / %.1f CPU", mem, cpu)
 }
 
-// UsedHostPorts returns all host ports in use.
+// UsedPorts returns all ports in use.
 // In cluster scope: checks all nodes (ports are cluster-unique).
 // In node scope: checks only the given node.
-func (p *PlacementService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
+func (p *PlacementService) UsedPorts(nodeID string, excludeID string) (map[int]bool, error) {
 	var filter model.GameserverFilter
 	if p.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		filter.NodeID = &nodeID
@@ -152,8 +152,8 @@ func (p *PlacementService) UsedHostPorts(nodeID string, excludeID string) (map[i
 			continue
 		}
 		for _, port := range gs.Ports {
-			if hp := int(port.HostPort); hp != 0 {
-				used[hp] = true
+			if p := int(port.Port); p != 0 {
+				used[p] = true
 			}
 		}
 	}
@@ -296,7 +296,7 @@ func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, exclud
 
 	rangeStart, rangeEnd := p.portRangeForNode(nodeID)
 
-	used, err := p.UsedHostPorts(nodeID, excludeID)
+	used, err := p.UsedPorts(nodeID, excludeID)
 	if err != nil {
 		return nil, err
 	}
@@ -330,10 +330,9 @@ func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, exclud
 	for i, gp := range gamePorts {
 		allocatedPort := base + portIndex[gp.Port]
 		result[i] = model.PortMapping{
-			Name:         gp.Name,
-			HostPort:     model.FlexInt(allocatedPort),
-			InstancePort: model.FlexInt(allocatedPort),
-			Protocol:     gp.Protocol,
+			Name:     gp.Name,
+			Port:     model.FlexInt(allocatedPort),
+			Protocol: gp.Protocol,
 		}
 	}
 
@@ -341,7 +340,7 @@ func (p *PlacementService) AllocatePorts(game *games.Game, nodeID string, exclud
 	if gameserverID != "" {
 		allocated := make([]int, len(result))
 		for i, pm := range result {
-			allocated[i] = int(pm.HostPort)
+			allocated[i] = int(pm.Port)
 		}
 		p.pendingPorts[gameserverID] = allocated
 	}

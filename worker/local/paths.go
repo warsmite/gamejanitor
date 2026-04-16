@@ -14,17 +14,16 @@ import (
 // All paths are resolved once at startup to avoid repeated lookups and
 // PATH issues inside systemd units.
 type systemPaths struct {
-	Bwrap       string
-	Slirp4netns string
-	Unshare     string
-	Nsenter     string
-	Sh          string
-	Sleep       string
-	Rm          string
-	Systemctl   string
-	NewUIDMap   string // empty if not available
-	NewGIDMap   string // empty if not available
-	IsRoot      bool
+	Bwrap     string
+	Unshare   string
+	Nsenter   string
+	Sh        string
+	Sleep     string
+	Rm        string
+	Systemctl string
+	NewUIDMap string // empty if not available
+	NewGIDMap string // empty if not available
+	IsRoot    bool
 }
 
 // resolvePaths finds all required system binaries. Returns an error if
@@ -36,15 +35,9 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 
 	var err error
 
-	// bwrap and slirp from embedded or system
 	p.Bwrap, err = ensureBwrap(dataDir, log)
 	if err != nil {
 		return nil, fmt.Errorf("bwrap not available: %w", err)
-	}
-
-	p.Slirp4netns, err = ensureSlirp4netns(dataDir, log)
-	if err != nil {
-		return nil, fmt.Errorf("slirp4netns not available: %w", err)
 	}
 
 	// System utilities
@@ -56,22 +49,6 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 	p.Systemctl = lookupBinary("systemctl")
 	p.NewUIDMap = lookupBinary("newuidmap")
 	p.NewGIDMap = lookupBinary("newgidmap")
-
-	// Network isolation requires slirp4netns + unshare + sh + sleep.
-	// Without it, gameservers share the host network causing port conflicts.
-	if !p.hasNetworkIsolation() {
-		missing := []string{}
-		if p.Unshare == "" {
-			missing = append(missing, "unshare")
-		}
-		if p.Sh == "" {
-			missing = append(missing, "sh")
-		}
-		if p.Sleep == "" {
-			missing = append(missing, "sleep")
-		}
-		return nil, fmt.Errorf("network isolation unavailable: missing %s", strings.Join(missing, ", "))
-	}
 
 	if p.Systemctl == "" {
 		log.Warn("systemctl not found — no resource limits (memory/CPU), processes will not survive gamejanitor restarts")
@@ -86,11 +63,6 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 // hasSystemd returns true if systemd-run is usable.
 func (p *systemPaths) hasSystemd() bool {
 	return p.Systemctl != ""
-}
-
-// hasNetworkIsolation returns true if all binaries for network namespace are available.
-func (p *systemPaths) hasNetworkIsolation() bool {
-	return p.Slirp4netns != "" && p.Unshare != "" && p.Sh != "" && p.Sleep != ""
 }
 
 // hasUIDMapping returns true if newuidmap/newgidmap are available (non-root only).

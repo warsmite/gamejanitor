@@ -189,10 +189,9 @@ func (fi *FlexInt) UnmarshalJSON(b []byte) error {
 
 // PortMapping represents a single port binding stored in the gameserver's ports JSON.
 type PortMapping struct {
-	Name          string  `json:"name"`
-	HostPort      FlexInt `json:"host_port"`
-	InstancePort FlexInt `json:"instance_port"`
-	Protocol      string  `json:"protocol"`
+	Name     string  `json:"name"`
+	Port     FlexInt `json:"port"`
+	Protocol string  `json:"protocol"`
 }
 
 // Ports is a slice of port mappings stored as JSON in the database.

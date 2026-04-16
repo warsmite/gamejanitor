@@ -242,8 +242,7 @@ func (x *PullImageProgress) GetTotalLayers() int32 {
 
 type PortBinding struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	HostPort      int32                  `protobuf:"varint,1,opt,name=host_port,json=hostPort,proto3" json:"host_port,omitempty"`
-	InstancePort  int32                  `protobuf:"varint,2,opt,name=instance_port,json=instancePort,proto3" json:"instance_port,omitempty"`
+	Port          int32                  `protobuf:"varint,1,opt,name=port,proto3" json:"port,omitempty"`
 	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -279,16 +278,9 @@ func (*PortBinding) Descriptor() ([]byte, []int) {
 	return file_worker_proto_worker_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *PortBinding) GetHostPort() int32 {
+func (x *PortBinding) GetPort() int32 {
 	if x != nil {
-		return x.HostPort
-	}
-	return 0
-}
-
-func (x *PortBinding) GetInstancePort() int32 {
-	if x != nil {
-		return x.InstancePort
+		return x.Port
 	}
 	return 0
 }
@@ -1057,8 +1049,6 @@ type InstanceStatsResponse struct {
 	MemoryUsageMb int32                  `protobuf:"varint,1,opt,name=memory_usage_mb,json=memoryUsageMb,proto3" json:"memory_usage_mb,omitempty"`
 	MemoryLimitMb int32                  `protobuf:"varint,2,opt,name=memory_limit_mb,json=memoryLimitMb,proto3" json:"memory_limit_mb,omitempty"`
 	CpuPercent    float64                `protobuf:"fixed64,3,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
-	NetRxBytes    int64                  `protobuf:"varint,4,opt,name=net_rx_bytes,json=netRxBytes,proto3" json:"net_rx_bytes,omitempty"`
-	NetTxBytes    int64                  `protobuf:"varint,5,opt,name=net_tx_bytes,json=netTxBytes,proto3" json:"net_tx_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1110,20 +1100,6 @@ func (x *InstanceStatsResponse) GetMemoryLimitMb() int32 {
 func (x *InstanceStatsResponse) GetCpuPercent() float64 {
 	if x != nil {
 		return x.CpuPercent
-	}
-	return 0
-}
-
-func (x *InstanceStatsResponse) GetNetRxBytes() int64 {
-	if x != nil {
-		return x.NetRxBytes
-	}
-	return 0
-}
-
-func (x *InstanceStatsResponse) GetNetTxBytes() int64 {
-	if x != nil {
-		return x.NetTxBytes
 	}
 	return 0
 }
@@ -4047,10 +4023,9 @@ const file_worker_proto_worker_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x03 \x01(\x04R\n" +
 	"totalBytes\x12)\n" +
 	"\x10completed_layers\x18\x04 \x01(\x05R\x0fcompletedLayers\x12!\n" +
-	"\ftotal_layers\x18\x05 \x01(\x05R\vtotalLayers\"k\n" +
-	"\vPortBinding\x12\x1b\n" +
-	"\thost_port\x18\x01 \x01(\x05R\bhostPort\x12#\n" +
-	"\rinstance_port\x18\x02 \x01(\x05R\finstancePort\x12\x1a\n" +
+	"\ftotal_layers\x18\x05 \x01(\x05R\vtotalLayers\"=\n" +
+	"\vPortBinding\x12\x12\n" +
+	"\x04port\x18\x01 \x01(\x05R\x04port\x12\x1a\n" +
 	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd1\x02\n" +
 	"\x15CreateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
@@ -4108,16 +4083,12 @@ const file_worker_proto_worker_proto_rawDesc = "" +
 	"\x06follow\x18\x03 \x01(\bR\x06follow\"7\n" +
 	"\x14InstanceStatsRequest\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
-	"instanceId\"\xcc\x01\n" +
+	"instanceId\"\x88\x01\n" +
 	"\x15InstanceStatsResponse\x12&\n" +
 	"\x0fmemory_usage_mb\x18\x01 \x01(\x05R\rmemoryUsageMb\x12&\n" +
 	"\x0fmemory_limit_mb\x18\x02 \x01(\x05R\rmemoryLimitMb\x12\x1f\n" +
 	"\vcpu_percent\x18\x03 \x01(\x01R\n" +
-	"cpuPercent\x12 \n" +
-	"\fnet_rx_bytes\x18\x04 \x01(\x03R\n" +
-	"netRxBytes\x12 \n" +
-	"\fnet_tx_bytes\x18\x05 \x01(\x03R\n" +
-	"netTxBytes\")\n" +
+	"cpuPercent\")\n" +
 	"\x13CreateVolumeRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x16\n" +
 	"\x14CreateVolumeResponse\")\n" +

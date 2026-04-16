@@ -49,8 +49,6 @@ type statsResponse struct {
 	CPUPercent      float64 `json:"cpu_percent"`
 	MemoryUsageMB   int     `json:"memory_usage_mb"`
 	MemoryLimitMB   int     `json:"memory_limit_mb"`
-	NetRxBytes      int64   `json:"net_rx_bytes"`
-	NetTxBytes      int64   `json:"net_tx_bytes"`
 	VolumeSizeBytes int64   `json:"volume_size_bytes"`
 	StorageLimitMB  *int    `json:"storage_limit_mb,omitempty"`
 }
@@ -64,8 +62,6 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 			CPUPercent:      cached.CPUPercent,
 			MemoryUsageMB:   cached.MemoryUsageMB,
 			MemoryLimitMB:   cached.MemoryLimitMB,
-			NetRxBytes:      cached.NetRxBytes,
-			NetTxBytes:      cached.NetTxBytes,
 			VolumeSizeBytes: cached.VolumeSizeBytes,
 			StorageLimitMB:  cached.StorageLimitMB,
 		})
@@ -84,8 +80,6 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 		CPUPercent:      stats.CPUPercent,
 		MemoryUsageMB:   stats.MemoryUsageMB,
 		MemoryLimitMB:   stats.MemoryLimitMB,
-		NetRxBytes:      stats.NetRxBytes,
-		NetTxBytes:      stats.NetTxBytes,
 		VolumeSizeBytes: stats.VolumeSizeBytes,
 		StorageLimitMB:  stats.StorageLimitMB,
 	})
@@ -304,16 +298,13 @@ func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Compute net I/O rates (bytes/sec) from cumulative counters
 	type statsPoint struct {
-		Timestamp        time.Time `json:"timestamp"`
-		CPUPercent       float64   `json:"cpu_percent"`
-		MemoryUsageMB    int       `json:"memory_usage_mb"`
-		MemoryLimitMB    int       `json:"memory_limit_mb"`
-		NetRxBytesPerSec float64   `json:"net_rx_bytes_per_sec"`
-		NetTxBytesPerSec float64   `json:"net_tx_bytes_per_sec"`
-		VolumeSizeBytes  int64     `json:"volume_size_bytes"`
-		PlayersOnline    int       `json:"players_online"`
+		Timestamp       time.Time `json:"timestamp"`
+		CPUPercent      float64   `json:"cpu_percent"`
+		MemoryUsageMB   int       `json:"memory_usage_mb"`
+		MemoryLimitMB   int       `json:"memory_limit_mb"`
+		VolumeSizeBytes int64     `json:"volume_size_bytes"`
+		PlayersOnline   int       `json:"players_online"`
 	}
 
 	points := make([]statsPoint, len(samples))
@@ -325,14 +316,6 @@ func (h *GameserverHandlers) StatsHistory(w http.ResponseWriter, r *http.Request
 			MemoryLimitMB:   s.MemoryLimitMB,
 			VolumeSizeBytes: s.VolumeSizeBytes,
 			PlayersOnline:   s.PlayersOnline,
-		}
-		if i > 0 {
-			prev := samples[i-1]
-			dt := s.Timestamp.Sub(prev.Timestamp).Seconds()
-			if dt > 0 && s.NetRxBytes >= prev.NetRxBytes {
-				points[i].NetRxBytesPerSec = float64(s.NetRxBytes-prev.NetRxBytes) / dt
-				points[i].NetTxBytesPerSec = float64(s.NetTxBytes-prev.NetTxBytes) / dt
-			}
 		}
 	}
 

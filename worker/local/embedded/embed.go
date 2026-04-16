@@ -2,5 +2,5 @@ package embedded
 
 import "embed"
 
-//go:embed bwrap-* slirp4netns-*
+//go:embed bwrap-*
 var Binaries embed.FS

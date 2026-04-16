@@ -21,8 +21,8 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// LocalWorker implements Worker using bwrap for isolation, systemd for lifecycle,
-// and slirp4netns for network isolation. No external daemon required.
+// LocalWorker implements Worker using bwrap for isolation and systemd for
+// lifecycle. Uses host networking. No external daemon required.
 type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
@@ -47,20 +47,16 @@ type managedInstance struct {
 	exitCode  atomic.Int32
 	exited    atomic.Bool
 	logWriter *rotatingWriter
-	done      chan struct{}
-	unitName  string // systemd unit name
-	slirp     *slirpInstance
+	done     chan struct{}
+	unitName string // systemd unit name
 }
 
 // instanceState is persisted alongside the manifest so running instances
 // can be re-adopted after a gamejanitor restart.
 type instanceState struct {
-	StartedAt   time.Time `json:"started_at"`
-	HolderPID   int       `json:"holder_pid,omitempty"`
-	SlirpPID    int       `json:"slirp_pid,omitempty"`
-	NsPID       int       `json:"ns_pid,omitempty"`
-	SlirpSocket string    `json:"slirp_socket,omitempty"`
-	UnitName    string    `json:"unit_name"`
+	StartedAt time.Time `json:"started_at"`
+	HolderPID int       `json:"holder_pid,omitempty"`
+	UnitName  string    `json:"unit_name"`
 }
 
 func saveInstanceState(dir string, state instanceState) error {
@@ -123,9 +119,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 
 	log.Info("sandbox runtime ready",
 		"bwrap", paths.Bwrap,
-		"slirp", paths.Slirp4netns,
 		"systemd", paths.hasSystemd(),
-		"network_isolation", paths.hasNetworkIsolation(),
 		"root", paths.IsRoot)
 	return w
 }
@@ -226,21 +220,13 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
 
-	// Set up network namespace — required for port isolation.
-	// hasNetworkIsolation() is guaranteed true (validated at startup).
-	slirpInst, err := setupNetworkNamespace(id, manifest.Ports, w.dataDir, w.paths, w.log)
-	if err != nil {
-		return fmt.Errorf("network isolation setup failed: %w", err)
-	}
-
 	// Wrap in systemd-run for lifecycle + cgroups.
-	cmd := buildSystemdCommandWithNetns(id, manifest, bwrapArgs, w.paths, slirpInst)
+	cmd := buildSystemdCommand(id, manifest, bwrapArgs, w.paths)
 
 	// Log file with size-based rotation (50MB cap, 1 backup)
 	logPath := filepath.Join(dir, "output.log")
 	logWriter, err := newRotatingWriter(logPath)
 	if err != nil {
-		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
@@ -250,7 +236,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	if err := cmd.Start(); err != nil {
 		logWriter.Close()
-		stopSlirp(slirpInst, w.log)
 		return fmt.Errorf("starting instance: %w", err)
 	}
 
@@ -266,9 +251,8 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		pid:       pid,
 		startedAt: time.Now(),
 		logWriter: logWriter,
-		done:      make(chan struct{}),
-		unitName:  "gj-" + id,
-		slirp:     slirpInst,
+		done:     make(chan struct{}),
+		unitName: "gj-" + id,
 	}
 
 	w.mu.Lock()
@@ -278,12 +262,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	state := instanceState{
 		StartedAt: inst.startedAt,
 		UnitName:  inst.unitName,
-	}
-	if inst.slirp != nil {
-		state.HolderPID = inst.slirp.holderPID
-		state.SlirpPID = inst.slirp.slirpPID
-		state.NsPID = inst.slirp.nsPID
-		state.SlirpSocket = inst.slirp.apiSock
 	}
 	if err := saveInstanceState(dir, state); err != nil {
 		w.log.Warn("failed to persist instance state", "id", id, "error", err)
@@ -309,7 +287,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		if inst.logWriter != nil {
 			inst.logWriter.Close()
 		}
-		stopSlirp(inst.slirp, w.log)
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
@@ -365,7 +342,6 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 
 	select {
 	case <-inst.done:
-		// Process exited gracefully — slirp cleaned up by exit watcher
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
@@ -398,8 +374,6 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 		w.log.Warn("RemoveInstance: killing running instance", "id", id, "pid", inst.pid)
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
-	} else if ok {
-		stopSlirp(inst.slirp, w.log)
 	}
 
 	if w.tracker != nil {
@@ -469,10 +443,6 @@ func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string)
 	nsArgs := []string{
 		fmt.Sprintf("--target=%d", targetPID),
 		"--mount", "--pid",
-	}
-	// Enter net namespace if we have network isolation
-	if inst.slirp != nil {
-		nsArgs = append(nsArgs, "--net")
 	}
 	if w.paths.IsRoot {
 		// Root can enter all namespaces directly
@@ -683,13 +653,6 @@ func (w *LocalWorker) InstanceStats(ctx context.Context, instanceID string) (*wo
 	stats, err := readCgroupStats(inst.unitName, inst.pid)
 	if err != nil {
 		return stats, err
-	}
-
-	// Network I/O from the namespace's tap0 interface
-	if inst.slirp != nil && inst.slirp.nsPID > 0 {
-		rx, tx := readNetDevBytes(inst.slirp.nsPID, "tap0")
-		stats.NetRxBytes = rx
-		stats.NetTxBytes = tx
 	}
 
 	// If cgroup didn't provide a memory limit, read from the manifest
@@ -985,24 +948,6 @@ func (w *LocalWorker) recoverInstances() {
 			continue
 		}
 
-		// Rebuild slirp instance from persisted PIDs if network isolation was active
-		var slirpInst *slirpInstance
-		if state.HolderPID > 0 && state.SlirpPID > 0 {
-			holderAlive := isPIDAlive(state.HolderPID, "unshare", "sleep")
-			slirpAlive := isPIDAlive(state.SlirpPID, "slirp4netns")
-			if holderAlive && slirpAlive {
-				slirpInst = &slirpInstance{
-					holderPID: state.HolderPID,
-					slirpPID:  state.SlirpPID,
-					nsPID:     state.NsPID,
-					apiSock:   state.SlirpSocket,
-				}
-			} else {
-				w.log.Warn("network isolation processes dead, instance recovered without network isolation",
-					"id", id, "holder_alive", holderAlive, "slirp_alive", slirpAlive)
-			}
-		}
-
 		inst := &managedInstance{
 			id:        id,
 			name:      manifest.Name,
@@ -1010,7 +955,6 @@ func (w *LocalWorker) recoverInstances() {
 			startedAt: state.StartedAt,
 			done:      make(chan struct{}),
 			unitName:  unitName,
-			slirp:     slirpInst,
 		}
 
 		w.mu.Lock()
@@ -1029,7 +973,6 @@ func (w *LocalWorker) recoverInstances() {
 				if !isSystemdScopeActive(inst.unitName, w.paths) {
 					inst.exited.Store(true)
 					inst.exitCode.Store(-1)
-					stopSlirp(inst.slirp, w.log)
 					os.Remove(filepath.Join(dir, "state.json"))
 
 					w.log.Info("recovered instance exited", "id", inst.id,
@@ -1046,27 +989,12 @@ func (w *LocalWorker) recoverInstances() {
 
 		recovered++
 		w.log.Info("recovered running instance", "id", id, "unit", unitName,
-			"started_at", state.StartedAt, "network_isolation", slirpInst != nil)
+			"started_at", state.StartedAt)
 	}
 
 	if recovered > 0 {
 		w.log.Info("instance recovery complete", "recovered", recovered)
 	}
-}
-
-// isPIDAlive checks that a PID exists and its cmdline contains one of the expected substrings.
-func isPIDAlive(pid int, expectedNames ...string) bool {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil {
-		return false
-	}
-	cmdline := strings.ReplaceAll(string(data), "\x00", " ")
-	for _, name := range expectedNames {
-		if strings.Contains(cmdline, name) {
-			return true
-		}
-	}
-	return false
 }
 
 // --- Worker interface: Game scripts & Steam ---

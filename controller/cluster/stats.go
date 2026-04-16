@@ -189,8 +189,6 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 			data.MemoryUsageMB = cs.MemoryUsageMB
 			data.MemoryLimitMB = cs.MemoryLimitMB
 			data.CPUPercent = cs.CPUPercent
-			data.NetRxBytes = cs.NetRxBytes
-			data.NetTxBytes = cs.NetTxBytes
 		}
 	}
 
@@ -219,8 +217,6 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 			CPUPercent:      data.CPUPercent,
 			MemoryUsageMB:   data.MemoryUsageMB,
 			MemoryLimitMB:   data.MemoryLimitMB,
-			NetRxBytes:      data.NetRxBytes,
-			NetTxBytes:      data.NetTxBytes,
 			VolumeSizeBytes: data.VolumeSizeBytes,
 			PlayersOnline:   players,
 		})

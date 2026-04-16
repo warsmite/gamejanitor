@@ -20,15 +20,6 @@ func ensureBwrap(dataDir string, log *slog.Logger) (string, error) {
 	return extractEmbeddedBinary(dataDir, "bwrap", log)
 }
 
-// ensureSlirp4netns returns the path to the slirp4netns binary.
-// Checks system PATH first, then extracts the embedded static binary.
-func ensureSlirp4netns(dataDir string, log *slog.Logger) (string, error) {
-	if path, err := exec.LookPath("slirp4netns"); err == nil {
-		return path, nil
-	}
-	return extractEmbeddedBinary(dataDir, "slirp4netns", log)
-}
-
 // extractEmbeddedBinary extracts a static binary from the embedded filesystem
 // to {dataDir}/bin/{name}. Skips if already extracted.
 func extractEmbeddedBinary(dataDir, name string, log *slog.Logger) (string, error) {

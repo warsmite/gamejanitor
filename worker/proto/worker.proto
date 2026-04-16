@@ -94,8 +94,7 @@ message PullImageProgress {
 }
 
 message PortBinding {
-    int32 host_port = 1;
-    int32 instance_port = 2;
+    int32 port = 1;
     string protocol = 3;
 }
 
@@ -166,8 +165,6 @@ message InstanceStatsResponse {
     int32 memory_usage_mb = 1;
     int32 memory_limit_mb = 2;
     double cpu_percent = 3;
-    int64 net_rx_bytes = 4;
-    int64 net_tx_bytes = 5;
 }
 
 // Volumes

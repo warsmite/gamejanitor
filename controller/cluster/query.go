@@ -78,9 +78,9 @@ func (s *QueryService) StartPolling(gameserverID string) {
 		return
 	}
 
-	hostPort := s.getHostPort(gs)
+	hostPort := s.getPort(gs)
 	if hostPort == 0 {
-		s.log.Warn("no host port found for gameserver, skipping polling", "gameserver", gameserverID)
+		s.log.Warn("no port found for gameserver, skipping polling", "gameserver", gameserverID)
 		return
 	}
 
@@ -189,19 +189,19 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 	return game.Query != nil && game.Query.Protocol != ""
 }
 
-func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {
+func (s *QueryService) getPort(gs *model.Gameserver) uint16 {
 	for _, p := range gs.Ports {
 		if p.Name == controller.PortNameQuery {
-			return uint16(p.HostPort)
+			return uint16(p.Port)
 		}
 	}
 	for _, p := range gs.Ports {
 		if p.Name == controller.PortNameGame {
-			return uint16(p.HostPort)
+			return uint16(p.Port)
 		}
 	}
 	if len(gs.Ports) > 0 {
-		return uint16(gs.Ports[0].HostPort)
+		return uint16(gs.Ports[0].Port)
 	}
 	return 0
 }

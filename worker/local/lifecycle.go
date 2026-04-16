@@ -10,17 +10,9 @@ import (
 	"syscall"
 )
 
-// buildSystemdCommandWithNetns wraps bwrap in systemd-run, optionally using
-// nsenter to join an existing network namespace from slirp4netns.
-func buildSystemdCommandWithNetns(id string, manifest instanceManifest, bwrapArgs []string, paths *systemPaths, si *slirpInstance) *exec.Cmd {
-	// Build the actual command: nsenter (if netns) + bwrap
-	var innerArgs []string
-	if si != nil && paths.Nsenter != "" {
-		innerArgs = append(nsenterPrefix(si.nsPID, paths), paths.Bwrap)
-	} else {
-		innerArgs = []string{paths.Bwrap}
-	}
-	innerArgs = append(innerArgs, bwrapArgs...)
+// buildSystemdCommand wraps bwrap in systemd-run for lifecycle + cgroups.
+func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []string, paths *systemPaths) *exec.Cmd {
+	innerArgs := append([]string{paths.Bwrap}, bwrapArgs...)
 
 	if !paths.hasSystemd() {
 		return exec.Command(innerArgs[0], innerArgs[1:]...)

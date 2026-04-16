@@ -22,7 +22,7 @@
   let storageLimitMb = $state(0);
   let backupLimit = $state(0);
   let portMode = $state('auto');
-  let manualPorts = $state<{ name: string; host_port: number; instance_port: number; protocol: string }[]>([]);
+  let manualPorts = $state<{ name: string; port: number; protocol: string }[]>([]);
   let autoRestart = $state(true);
   let autoStart = $state(true);
   let envValues = $state<Record<string, string>>({});
@@ -72,8 +72,7 @@
 
     manualPorts = game.default_ports.map(p => ({
       name: p.name,
-      host_port: p.port,
-      instance_port: p.port,
+      port: p.port,
       protocol: p.protocol,
     }));
 
