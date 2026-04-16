@@ -11,7 +11,7 @@ import (
 
 // --- Recovery ---
 
-// recoverInstances scans for active gj-*.scope systemd units and re-adopts
+// recoverInstances scans crun state for running containers and re-adopts
 // instances that survived a gamejanitor restart.
 func (w *LocalWorker) recoverInstances() {
 	if w.rt == nil {
@@ -56,15 +56,12 @@ func (w *LocalWorker) recoverInstances() {
 			continue
 		}
 
-		unitName := "gj-" + id
 		inst := &managedInstance{
 			id:        id,
 			name:      manifest.Name,
 			image:     manifest.Image,
 			startedAt: state.StartedAt,
-			pid:       c.PID,
 			done:      make(chan struct{}),
-			unitName:  unitName,
 		}
 
 		w.mu.Lock()
@@ -102,9 +99,6 @@ func (w *LocalWorker) recoverInstances() {
 		w.log.Info("recovered running instance", "id", id, "pid", c.PID,
 			"started_at", state.StartedAt)
 	}
-
-	// Clean up orphan systemd scopes that crun doesn't know about
-	cleanupOrphanScopes(w.paths, w.log)
 
 	if recovered > 0 {
 		w.log.Info("instance recovery complete", "recovered", recovered)

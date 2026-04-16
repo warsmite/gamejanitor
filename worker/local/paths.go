@@ -11,15 +11,13 @@ import (
 )
 
 // systemPaths holds resolved paths to system binaries used by the worker.
-// All paths are resolved once at startup to avoid repeated lookups and
-// PATH issues inside systemd units.
+// All paths are resolved once at startup to avoid repeated lookups.
 type systemPaths struct {
 	Unshare   string
 	Nsenter   string
 	Sh        string
 	Sleep     string
 	Rm        string
-	Systemctl string
 	NewUIDMap string // empty if not available
 	NewGIDMap string // empty if not available
 	IsRoot    bool
@@ -37,23 +35,14 @@ func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 	p.Sh = lookupBinary("sh")
 	p.Sleep = lookupBinary("sleep")
 	p.Rm = lookupBinary("rm")
-	p.Systemctl = lookupBinary("systemctl")
 	p.NewUIDMap = lookupBinary("newuidmap")
 	p.NewGIDMap = lookupBinary("newgidmap")
 
-	if p.Systemctl == "" {
-		log.Warn("systemctl not found — no resource limits (memory/CPU), processes will not survive gamejanitor restarts")
-	}
 	if !p.IsRoot && !p.hasUIDMapping() {
 		log.Warn("newuidmap/newgidmap not found — game install scripts that chown to UID 1001 may fail. Install 'uidmap' package or 'shadow' on your distribution.")
 	}
 
 	return p, nil
-}
-
-// hasSystemd returns true if systemd-run is usable.
-func (p *systemPaths) hasSystemd() bool {
-	return p.Systemctl != ""
 }
 
 // hasUIDMapping returns true if newuidmap/newgidmap are available (non-root only).

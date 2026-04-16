@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/util/naming"
@@ -169,9 +166,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("preparing OCI bundle: %w", err)
 	}
 
-	// Wrap in systemd-run for lifecycle management
-	cmd := buildSystemdCrunCommand(id, bundleDir, w.rt, w.paths)
-
 	// Log file with size-based rotation (50MB cap, 1 backup)
 	logPath := filepath.Join(dir, "output.log")
 	logWriter, err := newRotatingWriter(logPath)
@@ -179,21 +173,14 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
-	cmd.Stdout = logWriter
-	cmd.Stderr = logWriter
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	if err := cmd.Start(); err != nil {
+	handle, err := w.rt.RunContainer(id, bundleDir, logWriter, logWriter)
+	if err != nil {
 		logWriter.Close()
 		return fmt.Errorf("starting instance: %w", err)
 	}
 
-	pid := 0
-	if cmd.Process != nil {
-		pid = cmd.Process.Pid
-	}
-
-	// Start pasta for network namespace connectivity + port forwarding
+	// Start pasta for network namespace connectivity + port forwarding.
+	// The container PID is guaranteed valid here — RunContainer waits until running.
 	var forwards []runtime.PortForward
 	for _, p := range manifest.Ports {
 		forwards = append(forwards, runtime.PortForward{
@@ -204,11 +191,11 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 	var pastaInst *runtime.PastaInstance
 	if len(forwards) > 0 {
-		pi, err := w.rt.StartPasta(id, forwards)
+		pi, err := w.rt.StartPastaForPID(id, handle.PID, forwards)
 		if err != nil {
 			w.log.Error("failed to start pasta, killing container", "id", id, "error", err)
-			cmd.Process.Kill()
-			cmd.Wait()
+			w.rt.Kill(id, "SIGKILL")
+			handle.Wait()
 			logWriter.Close()
 			w.rt.Delete(id, true)
 			return fmt.Errorf("starting pasta network: %w", err)
@@ -220,12 +207,10 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		id:        id,
 		name:      manifest.Name,
 		image:     manifest.Image,
-		pid:       pid,
 		startedAt: time.Now(),
 		logWriter: logWriter,
 		done:      make(chan struct{}),
-		unitName:  "gj-" + id,
-		pasta:     pastaInst,
+		handle:    handle,
 	}
 
 	w.mu.Lock()
@@ -234,7 +219,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	state := instanceState{
 		StartedAt: inst.startedAt,
-		UnitName:  inst.unitName,
 	}
 	if err := saveInstanceState(dir, state); err != nil {
 		w.log.Warn("failed to persist instance state", "id", id, "error", err)
@@ -252,31 +236,26 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	// Exit watcher
 	go func() {
-		cmd.Wait()
-		inst.exitCode.Store(int32(cmd.ProcessState.ExitCode()))
+		exitCode := handle.Wait()
+		inst.exitCode.Store(int32(exitCode))
 		inst.exited.Store(true)
 		if inst.logWriter != nil {
 			inst.logWriter.Close()
 		}
-		inst.pasta.Stop()
+		if pastaInst != nil {
+			pastaInst.Stop()
+		}
 		w.rt.Delete(id, true)
-		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
-		exitCode := inst.exitCode.Load()
-		// Extract the signal that killed the process (if any)
-		var signalInfo string
-		if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-			signalInfo = status.Signal().String()
-		}
 
 		if exitCode != 0 && uptime < 3*time.Second {
 			logData, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
 			w.log.Error("instance failed to start (exited immediately)",
-				"id", id, "exit_code", exitCode, "signal", signalInfo, "uptime", uptime.Round(time.Millisecond),
+				"id", id, "exit_code", exitCode, "uptime", uptime.Round(time.Millisecond),
 				"output", truncate(string(logData), 500))
 		} else {
-			w.log.Info("instance exited", "id", id, "exit_code", exitCode, "signal", signalInfo, "uptime", uptime.Round(time.Second))
+			w.log.Info("instance exited", "id", id, "exit_code", exitCode, "uptime", uptime.Round(time.Second))
 		}
 		os.Remove(filepath.Join(w.instanceDir(id), "state.json"))
 		close(inst.done)
@@ -286,7 +265,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		}
 	}()
 
-	w.log.Info("instance started", "id", id, "pid", pid, "image", manifest.Image, "unit", inst.unitName)
+	w.log.Info("instance started", "id", id, "pid", handle.PID, "image", manifest.Image)
 	return nil
 }
 
@@ -299,16 +278,10 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 		return nil
 	}
 
-	w.log.Info("StopInstance called", "id", id, "pid", inst.pid, "uptime", time.Since(inst.startedAt).Round(time.Second))
+	w.log.Info("StopInstance called", "id", id)
 
-	// Send SIGTERM via crun kill
 	if err := w.rt.Kill(id, "SIGTERM"); err != nil {
-		w.log.Debug("crun kill SIGTERM failed, trying systemd fallback", "id", id, "error", err)
-		// Fallback to systemctl kill
-		if w.paths.hasSystemd() {
-			prefix := systemctlPrefix(w.paths)
-			exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=TERM", inst.unitName+".scope")...).Run()
-		}
+		w.log.Debug("crun kill SIGTERM failed", "id", id, "error", err)
 	}
 
 	select {
@@ -316,11 +289,7 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		// Force kill via crun
 		w.rt.Kill(id, "SIGKILL")
-		w.rt.Delete(id, true)
-		// Fallback: kill systemd scope
-		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 		return nil
 	case <-ctx.Done():
@@ -337,10 +306,9 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 	w.mu.Unlock()
 
 	if ok && !inst.exited.Load() {
-		w.log.Warn("RemoveInstance: killing running instance", "id", id, "pid", inst.pid)
+		w.log.Warn("RemoveInstance: killing running instance", "id", id)
 		w.rt.Kill(id, "SIGKILL")
 		w.rt.Delete(id, true)
-		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 	}
 
@@ -370,19 +338,23 @@ func (w *LocalWorker) InspectInstance(ctx context.Context, id string) (*worker.I
 		}, nil
 	}
 
-	// Not in memory — check persisted state for instances surviving a restart
-	dir := w.instanceDir(id)
-	state, err := loadInstanceState(dir)
+	// Not in memory — check crun state for instances surviving a restart
+	cs, err := w.rt.State(id)
 	if err != nil {
 		return nil, fmt.Errorf("instance %s not found", id)
 	}
 
-	unitName := state.UnitName
-	if isSystemdScopeActive(unitName, w.paths) {
+	if cs.Status == "running" {
+		dir := w.instanceDir(id)
+		state, _ := loadInstanceState(dir)
+		var startedAt time.Time
+		if state != nil {
+			startedAt = state.StartedAt
+		}
 		return &worker.InstanceInfo{
 			ID:        id,
 			State:     "running",
-			StartedAt: state.StartedAt,
+			StartedAt: startedAt,
 		}, nil
 	}
 
@@ -422,37 +394,6 @@ func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string)
 	env = append(env, manifest.Env...)
 
 	return w.rt.Exec(instanceID, cmd, env)
-}
-
-// cgroupPIDs returns all PIDs in the systemd scope for the given unit.
-func cgroupPIDs(unitName string, paths *systemPaths) []int {
-	if !paths.hasSystemd() {
-		return nil
-	}
-	args := []string{"show", "-p", "ControlGroup", unitName + ".scope"}
-	if !paths.IsRoot {
-		args = append([]string{"--user"}, args...)
-	}
-	out, err := exec.Command(paths.Systemctl, args...).Output()
-	if err != nil {
-		return nil
-	}
-	cgPath := strings.TrimPrefix(strings.TrimSpace(string(out)), "ControlGroup=")
-	if cgPath == "" {
-		return nil
-	}
-	data, err := os.ReadFile("/sys/fs/cgroup" + cgPath + "/cgroup.procs")
-	if err != nil {
-		return nil
-	}
-	var pids []int
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		pid, err := strconv.Atoi(strings.TrimSpace(line))
-		if err == nil && pid > 0 {
-			pids = append(pids, pid)
-		}
-	}
-	return pids
 }
 
 // --- Worker interface: Logs & Stats ---
@@ -496,7 +437,13 @@ func (w *LocalWorker) InstanceStats(ctx context.Context, instanceID string) (*wo
 		return &worker.InstanceStats{}, nil
 	}
 
-	stats, err := readCgroupStats(inst.unitName, inst.pid)
+	// Get the container PID from crun state for cgroup stats lookup
+	containerPID := 0
+	if inst.handle != nil {
+		containerPID = inst.handle.PID
+	}
+
+	stats, err := readCgroupStats(containerPID)
 	if err != nil {
 		return stats, err
 	}
@@ -562,11 +509,9 @@ func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.Gam
 		if inMemory && !inst.exited.Load() {
 			state = "running"
 		} else if !inMemory {
-			// Check persisted state for instances not yet in memory
-			if persisted, err := loadInstanceState(filepath.Join(instancesDir, id)); err == nil {
-				if isSystemdScopeActive(persisted.UnitName, w.paths) {
-					state = "running"
-				}
+			// Check crun state for instances not yet in memory
+			if cs, err := w.rt.State(id); err == nil && cs.Status == "running" {
+				state = "running"
 			}
 		}
 

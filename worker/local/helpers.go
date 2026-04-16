@@ -7,37 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
-
-// cleanupOrphanScopes resets failed gj-* systemd scopes from previous runs.
-func cleanupOrphanScopes(paths *systemPaths, log *slog.Logger) {
-	cleaned := 0
-	for _, prefix := range [][]string{nil, {"--user"}} {
-		args := append(prefix, "list-units", "--type=scope", "--state=failed", "--no-legend", "--plain")
-		out, err := exec.Command(paths.Systemctl, args...).Output()
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) == 0 || !strings.HasPrefix(fields[0], "gj-") {
-				continue
-			}
-			resetArgs := append(prefix, "reset-failed", fields[0])
-			exec.Command(paths.Systemctl, resetArgs...).Run()
-			cleaned++
-		}
-	}
-	if cleaned > 0 {
-		log.Info("reset failed systemd scopes from previous run", "count", cleaned)
-	}
-}
 
 // cleanupOverlayMounts unmounts any stale overlayfs mounts under dataDir/images.
 // These can linger if gamejanitor crashes without a clean shutdown.
@@ -92,28 +67,18 @@ func (b *safeBuffer) Bytes() []byte {
 }
 
 
-// tailFile reads the last n lines from a file, filtering out sandbox preamble.
+// tailFile reads the last n lines from a file.
 func tailFile(f *os.File, n int) ([]string, error) {
 	f.Seek(0, io.SeekStart)
 	scanner := bufio.NewScanner(f)
 	var lines []string
 	for scanner.Scan() {
-		line := scanner.Text()
-		if isSystemdPreamble(line) {
-			continue
-		}
-		lines = append(lines, line)
+		lines = append(lines, scanner.Text())
 	}
 	if len(lines) > n && n > 0 {
 		lines = lines[len(lines)-n:]
 	}
 	return lines, scanner.Err()
-}
-
-// isSystemdPreamble returns true for systemd-run output lines that
-// shouldn't be shown as game server logs.
-func isSystemdPreamble(line string) bool {
-	return strings.HasPrefix(line, "Running as unit: ")
 }
 
 const (

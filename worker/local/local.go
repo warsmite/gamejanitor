@@ -16,8 +16,8 @@ import (
 	"github.com/warsmite/gamejanitor/worker/local/runtime"
 )
 
-// LocalWorker implements Worker using crun for OCI container execution and
-// systemd for lifecycle management. Uses host networking. No external daemon required.
+// LocalWorker implements Worker using crun (OCI runtime) with pasta for
+// network namespace connectivity. No external daemon required.
 type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
@@ -38,22 +38,18 @@ type managedInstance struct {
 	id        string
 	name      string
 	image     string
-	pid       int
 	startedAt time.Time
 	exitCode  atomic.Int32
 	exited    atomic.Bool
 	logWriter *rotatingWriter
 	done      chan struct{}
-	unitName  string // systemd unit name
-	pasta     *runtime.PastaInstance
+	handle    *runtime.ContainerHandle
 }
 
 // instanceState is persisted alongside the manifest so running instances
 // can be re-adopted after a gamejanitor restart.
 type instanceState struct {
 	StartedAt time.Time `json:"started_at"`
-	HolderPID int       `json:"holder_pid,omitempty"`
-	UnitName  string    `json:"unit_name"`
 }
 
 func saveInstanceState(dir string, state instanceState) error {
@@ -117,7 +113,6 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 
 	log.Info("runtime ready",
 		"crun", rt != nil,
-		"systemd", paths.hasSystemd(),
 		"root", paths.IsRoot)
 	return w
 }

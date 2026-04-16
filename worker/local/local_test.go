@@ -53,8 +53,6 @@ func TestSaveAndLoadInstanceState(t *testing.T) {
 	dir := t.TempDir()
 	original := instanceState{
 		StartedAt: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
-		HolderPID: 1234,
-		UnitName:  "gj-test-instance",
 	}
 
 	require.NoError(t, saveInstanceState(dir, original))
@@ -62,8 +60,6 @@ func TestSaveAndLoadInstanceState(t *testing.T) {
 	loaded, err := loadInstanceState(dir)
 	require.NoError(t, err)
 	assert.Equal(t, original.StartedAt.UTC(), loaded.StartedAt.UTC())
-	assert.Equal(t, original.HolderPID, loaded.HolderPID)
-	assert.Equal(t, original.UnitName, loaded.UnitName)
 }
 
 func TestLoadInstanceState_Missing(t *testing.T) {

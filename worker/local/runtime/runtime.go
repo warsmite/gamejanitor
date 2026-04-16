@@ -3,12 +3,15 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/warsmite/gamejanitor/worker/local/runtime/embedded"
 )
@@ -100,10 +103,58 @@ func (r *Runtime) Start(id string) error {
 	return nil
 }
 
-// Run creates and starts a container in one step (foreground).
-// The returned *exec.Cmd is the running crun process — attach stdio before calling Start().
-func (r *Runtime) Run(id string, bundleDir string) *exec.Cmd {
-	return r.cmd("run", "--bundle", bundleDir, id)
+// ContainerHandle represents a running container managed by crun.
+type ContainerHandle struct {
+	PID      int
+	cmd      *exec.Cmd
+	done     chan struct{}
+	exitCode int
+}
+
+// Wait blocks until the container exits and returns the exit code.
+func (h *ContainerHandle) Wait() int {
+	<-h.done
+	return h.exitCode
+}
+
+// Done returns a channel that's closed when the container exits.
+func (h *ContainerHandle) Done() <-chan struct{} {
+	return h.done
+}
+
+// RunContainer starts a container via `crun run` and waits until it's fully running.
+// The container's stdout/stderr are attached to the provided writers.
+// Returns a ContainerHandle with the container PID available immediately.
+func (r *Runtime) RunContainer(id, bundleDir string, stdout, stderr io.Writer) (*ContainerHandle, error) {
+	cmd := r.cmd("run", "--bundle", bundleDir, id)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting crun run: %w", err)
+	}
+
+	cs, err := r.waitForRunning(id, 10*time.Second)
+	if err != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+		return nil, fmt.Errorf("container did not start: %w", err)
+	}
+
+	h := &ContainerHandle{
+		PID:  cs.PID,
+		cmd:  cmd,
+		done: make(chan struct{}),
+	}
+
+	go func() {
+		cmd.Wait()
+		h.exitCode = cmd.ProcessState.ExitCode()
+		close(h.done)
+	}()
+
+	return h, nil
 }
 
 // Kill sends a signal to the container's init process.
@@ -205,19 +256,36 @@ type PastaInstance struct {
 	pid int
 }
 
+// waitForRunning polls crun state until the container is running and has a PID.
+// systemd-run returns before crun has fully created the container, so we need
+// to wait before we can attach pasta to the network namespace.
+func (r *Runtime) waitForRunning(id string, timeout time.Duration) (*ContainerState, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		cs, err := r.State(id)
+		if err == nil && cs.PID > 0 {
+			return cs, nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("container %s did not start within %v", id, timeout)
+}
+
 // StartPasta starts a pasta process that provides network connectivity to the
 // container's network namespace. Each PortForward maps a host port to a
 // container port. The container process sees its default ports; pasta handles
 // the forwarding transparently.
 func (r *Runtime) StartPasta(containerID string, forwards []PortForward) (*PastaInstance, error) {
-	cs, err := r.State(containerID)
+	cs, err := r.waitForRunning(containerID, 10*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("getting container PID for pasta: %w", err)
+		return nil, fmt.Errorf("waiting for container %s to start: %w", containerID, err)
 	}
-	if cs.PID <= 0 {
-		return nil, fmt.Errorf("container %s has no PID", containerID)
-	}
+	return r.StartPastaForPID(containerID, cs.PID, forwards)
+}
 
+// StartPastaForPID starts a pasta process attached to a container with a known PID.
+// Use this when the container PID is already available (e.g. from RunContainer).
+func (r *Runtime) StartPastaForPID(containerID string, pid int, forwards []PortForward) (*PastaInstance, error) {
 	args := []string{
 		"--ns-ifname", "eth0",
 	}
@@ -234,7 +302,7 @@ func (r *Runtime) StartPasta(containerID string, forwards []PortForward) (*Pasta
 		}
 	}
 
-	args = append(args, fmt.Sprintf("%d", cs.PID))
+	args = append(args, fmt.Sprintf("%d", pid))
 
 	cmd := exec.Command(r.pastaPath, args...)
 	if err := cmd.Start(); err != nil {

@@ -406,7 +406,6 @@ while true; do sleep 1; done
 	dir := filepath.Join(w.dataDir, "instances", id)
 	state, err := loadInstanceState(dir)
 	require.NoError(t, err)
-	assert.Equal(t, "gj-"+id, state.UnitName)
 	assert.False(t, state.StartedAt.IsZero())
 
 	// Stop and verify state.json is cleaned up

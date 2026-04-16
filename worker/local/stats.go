@@ -14,11 +14,10 @@ import (
 
 // readCgroupStats reads memory and CPU stats from cgroups v2.
 // Falls back to /proc/<pid> if cgroup data is unavailable.
-func readCgroupStats(unitName string, pid int) (*worker.InstanceStats, error) {
+func readCgroupStats(pid int) (*worker.InstanceStats, error) {
 	stats := &worker.InstanceStats{}
 
-	// Try cgroups v2 first (via systemd slice path)
-	cgroupPath := findCgroupPath(unitName, pid)
+	cgroupPath := findCgroupPath(pid)
 	if cgroupPath != "" {
 		stats.MemoryUsageMB = int(readCgroupInt(filepath.Join(cgroupPath, "memory.current")) / (1024 * 1024))
 		memMax := readCgroupInt(filepath.Join(cgroupPath, "memory.max"))
@@ -36,26 +35,24 @@ func readCgroupStats(unitName string, pid int) (*worker.InstanceStats, error) {
 	return stats, nil
 }
 
-// findCgroupPath locates the cgroup v2 directory for a systemd scope unit.
-func findCgroupPath(unitName string, pid int) string {
-	if unitName == "" {
+// findCgroupPath locates the cgroup v2 directory for a container process.
+func findCgroupPath(pid int) string {
+	if pid <= 0 {
 		return ""
 	}
 
-	// systemd scope units live at /sys/fs/cgroup/user.slice/user-<uid>.slice/<unit>.scope
-	// Read the process's cgroup to find the exact path
-	if pid > 0 {
-		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
-		if err == nil {
-			// cgroups v2: single line "0::/<path>"
-			for _, line := range strings.Split(string(data), "\n") {
-				if strings.HasPrefix(line, "0::") {
-					cgPath := strings.TrimPrefix(line, "0::")
-					fullPath := filepath.Join("/sys/fs/cgroup", strings.TrimSpace(cgPath))
-					if _, err := os.Stat(fullPath); err == nil {
-						return fullPath
-					}
-				}
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
+	if err != nil {
+		return ""
+	}
+
+	// cgroups v2: single line "0::/<path>"
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "0::") {
+			cgPath := strings.TrimPrefix(line, "0::")
+			fullPath := filepath.Join("/sys/fs/cgroup", strings.TrimSpace(cgPath))
+			if _, err := os.Stat(fullPath); err == nil {
+				return fullPath
 			}
 		}
 	}
