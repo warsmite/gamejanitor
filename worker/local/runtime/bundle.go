@@ -122,7 +122,7 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		"process":    process,
 		"root": map[string]any{
 			"path":     "rootfs",
-			"readonly": false,
+			"readonly": true,
 		},
 		"hostname": hostname,
 		"mounts":   mounts,
@@ -169,6 +169,24 @@ func defaultMounts() []map[string]any {
 		},
 		{
 			"destination": "/tmp",
+			"type":        "tmpfs",
+			"source":      "tmpfs",
+			"options":     []string{"nosuid", "nodev", "mode=1777"},
+		},
+		{
+			"destination": "/home",
+			"type":        "tmpfs",
+			"source":      "tmpfs",
+			"options":     []string{"nosuid", "nodev", "mode=755"},
+		},
+		{
+			"destination": "/run",
+			"type":        "tmpfs",
+			"source":      "tmpfs",
+			"options":     []string{"nosuid", "nodev", "mode=755"},
+		},
+		{
+			"destination": "/var/tmp",
 			"type":        "tmpfs",
 			"source":      "tmpfs",
 			"options":     []string{"nosuid", "nodev", "mode=1777"},

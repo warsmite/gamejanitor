@@ -4,86 +4,23 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
-// cleanupOrphanState kills leftover namespace holders, resets failed systemd scopes,
-// and unmounts stale overlayfs mounts from a previous gamejanitor crash.
-// Holders belonging to active gj-*.scope units are preserved for recovery.
-func cleanupOrphanHolders(log *slog.Logger) {
-	// Collect active gj-* scope PIDs so we don't kill recoverable holders
-	activeScopePIDs := activeGJScopePIDs()
-
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return
-	}
-	killed := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil {
-			continue
-		}
-		cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-		if err != nil {
-			continue
-		}
-		// cmdline is null-separated
-		cmd := strings.ReplaceAll(string(cmdline), "\x00", " ")
-		if strings.Contains(cmd, "unshare") && strings.Contains(cmd, "sleep infinity") {
-			if activeScopePIDs[pid] {
-				continue
-			}
-			syscall.Kill(pid, syscall.SIGKILL)
-			killed++
-		}
-	}
-	// Also reset any failed systemd scopes from previous runs
-	if out, err := exec.Command("sh", "-c", "systemctl list-units --type=scope --state=failed --no-legend --plain 2>/dev/null | grep gj- | awk '{print $1}'").Output(); err == nil {
-		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if unit != "" {
-				exec.Command("systemctl", "reset-failed", unit).Run()
-				killed++
-			}
-		}
-	}
-	// Same for user scopes
-	if out, err := exec.Command("sh", "-c", "systemctl --user list-units --type=scope --state=failed --no-legend --plain 2>/dev/null | grep gj- | awk '{print $1}'").Output(); err == nil {
-		for _, unit := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if unit != "" {
-				exec.Command("systemctl", "--user", "reset-failed", unit).Run()
-				killed++
-			}
-		}
-	}
-
-	if killed > 0 {
-		log.Warn("cleaned up orphaned sandbox state from previous run", "count", killed)
-	}
-}
-
-// activeGJScopePIDs returns a set of PIDs that belong to active gj-*.scope cgroups.
-// Used to avoid killing holder processes that are part of recoverable instances.
-func activeGJScopePIDs() map[int]bool {
-	pids := make(map[int]bool)
-
-	// Try both system and user scopes
-	for _, userFlag := range [][]string{nil, {"--user"}} {
-		args := append(userFlag, "list-units", "--type=scope", "--state=active", "--no-legend", "--plain")
-		out, err := exec.Command("systemctl", args...).Output()
+// cleanupOrphanScopes resets failed gj-* systemd scopes from previous runs.
+func cleanupOrphanScopes(paths *systemPaths, log *slog.Logger) {
+	cleaned := 0
+	for _, prefix := range [][]string{nil, {"--user"}} {
+		args := append(prefix, "list-units", "--type=scope", "--state=failed", "--no-legend", "--plain")
+		out, err := exec.Command(paths.Systemctl, args...).Output()
 		if err != nil {
 			continue
 		}
@@ -92,28 +29,14 @@ func activeGJScopePIDs() map[int]bool {
 			if len(fields) == 0 || !strings.HasPrefix(fields[0], "gj-") {
 				continue
 			}
-			showArgs := append(userFlag, "show", "-p", "ControlGroup", fields[0])
-			cgOut, err := exec.Command("systemctl", showArgs...).Output()
-			if err != nil {
-				continue
-			}
-			cgPath := strings.TrimPrefix(strings.TrimSpace(string(cgOut)), "ControlGroup=")
-			if cgPath == "" {
-				continue
-			}
-			data, err := os.ReadFile("/sys/fs/cgroup" + cgPath + "/cgroup.procs")
-			if err != nil {
-				continue
-			}
-			for _, pidLine := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-				pid, err := strconv.Atoi(strings.TrimSpace(pidLine))
-				if err == nil && pid > 0 {
-					pids[pid] = true
-				}
-			}
+			resetArgs := append(prefix, "reset-failed", fields[0])
+			exec.Command(paths.Systemctl, resetArgs...).Run()
+			cleaned++
 		}
 	}
-	return pids
+	if cleaned > 0 {
+		log.Info("reset failed systemd scopes from previous run", "count", cleaned)
+	}
 }
 
 // cleanupOverlayMounts unmounts any stale overlayfs mounts under dataDir/images.
