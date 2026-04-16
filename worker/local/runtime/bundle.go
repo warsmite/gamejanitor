@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -42,22 +43,42 @@ func PrepareBundle(bundleDir string, cfg BundleConfig) error {
 		return fmt.Errorf("writing config.json: %w", err)
 	}
 
-	// crun needs rootfs to be a mount point for pivot_root — symlinks don't work.
-	rootfsDir := filepath.Join(bundleDir, "rootfs")
-	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
-		return fmt.Errorf("creating rootfs dir: %w", err)
-	}
-	if err := syscall.Mount(cfg.RootFS, rootfsDir, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("bind-mounting rootfs: %w", err)
+	// pivot_root requires the rootfs to be on its own mount. Self-bind-mount
+	// the image directory so it appears as a separate mount entry. Without
+	// this, pivot_root fails with EINVAL on hosts where / is a shared mount.
+	if err := selfBindMount(cfg.RootFS); err != nil {
+		return fmt.Errorf("self-bind-mounting rootfs: %w", err)
 	}
 
 	return nil
 }
 
-// CleanupBundle unmounts the rootfs bind mount in the bundle directory.
-func CleanupBundle(bundleDir string) {
-	rootfsDir := filepath.Join(bundleDir, "rootfs")
-	syscall.Unmount(rootfsDir, 0)
+// CleanupBundle is a no-op placeholder. The rootfs self-bind-mount is shared
+// across containers using the same image and is cleaned up on shutdown, not
+// per-container.
+func CleanupBundle(_ string) {}
+
+// selfBindMount bind-mounts a directory onto itself if it isn't already a
+// mount point. This makes it a distinct mount entry so pivot_root can use it.
+func selfBindMount(path string) error {
+	if isMountPoint(path) {
+		return nil
+	}
+	return syscall.Mount(path, path, "", syscall.MS_BIND|syscall.MS_REC, "")
+}
+
+func isMountPoint(path string) bool {
+	data, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 5 && fields[4] == path {
+			return true
+		}
+	}
+	return false
 }
 
 func buildSpec(cfg BundleConfig) map[string]any {
@@ -106,8 +127,9 @@ func buildSpec(cfg BundleConfig) map[string]any {
 			{"type": "uts"},
 			{"type": "mount"},
 		},
-		"maskedPaths":   defaultMaskedPaths(),
-		"readonlyPaths": defaultReadonlyPaths(),
+		"rootfsPropagation": "private",
+		"maskedPaths":       defaultMaskedPaths(),
+		"readonlyPaths":     defaultReadonlyPaths(),
 	}
 
 	resources := map[string]any{}
@@ -132,7 +154,7 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		"ociVersion": "1.0.0",
 		"process":    process,
 		"root": map[string]any{
-			"path":     "rootfs",
+			"path":     cfg.RootFS,
 			"readonly": true,
 		},
 		"hostname": hostname,
