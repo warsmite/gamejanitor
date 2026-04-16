@@ -35,16 +35,12 @@ func newTestWorker(t *testing.T) *LocalWorker {
 	dataDir := t.TempDir()
 	log := testLogger()
 
-	paths, err := resolvePaths(dataDir, log)
-	require.NoError(t, err)
-
 	rt, err := runtime.New(dataDir, log)
 	require.NoError(t, err, "crun runtime must be available for integration tests")
 
 	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
-		paths:     paths,
 		rt:        rt,
 		instances: make(map[string]*managedInstance),
 		tracker:   NewInstanceTracker(log),
@@ -428,16 +424,12 @@ func newTestWorkerWithDir(t *testing.T, dataDir string) *LocalWorker {
 	t.Helper()
 	log := testLogger()
 
-	paths, err := resolvePaths(dataDir, log)
-	require.NoError(t, err)
-
 	rt, err := runtime.New(dataDir, log)
 	require.NoError(t, err, "crun runtime must be available for integration tests")
 
 	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
-		paths:     paths,
 		rt:        rt,
 		instances: make(map[string]*managedInstance),
 		tracker:   NewInstanceTracker(log),

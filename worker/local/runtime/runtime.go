@@ -103,6 +103,13 @@ func (r *Runtime) Start(id string) error {
 	return nil
 }
 
+// RunSync returns a *exec.Cmd for `crun run` that can be executed synchronously.
+// Used for short-lived operations (cleanup, install) where the caller wants to
+// run the container to completion and capture output.
+func (r *Runtime) RunSync(id, bundleDir string) *exec.Cmd {
+	return r.cmd("run", "--bundle", bundleDir, id)
+}
+
 // ContainerHandle represents a running container managed by crun.
 type ContainerHandle struct {
 	PID      int

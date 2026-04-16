@@ -22,9 +22,8 @@ type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
-	resolve   VolumeResolver
-	paths     *systemPaths
-	rt        *runtime.Runtime
+	resolve VolumeResolver
+	rt      *runtime.Runtime
 
 	mu        sync.Mutex
 	instances map[string]*managedInstance
@@ -88,12 +87,6 @@ type instanceManifest struct {
 func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	cleanupOverlayMounts(dataDir, log)
 
-	paths, err := resolvePaths(dataDir, log)
-	if err != nil {
-		log.Error("runtime initialization failed", "error", err)
-		paths = &systemPaths{IsRoot: os.Getuid() == 0}
-	}
-
 	rt, err := runtime.New(dataDir, log)
 	if err != nil {
 		log.Error("crun runtime initialization failed", "error", err)
@@ -103,7 +96,6 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 		log:       log,
 		gameStore: gameStore,
 		dataDir:   dataDir,
-		paths:     paths,
 		rt:        rt,
 		instances: make(map[string]*managedInstance),
 	}
@@ -113,7 +105,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 
 	log.Info("runtime ready",
 		"crun", rt != nil,
-		"root", paths.IsRoot)
+		"root", os.Getuid() == 0)
 	return w
 }
 
