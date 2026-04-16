@@ -2,217 +2,204 @@
 
 package e2e
 
+// permissions_test.go — auth, tokens, grants, quotas, scoping. These tests
+// mutate global settings (auth_enabled, localhost_bypass), so they run
+// serially and clean up after themselves.
+
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdk "github.com/warsmite/gamejanitor/sdk"
 )
 
-// TestE2E_Permissions_FullFlow tests the complete permission system end-to-end:
-// 1. Enable auth, get admin token
-// 2. Admin creates a gameserver
-// 3. Admin creates a user token (can_create=false)
-// 4. User token cannot see admin's gameserver (no grant)
-// 5. Admin grants user access to the gameserver
-// 6. User token can now see and interact with the gameserver
-// 7. Admin creates a user token with can_create=true
-// 8. Creator token creates its own gameserver and can see it (ownership)
-// 9. Creator token cannot see admin's gameserver (no grant)
-// This test mutates global auth settings (enables auth, disables localhost
-// bypass), so it must NOT run in parallel with other tests. We avoid Start(t)
-// which calls t.Parallel(), and set up the harness manually instead.
-func TestE2E_Permissions_FullFlow(t *testing.T) {
-	h := startSerial(t)
+// enableAuth creates an admin token, enables auth, and returns the admin
+// token. Cleanup is registered to restore settings at test end.
+func enableAuth(t *testing.T, env *Env) *Token {
+	t.Helper()
 
-	// 1. Create admin token BEFORE enabling auth (localhost bypass lets us through)
-	tokenName := fmt.Sprintf("e2e-admin-%d", time.Now().UnixNano())
-	resp, err := h.PostJSON("/api/tokens", map[string]any{
-		"name": tokenName, "role": "admin",
+	admin := env.NewToken(sdk.CreateTokenRequest{
+		Name: "e2e-admin-" + t.Name(),
+		Role: "admin",
 	})
-	require.NoError(t, err)
-	var adminResult struct {
-		Token   string `json:"token"`
-		TokenID string `json:"token_id"`
-	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&adminResult))
-	resp.Body.Close()
-	adminToken := adminResult.Token
-	require.NotEmpty(t, adminToken)
 
-	// Enable auth first, then disable localhost bypass (must be in two steps —
-	// the handler rejects disabling bypass before auth is enabled).
-	resp, err = h.AuthPatch("/api/settings", adminToken, map[string]any{
-		"auth_enabled": true,
-	})
-	require.NoError(t, err)
-	resp.Body.Close()
+	env.SetSetting("auth_enabled", true)
+	env.SetSettingAs(admin, "localhost_bypass", false)
 
-	resp, err = h.AuthPatch("/api/settings", adminToken, map[string]any{
-		"localhost_bypass": false,
-	})
-	require.NoError(t, err)
-	resp.Body.Close()
-
-	// Cleanup: restore settings so other tests aren't affected
 	t.Cleanup(func() {
-		h.AuthPatch("/api/settings", adminToken, map[string]any{
-			"auth_enabled":     false,
-			"localhost_bypass": true,
+		env.SetSettingAs(admin, "localhost_bypass", true)
+		env.SetSettingAs(admin, "auth_enabled", false)
+	})
+
+	return admin
+}
+
+// TestPermissions_Scoping verifies that tokens with no grants see no
+// gameservers other than their own owned ones.
+func TestPermissions_Scoping(t *testing.T) {
+	env := NewEnvSerial(t)
+	admin := enableAuth(t, env)
+
+	// Admin creates a gameserver.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	adminGs, err := admin.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+		Name:   "admin-" + t.Name(),
+		GameID: env.GameID(),
+		Env:    env.GameEnv(),
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = admin.SDK().Gameservers.Delete(context.Background(), adminGs.ID) })
+
+	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "viewer-" + t.Name(), Role: "user"})
+
+	// Viewer without grants sees zero gameservers.
+	resp, err := viewer.SDK().Gameservers.List(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, resp.Gameservers, "viewer with no grants should see nothing")
+}
+
+// TestPermissions_Grants verifies that granting access lets a scoped token
+// see and act on a specific gameserver.
+func TestPermissions_Grants(t *testing.T) {
+	env := NewEnvSerial(t)
+	admin := enableAuth(t, env)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	adminGs, err := admin.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+		Name:   "granted-" + t.Name(),
+		GameID: env.GameID(),
+		Env:    env.GameEnv(),
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = admin.SDK().Gameservers.Delete(context.Background(), adminGs.ID) })
+
+	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "grantee-" + t.Name(), Role: "user"})
+
+	// Grant viewer start/stop permission on this specific gameserver.
+	_, err = admin.SDK().Gameservers.Update(ctx, adminGs.ID, &sdk.UpdateGameserverRequest{
+		Grants: map[string][]string{viewer.ID: {"gameserver.start", "gameserver.stop"}},
+	})
+	require.NoError(t, err)
+
+	// Viewer sees the granted gameserver.
+	resp, err := viewer.SDK().Gameservers.List(ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, resp.Gameservers, 1, "viewer should see the granted gameserver")
+	assert.Equal(t, adminGs.ID, resp.Gameservers[0].ID)
+}
+
+// TestPermissions_CanCreate verifies that tokens without can_create can't
+// create gameservers, and tokens with can_create can.
+func TestPermissions_CanCreate(t *testing.T) {
+	env := NewEnvSerial(t)
+	admin := enableAuth(t, env)
+	_ = admin
+
+	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "noviewer-" + t.Name(), Role: "user"})
+	creator := env.NewToken(sdk.CreateTokenRequest{Name: "creator-" + t.Name(), Role: "user", CanCreate: true})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Viewer without can_create is forbidden.
+	_, err := viewer.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+		Name: "should-fail", GameID: env.GameID(), Env: env.GameEnv(),
+	})
+	require.Error(t, err, "viewer without can_create should be blocked")
+	assert.True(t, sdk.IsForbidden(err), "expected 403, got %v", err)
+
+	// Creator with can_create succeeds.
+	created, err := creator.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+		Name: "creator-gs-" + t.Name(), GameID: env.GameID(), Env: env.GameEnv(),
+	})
+	require.NoError(t, err, "creator with can_create should succeed")
+	t.Cleanup(func() { _ = creator.SDK().Gameservers.Delete(context.Background(), created.ID) })
+
+	// Creator sees only their own gameserver (no grants on admin's).
+	resp, err := creator.SDK().Gameservers.List(ctx, nil)
+	require.NoError(t, err)
+	assert.Len(t, resp.Gameservers, 1, "creator should see only owned gameserver")
+}
+
+// TestPermissions_Quota_MaxGameservers verifies that max_gameservers caps
+// creation at the configured limit.
+func TestPermissions_Quota_MaxGameservers(t *testing.T) {
+	env := NewEnvSerial(t)
+	_ = enableAuth(t, env)
+
+	limit := 2
+	creator := env.NewToken(sdk.CreateTokenRequest{
+		Name:           "quota-" + t.Name(),
+		Role:           "user",
+		CanCreate:      true,
+		MaxGameservers: &limit,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var created []string
+	t.Cleanup(func() {
+		for _, id := range created {
+			_ = creator.SDK().Gameservers.Delete(context.Background(), id)
+		}
+	})
+
+	// First two creations succeed.
+	for i := 0; i < limit; i++ {
+		gs, err := creator.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+			Name: "quota-ok", GameID: env.GameID(), Env: env.GameEnv(),
 		})
-	})
-
-	// 2. Admin creates a gameserver
-	resp, err = h.AuthPost("/api/gameservers", adminToken, map[string]any{
-		"name":    "E2E Admin Server",
-		"game_id": h.GameID(),
-		"env":     testGameEnv(h, nil),
-	})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "admin should create gameserver")
-	var gsResult struct {
-		ID string `json:"id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&gsResult)
-	resp.Body.Close()
-	adminGsID := gsResult.ID
-	require.NotEmpty(t, adminGsID)
-
-	t.Cleanup(func() {
-		h.AuthPost("/api/gameservers/"+adminGsID+"/actions/stop", adminToken, nil)
-		req, _ := http.NewRequest("DELETE", h.BaseURL+"/api/gameservers/"+adminGsID, nil)
-		req.Header.Set("Authorization", "Bearer "+adminToken)
-		http.DefaultClient.Do(req)
-	})
-
-	// 3. Admin creates a user token (view only, no can_create)
-	resp, err = h.AuthPost("/api/tokens", adminToken, map[string]any{
-		"name": "e2e-viewer", "role": "user",
-	})
-	require.NoError(t, err)
-	var viewerResult struct {
-		Token   string `json:"token"`
-		TokenID string `json:"token_id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&viewerResult)
-	resp.Body.Close()
-	viewerToken := viewerResult.Token
-	viewerTokenID := viewerResult.TokenID
-	require.NotEmpty(t, viewerToken)
-
-	// 4. Viewer cannot see admin's gameserver (no grant)
-	resp, err = h.AuthGet("/api/gameservers", viewerToken)
-	require.NoError(t, err)
-	var listResult []struct{ ID string }
-	json.NewDecoder(resp.Body).Decode(&listResult)
-	resp.Body.Close()
-	assert.Len(t, listResult, 0, "viewer with no grants should see no gameservers")
-
-	// 5. Admin grants viewer access to the gameserver with start permission
-	resp, err = h.AuthPatch("/api/gameservers/"+adminGsID, adminToken, map[string]any{
-		"grants": map[string][]string{
-			viewerTokenID: {"gameserver.start", "gameserver.stop"},
-		},
-	})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode, "admin should be able to patch grants")
-	resp.Body.Close()
-
-	// 6. Viewer can now see the gameserver
-	resp, err = h.AuthGet("/api/gameservers", viewerToken)
-	require.NoError(t, err)
-	json.NewDecoder(resp.Body).Decode(&listResult)
-	resp.Body.Close()
-	assert.Len(t, listResult, 1, "viewer with grant should see the gameserver")
-	if len(listResult) > 0 {
-		assert.Equal(t, adminGsID, listResult[0].ID)
+		require.NoError(t, err, "creation %d should succeed within quota", i+1)
+		created = append(created, gs.ID)
 	}
 
-	// 7. Viewer cannot create a gameserver (no can_create)
-	resp, err = h.AuthPost("/api/gameservers", viewerToken, map[string]any{
-		"name":    "Should Fail",
-		"game_id": h.GameID(),
-		"env":     testGameEnv(h, nil),
+	// Third hits the cap.
+	_, err := creator.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
+		Name: "quota-over", GameID: env.GameID(), Env: env.GameEnv(),
 	})
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "viewer without can_create should be blocked")
-	resp.Body.Close()
+	require.Error(t, err, "creation beyond max_gameservers should be blocked")
+}
 
-	// 8. Viewer cannot access cluster routes
-	resp, err = h.AuthGet("/api/settings", viewerToken)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "viewer should not see settings")
-	resp.Body.Close()
+// TestPermissions_ViewerForbiddenOnClusterRoutes verifies that non-admin
+// tokens can't access cluster-level routes (settings, tokens).
+func TestPermissions_ViewerForbiddenOnClusterRoutes(t *testing.T) {
+	env := NewEnvSerial(t)
+	_ = enableAuth(t, env)
 
-	resp, err = h.AuthGet("/api/tokens", viewerToken)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "viewer should not see tokens")
-	resp.Body.Close()
+	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "cluster-" + t.Name(), Role: "user"})
 
-	// 9. Admin creates a creator token
-	resp, err = h.AuthPost("/api/tokens", adminToken, map[string]any{
-		"name": "e2e-creator", "role": "user", "can_create": true,
-		"max_gameservers": 2,
-	})
-	require.NoError(t, err)
-	var creatorResult struct {
-		Token   string `json:"token"`
-		TokenID string `json:"token_id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&creatorResult)
-	resp.Body.Close()
-	creatorToken := creatorResult.Token
-	require.NotEmpty(t, creatorToken)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// 10. Creator creates a gameserver (ownership)
-	resp, err = h.AuthPost("/api/gameservers", creatorToken, map[string]any{
-		"name":    "E2E Creator Server",
-		"game_id": h.GameID(),
-		"env":     testGameEnv(h, nil),
-	})
-	require.NoError(t, err)
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "creator should create gameserver")
-	var creatorGsResult struct {
-		ID string `json:"id"`
-	}
-	json.NewDecoder(resp.Body).Decode(&creatorGsResult)
-	resp.Body.Close()
-	creatorGsID := creatorGsResult.ID
+	_, err := viewer.SDK().Settings.Get(ctx)
+	assert.True(t, sdk.IsForbidden(err), "viewer should not access settings; got %v", err)
 
-	t.Cleanup(func() {
-		h.AuthPost("/api/gameservers/"+creatorGsID+"/actions/stop", adminToken, nil)
-		req, _ := http.NewRequest("DELETE", h.BaseURL+"/api/gameservers/"+creatorGsID, nil)
-		req.Header.Set("Authorization", "Bearer "+adminToken)
-		http.DefaultClient.Do(req)
-	})
+	_, err = viewer.SDK().Tokens.List(ctx)
+	assert.True(t, sdk.IsForbidden(err), "viewer should not access tokens; got %v", err)
+}
 
-	// 11. Creator sees only their own server (not admin's)
-	resp, err = h.AuthGet("/api/gameservers", creatorToken)
-	require.NoError(t, err)
-	json.NewDecoder(resp.Body).Decode(&listResult)
-	resp.Body.Close()
-	assert.Len(t, listResult, 1, "creator should see only owned gameserver")
-	if len(listResult) > 0 {
-		assert.Equal(t, creatorGsID, listResult[0].ID)
-	}
+// TestPermissions_MeEndpoint verifies /api/me returns correct role info for
+// each token type.
+func TestPermissions_MeEndpoint(t *testing.T) {
+	env := NewEnvSerial(t)
+	admin := enableAuth(t, env)
 
-	// 12. /api/me returns correct info for each token
-	resp, err = h.AuthGet("/api/me", adminToken)
-	require.NoError(t, err)
-	var meResult struct {
-		Role string `json:"role"`
-	}
-	json.NewDecoder(resp.Body).Decode(&meResult)
-	resp.Body.Close()
-	assert.Equal(t, "admin", meResult.Role)
+	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "me-" + t.Name(), Role: "user"})
 
-	resp, err = h.AuthGet("/api/me", viewerToken)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	adminMe, err := admin.SDK().Me(ctx)
 	require.NoError(t, err)
-	json.NewDecoder(resp.Body).Decode(&meResult)
-	resp.Body.Close()
-	assert.Equal(t, "user", meResult.Role)
+	assert.Equal(t, "admin", adminMe.Role)
+
+	viewerMe, err := viewer.SDK().Me(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "user", viewerMe.Role)
 }

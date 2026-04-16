@@ -111,6 +111,7 @@ type UpdateGameserverRequest struct {
 	NodeTags          map[string]string `json:"node_tags,omitempty"`
 	AutoRestart       *bool             `json:"auto_restart,omitempty"`
 	ConnectionAddress *string           `json:"connection_address,omitempty"`
+	Grants            map[string][]string `json:"grants,omitempty"`
 }
 
 // UpdateGameserverResponse is returned by update — it may include a migration flag.

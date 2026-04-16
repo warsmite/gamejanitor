@@ -430,16 +430,16 @@
             exec go test -tags e2e -count=1 -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
           '';
 
-          test-smoke = pkgs.writeShellScriptBin "test-smoke" ''
+          test-games = pkgs.writeShellScriptBin "test-games" ''
             update-vendor-hash
             if [ -n "$1" ] && [[ "$1" != -* ]]; then
-              export SMOKE_GAME="$1"
+              export E2E_GAMES="$1"
               shift
             fi
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
-            echo "Running smoke tests (SMOKE_GAME=''${SMOKE_GAME:-minecraft-java})..."
-            exec go test -tags smoke -timeout "''${TEST_TIMEOUT:-5m}" -v ./e2e/ "$@"
+            echo "Running game compatibility tests (E2E_GAMES=''${E2E_GAMES:-minecraft-java})..."
+            exec go test -tags e2e -run TestGame_Compatibility -timeout "''${TEST_TIMEOUT:-15m}" -v ./e2e/ "$@"
           '';
 
           test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
@@ -545,7 +545,7 @@
             test-race
             test-e2e
             test-homelab
-            test-smoke
+            test-games
             test-coverage
           ];
 

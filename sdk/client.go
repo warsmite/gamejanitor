@@ -49,6 +49,23 @@ type Client struct {
 	Logs        *LogService
 }
 
+// MeResponse is the payload from GET /api/me. Describes the current token's
+// identity and permissions.
+type MeResponse struct {
+	TokenID   string `json:"token_id"`
+	Role      string `json:"role"`
+	CanCreate bool   `json:"can_create"`
+}
+
+// Me returns information about the currently-authenticated token.
+func (c *Client) Me(ctx context.Context) (*MeResponse, error) {
+	var m MeResponse
+	if err := c.get(ctx, "/api/me", &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 // Option configures a [Client].
 type Option func(*Client)
 
