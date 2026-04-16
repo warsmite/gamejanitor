@@ -5,40 +5,102 @@ import (
 	"time"
 )
 
+// Gameserver display-phase constants. These are derived at read time from
+// primary facts; they are NOT a field on the wire. Use Gameserver.Phase()
+// to compute one.
+const (
+	PhaseDeleting    = "deleting"
+	PhaseArchived    = "archived"
+	PhaseUnreachable = "unreachable"
+	PhaseInstalling  = "installing"
+	PhaseStopping    = "stopping"
+	PhaseStarting    = "starting"
+	PhaseError       = "error"
+	PhaseRunning     = "running"
+	PhaseStopped     = "stopped"
+)
+
+// Phase returns a one-word display summary derived from primary facts. The
+// controller does not emit this — it's a rendering helper for callers that
+// want a single pill string.
+func (gs *Gameserver) Phase() string {
+	if gs == nil {
+		return ""
+	}
+	if gs.Operation != nil && gs.Operation.Phase == "deleting" {
+		return PhaseDeleting
+	}
+	if gs.DesiredState == "archived" {
+		return PhaseArchived
+	}
+	if !gs.WorkerOnline {
+		return PhaseUnreachable
+	}
+	if gs.Operation != nil {
+		switch gs.Operation.Phase {
+		case "pulling_image", "downloading_game", "installing":
+			return PhaseInstalling
+		case "stopping":
+			return PhaseStopping
+		case "starting":
+			return PhaseStarting
+		case "migrating":
+			return PhaseInstalling
+		}
+	}
+	if gs.ErrorReason != "" {
+		return PhaseError
+	}
+	if gs.ProcessState == "running" && gs.Ready {
+		return PhaseRunning
+	}
+	return PhaseStopped
+}
+
 // Gameserver represents a game server instance.
 type Gameserver struct {
-	ID                string            `json:"id"`
-	Name              string            `json:"name"`
-	GameID            string            `json:"game_id"`
-	Ports             []PortMapping     `json:"ports"`
-	Env               map[string]string `json:"env"`
-	MemoryLimitMB     int               `json:"memory_limit_mb"`
-	CPULimit          float64           `json:"cpu_limit"`
-	CPUEnforced       bool              `json:"cpu_enforced"`
-	InstanceID       *string           `json:"instance_id"`
-	VolumeName        string            `json:"volume_name"`
-	Status            string            `json:"status"`
-	ErrorReason       string            `json:"error_reason"`
-	PortMode          string            `json:"port_mode"`
-	NodeID            *string           `json:"node_id"`
-	Node              *GameserverNode   `json:"node,omitempty"`
-	SFTPUsername      string            `json:"sftp_username"`
-	SFTPPort          int               `json:"sftp_port,omitempty"`
-	Installed         bool              `json:"installed"`
-	BackupLimit       *int              `json:"backup_limit"`
-	StorageLimitMB    *int              `json:"storage_limit_mb"`
-	NodeTags          map[string]string `json:"node_tags"`
-	AutoRestart       *bool             `json:"auto_restart"`
-	ConnectionAddress *string           `json:"connection_address"`
-	ConnectionHost    string            `json:"connection_host,omitempty"`
-	DesiredState      string            `json:"desired_state"`
-	RestartRequired   bool              `json:"restart_required"`
-	StartedAt         *time.Time        `json:"started_at,omitempty"`
-	Operation         *Operation        `json:"operation,omitempty"`
+	// Identity + spec
+	ID                string              `json:"id"`
+	Name              string              `json:"name"`
+	GameID            string              `json:"game_id"`
+	Ports             []PortMapping       `json:"ports"`
+	Env               map[string]string   `json:"env"`
+	MemoryLimitMB     int                 `json:"memory_limit_mb"`
+	CPULimit          float64             `json:"cpu_limit"`
+	CPUEnforced       bool                `json:"cpu_enforced"`
+	VolumeName        string              `json:"volume_name"`
+	PortMode          string              `json:"port_mode"`
+	NodeID            *string             `json:"node_id"`
+	Node              *GameserverNode     `json:"node,omitempty"`
+	SFTPUsername      string              `json:"sftp_username"`
+	SFTPPort          int                 `json:"sftp_port,omitempty"`
+	BackupLimit       *int                `json:"backup_limit"`
+	StorageLimitMB    *int                `json:"storage_limit_mb"`
+	NodeTags          map[string]string   `json:"node_tags"`
+	AutoRestart       *bool               `json:"auto_restart"`
+	ConnectionAddress *string             `json:"connection_address"`
+	ConnectionHost    string              `json:"connection_host,omitempty"`
+	DesiredState      string              `json:"desired_state"`
 	Grants            map[string][]string `json:"grants,omitempty"`
-	CreatedByTokenID  *string           `json:"created_by_token_id,omitempty"`
-	CreatedAt         time.Time         `json:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at"`
+	CreatedByTokenID  *string             `json:"created_by_token_id,omitempty"`
+	CreatedAt         time.Time           `json:"created_at"`
+	UpdatedAt         time.Time           `json:"updated_at"`
+
+	// Observed facts — primary signals from the controller. Consumers that
+	// want a one-word display pill derive it from these; the controller does
+	// not produce a status enum.
+	InstanceID      *string    `json:"instance_id"`
+	Installed       bool       `json:"installed"`
+	ErrorReason     string     `json:"error_reason"`
+	Operation       *Operation `json:"operation,omitempty"`
+	ProcessState    string     `json:"process_state"`
+	Ready           bool       `json:"ready"`
+	WorkerOnline    bool       `json:"worker_online"`
+	ExitCode        int        `json:"exit_code,omitempty"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
+	ReadyAt         *time.Time `json:"ready_at,omitempty"`
+	ExitedAt        *time.Time `json:"exited_at,omitempty"`
+	RestartRequired bool       `json:"restart_required"`
 }
 
 // Operation describes an in-flight lifecycle operation on a gameserver

@@ -78,37 +78,18 @@ type Poller interface {
 }
 
 // LiveGameserver is the runtime object for a single gameserver. It owns its own
-// lifecycle, status derivation, and operation tracking. One exists per gameserver
-// in the Manager's map for the lifetime of the process (or until deleted).
+// lifecycle and operation tracking. One exists per gameserver in the Manager's
+// map for the lifetime of the process (or until deleted).
+//
+// Durable state lives on `spec` (a *model.Gameserver). Mutations to durable
+// fields go through `spec` and are persisted via g.store methods. Observed
+// facts (process state, operation, runtime timestamps) live as top-level
+// fields on the struct — they are in-memory only and never persisted.
 type LiveGameserver struct {
-	// Durable state — loaded from / persisted to DB via model.Gameserver.
-	id                 string
-	name               string
-	gameID             string
-	volumeName         string
-	desiredState       model.DesiredState
-	instanceID         *string
-	installed          bool
-	nodeID             *string
-	ports              model.Ports
-	env                model.Env
-	memoryLimitMB      int
-	cpuLimit           float64
-	cpuEnforced        bool
-	storageLimitMB     *int
-	backupLimit        *int
-	portMode           string
-	autoRestart        *bool
-	connectionAddress  *string
-	nodeTags           model.Labels
-	appliedConfig      *model.AppliedConfig
-	createdByTokenID   *string
-	grants             model.GrantMap
-	sftpUsername        string
-	hashedSFTPPassword string
-	errorReason        string
-	createdAt          time.Time
-	updatedAt          time.Time
+	// Spec — durable state. The whole model.Gameserver is held here; writes
+	// are either local-only or paired with a store call. Reading spec fields
+	// requires g.mu; writing spec fields requires g.mu.
+	spec *model.Gameserver
 
 	// Runtime state — in-memory only.
 	mu         sync.Mutex
@@ -147,50 +128,23 @@ type LiveGameserver struct {
 
 func newLiveGameserver(gs *model.Gameserver, store Store, bus *event.EventBus, gameStore *games.GameStore, settingsSvc SettingsReader, backupStore BackupStore, dispatcher *cluster.Dispatcher, placement *cluster.PlacementService, log *slog.Logger) *LiveGameserver {
 	return &LiveGameserver{
-		processState:       model.ProcessNone,
-		id:                 gs.ID,
-		name:               gs.Name,
-		gameID:             gs.GameID,
-		volumeName:         gs.VolumeName,
-		desiredState:       gs.DesiredState,
-		instanceID:         gs.InstanceID,
-		installed:          gs.Installed,
-		nodeID:             gs.NodeID,
-		ports:              gs.Ports,
-		env:                gs.Env,
-		memoryLimitMB:      gs.MemoryLimitMB,
-		cpuLimit:           gs.CPULimit,
-		cpuEnforced:        gs.CPUEnforced,
-		storageLimitMB:     gs.StorageLimitMB,
-		backupLimit:        gs.BackupLimit,
-		portMode:           gs.PortMode,
-		autoRestart:        gs.AutoRestart,
-		connectionAddress:  gs.ConnectionAddress,
-		nodeTags:           gs.NodeTags,
-		appliedConfig:      gs.AppliedConfig,
-		createdByTokenID:   gs.CreatedByTokenID,
-		grants:             gs.Grants,
-		sftpUsername:        gs.SFTPUsername,
-		hashedSFTPPassword: gs.HashedSFTPPassword,
-		errorReason:        gs.ErrorReason,
-		createdAt:          gs.CreatedAt,
-		updatedAt:          gs.UpdatedAt,
-
-		store:       store,
-		bus:         bus,
-		gameStore:   gameStore,
-		settingsSvc: settingsSvc,
-		backupStore: backupStore,
-		dispatcher:  dispatcher,
-		placement:   placement,
-		log:         log.With("gameserver", gs.ID),
-		watchers:  make(map[uint64]chan *model.Operation),
+		spec:         gs,
+		processState: model.ProcessNone,
+		store:        store,
+		bus:          bus,
+		gameStore:    gameStore,
+		settingsSvc:  settingsSvc,
+		backupStore:  backupStore,
+		dispatcher:   dispatcher,
+		placement:    placement,
+		log:          log.With("gameserver", gs.ID),
+		watchers:     make(map[uint64]chan *model.Operation),
 	}
 }
 
 // ID returns the gameserver's unique identifier.
 func (g *LiveGameserver) ID() string {
-	return g.id
+	return g.spec.ID
 }
 
 // Snapshot returns a point-in-time view of the gameserver — spec plus
@@ -201,50 +155,22 @@ func (g *LiveGameserver) Snapshot() model.Gameserver {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	gs := model.Gameserver{
-		// Identity + spec
-		ID:                 g.id,
-		Name:               g.name,
-		GameID:             g.gameID,
-		VolumeName:         g.volumeName,
-		DesiredState:       g.desiredState,
-		NodeID:             g.nodeID,
-		Ports:              g.ports,
-		Env:                g.env,
-		MemoryLimitMB:      g.memoryLimitMB,
-		CPULimit:           g.cpuLimit,
-		CPUEnforced:        g.cpuEnforced,
-		StorageLimitMB:     g.storageLimitMB,
-		BackupLimit:        g.backupLimit,
-		PortMode:           g.portMode,
-		AutoRestart:        g.autoRestart,
-		ConnectionAddress:  g.connectionAddress,
-		NodeTags:           g.nodeTags,
-		AppliedConfig:      g.appliedConfig,
-		CreatedByTokenID:   g.createdByTokenID,
-		Grants:             g.grants,
-		SFTPUsername:       g.sftpUsername,
-		HashedSFTPPassword: g.hashedSFTPPassword,
-		CreatedAt:          g.createdAt,
-		UpdatedAt:          g.updatedAt,
-
-		// Observed — primary facts
-		InstanceID:   g.instanceID,
-		Installed:    g.installed,
-		ErrorReason:  g.errorReason,
-		Operation:    g.operation,
-		ProcessState: g.processState,
-		Ready:        g.ready,
-		WorkerOnline: g.worker != nil,
-		ExitCode:     g.exitCode,
-		StartedAt:    g.startedAt,
-		ReadyAt:      g.readyAt,
-		ExitedAt:     g.exitedAt,
-	}
+	// Shallow-copy the spec and overlay observed runtime facts. Any slices
+	// or maps inside (Ports, Env, Grants) remain shared with the spec —
+	// callers must not mutate them, matching the pre-existing contract.
+	gs := *g.spec
+	gs.Operation = g.operation
+	gs.ProcessState = g.processState
+	gs.Ready = g.ready
+	gs.WorkerOnline = g.worker != nil
+	gs.ExitCode = g.exitCode
+	gs.StartedAt = g.startedAt
+	gs.ReadyAt = g.readyAt
+	gs.ExitedAt = g.exitedAt
 
 	gs.ComputeRestartRequired()
-	if g.connectionAddress != nil && *g.connectionAddress != "" {
-		gs.ConnectionHost = *g.connectionAddress
+	if g.spec.ConnectionAddress != nil && *g.spec.ConnectionAddress != "" {
+		gs.ConnectionHost = *g.spec.ConnectionAddress
 	}
 	g.store.PopulateNode(&gs)
 
@@ -259,7 +185,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 	defer g.mu.Unlock()
 
 	// Ignore events for stale instances
-	if g.instanceID == nil || update.InstanceID != *g.instanceID {
+	if g.spec.InstanceID == nil || update.InstanceID != *g.spec.InstanceID {
 		return
 	}
 
@@ -267,12 +193,12 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 	case worker.StateRunning:
 		wasReady := g.ready
 		g.setProcessRunningLocked(update)
-		g.errorReason = ""
-		g.store.ClearErrorReason(g.id)
+		g.spec.ErrorReason = ""
+		g.store.ClearErrorReason(g.spec.ID)
 
-		if !g.installed && update.Installed {
-			g.installed = true
-			dbGS, err := g.store.GetGameserver(g.id)
+		if !g.spec.Installed && update.Installed {
+			g.spec.Installed = true
+			dbGS, err := g.store.GetGameserver(g.spec.ID)
 			if err == nil {
 				dbGS.Installed = true
 				g.store.UpdateGameserver(dbGS)
@@ -286,9 +212,9 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 			if g.operation != nil {
 				g.operation = nil
 				g.notifyWatchersLocked(nil)
-				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{Operation: nil}))
+				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{Operation: nil}))
 			}
-			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.id, nil))
+			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.spec.ID, nil))
 		}
 
 	case worker.StateExited:
@@ -297,7 +223,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		//   - a delete is in progress (OpDelete intentionally kills the instance)
 		// Both skip handleUnexpectedDeath so auto-restart doesn't fight the
 		// intentional action.
-		intentional := g.desiredState != model.DesiredRunning ||
+		intentional := g.spec.DesiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
 		wasRunning := g.processState == model.ProcessRunning
 		operationWasActive := g.operation != nil
@@ -314,9 +240,9 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		// Clear instanceID — the ID points to an exited instance that should not
 		// block a subsequent Start from running (which would otherwise see a
 		// non-nil instanceID and short-circuit).
-		if g.instanceID != nil {
-			g.instanceID = nil
-			g.store.SetInstanceID(g.id, nil)
+		if g.spec.InstanceID != nil {
+			g.spec.InstanceID = nil
+			g.store.SetInstanceID(g.spec.ID, nil)
 		}
 	}
 }
@@ -385,36 +311,36 @@ func (g *LiveGameserver) ClearWorker() {
 // Must be called with g.mu held.
 func (g *LiveGameserver) handleUnexpectedDeath(exitCode int, startedAt time.Time) {
 	reason := describeExit(exitCode, time.Since(startedAt), nil)
-	g.errorReason = reason
+	g.spec.ErrorReason = reason
 	g.setProcessExitedLocked(exitCode, time.Time{})
-	g.store.SetErrorReason(g.id, reason)
+	g.store.SetErrorReason(g.spec.ID, reason)
 
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.id, nil))
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{Reason: reason}))
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.spec.ID, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: reason}))
 
-	if g.autoRestart == nil || !*g.autoRestart {
+	if g.spec.AutoRestart == nil || !*g.spec.AutoRestart {
 		return
 	}
 
 	g.crashCount++
 	const maxRestartAttempts = 3
 	if g.crashCount > maxRestartAttempts {
-		g.errorReason = fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", g.crashCount, reason)
-		g.store.SetErrorReason(g.id, g.errorReason)
-		g.log.Error("auto-restart limit reached", "gameserver", g.id, "crashes", g.crashCount, "max_restarts", maxRestartAttempts)
+		g.spec.ErrorReason = fmt.Sprintf("Crashed %d times, auto-restart disabled. Last crash: %s", g.crashCount, reason)
+		g.store.SetErrorReason(g.spec.ID, g.spec.ErrorReason)
+		g.log.Error("auto-restart limit reached", "gameserver", g.spec.ID, "crashes", g.crashCount, "max_restarts", maxRestartAttempts)
 		return
 	}
 
-	g.log.Warn("auto-restarting crashed gameserver", "gameserver", g.id, "attempt", g.crashCount, "max_restarts", maxRestartAttempts)
+	g.log.Warn("auto-restarting crashed gameserver", "gameserver", g.spec.ID, "attempt", g.crashCount, "max_restarts", maxRestartAttempts)
 
 	// Clear error state so the restart can proceed
-	g.errorReason = ""
+	g.spec.ErrorReason = ""
 	g.clearProcessLocked()
 
 	// Start in a new goroutine — we're inside HandleProcessEvent which holds the lock
 	go func() {
 		if err := g.Start(context.Background()); err != nil {
-			g.log.Error("auto-restart failed", "gameserver", g.id, "error", err)
+			g.log.Error("auto-restart failed", "gameserver", g.spec.ID, "error", err)
 		}
 	}()
 }
@@ -452,9 +378,9 @@ func describeExit(exitCode int, uptime time.Duration, lastStats *event.StatsData
 
 // setErrorLocked sets the error reason and persists it. Must be called with g.mu held.
 func (g *LiveGameserver) setErrorLocked(reason string) {
-	g.errorReason = reason
-	g.store.SetErrorReason(g.id, reason)
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{Reason: reason}))
+	g.spec.ErrorReason = reason
+	g.store.SetErrorReason(g.spec.ID, reason)
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: reason}))
 }
 
 // opPriority ranks operations for preemption. A submitted op whose priority
@@ -533,7 +459,7 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 
 	if opts.requireWorker && g.worker == nil {
 		g.mu.Unlock()
-		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.id)
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", g.spec.ID)
 	}
 
 	g.operation = &model.Operation{Type: opts.opType, Phase: opts.initialPhase}
@@ -545,7 +471,7 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 
 	// Announce the new operation immediately so watchers and SSE consumers
 	// don't have to wait for the first setPhase.
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
 		Operation: op,
 	}))
 	g.notifyWatchersLocked(op)
@@ -595,7 +521,7 @@ func (g *LiveGameserver) setPhase(phase model.OperationPhase) {
 	}
 	g.operation.Phase = phase
 
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
 		Operation: g.operation,
 	}))
 	g.notifyWatchersLocked(g.operation)
@@ -643,7 +569,7 @@ func (g *LiveGameserver) clearOperation() {
 	defer g.mu.Unlock()
 
 	g.operation = nil
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
 		Operation: nil,
 	}))
 	g.notifyWatchersLocked(nil)

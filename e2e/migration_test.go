@@ -51,7 +51,7 @@ func TestMigration_StoppedServer(t *testing.T) {
 	gs.Migrate(target).MustMigrateTo(target)
 
 	snap := gs.Snapshot()
-	assert.Equal(t, "stopped", snap.Status, "stopped server should stay stopped after migration")
+	assert.Equal(t, "stopped", phase(snap), "stopped server should stay stopped after migration")
 	assert.Equal(t, target, *snap.NodeID, "should be on target node")
 }
 

@@ -25,11 +25,11 @@ func (s *GameserverService) List(ctx context.Context, opts *GameserverListOption
 
 // GameserverListOptions configures filters for listing gameservers.
 type GameserverListOptions struct {
-	Game   string
-	Status string
-	IDs    []string
-	Limit  int
-	Offset int
+	Game         string
+	DesiredState string
+	IDs          []string
+	Limit        int
+	Offset       int
 }
 
 func (o *GameserverListOptions) encode() string {
@@ -40,8 +40,8 @@ func (o *GameserverListOptions) encode() string {
 	if o.Game != "" {
 		v.Set("game", o.Game)
 	}
-	if o.Status != "" {
-		v.Set("status", o.Status)
+	if o.DesiredState != "" {
+		v.Set("desired_state", o.DesiredState)
 	}
 	if len(o.IDs) > 0 {
 		v.Set("ids", strings.Join(o.IDs, ","))

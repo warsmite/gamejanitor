@@ -484,25 +484,12 @@ func (m *Manager) UpdateConfig(ctx context.Context, gs *model.Gameserver) error 
 		}
 	}
 
-	// Update the LiveGameserver's in-memory fields
+	// Update the LiveGameserver's in-memory spec. Since spec is the whole
+	// durable struct, we can swap it wholesale — no need to copy every field.
 	live := m.Get(gs.ID)
 	if live != nil {
 		live.mu.Lock()
-		live.name = existing.Name
-		live.ports = existing.Ports
-		live.env = existing.Env
-		live.memoryLimitMB = existing.MemoryLimitMB
-		live.cpuLimit = existing.CPULimit
-		live.cpuEnforced = existing.CPUEnforced
-		live.backupLimit = existing.BackupLimit
-		live.storageLimitMB = existing.StorageLimitMB
-		live.nodeTags = existing.NodeTags
-		live.connectionAddress = existing.ConnectionAddress
-		live.portMode = existing.PortMode
-		live.autoRestart = existing.AutoRestart
-		live.grants = existing.Grants
-		live.installed = existing.Installed
-		live.updatedAt = existing.UpdatedAt
+		live.spec = existing
 		live.mu.Unlock()
 	}
 
@@ -569,7 +556,7 @@ func (m *Manager) RegenerateSFTPPassword(ctx context.Context, gameserverID strin
 	live := m.Get(gameserverID)
 	if live != nil {
 		live.mu.Lock()
-		live.hashedSFTPPassword = string(hashed)
+		live.spec.HashedSFTPPassword = string(hashed)
 		live.mu.Unlock()
 	}
 
@@ -596,7 +583,7 @@ func (m *Manager) OnWorkerOnline(nodeID string, w worker.Worker) {
 	m.mu.RLock()
 	for _, gs := range m.gameservers {
 		gs.mu.Lock()
-		if gs.nodeID != nil && *gs.nodeID == nodeID {
+		if gs.spec.NodeID != nil && *gs.spec.NodeID == nodeID {
 			gs.worker = w
 		}
 		gs.mu.Unlock()
@@ -626,7 +613,7 @@ func (m *Manager) OnWorkerOffline(nodeID string) {
 	m.mu.RLock()
 	for id, gs := range m.gameservers {
 		gs.mu.Lock()
-		if gs.nodeID != nil && *gs.nodeID == nodeID {
+		if gs.spec.NodeID != nil && *gs.spec.NodeID == nodeID {
 			gs.worker = nil
 			gs.clearProcessLocked()
 			affectedIDs = append(affectedIDs, id)
@@ -793,11 +780,11 @@ func (m *Manager) RecoverAll(ctx context.Context) error {
 // instance was not found.
 func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w worker.Worker) bool {
 	gs.mu.Lock()
-	instanceID := gs.instanceID
+	instanceID := gs.spec.InstanceID
 	gs.mu.Unlock()
 
 	if instanceID == nil {
-		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.id)
+		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.spec.ID)
 		gs.mu.Lock()
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
@@ -806,16 +793,16 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 
 	info, err := w.InspectInstance(ctx, *instanceID)
 	if err != nil {
-		m.log.Warn("instance not found, clearing", "gameserver", gs.id, "instance_id", truncID(*instanceID), "error", err)
+		m.log.Warn("instance not found, clearing", "gameserver", gs.spec.ID, "instance_id", truncID(*instanceID), "error", err)
 
 		gs.mu.Lock()
-		gs.instanceID = nil
-		gs.desiredState = model.DesiredStopped
+		gs.spec.InstanceID = nil
+		gs.spec.DesiredState = model.DesiredStopped
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
 
 		// Persist to DB
-		dbGS, _ := m.store.GetGameserver(gs.id)
+		dbGS, _ := m.store.GetGameserver(gs.spec.ID)
 		if dbGS != nil {
 			dbGS.InstanceID = nil
 			dbGS.DesiredState = model.DesiredStopped
@@ -826,7 +813,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 
 	switch info.State {
 	case "running":
-		m.log.Info("instance running, populating process state", "gameserver", gs.id)
+		m.log.Info("instance running, populating process state", "gameserver", gs.spec.ID)
 		gs.mu.Lock()
 		gs.processState = model.ProcessRunning
 		// Recovered instances are treated as ready — the worker was accepting
@@ -837,28 +824,28 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 		gs.readyAt = &startedAt
 		gs.mu.Unlock()
 		if m.statsPoller != nil {
-			m.statsPoller.StartPolling(gs.id)
+			m.statsPoller.StartPolling(gs.spec.ID)
 		}
 		if m.querySvc != nil {
-			m.querySvc.StartPolling(gs.id)
+			m.querySvc.StartPolling(gs.spec.ID)
 		}
 	case "exited", "dead", "created":
-		m.log.Info("instance is not running, clearing", "gameserver", gs.id, "state", info.State)
+		m.log.Info("instance is not running, clearing", "gameserver", gs.spec.ID, "state", info.State)
 
 		gs.mu.Lock()
-		gs.instanceID = nil
-		gs.desiredState = model.DesiredStopped
+		gs.spec.InstanceID = nil
+		gs.spec.DesiredState = model.DesiredStopped
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
 
-		dbGS, _ := m.store.GetGameserver(gs.id)
+		dbGS, _ := m.store.GetGameserver(gs.spec.ID)
 		if dbGS != nil {
 			dbGS.InstanceID = nil
 			dbGS.DesiredState = model.DesiredStopped
 			m.store.UpdateGameserver(dbGS)
 		}
 	default:
-		m.log.Warn("instance in unexpected state", "gameserver", gs.id, "state", info.State)
+		m.log.Warn("instance in unexpected state", "gameserver", gs.spec.ID, "state", info.State)
 		gs.mu.Lock()
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
@@ -875,9 +862,9 @@ func (m *Manager) recoverWorkerGameservers(ctx context.Context, nodeID string, w
 	var toRecover []*LiveGameserver
 	for _, gs := range m.gameservers {
 		gs.mu.Lock()
-		if gs.nodeID != nil && *gs.nodeID == nodeID {
-			knownIDs[gs.id] = true
-			if gs.instanceID != nil {
+		if gs.spec.NodeID != nil && *gs.spec.NodeID == nodeID {
+			knownIDs[gs.spec.ID] = true
+			if gs.spec.InstanceID != nil {
 				toRecover = append(toRecover, gs)
 			}
 		}
@@ -886,7 +873,7 @@ func (m *Manager) recoverWorkerGameservers(ctx context.Context, nodeID string, w
 	m.mu.RUnlock()
 
 	for _, gs := range toRecover {
-		m.log.Info("recovering gameserver on reconnected worker", "gameserver", gs.id, "worker", nodeID)
+		m.log.Info("recovering gameserver on reconnected worker", "gameserver", gs.spec.ID, "worker", nodeID)
 		m.recoverGameserver(ctx, gs, w)
 	}
 
@@ -1109,9 +1096,9 @@ func (m *Manager) GetGameserverStats(ctx context.Context, id string) (*worker.Ga
 
 	gs.mu.Lock()
 	w := gs.worker
-	instanceID := gs.instanceID
-	volumeName := gs.volumeName
-	storageLimitMB := gs.storageLimitMB
+	instanceID := gs.spec.InstanceID
+	volumeName := gs.spec.VolumeName
+	storageLimitMB := gs.spec.StorageLimitMB
 	gs.mu.Unlock()
 
 	if w == nil {
@@ -1146,7 +1133,7 @@ func (m *Manager) GetInstanceLogs(ctx context.Context, id string, tail int) (io.
 
 	gs.mu.Lock()
 	w := gs.worker
-	instanceID := gs.instanceID
+	instanceID := gs.spec.InstanceID
 	gs.mu.Unlock()
 
 	if instanceID == nil {

@@ -161,6 +161,43 @@ func (gs *Gameserver) IsArchived() bool {
 	return gs.DesiredState == DesiredArchived
 }
 
+// Phase returns a one-word display summary derived from primary facts. The
+// controller does not store or emit this value — it's a rendering convenience
+// for callers (CLIs, UIs, dashboards) that want a simple pill.
+func (gs *Gameserver) Phase() string {
+	if gs == nil {
+		return ""
+	}
+	if gs.Operation != nil && gs.Operation.Phase == PhaseDeleting {
+		return "deleting"
+	}
+	if gs.DesiredState == DesiredArchived {
+		return "archived"
+	}
+	if !gs.WorkerOnline {
+		return "unreachable"
+	}
+	if gs.Operation != nil {
+		switch gs.Operation.Phase {
+		case PhasePullingImage, PhaseDownloadingGame, PhaseInstalling:
+			return "installing"
+		case PhaseStopping:
+			return "stopping"
+		case PhaseStarting:
+			return "starting"
+		case PhaseMigrating:
+			return "installing"
+		}
+	}
+	if gs.ErrorReason != "" {
+		return "error"
+	}
+	if gs.ProcessState == ProcessRunning && gs.Ready {
+		return "running"
+	}
+	return "stopped"
+}
+
 // FlexInt handles JSON values that may be a number or a string containing a number.
 // Used for port mappings where values come from user-provided JSON.
 type FlexInt int

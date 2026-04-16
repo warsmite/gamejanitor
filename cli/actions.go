@@ -109,7 +109,7 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
+		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Phase()))
 		return nil
 	}
 }
@@ -192,7 +192,7 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Status:      %s\n", colorStatus(gs.Status))
+		fmt.Printf("Status:      %s\n", colorStatus(gs.Phase()))
 		if gs.StartedAt != nil && !gs.StartedAt.IsZero() {
 			d := time.Since(*gs.StartedAt)
 			fmt.Printf("Uptime:      %s\n", formatDuration(d))
@@ -247,12 +247,12 @@ func runStatusOverview() error {
 	fmt.Fprintln(w, "NAME\tGAME\tSTATUS\tPLAYERS")
 	for _, gs := range resp {
 		players := ""
-		if gs.Status == "running" || gs.Status == "started" {
+		if gs.Phase() == "running" || gs.Phase() == "started" {
 			if q, err := getClient().Gameservers.Query(ctx(), gs.ID); err == nil {
 				players = fmt.Sprintf("%d/%d", q.PlayersOnline, q.MaxPlayers)
 			}
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Status), players)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Phase()), players)
 	}
 	w.Flush()
 	return nil
@@ -396,7 +396,7 @@ var reinstallCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Status))
+		fmt.Printf("Gameserver %s is now %s.\n", name, colorStatus(gs.Phase()))
 		return nil
 	},
 }

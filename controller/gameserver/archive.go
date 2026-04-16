@@ -18,9 +18,9 @@ import (
 // removes the instance and volume from the worker, and marks it as archived.
 func (g *LiveGameserver) Archive(ctx context.Context) error {
 	g.mu.Lock()
-	if g.desiredState == model.DesiredArchived {
+	if g.spec.DesiredState == model.DesiredArchived {
 		g.mu.Unlock()
-		return controller.ErrConflictf("gameserver %s is already archived", g.id)
+		return controller.ErrConflictf("gameserver %s is already archived", g.spec.ID)
 	}
 	if g.backupStore == nil {
 		g.mu.Unlock()
@@ -47,8 +47,8 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 
 	g.mu.Lock()
 	w := g.worker
-	volumeName := g.volumeName
-	instanceID := g.instanceID
+	volumeName := g.spec.VolumeName
+	instanceID := g.spec.InstanceID
 	g.mu.Unlock()
 
 	if w == nil {
@@ -81,11 +81,11 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 		pw.Close()
 	}()
 
-	if err := g.backupStore.SaveArchive(ctx, g.id, pr); err != nil {
+	if err := g.backupStore.SaveArchive(ctx, g.spec.ID, pr); err != nil {
 		return fmt.Errorf("saving archive to store: %w", err)
 	}
 	if compressErr != nil {
-		g.backupStore.DeleteArchive(ctx, g.id)
+		g.backupStore.DeleteArchive(ctx, g.spec.ID)
 		return compressErr
 	}
 
@@ -96,7 +96,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 		}
 	}
 	// Also try by name in case instance_id is stale
-	instanceName := naming.InstanceName(g.id)
+	instanceName := naming.InstanceName(g.spec.ID)
 	if err := w.RemoveInstance(ctx, instanceName); err != nil {
 		g.log.Debug("no instance to remove by name during archive", "name", instanceName)
 	}
@@ -108,21 +108,21 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 
 	// Update state to archived
 	g.mu.Lock()
-	g.desiredState = model.DesiredArchived
-	g.instanceID = nil
-	g.nodeID = nil
+	g.spec.DesiredState = model.DesiredArchived
+	g.spec.InstanceID = nil
+	g.spec.NodeID = nil
 	g.worker = nil
 	g.clearProcessLocked()
-	g.errorReason = ""
+	g.spec.ErrorReason = ""
 	g.mu.Unlock()
 
 	// Persist to DB
-	dbGS, err := g.store.GetGameserver(g.id)
+	dbGS, err := g.store.GetGameserver(g.spec.ID)
 	if err != nil {
 		return fmt.Errorf("loading gameserver from DB for archive update: %w", err)
 	}
 	if dbGS == nil {
-		return fmt.Errorf("gameserver %s not found in DB", g.id)
+		return fmt.Errorf("gameserver %s not found in DB", g.spec.ID)
 	}
 	dbGS.DesiredState = model.DesiredArchived
 	dbGS.InstanceID = nil
@@ -133,7 +133,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 	}
 
 	g.log.Info("gameserver archived")
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverArchive, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverArchive, g.spec.ID, nil))
 
 	return nil
 }
@@ -142,9 +142,9 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 // If targetNodeID is empty, auto-selects via placement ranking.
 func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) error {
 	g.mu.Lock()
-	if g.desiredState != model.DesiredArchived {
+	if g.spec.DesiredState != model.DesiredArchived {
 		g.mu.Unlock()
-		return controller.ErrConflictf("gameserver %s is not archived", g.id)
+		return controller.ErrConflictf("gameserver %s is not archived", g.spec.ID)
 	}
 	if g.backupStore == nil {
 		g.mu.Unlock()
@@ -169,7 +169,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 	// Select target node
 	if targetNodeID == "" {
 		g.mu.Lock()
-		nodeTags := g.nodeTags
+		nodeTags := g.spec.NodeTags
 		g.mu.Unlock()
 
 		candidates := g.dispatcher.RankWorkersForPlacement(nodeTags)
@@ -186,7 +186,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 	}
 
 	g.mu.Lock()
-	volumeName := g.volumeName
+	volumeName := g.spec.VolumeName
 	g.mu.Unlock()
 
 	// Create volume on target
@@ -195,7 +195,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 	}
 
 	// Load archive from store and decompress into volume
-	reader, err := g.backupStore.LoadArchive(ctx, g.id)
+	reader, err := g.backupStore.LoadArchive(ctx, g.spec.ID)
 	if err != nil {
 		return fmt.Errorf("loading archive from store: %w", err)
 	}
@@ -216,8 +216,8 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 
 	// Reallocate ports if port_uniqueness is "node" (ports may conflict on new node)
 	g.mu.Lock()
-	gameID := g.gameID
-	gsID := g.id
+	gameID := g.spec.GameID
+	gsID := g.spec.ID
 	g.mu.Unlock()
 
 	if g.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
@@ -228,7 +228,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 				g.log.Warn("failed to reallocate ports during unarchive, keeping existing", "error", err)
 			} else if newPorts != nil {
 				g.mu.Lock()
-				g.ports = newPorts
+				g.spec.Ports = newPorts
 				g.mu.Unlock()
 			}
 		}
@@ -236,26 +236,26 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 
 	// Update state
 	g.mu.Lock()
-	g.desiredState = model.DesiredStopped
-	g.nodeID = &targetNodeID
+	g.spec.DesiredState = model.DesiredStopped
+	g.spec.NodeID = &targetNodeID
 	g.worker = targetWorker
-	g.errorReason = ""
+	g.spec.ErrorReason = ""
 	g.mu.Unlock()
 
 	// Persist to DB
-	dbGS, err := g.store.GetGameserver(g.id)
+	dbGS, err := g.store.GetGameserver(g.spec.ID)
 	if err != nil {
 		return fmt.Errorf("loading gameserver from DB for unarchive update: %w", err)
 	}
 	if dbGS == nil {
-		return fmt.Errorf("gameserver %s not found in DB", g.id)
+		return fmt.Errorf("gameserver %s not found in DB", g.spec.ID)
 	}
 	dbGS.DesiredState = model.DesiredStopped
 	dbGS.NodeID = &targetNodeID
 	dbGS.ErrorReason = ""
 
 	g.mu.Lock()
-	dbGS.Ports = g.ports
+	dbGS.Ports = g.spec.Ports
 	g.mu.Unlock()
 
 	if err := g.store.UpdateGameserver(dbGS); err != nil {
@@ -263,7 +263,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 	}
 
 	g.log.Info("gameserver unarchived", "node_id", targetNodeID)
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverUnarchive, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverUnarchive, g.spec.ID, nil))
 
 	return nil
 }
@@ -275,8 +275,8 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 	// Synchronous pre-validation before submitting the operation.
 	g.mu.Lock()
 	currentNodeID := ""
-	if g.nodeID != nil {
-		currentNodeID = *g.nodeID
+	if g.spec.NodeID != nil {
+		currentNodeID = *g.spec.NodeID
 	}
 	if currentNodeID == targetNodeID {
 		g.mu.Unlock()
@@ -286,10 +286,10 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 		g.mu.Unlock()
 		return controller.ErrBadRequest("gameserver has no current node, cannot migrate")
 	}
-	memoryNeeded := g.memoryLimitMB
-	cpuNeeded := g.cpuLimit
-	storageNeeded := ptrIntOr0(g.storageLimitMB)
-	nodeTags := g.nodeTags
+	memoryNeeded := g.spec.MemoryLimitMB
+	cpuNeeded := g.spec.CPULimit
+	storageNeeded := ptrIntOr0(g.spec.StorageLimitMB)
+	nodeTags := g.spec.NodeTags
 	g.mu.Unlock()
 
 	if _, err := g.dispatcher.SelectWorkerByNodeID(targetNodeID); err != nil {
@@ -304,10 +304,10 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 			return controller.ErrBadRequestf("target node %s missing required tags: %v", targetNodeID, nodeTags)
 		}
 	}
-	if err := g.placement.CheckWorkerLimitsExcluding(targetNodeID, memoryNeeded, cpuNeeded, storageNeeded, g.id); err != nil {
+	if err := g.placement.CheckWorkerLimitsExcluding(targetNodeID, memoryNeeded, cpuNeeded, storageNeeded, g.spec.ID); err != nil {
 		return err
 	}
-	if g.dispatcher.WorkerFor(g.id) == nil {
+	if g.dispatcher.WorkerFor(g.spec.ID) == nil {
 		return controller.ErrUnavailable("source worker is offline, cannot migrate")
 	}
 
@@ -341,8 +341,8 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 	// Record whether the gameserver was running so we can restart after migration
 	g.mu.Lock()
 	wasRunning := g.processState == model.ProcessRunning
-	volumeName := g.volumeName
-	gameID := g.gameID
+	volumeName := g.spec.VolumeName
+	gameID := g.spec.GameID
 	g.mu.Unlock()
 
 	// Stop if running
@@ -352,7 +352,7 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 
 	g.setPhase(model.PhaseMigrating)
 
-	sourceWorker := g.dispatcher.WorkerFor(g.id)
+	sourceWorker := g.dispatcher.WorkerFor(g.spec.ID)
 	if sourceWorker == nil {
 		return fmt.Errorf("source worker went offline during migration")
 	}
@@ -390,37 +390,37 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 	}()
 
 	// Store migration data temporarily via the backup store
-	if err := g.backupStore.Save(ctx, g.id, migrationID, pr); err != nil {
+	if err := g.backupStore.Save(ctx, g.spec.ID, migrationID, pr); err != nil {
 		return fmt.Errorf("saving migration data: %w", err)
 	}
 	if compressErr != nil {
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return compressErr
 	}
 
 	// Create volume on target and restore
 	if err := targetWorker.CreateVolume(ctx, volumeName); err != nil {
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return fmt.Errorf("creating volume on target: %w", err)
 	}
 
-	reader, err := g.backupStore.Load(ctx, g.id, migrationID)
+	reader, err := g.backupStore.Load(ctx, g.spec.ID, migrationID)
 	if err != nil {
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return fmt.Errorf("loading migration data: %w", err)
 	}
 
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
 		reader.Close()
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return fmt.Errorf("decompressing migration data: %w", err)
 	}
 
 	if err := targetWorker.RestoreVolume(ctx, volumeName, gzReader); err != nil {
 		gzReader.Close()
 		reader.Close()
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return fmt.Errorf("restoring volume on target: %w", err)
 	}
 	gzReader.Close()
@@ -431,7 +431,7 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 	if err != nil {
 		g.log.Warn("failed to check target volume size after migration", "error", err)
 	} else if targetSize == 0 {
-		g.backupStore.Delete(ctx, g.id, migrationID)
+		g.backupStore.Delete(ctx, g.spec.ID, migrationID)
 		return fmt.Errorf("target volume is empty after restore, aborting migration")
 	}
 
@@ -439,12 +439,12 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 	if g.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		game := g.gameStore.GetGame(gameID)
 		if game != nil {
-			newPorts, err := g.placement.ReallocatePorts(game, targetNodeID, g.id)
+			newPorts, err := g.placement.ReallocatePorts(game, targetNodeID, g.spec.ID)
 			if err != nil {
 				g.log.Warn("failed to reallocate ports during migration, keeping existing", "error", err)
 			} else if newPorts != nil {
 				g.mu.Lock()
-				g.ports = newPorts
+				g.spec.Ports = newPorts
 				g.mu.Unlock()
 			}
 		}
@@ -452,22 +452,22 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 
 	// Update state to target node
 	g.mu.Lock()
-	g.nodeID = &targetNodeID
+	g.spec.NodeID = &targetNodeID
 	g.worker = targetWorker
 	g.mu.Unlock()
 
 	// Persist to DB
-	dbGS, err := g.store.GetGameserver(g.id)
+	dbGS, err := g.store.GetGameserver(g.spec.ID)
 	if err != nil {
 		return fmt.Errorf("loading gameserver from DB for migration update: %w", err)
 	}
 	if dbGS == nil {
-		return fmt.Errorf("gameserver %s not found in DB", g.id)
+		return fmt.Errorf("gameserver %s not found in DB", g.spec.ID)
 	}
 	dbGS.NodeID = &targetNodeID
 
 	g.mu.Lock()
-	dbGS.Ports = g.ports
+	dbGS.Ports = g.spec.Ports
 	g.mu.Unlock()
 
 	if err := g.store.UpdateGameserver(dbGS); err != nil {
@@ -478,12 +478,12 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 	if err := sourceWorker.RemoveVolume(ctx, volumeName); err != nil {
 		g.log.Warn("failed to remove volume from source after migration", "volume", volumeName, "error", err)
 	}
-	if err := g.backupStore.Delete(ctx, g.id, migrationID); err != nil {
+	if err := g.backupStore.Delete(ctx, g.spec.ID, migrationID); err != nil {
 		g.log.Warn("failed to clean up migration data", "migration_id", migrationID, "error", err)
 	}
 
 	g.log.Info("gameserver migrated", "target_node_id", targetNodeID)
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverMigrate, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverMigrate, g.spec.ID, nil))
 
 	// Restart on target if it was running before migration.
 	// Call executeStart directly — we're already inside the migrate operation goroutine.
@@ -492,7 +492,7 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 		g.log.Info("restarting gameserver on target after migration")
 		if err := g.executeStart(ctx); err != nil {
 			g.log.Error("failed to restart after migration", "error", err)
-			g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.id, &event.ErrorData{
+			g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{
 				Reason: fmt.Sprintf("Restart after migration failed: %v", err),
 			}))
 			return err
@@ -508,7 +508,7 @@ func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string
 func (g *LiveGameserver) stopIfRunning(ctx context.Context) error {
 	g.mu.Lock()
 	w := g.worker
-	instanceID := g.instanceID
+	instanceID := g.spec.InstanceID
 	g.mu.Unlock()
 
 	if w == nil || instanceID == nil {
@@ -518,11 +518,11 @@ func (g *LiveGameserver) stopIfRunning(ctx context.Context) error {
 	g.stopInstanceOnWorker(ctx, w, *instanceID)
 
 	g.mu.Lock()
-	g.instanceID = nil
+	g.spec.InstanceID = nil
 	g.clearProcessLocked()
 	g.mu.Unlock()
 
-	g.store.SetInstanceID(g.id, nil)
+	g.store.SetInstanceID(g.spec.ID, nil)
 
 	return nil
 }

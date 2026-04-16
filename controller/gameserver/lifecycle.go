@@ -22,7 +22,7 @@ import (
 func (g *LiveGameserver) Start(ctx context.Context) error {
 	// Pre-submit checks that are specific to Start: archived and already-running.
 	g.mu.Lock()
-	if g.desiredState == model.DesiredArchived {
+	if g.spec.DesiredState == model.DesiredArchived {
 		g.mu.Unlock()
 		return controller.ErrBadRequest("cannot start archived gameserver")
 	}
@@ -33,10 +33,10 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 	// Reset user intent + crash state before submitting. If submit rejects
 	// (operation already in progress), the desired_state update is reverted
 	// implicitly by the caller retrying later.
-	g.desiredState = model.DesiredRunning
-	g.store.SetDesiredState(g.id, model.DesiredRunning)
-	g.errorReason = ""
-	g.store.ClearErrorReason(g.id)
+	g.spec.DesiredState = model.DesiredRunning
+	g.store.SetDesiredState(g.spec.ID, model.DesiredRunning)
+	g.spec.ErrorReason = ""
+	g.store.ClearErrorReason(g.spec.ID)
 	g.crashCount = 0
 	g.mu.Unlock()
 
@@ -52,16 +52,16 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 // executeStart performs the full start sequence: depot download, image pull,
 // install phase (if needed), and instance creation.
 func (g *LiveGameserver) executeStart(ctx context.Context) error {
-	game := g.gameStore.GetGame(g.gameID)
+	game := g.gameStore.GetGame(g.spec.GameID)
 	if game == nil {
-		g.setError("Game not found: " + g.gameID)
-		return fmt.Errorf("game %s not found", g.gameID)
+		g.setError("Game not found: " + g.spec.GameID)
+		return fmt.Errorf("game %s not found", g.spec.GameID)
 	}
 
 	w := g.getWorker()
 	if w == nil {
 		g.setError("Worker unavailable.")
-		return fmt.Errorf("worker unavailable for gameserver %s", g.id)
+		return fmt.Errorf("worker unavailable for gameserver %s", g.spec.ID)
 	}
 
 	// Download game files via Steam depot if the game requires it.
@@ -79,7 +79,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 			}
 		}
 
-		g.bus.Publish(event.NewSystemEvent(event.EventDepotDownloading, g.id, &event.DepotDownloadingData{AppID: depotAppID}))
+		g.bus.Publish(event.NewSystemEvent(event.EventDepotDownloading, g.spec.ID, &event.DepotDownloadingData{AppID: depotAppID}))
 		g.setPhase(model.PhaseDownloadingGame)
 
 		depotResult, depotErr := w.EnsureDepot(ctx, depotAppID, "public", accountName, refreshToken, func(p worker.DepotProgress) {
@@ -99,9 +99,9 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		depotDir = depotResult.DepotDir
 
 		if depotResult.Cached {
-			g.bus.Publish(event.NewSystemEvent(event.EventDepotCached, g.id, &event.DepotCachedData{AppID: depotAppID}))
+			g.bus.Publish(event.NewSystemEvent(event.EventDepotCached, g.spec.ID, &event.DepotCachedData{AppID: depotAppID}))
 		} else {
-			g.bus.Publish(event.NewSystemEvent(event.EventDepotComplete, g.id, &event.DepotCompleteData{
+			g.bus.Publish(event.NewSystemEvent(event.EventDepotComplete, g.spec.ID, &event.DepotCompleteData{
 				AppID: depotAppID, BytesDownloaded: depotResult.BytesDownloaded,
 			}))
 		}
@@ -113,9 +113,9 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 
 	// Pull the OCI image.
 	g.setPhase(model.PhasePullingImage)
-	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.spec.ID, nil))
 
-	gs := g.toModelGameserver()
+	gs := g.specCopy()
 
 	if err := w.PullImage(ctx, game.BaseImage, func(p worker.PullProgress) {
 		if p.TotalBytes > 0 {
@@ -129,7 +129,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		g.setError("Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image: %w", err)
 	}
-	g.bus.Publish(event.NewSystemEvent(event.EventImagePulled, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulled, g.spec.ID, nil))
 
 	if err := ctx.Err(); err != nil {
 		return err
@@ -147,7 +147,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		return fmt.Errorf("parsing ports: %w", err)
 	}
 
-	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, g.gameID, g.id)
+	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, g.spec.GameID, g.spec.ID)
 	if err != nil {
 		g.setError("Failed to extract game scripts.")
 		return fmt.Errorf("preparing scripts: %w", err)
@@ -156,14 +156,14 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	// Copy depot files into volume on first install (before the container runs).
 	if depotDir != "" && !g.isInstalled() {
 		g.log.Info("copying depot to volume", "depot", depotDir)
-		if err := w.CopyDepotToVolume(ctx, depotDir, g.volumeName); err != nil {
+		if err := w.CopyDepotToVolume(ctx, depotDir, g.spec.VolumeName); err != nil {
 			g.setError("Failed to copy game files to volume.")
 			return fmt.Errorf("copying depot to volume: %w", err)
 		}
 	}
 
 	if g.modReconciler != nil {
-		if err := g.modReconciler.Reconcile(ctx, g.id); err != nil {
+		if err := g.modReconciler.Reconcile(ctx, g.spec.ID); err != nil {
 			g.log.Warn("mod reconciliation had errors, continuing", "error", err)
 		}
 	}
@@ -177,16 +177,16 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	}
 
 	// Clean up any stale instance from a previous run.
-	instanceName := naming.InstanceName(g.id)
+	instanceName := naming.InstanceName(g.spec.ID)
 	g.mu.Lock()
 	var oldInstanceID string
-	if g.instanceID != nil {
-		oldInstanceID = *g.instanceID
-		g.instanceID = nil
+	if g.spec.InstanceID != nil {
+		oldInstanceID = *g.spec.InstanceID
+		g.spec.InstanceID = nil
 	}
 	g.mu.Unlock()
 	if oldInstanceID != "" {
-		g.store.SetInstanceID(g.id, nil)
+		g.store.SetInstanceID(g.spec.ID, nil)
 		w.RemoveInstance(ctx, oldInstanceID)
 	}
 	w.RemoveInstance(ctx, instanceName)
@@ -195,10 +195,10 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	if !g.isInstalled() {
 		g.setPhase(model.PhaseInstalling)
 
-		rotateConsoleLogs(w, g.volumeName)
-		copyDefaults(w, g.volumeName, defaultsDir)
+		rotateConsoleLogs(w, g.spec.VolumeName)
+		copyDefaults(w, g.spec.VolumeName, defaultsDir)
 
-		installName := naming.InstallInstanceName(g.id)
+		installName := naming.InstallInstanceName(g.spec.ID)
 		w.RemoveInstance(ctx, installName)
 
 		g.log.Info("running install phase")
@@ -207,10 +207,10 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 			Image:         game.BaseImage,
 			Env:           env,
 			Ports:         ports,
-			VolumeName:    g.volumeName,
-			MemoryLimitMB: g.memoryLimitMB,
-			CPULimit:      g.cpuLimit,
-			CPUEnforced:   g.cpuEnforced,
+			VolumeName:    g.spec.VolumeName,
+			MemoryLimitMB: g.spec.MemoryLimitMB,
+			CPULimit:      g.spec.CPULimit,
+			CPUEnforced:   g.spec.CPUEnforced,
 			Binds:         binds,
 			Entrypoint:    []string{"/bin/sh", "-c", "/scripts/install-server"},
 		})
@@ -232,7 +232,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 			logData, _ := io.ReadAll(logReader)
 			logReader.Close()
 			if len(logData) > 0 {
-				w.WriteFile(ctx, g.volumeName, ".gamejanitor/logs/console.log", logData, 0644)
+				w.WriteFile(ctx, g.spec.VolumeName, ".gamejanitor/logs/console.log", logData, 0644)
 			}
 			if exitCode != 0 || installErr != nil {
 				out := string(logData)
@@ -255,8 +255,8 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		}
 
 		g.mu.Lock()
-		g.installed = true
-		g.store.UpdateGameserver(g.toModelGameserverLocked())
+		g.spec.Installed = true
+		g.store.UpdateGameserver(g.specCopyLocked())
 		g.mu.Unlock()
 		g.log.Info("install phase complete")
 	}
@@ -273,10 +273,10 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		Image:         game.BaseImage,
 		Env:           env,
 		Ports:         ports,
-		VolumeName:    g.volumeName,
-		MemoryLimitMB: g.memoryLimitMB,
-		CPULimit:      g.cpuLimit,
-		CPUEnforced:   g.cpuEnforced,
+		VolumeName:    g.spec.VolumeName,
+		MemoryLimitMB: g.spec.MemoryLimitMB,
+		CPULimit:      g.spec.CPULimit,
+		CPUEnforced:   g.spec.CPUEnforced,
 		Binds:         binds,
 		Entrypoint:    []string{"/bin/sh", "-c", "exec /scripts/start-server"},
 	})
@@ -291,17 +291,17 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	}
 
 	g.mu.Lock()
-	g.instanceID = &instanceID
-	g.appliedConfig = &model.AppliedConfig{
-		Env:           g.env,
-		MemoryLimitMB: g.memoryLimitMB,
-		CPULimit:      g.cpuLimit,
-		CPUEnforced:   g.cpuEnforced,
+	g.spec.InstanceID = &instanceID
+	g.spec.AppliedConfig = &model.AppliedConfig{
+		Env:           g.spec.Env,
+		MemoryLimitMB: g.spec.MemoryLimitMB,
+		CPULimit:      g.spec.CPULimit,
+		CPUEnforced:   g.spec.CPUEnforced,
 	}
-	g.store.UpdateGameserver(g.toModelGameserverLocked())
+	g.store.UpdateGameserver(g.specCopyLocked())
 	g.mu.Unlock()
 
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.spec.ID, nil))
 
 	if err := w.StartInstance(ctx, instanceID, game.ReadyPattern); err != nil {
 		g.setError(userFriendlyError("Failed to start instance", err))
@@ -311,7 +311,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 	// StartInstance returns immediately — the process is starting but not yet ready.
 	// The worker watches logs for the ready pattern and emits StateRunning when matched.
 	// HandleProcessEvent will set process state and clear the operation.
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceCreating, g.spec.ID, nil))
 	g.log.Info("instance started, waiting for ready", "instance_id", instanceID[:12])
 	return nil
 }
@@ -322,7 +322,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 // Returns nil immediately — the teardown work happens asynchronously.
 func (g *LiveGameserver) Stop(ctx context.Context) error {
 	g.mu.Lock()
-	if g.instanceID == nil && g.processState == model.ProcessNone && g.operation == nil {
+	if g.spec.InstanceID == nil && g.processState == model.ProcessNone && g.operation == nil {
 		g.mu.Unlock()
 		return nil
 	}
@@ -335,7 +335,7 @@ func (g *LiveGameserver) Stop(ctx context.Context) error {
 		errorPrefix:    "", // doStop logs errors; it does not fail.
 		clearOnSuccess: true,
 	}, func(ctx context.Context) error {
-		g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopping, g.id, nil))
+		g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopping, g.spec.ID, nil))
 		return g.doStop(ctx)
 	})
 }
@@ -348,9 +348,9 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 	// consults desiredState when classifying StateExited — if we waited until
 	// after the worker calls, an exit event arriving mid-stop would look like
 	// an unexpected crash and trigger auto-restart on auto_restart=true servers.
-	g.desiredState = model.DesiredStopped
-	g.store.UpdateGameserver(g.toModelGameserverLocked())
-	instanceID := g.instanceID
+	g.spec.DesiredState = model.DesiredStopped
+	g.store.UpdateGameserver(g.specCopyLocked())
+	instanceID := g.spec.InstanceID
 	w := g.worker
 	g.mu.Unlock()
 
@@ -359,15 +359,15 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 	}
 
 	g.mu.Lock()
-	g.instanceID = nil
-	g.desiredState = model.DesiredStopped
+	g.spec.InstanceID = nil
+	g.spec.DesiredState = model.DesiredStopped
 	g.clearProcessLocked()
-	g.errorReason = ""
-	gsModel := g.toModelGameserverLocked()
+	g.spec.ErrorReason = ""
+	gsModel := g.specCopyLocked()
 	g.mu.Unlock()
 
 	g.store.UpdateGameserver(gsModel)
-	g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopped, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventInstanceStopped, g.spec.ID, nil))
 	g.log.Info("gameserver stopped")
 	return nil
 }
@@ -402,13 +402,13 @@ func (g *LiveGameserver) UpdateServerGame(ctx context.Context) error {
 }
 
 func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
-	game := g.gameStore.GetGame(g.gameID)
+	game := g.gameStore.GetGame(g.spec.GameID)
 	if game == nil {
 		g.setError("Game not found")
-		return fmt.Errorf("game %s not found", g.gameID)
+		return fmt.Errorf("game %s not found", g.spec.GameID)
 	}
 
-	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.spec.ID, nil))
 	if err := g.stopIfRunning(ctx); err != nil {
 		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return err
@@ -420,14 +420,14 @@ func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
 		return fmt.Errorf("worker unavailable")
 	}
 
-	gs := g.toModelGameserver()
+	gs := g.specCopy()
 
 	if err := w.PullImage(ctx, game.BaseImage, nil); err != nil {
 		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
-	scriptDir, _, err := w.PrepareGameScripts(ctx, g.gameID, g.id)
+	scriptDir, _, err := w.PrepareGameScripts(ctx, g.spec.GameID, g.spec.ID)
 	if err != nil {
 		g.setError(controller.OperationFailedReason("Game update failed", err))
 		return fmt.Errorf("preparing scripts: %w", err)
@@ -439,12 +439,12 @@ func (g *LiveGameserver) executeUpdateGame(ctx context.Context) error {
 		return err
 	}
 
-	tempName := naming.UpdateInstanceName(g.id)
+	tempName := naming.UpdateInstanceName(g.spec.ID)
 	tempID, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,
 		Env:        env,
-		VolumeName: g.volumeName,
+		VolumeName: g.spec.VolumeName,
 		Binds:      []string{scriptDir + ":/scripts:ro"},
 		Entrypoint: []string{"/bin/sh", "-c", "/scripts/update-server"},
 	})
@@ -486,7 +486,7 @@ func (g *LiveGameserver) Reinstall(ctx context.Context) error {
 }
 
 func (g *LiveGameserver) executeReinstall(ctx context.Context) error {
-	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.id, nil))
+	g.bus.Publish(event.NewSystemEvent(event.EventImagePulling, g.spec.ID, nil))
 
 	if err := g.stopIfRunning(ctx); err != nil {
 		g.setError(controller.OperationFailedReason("Reinstall failed", err))
@@ -500,15 +500,15 @@ func (g *LiveGameserver) executeReinstall(ctx context.Context) error {
 	}
 
 	g.mu.Lock()
-	g.installed = false
-	g.store.UpdateGameserver(g.toModelGameserverLocked())
+	g.spec.Installed = false
+	g.store.UpdateGameserver(g.specCopyLocked())
 	g.mu.Unlock()
 
-	if err := w.RemoveVolume(ctx, g.volumeName); err != nil {
+	if err := w.RemoveVolume(ctx, g.spec.VolumeName); err != nil {
 		g.setError(controller.OperationFailedReason("Reinstall failed", err))
 		return err
 	}
-	if err := w.CreateVolume(ctx, g.volumeName); err != nil {
+	if err := w.CreateVolume(ctx, g.spec.VolumeName); err != nil {
 		g.setError(controller.OperationFailedReason("Reinstall failed", err))
 		return err
 	}
@@ -530,48 +530,21 @@ func (g *LiveGameserver) getWorker() worker.Worker {
 func (g *LiveGameserver) isInstalled() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.installed
+	return g.spec.Installed
 }
 
-// toModelGameserver creates a model.Gameserver from the live state. Acquires g.mu.
-func (g *LiveGameserver) toModelGameserver() model.Gameserver {
+// specCopy returns a pointer to a shallow copy of the durable spec — safe to
+// hand to the store for persistence. Caller must hold g.mu.
+func (g *LiveGameserver) specCopyLocked() *model.Gameserver {
+	cp := *g.spec
+	return &cp
+}
+
+// specCopy is the g.mu-acquiring variant of specCopyLocked.
+func (g *LiveGameserver) specCopy() model.Gameserver {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return *g.toModelGameserverLocked()
-}
-
-// toModelGameserverLocked creates a model.Gameserver from the live state.
-// Caller must hold g.mu.
-func (g *LiveGameserver) toModelGameserverLocked() *model.Gameserver {
-	return &model.Gameserver{
-		ID:                 g.id,
-		Name:               g.name,
-		GameID:             g.gameID,
-		Ports:              g.ports,
-		Env:                g.env,
-		MemoryLimitMB:      g.memoryLimitMB,
-		CPULimit:           g.cpuLimit,
-		CPUEnforced:        g.cpuEnforced,
-		InstanceID:         g.instanceID,
-		VolumeName:         g.volumeName,
-		PortMode:           g.portMode,
-		NodeID:             g.nodeID,
-		SFTPUsername:        g.sftpUsername,
-		HashedSFTPPassword: g.hashedSFTPPassword,
-		Installed:          g.installed,
-		BackupLimit:        g.backupLimit,
-		StorageLimitMB:     g.storageLimitMB,
-		NodeTags:           g.nodeTags,
-		AutoRestart:        g.autoRestart,
-		ConnectionAddress:  g.connectionAddress,
-		AppliedConfig:      g.appliedConfig,
-		DesiredState:       g.desiredState,
-		ErrorReason:        g.errorReason,
-		CreatedByTokenID:   g.createdByTokenID,
-		Grants:             g.grants,
-		CreatedAt:          g.createdAt,
-		UpdatedAt:          g.updatedAt,
-	}
+	return *g.spec
 }
 
 // setError acquires g.mu and sets the error reason, persists it, and publishes
@@ -606,7 +579,7 @@ func (g *LiveGameserver) Delete(ctx context.Context, onSuccess func(context.Cont
 // backup store cleanup, and publishing the gameserver.delete event. Runs
 // inside the submitOperation goroutine.
 func (g *LiveGameserver) executeDelete(ctx context.Context) error {
-	gs, err := g.store.GetGameserver(g.id)
+	gs, err := g.store.GetGameserver(g.spec.ID)
 	if err != nil || gs == nil {
 		// Already gone from the DB — nothing to tear down.
 		return nil
@@ -617,27 +590,27 @@ func (g *LiveGameserver) executeDelete(ctx context.Context) error {
 	if !gs.IsArchived() {
 		w := g.getWorker()
 		if w == nil {
-			g.log.Warn("worker unavailable during delete, skipping infrastructure cleanup", "gameserver", g.id)
+			g.log.Warn("worker unavailable during delete, skipping infrastructure cleanup", "gameserver", g.spec.ID)
 		} else {
 			// Remove the instance by its naming-convention name. This catches
 			// any instance we created even if instanceID was never persisted
 			// (e.g. a crash during Start before the DB write landed).
-			instanceName := naming.InstanceName(g.id)
+			instanceName := naming.InstanceName(g.spec.ID)
 			if err := w.RemoveInstance(ctx, instanceName); err != nil {
 				g.log.Debug("no instance to remove by name during delete", "name", instanceName)
 			}
 			if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
-				g.log.Warn("failed to remove volume during delete", "id", g.id, "error", err)
+				g.log.Warn("failed to remove volume during delete", "id", g.spec.ID, "error", err)
 			}
 		}
 	}
 
-	backups, err := g.store.ListBackups(model.BackupFilter{GameserverID: g.id})
+	backups, err := g.store.ListBackups(model.BackupFilter{GameserverID: g.spec.ID})
 	if err != nil {
-		g.log.Warn("failed to list backups for store cleanup", "id", g.id, "error", err)
+		g.log.Warn("failed to list backups for store cleanup", "id", g.spec.ID, "error", err)
 	}
 
-	if err := g.store.DeleteGameserver(g.id); err != nil {
+	if err := g.store.DeleteGameserver(g.spec.ID); err != nil {
 		return fmt.Errorf("deleting gameserver record: %w", err)
 	}
 
@@ -653,12 +626,12 @@ func (g *LiveGameserver) executeDelete(ctx context.Context) error {
 	// Best-effort backup storage cleanup.
 	if g.backupStore != nil {
 		for _, b := range backups {
-			if err := g.backupStore.Delete(ctx, g.id, b.ID); err != nil {
+			if err := g.backupStore.Delete(ctx, g.spec.ID, b.ID); err != nil {
 				g.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
 			}
 		}
-		if err := g.backupStore.DeleteArchive(ctx, g.id); err != nil {
-			g.log.Warn("failed to remove archive store file", "gameserver", g.id, "error", err)
+		if err := g.backupStore.DeleteArchive(ctx, g.spec.ID); err != nil {
+			g.log.Warn("failed to remove archive store file", "gameserver", g.spec.ID, "error", err)
 		}
 	}
 

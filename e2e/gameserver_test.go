@@ -54,7 +54,7 @@ func TestGameserver_DoubleStart(t *testing.T) {
 	gs.Start().MustBeRunning()
 	gs.Start() // second start is a safe no-op
 
-	assert.Equal(t, "running", gs.Snapshot().Status)
+	assert.Equal(t, "running", phase(gs.Snapshot()))
 }
 
 func TestGameserver_DoubleStop(t *testing.T) {
@@ -65,7 +65,7 @@ func TestGameserver_DoubleStop(t *testing.T) {
 	gs.Stop().MustBeStopped()
 	gs.Stop() // second stop is a safe no-op
 
-	assert.Equal(t, "stopped", gs.Snapshot().Status)
+	assert.Equal(t, "stopped", phase(gs.Snapshot()))
 }
 
 // --- Ports ---
@@ -155,7 +155,7 @@ func TestGameserver_Stop_AutoRestartRace(t *testing.T) {
 	gs.Stop().MustBeStopped()
 
 	snap := gs.Snapshot()
-	assert.Equal(t, "stopped", snap.Status, "gameserver should stay stopped, not auto-restart")
+	assert.Equal(t, "stopped", phase(snap), "gameserver should stay stopped, not auto-restart")
 	assert.Empty(t, snap.ErrorReason, "graceful stop should not leave an error")
 }
 
@@ -274,7 +274,7 @@ func TestGameserver_LogFlood_NoOOM(t *testing.T) {
 	// Let it flood for a bit, then verify the controller is still responsive
 	// and the server is still tracked as running.
 	time.Sleep(3 * time.Second)
-	assert.Equal(t, "running", gs.Snapshot().Status, "gameserver should survive log flood")
+	assert.Equal(t, "running", phase(gs.Snapshot()), "gameserver should survive log flood")
 
 	// Stop should still work under log pressure.
 	gs.Stop().MustBeStopped()
@@ -294,7 +294,7 @@ func TestGameserver_RunningAPI(t *testing.T) {
 		s := gs.Snapshot()
 		require.NotNil(t, s)
 		assert.Equal(t, gs.ID(), s.ID)
-		assert.Equal(t, "running", s.Status)
+		assert.Equal(t, "running", phase(s))
 		assert.True(t, s.Installed, "should be installed")
 		assert.NotNil(t, s.NodeID, "should be assigned to a node")
 		assert.NotEmpty(t, s.Ports, "should have ports")

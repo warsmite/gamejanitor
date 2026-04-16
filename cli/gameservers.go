@@ -30,7 +30,7 @@ func runGameserversList(cmd *cobra.Command, args []string) error {
 		opts.Game = v
 	}
 	if v, _ := cmd.Flags().GetString("status"); v != "" {
-		opts.Status = v
+		opts.DesiredState = v
 	}
 
 	resp, err := getClient().Gameservers.List(ctx(), opts)
@@ -55,7 +55,7 @@ func runGameserversList(cmd *cobra.Command, args []string) error {
 		if len(id) > 8 {
 			id = id[:8]
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Status))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Phase()))
 	}
 	w.Flush()
 	return nil
@@ -89,7 +89,7 @@ var getCmd = &cobra.Command{
 		fmt.Printf("ID:         %s\n", gs.ID)
 		fmt.Printf("Name:       %s\n", gs.Name)
 		fmt.Printf("Game:       %s\n", gs.GameID)
-		fmt.Printf("Status:     %s\n", colorStatus(gs.Status))
+		fmt.Printf("Status:     %s\n", colorStatus(gs.Phase()))
 		fmt.Printf("Memory:     %s\n", formatMemory(gs.MemoryLimitMB))
 		if gs.CPULimit > 0 {
 			fmt.Printf("CPU:        %.1f cores\n", gs.CPULimit)
