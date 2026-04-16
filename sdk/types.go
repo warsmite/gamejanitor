@@ -34,8 +34,27 @@ type Gameserver struct {
 	DesiredState      string            `json:"desired_state"`
 	RestartRequired   bool              `json:"restart_required"`
 	StartedAt         *time.Time        `json:"started_at,omitempty"`
+	Operation         *Operation        `json:"operation,omitempty"`
+	Grants            map[string][]string `json:"grants,omitempty"`
+	CreatedByTokenID  *string           `json:"created_by_token_id,omitempty"`
 	CreatedAt         time.Time         `json:"created_at"`
 	UpdatedAt         time.Time         `json:"updated_at"`
+}
+
+// Operation describes an in-flight lifecycle operation on a gameserver
+// (start, stop, backup, etc.). Nil when no operation is active.
+type Operation struct {
+	Type     string             `json:"type"`
+	Phase    string             `json:"phase"`
+	Progress *OperationProgress `json:"progress,omitempty"`
+}
+
+// OperationProgress carries progress details for long-running phases
+// (depot download, image pull). Nil during phases that don't report progress.
+type OperationProgress struct {
+	Percent        float64 `json:"percent"`
+	CompletedBytes uint64  `json:"completed_bytes,omitempty"`
+	TotalBytes     uint64  `json:"total_bytes,omitempty"`
 }
 
 // GameserverNode contains the resolved node IPs for a gameserver.
