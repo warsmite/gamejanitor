@@ -547,12 +547,16 @@ func (g *LiveGameserver) specCopy() model.Gameserver {
 	return *g.spec
 }
 
-// setError acquires g.mu and sets the error reason, persists it, and publishes
-// an error event.
+// setError sets the error reason, persists it, and publishes an error event.
+// Acquires g.mu for the state change but releases before publishing so the bus
+// can never block a locked gameserver.
 func (g *LiveGameserver) setError(reason string) {
 	g.mu.Lock()
-	g.setErrorLocked(reason)
+	g.spec.ErrorReason = reason
 	g.mu.Unlock()
+
+	g.store.SetErrorReason(g.spec.ID, reason)
+	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: reason}))
 }
 
 // Delete tears down the gameserver: cancels any in-flight operation, removes
@@ -561,17 +565,17 @@ func (g *LiveGameserver) setError(reason string) {
 // storage. Runs in a background goroutine via submitOperation with OpDelete
 // priority (highest), so it preempts everything including Stop.
 //
-// onSuccess runs after the worker/DB teardown succeeds and lets the caller
-// hook in manager-level cleanup (e.g. removing this live object from the map)
-// that must happen while the operation record is still in place.
-func (g *LiveGameserver) Delete(ctx context.Context, onSuccess func(context.Context) error) error {
+// onFinish runs after the worker/DB teardown succeeds, while the live object
+// is still in place, so the caller can remove the object from the manager map
+// and clean up filesystem artifacts (scripts dir, etc.).
+func (g *LiveGameserver) Delete(ctx context.Context, onFinish func(context.Context) error) error {
 	return g.submitOperation(operationOpts{
-		opType:         model.OpDelete,
-		initialPhase:   model.PhaseDeleting,
-		requireWorker:  false, // delete must proceed even if the worker is offline
-		errorPrefix:    "Delete failed",
-		clearOnSuccess: false, // on success the live object is removed from the map; no op to clear
-		onSuccess:      onSuccess,
+		opType:        model.OpDelete,
+		initialPhase:  model.PhaseDeleting,
+		requireWorker: false, // delete must proceed even if the worker is offline
+		errorPrefix:   "Delete failed",
+		terminal:      true, // gameserver object goes away on success; no op to clear
+		onFinish:      onFinish,
 	}, g.executeDelete)
 }
 

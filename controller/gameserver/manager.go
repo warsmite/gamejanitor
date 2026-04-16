@@ -314,8 +314,7 @@ func (m *Manager) Create(ctx context.Context, gs *model.Gameserver) (string, err
 	}))
 
 	// Create the LiveGameserver and add to map
-	live := newLiveGameserver(gs, m.store, m.bus, m.gameStore, m.settingsSvc, m.backupStore, m.dispatcher, m.placement, m.log)
-	live.modReconciler = m.modReconciler
+	live := newLiveGameserver(gs, m.store, m.bus, m.gameStore, m.settingsSvc, m.modReconciler, m.backupStore, m.dispatcher, m.placement, m.log)
 	if targetWorker != nil {
 		live.SetWorker(targetWorker)
 	}
@@ -742,8 +741,7 @@ func (m *Manager) RecoverAll(ctx context.Context) error {
 	m.mu.Lock()
 	for i := range gameservers {
 		gs := &gameservers[i]
-		live := newLiveGameserver(gs, m.store, m.bus, m.gameStore, m.settingsSvc, m.backupStore, m.dispatcher, m.placement, m.log)
-		live.modReconciler = m.modReconciler
+		live := newLiveGameserver(gs, m.store, m.bus, m.gameStore, m.settingsSvc, m.modReconciler, m.backupStore, m.dispatcher, m.placement, m.log)
 		m.gameservers[gs.ID] = live
 
 		w := m.dispatcher.WorkerFor(gs.ID)

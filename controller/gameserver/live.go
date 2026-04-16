@@ -126,19 +126,20 @@ type LiveGameserver struct {
 	nextWatch uint64
 }
 
-func newLiveGameserver(gs *model.Gameserver, store Store, bus *event.EventBus, gameStore *games.GameStore, settingsSvc SettingsReader, backupStore BackupStore, dispatcher *cluster.Dispatcher, placement *cluster.PlacementService, log *slog.Logger) *LiveGameserver {
+func newLiveGameserver(gs *model.Gameserver, store Store, bus *event.EventBus, gameStore *games.GameStore, settingsSvc SettingsReader, modReconciler ModReconciler, backupStore BackupStore, dispatcher *cluster.Dispatcher, placement *cluster.PlacementService, log *slog.Logger) *LiveGameserver {
 	return &LiveGameserver{
-		spec:         gs,
-		processState: model.ProcessNone,
-		store:        store,
-		bus:          bus,
-		gameStore:    gameStore,
-		settingsSvc:  settingsSvc,
-		backupStore:  backupStore,
-		dispatcher:   dispatcher,
-		placement:    placement,
-		log:          log.With("gameserver", gs.ID),
-		watchers:     make(map[uint64]chan *model.Operation),
+		spec:          gs,
+		processState:  model.ProcessNone,
+		store:         store,
+		bus:           bus,
+		gameStore:     gameStore,
+		settingsSvc:   settingsSvc,
+		modReconciler: modReconciler,
+		backupStore:   backupStore,
+		dispatcher:    dispatcher,
+		placement:     placement,
+		log:           log.With("gameserver", gs.ID),
+		watchers:      make(map[uint64]chan *model.Operation),
 	}
 }
 
@@ -211,7 +212,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		if g.ready && !wasReady {
 			if g.operation != nil {
 				g.operation = nil
-				g.notifyWatchersLocked(nil)
+				g.notifyWatchers(nil)
 				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{Operation: nil}))
 			}
 			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.spec.ID, nil))
@@ -235,7 +236,7 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		// Clear any active operation — the process died
 		if g.operation != nil {
 			g.operation = nil
-			g.notifyWatchersLocked(nil)
+			g.notifyWatchers(nil)
 		}
 		// Clear instanceID — the ID points to an exited instance that should not
 		// block a subsequent Start from running (which would otherwise see a
@@ -376,12 +377,6 @@ func describeExit(exitCode int, uptime time.Duration, lastStats *event.StatsData
 	return fmt.Sprintf("%s (after %s)", reason, uptimeStr)
 }
 
-// setErrorLocked sets the error reason and persists it. Must be called with g.mu held.
-func (g *LiveGameserver) setErrorLocked(reason string) {
-	g.spec.ErrorReason = reason
-	g.store.SetErrorReason(g.spec.ID, reason)
-	g.bus.Publish(event.NewSystemEvent(event.EventGameserverError, g.spec.ID, &event.ErrorData{Reason: reason}))
-}
 
 // opPriority ranks operations for preemption. A submitted op whose priority
 // strictly exceeds the running op's priority cancels it and takes over; equal
@@ -403,21 +398,27 @@ type operationOpts struct {
 	initialPhase model.OperationPhase
 	// requireWorker controls whether submitOperation checks g.worker != nil
 	// before accepting. Operations that don't need a worker (unarchive placing
-	// onto a different node, delete when the worker is offline) should set this false.
+	// onto a different node, delete when the worker is offline) set this false.
 	requireWorker bool
 	// errorPrefix is prepended to error messages when the operation fails.
 	// Empty means the operation is expected to set errors itself via setError.
 	errorPrefix string
 	// clearOnSuccess controls whether to clear the operation when fn returns nil.
-	// Lifecycle operations that end in "starting" leave the operation active
-	// until HandleProcessEvent observes StateRunning — they set this false.
-	// Terminal operations (stop, archive) set this true.
+	// Operations that end with the gameserver reaching "running" (Start, Restart,
+	// Update, Reinstall, Migrate) leave the operation set so HandleProcessEvent
+	// can clear it once the worker reports ready. Terminal operations that end
+	// in a resting state without further signals (Stop, Archive, Unarchive) set
+	// this true.
 	clearOnSuccess bool
-	// onSuccess runs after fn returns nil, before clearOperation. Used for
-	// manager-level cleanup tied to operation completion (e.g. removing the
-	// live object from the manager map on delete). Errors are logged, not
-	// surfaced — the operation has already succeeded.
-	onSuccess func(context.Context) error
+	// terminal marks operations that end with the gameserver object itself
+	// going away (only Delete). On success we run onFinish to let the Manager
+	// tear down the map entry and scripts dir, but we don't clearOperation —
+	// the object is being removed, there is no operation to clear.
+	terminal bool
+	// onFinish runs after fn returns nil. For terminal ops, this is where the
+	// Manager removes the live object and does its filesystem cleanup. Errors
+	// are logged, not surfaced — the operation has already succeeded.
+	onFinish func(context.Context) error
 }
 
 // submitOperation is the common goroutine harness for lifecycle operations.
@@ -474,7 +475,7 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
 		Operation: op,
 	}))
-	g.notifyWatchersLocked(op)
+	g.notifyWatchers(op)
 
 	go func() {
 		defer func() {
@@ -497,10 +498,15 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 			g.clearOperation()
 			return
 		}
-		if opts.onSuccess != nil {
-			if onErr := opts.onSuccess(opCtx); onErr != nil {
-				g.log.Error("operation onSuccess hook failed", "type", opts.opType, "error", onErr)
+		if opts.onFinish != nil {
+			if onErr := opts.onFinish(opCtx); onErr != nil {
+				g.log.Error("operation onFinish hook failed", "type", opts.opType, "error", onErr)
 			}
+		}
+		if opts.terminal {
+			// The gameserver object is going away — skip clearOperation. No
+			// subscriber should be looking at this object after onFinish ran.
+			return
 		}
 		if opts.clearOnSuccess {
 			g.clearOperation()
@@ -514,30 +520,33 @@ func (g *LiveGameserver) submitOperation(opts operationOpts, fn func(ctx context
 // setPhase updates the current operation's phase and notifies watchers.
 func (g *LiveGameserver) setPhase(phase model.OperationPhase) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-
 	if g.operation == nil {
+		g.mu.Unlock()
 		return
 	}
 	g.operation.Phase = phase
+	op := g.operation
+	g.mu.Unlock()
 
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
-		Operation: g.operation,
+		Operation: op,
 	}))
-	g.notifyWatchersLocked(g.operation)
+	g.notifyWatchers(op)
 }
 
 // setProgress updates the current operation's progress and notifies watchers.
 // Does not publish to the event bus — progress updates are high-frequency.
 func (g *LiveGameserver) setProgress(progress model.OperationProgress) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-
 	if g.operation == nil {
+		g.mu.Unlock()
 		return
 	}
 	g.operation.Progress = &progress
-	g.notifyWatchersLocked(g.operation)
+	op := g.operation
+	g.mu.Unlock()
+
+	g.notifyWatchers(op)
 }
 
 // stopInstanceOnWorker runs the graceful-then-forced teardown on the worker:
@@ -566,20 +575,19 @@ func (g *LiveGameserver) stopInstanceOnWorker(ctx context.Context, w worker.Work
 // clearOperation clears the current operation and notifies watchers.
 func (g *LiveGameserver) clearOperation() {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-
 	g.operation = nil
+	g.mu.Unlock()
+
 	g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.spec.ID, &event.OperationData{
 		Operation: nil,
 	}))
-	g.notifyWatchersLocked(nil)
+	g.notifyWatchers(nil)
 }
 
-// notifyWatchersLocked sends the operation state to all watchers.
-// Non-blocking: drains and replaces if the consumer is behind.
-// Must be called with g.mu held (watchers are accessed under the main lock
-// or the watcherMu — here we use watcherMu for watcher-specific access).
-func (g *LiveGameserver) notifyWatchersLocked(op *model.Operation) {
+// notifyWatchers sends the operation state to all watchers. Takes watcherMu
+// itself, so it is safe to call with or without g.mu held. Non-blocking:
+// drains and replaces if a consumer is behind.
+func (g *LiveGameserver) notifyWatchers(op *model.Operation) {
 	g.watcherMu.RLock()
 	defer g.watcherMu.RUnlock()
 

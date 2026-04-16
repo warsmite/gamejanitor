@@ -330,7 +330,7 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 		g.mu.Lock()
 		if g.operation != nil && g.processState == model.ProcessNone {
 			g.operation = nil
-			g.notifyWatchersLocked(nil)
+			g.notifyWatchers(nil)
 		}
 		g.mu.Unlock()
 		return nil
