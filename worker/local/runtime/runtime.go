@@ -318,8 +318,11 @@ type PastaInstance struct {
 
 // StartPasta starts a pasta process for a container with a known PID.
 func (r *Runtime) StartPasta(containerID string, pid int, forwards []PortForward) (*PastaInstance, error) {
+	uid := os.Getuid()
+	gid := os.Getgid()
 	args := []string{
 		"--ns-ifname", "eth0",
+		"--runas", fmt.Sprintf("%d:%d", uid, gid),
 	}
 
 	for _, fwd := range forwards {
