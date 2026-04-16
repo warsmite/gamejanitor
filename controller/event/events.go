@@ -246,7 +246,7 @@ func NewSystemEvent(eventType, gameserverID string, data any) Event {
 }
 
 // EventTypeForOp maps an operation type (model.OpStart, etc.) to its event type constant.
-func EventTypeForOp(op string) string {
+func EventTypeForOp(op model.OpType) string {
 	switch op {
 	case model.OpStart:
 		return EventGameserverStart
@@ -269,6 +269,6 @@ func EventTypeForOp(op string) string {
 	case model.OpUnarchive:
 		return EventGameserverUnarchive
 	default:
-		return "gameserver." + op
+		return "gameserver." + string(op)
 	}
 }

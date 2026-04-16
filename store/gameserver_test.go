@@ -21,7 +21,7 @@ func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 		Env:          model.Env{},
 		VolumeName:   "vol-" + id,
 		PortMode:     "auto",
-		DesiredState: "stopped",
+		DesiredState: model.DesiredStopped,
 		NodeID:       nodeID,
 		NodeTags:     model.Labels{},
 		AutoRestart:  boolPtr(false),
@@ -43,7 +43,7 @@ func TestGameserver_CreateAndGet(t *testing.T) {
 	require.NotNil(t, fetched)
 	assert.Equal(t, "Test Server", fetched.Name)
 	assert.Equal(t, "minecraft-java", fetched.GameID)
-	assert.Equal(t, "stopped", fetched.DesiredState)
+	assert.Equal(t, model.DesiredStopped, fetched.DesiredState)
 }
 
 func TestGameserver_GetNotFound(t *testing.T) {
@@ -63,13 +63,13 @@ func TestGameserver_Update(t *testing.T) {
 	require.NoError(t, db.CreateGameserver(gs))
 
 	gs.Name = "Updated"
-	gs.DesiredState = "running"
+	gs.DesiredState = model.DesiredRunning
 	require.NoError(t, db.UpdateGameserver(gs))
 
 	fetched, err := db.GetGameserver("gs-1")
 	require.NoError(t, err)
 	assert.Equal(t, "Updated", fetched.Name)
-	assert.Equal(t, "running", fetched.DesiredState)
+	assert.Equal(t, model.DesiredRunning, fetched.DesiredState)
 	assert.True(t, fetched.UpdatedAt.After(fetched.CreatedAt) || fetched.UpdatedAt.Equal(fetched.CreatedAt))
 }
 

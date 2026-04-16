@@ -22,7 +22,7 @@ import (
 func (g *LiveGameserver) Start(ctx context.Context) error {
 	// Pre-submit checks that are specific to Start: archived and already-running.
 	g.mu.Lock()
-	if g.desiredState == "archived" {
+	if g.desiredState == model.DesiredArchived {
 		g.mu.Unlock()
 		return controller.ErrBadRequest("cannot start archived gameserver")
 	}
@@ -33,7 +33,7 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 	// Reset user intent + crash state before submitting. If submit rejects
 	// (operation already in progress), the desired_state update is reverted
 	// implicitly by the caller retrying later.
-	g.desiredState = "running"
+	g.desiredState = model.DesiredRunning
 	g.store.SetDesiredState(g.id, "running")
 	g.errorReason = ""
 	g.store.ClearErrorReason(g.id)
@@ -348,7 +348,7 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 	// consults desiredState when classifying StateExited — if we waited until
 	// after the worker calls, an exit event arriving mid-stop would look like
 	// an unexpected crash and trigger auto-restart on auto_restart=true servers.
-	g.desiredState = "stopped"
+	g.desiredState = model.DesiredStopped
 	g.store.UpdateGameserver(g.toModelGameserverLocked())
 	instanceID := g.instanceID
 	w := g.worker
@@ -360,7 +360,7 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 
 	g.mu.Lock()
 	g.instanceID = nil
-	g.desiredState = "stopped"
+	g.desiredState = model.DesiredStopped
 	g.process = nil
 	g.errorReason = ""
 	gsModel := g.toModelGameserverLocked()

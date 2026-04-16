@@ -27,7 +27,7 @@ type OperationProgress struct {
 // Operation represents the current in-flight operation on a gameserver.
 // Transient — held in memory, not persisted to DB.
 type Operation struct {
-	Type     string             `json:"type"`               // "start", "stop", "backup", "restore", "update_game", "reinstall", "migrate"
+	Type     OpType             `json:"type"`
 	Phase    OperationPhase     `json:"phase"`
 	Progress *OperationProgress `json:"progress,omitempty"`
 }

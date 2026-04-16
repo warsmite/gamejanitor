@@ -19,7 +19,7 @@ import (
 // removes the instance and volume from the worker, and marks it as archived.
 func (g *LiveGameserver) Archive(ctx context.Context) error {
 	g.mu.Lock()
-	if g.desiredState == "archived" {
+	if g.desiredState == model.DesiredArchived {
 		g.mu.Unlock()
 		return controller.ErrConflictf("gameserver %s is already archived", g.id)
 	}
@@ -109,7 +109,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 
 	// Update state to archived
 	g.mu.Lock()
-	g.desiredState = "archived"
+	g.desiredState = model.DesiredArchived
 	g.instanceID = nil
 	g.nodeID = nil
 	g.worker = nil
@@ -125,7 +125,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 	if dbGS == nil {
 		return fmt.Errorf("gameserver %s not found in DB", g.id)
 	}
-	dbGS.DesiredState = "archived"
+	dbGS.DesiredState = model.DesiredArchived
 	dbGS.InstanceID = nil
 	dbGS.NodeID = nil
 	dbGS.ErrorReason = ""
@@ -146,7 +146,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 // If targetNodeID is empty, auto-selects via placement ranking.
 func (g *LiveGameserver) Unarchive(ctx context.Context, targetNodeID string) error {
 	g.mu.Lock()
-	if g.desiredState != "archived" {
+	if g.desiredState != model.DesiredArchived {
 		g.mu.Unlock()
 		return controller.ErrConflictf("gameserver %s is not archived", g.id)
 	}
@@ -240,7 +240,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 
 	// Update state
 	g.mu.Lock()
-	g.desiredState = "stopped"
+	g.desiredState = model.DesiredStopped
 	g.nodeID = &targetNodeID
 	g.worker = targetWorker
 	g.errorReason = ""
@@ -254,7 +254,7 @@ func (g *LiveGameserver) executeUnarchive(ctx context.Context, targetNodeID stri
 	if dbGS == nil {
 		return fmt.Errorf("gameserver %s not found in DB", g.id)
 	}
-	dbGS.DesiredState = "stopped"
+	dbGS.DesiredState = model.DesiredStopped
 	dbGS.NodeID = &targetNodeID
 	dbGS.ErrorReason = ""
 

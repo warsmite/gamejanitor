@@ -193,7 +193,7 @@ func (m *Manager) Create(ctx context.Context, gs *model.Gameserver) (string, err
 
 	gs.ID = uuid.New().String()
 	gs.VolumeName = naming.VolumeName(gs.ID)
-	gs.DesiredState = "stopped"
+	gs.DesiredState = model.DesiredStopped
 
 	// Set ownership from the creating token
 	if token := auth.TokenFromContext(ctx); token != nil {
@@ -810,7 +810,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 
 		gs.mu.Lock()
 		gs.instanceID = nil
-		gs.desiredState = "stopped"
+		gs.desiredState = model.DesiredStopped
 		gs.process = nil
 		gs.mu.Unlock()
 
@@ -818,7 +818,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 		dbGS, _ := m.store.GetGameserver(gs.id)
 		if dbGS != nil {
 			dbGS.InstanceID = nil
-			dbGS.DesiredState = "stopped"
+			dbGS.DesiredState = model.DesiredStopped
 			m.store.UpdateGameserver(dbGS)
 		}
 		return true
@@ -842,14 +842,14 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 
 		gs.mu.Lock()
 		gs.instanceID = nil
-		gs.desiredState = "stopped"
+		gs.desiredState = model.DesiredStopped
 		gs.process = nil
 		gs.mu.Unlock()
 
 		dbGS, _ := m.store.GetGameserver(gs.id)
 		if dbGS != nil {
 			dbGS.InstanceID = nil
-			dbGS.DesiredState = "stopped"
+			dbGS.DesiredState = model.DesiredStopped
 			m.store.UpdateGameserver(dbGS)
 		}
 	default:

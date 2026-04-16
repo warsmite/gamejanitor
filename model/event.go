@@ -5,20 +5,23 @@ import (
 	"time"
 )
 
-// Operation type constants — used as event types for lifecycle operations
-// and as the value of Gameserver.OperationType while an operation is in progress.
+// OpType names a kind of lifecycle operation. Used in Operation.Type, as the
+// key for operation-priority rules in the controller, and as the value of the
+// operation field on gameserver.operation events.
+type OpType string
+
 const (
-	OpStart     = "start"
-	OpStop      = "stop"
-	OpRestart   = "restart"
-	OpUpdate    = "update"
-	OpReinstall = "reinstall"
-	OpMigrate   = "migrate"
-	OpBackup    = "backup"
-	OpRestore   = "restore"
-	OpArchive   = "archive"
-	OpUnarchive = "unarchive"
-	OpDelete    = "delete"
+	OpStart     OpType = "start"
+	OpStop      OpType = "stop"
+	OpRestart   OpType = "restart"
+	OpUpdate    OpType = "update"
+	OpReinstall OpType = "reinstall"
+	OpMigrate   OpType = "migrate"
+	OpBackup    OpType = "backup"
+	OpRestore   OpType = "restore"
+	OpArchive   OpType = "archive"
+	OpUnarchive OpType = "unarchive"
+	OpDelete    OpType = "delete"
 )
 
 // Event represents a persisted event in the events table.

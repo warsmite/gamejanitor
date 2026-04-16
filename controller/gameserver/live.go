@@ -47,7 +47,7 @@ type Store interface {
 	ClearErrorReason(id string) error
 	SetInstanceID(id string, instanceID *string) error
 	ClearInstanceAndSetError(id string, reason string) error
-	SetDesiredState(id, state string) error
+	SetDesiredState(id string, state model.DesiredState) error
 }
 
 // BackupStore abstracts backup storage operations.
@@ -92,7 +92,7 @@ type LiveGameserver struct {
 	name               string
 	gameID             string
 	volumeName         string
-	desiredState       string
+	desiredState       model.DesiredState
 	instanceID         *string
 	installed          bool
 	nodeID             *string
@@ -198,7 +198,7 @@ func (g *LiveGameserver) Status() string {
 		return controller.StatusDeleting
 	}
 
-	if g.desiredState == "archived" {
+	if g.desiredState == model.DesiredArchived {
 		return controller.StatusArchived
 	}
 
@@ -329,11 +329,11 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 
 	case worker.StateExited:
 		// Classify the exit. It is expected (not a crash) when:
-		//   - the user asked for the gameserver to stop (desiredState != "running")
+		//   - the user asked for the gameserver to stop (desiredState != model.DesiredRunning)
 		//   - a delete is in progress (OpDelete intentionally kills the instance)
 		// Both skip handleUnexpectedDeath so auto-restart doesn't fight the
 		// intentional action.
-		intentional := g.desiredState != "running" ||
+		intentional := g.desiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
 		wasRunningOrStarting := g.process != nil && (g.process.State == worker.StateRunning || g.process.State == worker.StateStarting)
 		operationWasActive := g.operation != nil
@@ -459,7 +459,7 @@ func (g *LiveGameserver) setErrorLocked(reason string) {
 // Stop interrupts any peer (start/restart/update/…). Delete interrupts everything,
 // including Stop. This encodes the real precedence users expect: "make it stop
 // now" always wins over "make it do X," and "make it go away" always wins over both.
-var opPriority = map[string]int{
+var opPriority = map[model.OpType]int{
 	model.OpStop:   1,
 	model.OpDelete: 2,
 }
@@ -467,7 +467,7 @@ var opPriority = map[string]int{
 // operationOpts configures how submitOperation handles an operation.
 type operationOpts struct {
 	// opType is the operation type (e.g. model.OpStart).
-	opType string
+	opType model.OpType
 	// initialPhase is the operation's starting phase.
 	initialPhase model.OperationPhase
 	// requireWorker controls whether submitOperation checks g.worker != nil

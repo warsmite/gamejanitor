@@ -188,8 +188,8 @@ func (s *GameserverStore) ClearInstanceAndSetError(id string, reason string) err
 }
 
 // SetDesiredState updates the desired state for a gameserver.
-func (s *GameserverStore) SetDesiredState(id, state string) error {
-	_, err := s.db.Exec("UPDATE gameservers SET desired_state = ?, updated_at = ? WHERE id = ?", state, time.Now(), id)
+func (s *GameserverStore) SetDesiredState(id string, state model.DesiredState) error {
+	_, err := s.db.Exec("UPDATE gameservers SET desired_state = ?, updated_at = ? WHERE id = ?", string(state), time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("setting desired state for gameserver %s: %w", id, err)
 	}

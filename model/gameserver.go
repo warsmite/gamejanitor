@@ -15,6 +15,18 @@ const (
 	GameserverPerm = 0644
 )
 
+// DesiredState captures the user's intent for a gameserver. It is persisted
+// and is the durable input to lifecycle decisions. Observed reality (whether a
+// process is actually running) is a separate, orthogonal concept — see
+// controller.ProcessState.
+type DesiredState string
+
+const (
+	DesiredStopped  DesiredState = "stopped"
+	DesiredRunning  DesiredState = "running"
+	DesiredArchived DesiredState = "archived"
+)
+
 type GameserverNode struct {
 	ExternalIP string `json:"external_ip"`
 	LanIP      string `json:"lan_ip"`
@@ -46,7 +58,7 @@ type Gameserver struct {
 	AutoRestart        *bool           `json:"auto_restart"`
 	ConnectionAddress  *string         `json:"connection_address"`
 	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
-	DesiredState       string          `json:"desired_state"`  // stopped, running, archived
+	DesiredState       DesiredState    `json:"desired_state"`
 	CreatedByTokenID   *string         `json:"created_by_token_id,omitempty"`
 	Grants             GrantMap        `json:"grants"`
 	RestartRequired    bool            `json:"restart_required"`          // derived, not stored
@@ -112,7 +124,7 @@ func (gs *Gameserver) ComputeRestartRequired() {
 
 // IsArchived returns true if the gameserver's desired state is archived.
 func (gs *Gameserver) IsArchived() bool {
-	return gs.DesiredState == "archived"
+	return gs.DesiredState == DesiredArchived
 }
 
 // FlexInt handles JSON values that may be a number or a string containing a number.
