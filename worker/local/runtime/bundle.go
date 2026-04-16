@@ -91,6 +91,7 @@ func buildSpec(cfg BundleConfig) map[string]any {
 	linux := map[string]any{
 		"namespaces": []map[string]any{
 			{"type": "pid"},
+			{"type": "network"},
 			{"type": "ipc"},
 			{"type": "uts"},
 			{"type": "mount"},

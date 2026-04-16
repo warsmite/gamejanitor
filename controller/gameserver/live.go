@@ -745,9 +745,11 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 }
 
 // parseGameserverPorts converts model port mappings to worker port bindings.
-func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
+// The game definition provides the container-side default ports that the game
+// process binds to; the model ports have the allocated host-side ports.
+func parseGameserverPorts(game *games.Game, gs *model.Gameserver) ([]worker.PortBinding, error) {
 	bindings := make([]worker.PortBinding, 0, len(gs.Ports))
-	for _, p := range gs.Ports {
+	for i, p := range gs.Ports {
 		if int(p.Port) <= 0 {
 			return nil, fmt.Errorf("invalid port mapping: port=%d", int(p.Port))
 		}
@@ -755,9 +757,14 @@ func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
 		if protocol == "" {
 			protocol = "tcp"
 		}
+		containerPort := int(p.Port)
+		if i < len(game.DefaultPorts) {
+			containerPort = game.DefaultPorts[i].Port
+		}
 		bindings = append(bindings, worker.PortBinding{
-			Port:     int(p.Port),
-			Protocol: protocol,
+			Port:          int(p.Port),
+			ContainerPort: containerPort,
+			Protocol:      protocol,
 		})
 	}
 	return bindings, nil

@@ -2,5 +2,5 @@ package embedded
 
 import "embed"
 
-//go:embed crun-*
+//go:embed crun-* pasta-*
 var Binaries embed.FS

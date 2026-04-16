@@ -39,8 +39,9 @@ type InstanceOptions struct {
 }
 
 type PortBinding struct {
-	Port     int
-	Protocol string // "tcp" or "udp"
+	Port          int    // host-side port (allocated by scheduler)
+	ContainerPort int    // container-side port (game default, what the process binds)
+	Protocol      string // "tcp" or "udp"
 }
 
 type InstanceInfo struct {

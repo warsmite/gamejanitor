@@ -95,6 +95,7 @@ message PullImageProgress {
 
 message PortBinding {
     int32 port = 1;
+    int32 container_port = 4;
     string protocol = 3;
 }
 

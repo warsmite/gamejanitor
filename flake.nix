@@ -506,11 +506,13 @@
             exit $EXIT
           '';
 
-          fetch-crun = pkgs.writeShellScriptBin "fetch-crun" ''
+          fetch-runtime = pkgs.writeShellScriptBin "fetch-runtime" ''
             set -e
             CRUN_VERSION="1.24"
             DEST="worker/local/runtime/embedded"
             mkdir -p "$DEST"
+
+            # crun — download from GitHub releases
             for arch in x86_64 aarch64; do
               OUT="$DEST/crun-$arch"
               if [ -f "$OUT" ]; then
@@ -526,7 +528,22 @@
               ${pkgs.curl}/bin/curl -sL "$URL" -o "$OUT"
               chmod +x "$OUT"
             done
-            echo "crun binaries ready in $DEST"
+
+            # pasta — build static from nixpkgs
+            for arch in x86_64; do
+              OUT="$DEST/pasta-$arch"
+              if [ -f "$OUT" ]; then
+                echo "pasta-$arch already present, skipping"
+                continue
+              fi
+              echo "Building static pasta for $arch..."
+              nix build --impure --expr 'with import <nixpkgs> {}; pkgsStatic.passt' -o /tmp/pasta-build
+              cp /tmp/pasta-build/bin/passt "$OUT"
+              chmod +x "$OUT"
+              rm -f /tmp/pasta-build
+            done
+
+            echo "Runtime binaries ready in $DEST"
           '';
 
           loc = pkgs.writeShellScriptBin "loc" ''
@@ -562,7 +579,7 @@
             gen-proto
             update-vendor-hash
             vendor-check
-            fetch-crun
+            fetch-runtime
             loc
             cleanup
             test-all

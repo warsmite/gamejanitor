@@ -59,8 +59,9 @@ func (a *Agent) CreateInstance(ctx context.Context, req *pb.CreateInstanceReques
 	}
 	for _, p := range req.Ports {
 		opts.Ports = append(opts.Ports, worker.PortBinding{
-			Port:     int(p.Port),
-			Protocol: p.Protocol,
+			Port:          int(p.Port),
+			ContainerPort: int(p.ContainerPort),
+			Protocol:      p.Protocol,
 		})
 	}
 

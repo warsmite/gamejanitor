@@ -141,7 +141,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 		return fmt.Errorf("merging env: %w", err)
 	}
 
-	ports, err := parseGameserverPorts(&gs)
+	ports, err := parseGameserverPorts(game, &gs)
 	if err != nil {
 		g.setError("Invalid port configuration.")
 		return fmt.Errorf("parsing ports: %w", err)

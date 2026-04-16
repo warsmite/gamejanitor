@@ -43,8 +43,9 @@ type managedInstance struct {
 	exitCode  atomic.Int32
 	exited    atomic.Bool
 	logWriter *rotatingWriter
-	done     chan struct{}
-	unitName string // systemd unit name
+	done      chan struct{}
+	unitName  string // systemd unit name
+	pasta     *runtime.PastaInstance
 }
 
 // instanceState is persisted alongside the manifest so running instances

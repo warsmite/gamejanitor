@@ -71,8 +71,9 @@ func (w *RemoteWorker) CreateInstance(ctx context.Context, opts worker.InstanceO
 	}
 	for _, p := range opts.Ports {
 		req.Ports = append(req.Ports, &pb.PortBinding{
-			Port:     int32(p.Port),
-			Protocol: p.Protocol,
+			Port:          int32(p.Port),
+			ContainerPort: int32(p.ContainerPort),
+			Protocol:      p.Protocol,
 		})
 	}
 

@@ -193,6 +193,29 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		pid = cmd.Process.Pid
 	}
 
+	// Start pasta for network namespace connectivity + port forwarding
+	var forwards []runtime.PortForward
+	for _, p := range manifest.Ports {
+		forwards = append(forwards, runtime.PortForward{
+			HostPort:      p.Port,
+			ContainerPort: p.ContainerPort,
+			Protocol:      p.Protocol,
+		})
+	}
+	var pastaInst *runtime.PastaInstance
+	if len(forwards) > 0 {
+		pi, err := w.rt.StartPasta(id, forwards)
+		if err != nil {
+			w.log.Error("failed to start pasta, killing container", "id", id, "error", err)
+			cmd.Process.Kill()
+			cmd.Wait()
+			logWriter.Close()
+			w.rt.Delete(id, true)
+			return fmt.Errorf("starting pasta network: %w", err)
+		}
+		pastaInst = pi
+	}
+
 	inst := &managedInstance{
 		id:        id,
 		name:      manifest.Name,
@@ -200,8 +223,9 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		pid:       pid,
 		startedAt: time.Now(),
 		logWriter: logWriter,
-		done:     make(chan struct{}),
-		unitName: "gj-" + id,
+		done:      make(chan struct{}),
+		unitName:  "gj-" + id,
+		pasta:     pastaInst,
 	}
 
 	w.mu.Lock()
@@ -218,8 +242,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	if w.tracker != nil {
 		w.tracker.Track(id, manifest.Name)
-		// Process is alive once the systemd scope is up — mark Running now. Ready
-		// is a separate signal set by WatchLogs (or immediately below if no pattern).
 		w.tracker.SetState(id, worker.StateRunning)
 
 		logReader, err := w.InstanceLogs(context.Background(), id, 0, true)
@@ -236,6 +258,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		if inst.logWriter != nil {
 			inst.logWriter.Close()
 		}
+		inst.pasta.Stop()
 		w.rt.Delete(id, true)
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 

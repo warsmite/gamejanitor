@@ -243,6 +243,7 @@ func (x *PullImageProgress) GetTotalLayers() int32 {
 type PortBinding struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Port          int32                  `protobuf:"varint,1,opt,name=port,proto3" json:"port,omitempty"`
+	ContainerPort int32                  `protobuf:"varint,4,opt,name=container_port,json=containerPort,proto3" json:"container_port,omitempty"`
 	Protocol      string                 `protobuf:"bytes,3,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -281,6 +282,13 @@ func (*PortBinding) Descriptor() ([]byte, []int) {
 func (x *PortBinding) GetPort() int32 {
 	if x != nil {
 		return x.Port
+	}
+	return 0
+}
+
+func (x *PortBinding) GetContainerPort() int32 {
+	if x != nil {
+		return x.ContainerPort
 	}
 	return 0
 }
@@ -4023,9 +4031,10 @@ const file_worker_proto_worker_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x03 \x01(\x04R\n" +
 	"totalBytes\x12)\n" +
 	"\x10completed_layers\x18\x04 \x01(\x05R\x0fcompletedLayers\x12!\n" +
-	"\ftotal_layers\x18\x05 \x01(\x05R\vtotalLayers\"=\n" +
+	"\ftotal_layers\x18\x05 \x01(\x05R\vtotalLayers\"d\n" +
 	"\vPortBinding\x12\x12\n" +
-	"\x04port\x18\x01 \x01(\x05R\x04port\x12\x1a\n" +
+	"\x04port\x18\x01 \x01(\x05R\x04port\x12%\n" +
+	"\x0econtainer_port\x18\x04 \x01(\x05R\rcontainerPort\x12\x1a\n" +
 	"\bprotocol\x18\x03 \x01(\tR\bprotocol\"\xd1\x02\n" +
 	"\x15CreateInstanceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +

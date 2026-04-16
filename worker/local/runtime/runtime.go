@@ -17,16 +17,22 @@ const crunVersion = "1.24"
 
 // Runtime wraps crun for OCI container lifecycle operations.
 type Runtime struct {
-	crunPath string
-	stateDir string
-	log      *slog.Logger
+	crunPath  string
+	pastaPath string
+	stateDir  string
+	log       *slog.Logger
 }
 
-// New creates a Runtime, extracting the embedded crun binary if needed.
+// New creates a Runtime, extracting embedded binaries if needed.
 func New(dataDir string, log *slog.Logger) (*Runtime, error) {
-	crunPath, err := ensureCrun(dataDir, log)
+	crunPath, err := ensureBinary(dataDir, "crun", crunVersion, log)
 	if err != nil {
 		return nil, fmt.Errorf("crun not available: %w", err)
+	}
+
+	pastaPath, err := ensureBinary(dataDir, "pasta", "", log)
+	if err != nil {
+		return nil, fmt.Errorf("pasta not available: %w", err)
 	}
 
 	stateDir := filepath.Join(dataDir, "crun-state")
@@ -34,13 +40,17 @@ func New(dataDir string, log *slog.Logger) (*Runtime, error) {
 		return nil, fmt.Errorf("creating crun state dir: %w", err)
 	}
 
-	log.Info("crun runtime ready", "path", crunPath, "state_dir", stateDir)
-	return &Runtime{crunPath: crunPath, stateDir: stateDir, log: log}, nil
+	log.Info("runtime ready", "crun", crunPath, "pasta", pastaPath, "state_dir", stateDir)
+	return &Runtime{crunPath: crunPath, pastaPath: pastaPath, stateDir: stateDir, log: log}, nil
 }
 
-func ensureCrun(dataDir string, log *slog.Logger) (string, error) {
+func ensureBinary(dataDir, name, version string, log *slog.Logger) (string, error) {
 	binDir := filepath.Join(dataDir, "bin")
-	binPath := filepath.Join(binDir, fmt.Sprintf("crun-%s", crunVersion))
+	binName := name
+	if version != "" {
+		binName = fmt.Sprintf("%s-%s", name, version)
+	}
+	binPath := filepath.Join(binDir, binName)
 
 	if _, err := os.Stat(binPath); err == nil {
 		return binPath, nil
@@ -53,10 +63,10 @@ func ensureCrun(dataDir string, log *slog.Logger) (string, error) {
 		arch = "aarch64"
 	}
 
-	embedName := "crun-" + arch
+	embedName := name + "-" + arch
 	data, err := embedded.Binaries.ReadFile(embedName)
 	if err != nil {
-		return "", fmt.Errorf("embedded crun binary not found for %s: %w", arch, err)
+		return "", fmt.Errorf("embedded %s binary not found for %s: %w", name, arch, err)
 	}
 
 	if err := os.MkdirAll(binDir, 0755); err != nil {
@@ -64,10 +74,10 @@ func ensureCrun(dataDir string, log *slog.Logger) (string, error) {
 	}
 
 	if err := os.WriteFile(binPath, data, 0755); err != nil {
-		return "", fmt.Errorf("extracting crun: %w", err)
+		return "", fmt.Errorf("extracting %s: %w", name, err)
 	}
 
-	log.Info("extracted embedded crun", "path", binPath, "version", crunVersion)
+	log.Info("extracted embedded binary", "name", name, "path", binPath)
 	return binPath, nil
 }
 
@@ -182,8 +192,82 @@ func (r *Runtime) List() ([]ContainerState, error) {
 // CrunPath returns the path to the crun binary.
 func (r *Runtime) CrunPath() string { return r.crunPath }
 
+// PastaPath returns the path to the pasta binary.
+func (r *Runtime) PastaPath() string { return r.pastaPath }
+
 // StateDir returns the crun state directory (--root flag).
 func (r *Runtime) StateDir() string { return r.stateDir }
+
+// PastaInstance represents a running pasta process providing network
+// connectivity to a container's network namespace.
+type PastaInstance struct {
+	cmd *exec.Cmd
+	pid int
+}
+
+// StartPasta starts a pasta process that provides network connectivity to the
+// container's network namespace. Each PortForward maps a host port to a
+// container port. The container process sees its default ports; pasta handles
+// the forwarding transparently.
+func (r *Runtime) StartPasta(containerID string, forwards []PortForward) (*PastaInstance, error) {
+	cs, err := r.State(containerID)
+	if err != nil {
+		return nil, fmt.Errorf("getting container PID for pasta: %w", err)
+	}
+	if cs.PID <= 0 {
+		return nil, fmt.Errorf("container %s has no PID", containerID)
+	}
+
+	args := []string{
+		"--ns-ifname", "eth0",
+	}
+
+	for _, fwd := range forwards {
+		flag := "-t"
+		if fwd.Protocol == "udp" {
+			flag = "-u"
+		}
+		if fwd.HostPort == fwd.ContainerPort {
+			args = append(args, flag, fmt.Sprintf("%d", fwd.HostPort))
+		} else {
+			args = append(args, flag, fmt.Sprintf("%d:%d", fwd.HostPort, fwd.ContainerPort))
+		}
+	}
+
+	args = append(args, fmt.Sprintf("%d", cs.PID))
+
+	cmd := exec.Command(r.pastaPath, args...)
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting pasta for %s: %w", containerID, err)
+	}
+
+	r.log.Info("pasta started", "container", containerID, "pid", cmd.Process.Pid, "forwards", len(forwards))
+
+	pi := &PastaInstance{cmd: cmd, pid: cmd.Process.Pid}
+
+	go func() {
+		cmd.Wait()
+		r.log.Debug("pasta exited", "container", containerID, "pid", pi.pid)
+	}()
+
+	return pi, nil
+}
+
+// Stop terminates the pasta process.
+func (p *PastaInstance) Stop() {
+	if p == nil || p.cmd == nil || p.cmd.Process == nil {
+		return
+	}
+	p.cmd.Process.Kill()
+	p.cmd.Wait()
+}
+
+// PortForward describes a host-to-container port mapping via pasta.
+type PortForward struct {
+	HostPort      int
+	ContainerPort int
+	Protocol      string // "tcp" or "udp"
+}
 
 func (r *Runtime) cmd(args ...string) *exec.Cmd {
 	fullArgs := append([]string{"--root", r.stateDir}, args...)
