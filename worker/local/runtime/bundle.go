@@ -58,13 +58,15 @@ func PrepareBundle(bundleDir string, cfg BundleConfig) error {
 // per-container.
 func CleanupBundle(_ string) {}
 
-// selfBindMount bind-mounts a directory onto itself if it isn't already a
-// mount point. This makes it a distinct mount entry so pivot_root can use it.
+// selfBindMount bind-mounts a directory onto itself and marks it private.
+// pivot_root requires the new root to be on a separate, non-shared mount.
 func selfBindMount(path string) error {
-	if isMountPoint(path) {
-		return nil
+	if !isMountPoint(path) {
+		if err := syscall.Mount(path, path, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
+			return err
+		}
 	}
-	return syscall.Mount(path, path, "", syscall.MS_BIND|syscall.MS_REC, "")
+	return syscall.Mount("", path, "", syscall.MS_PRIVATE, "")
 }
 
 func isMountPoint(path string) bool {
