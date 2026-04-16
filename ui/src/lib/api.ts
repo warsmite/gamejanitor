@@ -129,13 +129,17 @@ export interface Operation {
   progress?: OperationProgress;
 }
 
+// Primary facts the controller emits. The controller does NOT compute a
+// compressed status enum — consumers derive display strings from these
+// facts at read time (see $lib/gameserver.ts).
+export type ProcessState = 'none' | 'creating' | 'starting' | 'running' | 'exited';
+export type DesiredState = 'stopped' | 'running' | 'archived';
+
 export interface Gameserver {
+  // Identity + spec
   id: string;
   name: string;
   game_id: string;
-  status: string;
-  error_reason?: string;
-  operation?: Operation | null;
   ports: any;
   env: any;
   memory_limit_mb: number;
@@ -143,7 +147,6 @@ export interface Gameserver {
   cpu_enforced: boolean;
   storage_limit_mb?: number;
   backup_limit?: number;
-  instance_id?: string;
   volume_name: string;
   port_mode: string;
   node_id?: string;
@@ -151,16 +154,27 @@ export interface Gameserver {
   node_tags: Record<string, string>;
   sftp_username: string;
   sftp_port?: number;
-  installed: boolean;
   auto_restart: boolean;
   connection_address?: string;
   connection_host?: string;
-  desired_state: string;
+  desired_state: DesiredState;
   created_by_token_id?: string;
   grants: Record<string, string[]>;
-  started_at?: string;
   created_at: string;
   updated_at: string;
+
+  // Observed — primary facts from the controller.
+  instance_id?: string;
+  installed: boolean;
+  error_reason?: string;
+  operation?: Operation | null;
+  process_state: ProcessState;
+  ready: boolean;
+  worker_online: boolean;
+  exit_code?: number;
+  started_at?: string;
+  ready_at?: string;
+  exited_at?: string;
 }
 
 export interface GameserverStats {

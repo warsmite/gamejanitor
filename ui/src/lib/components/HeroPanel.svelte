@@ -2,6 +2,7 @@
   import type { Gameserver, GameserverStats, QueryData } from '$lib/api';
   import { navigate } from '$lib/router';
   import { gameserverStore } from '$lib/stores';
+  import { isRunning, isStopped, isArchived, isUnreachable } from '$lib/gameserver';
   import GameIcon from './GameIcon.svelte';
   import StatusPill from './StatusPill.svelte';
   import CopyBlock from './CopyBlock.svelte';
@@ -17,11 +18,6 @@
       gameName?: string;
       onaction?: (action: string) => void;
     } = $props();
-
-  const isRunning = $derived(gameserver.status === 'running');
-  const isStopped = $derived(gameserver.status === 'stopped');
-  const isArchived = $derived(gameserver.desired_state === 'archived');
-  const isUnreachable = $derived(gameserver.status === 'unreachable');
 
   const can = (p: string) => gameserverStore.canOnGameserver(p, gameserver.id);
   const canConsole = $derived(can('gameserver.logs'));
@@ -43,7 +39,7 @@
   );
 </script>
 
-<div class="hero" class:running={isRunning} class:stopped={isStopped} onclick={() => navigate(`/gameservers/${gameserver.id}`)} onkeydown={(e) => e.key === 'Enter' && navigate(`/gameservers/${gameserver.id}`)} role="link" tabindex="0">
+<div class="hero" class:running={isRunning(gameserver)} class:stopped={isStopped(gameserver)} onclick={() => navigate(`/gameservers/${gameserver.id}`)} onkeydown={(e) => e.key === 'Enter' && navigate(`/gameservers/${gameserver.id}`)} role="link" tabindex="0">
   <!-- Identity + status -->
   <div class="head">
     <div class="id-left">
@@ -53,13 +49,13 @@
         <div class="game">{gameName || gameserver.game_id}</div>
       </div>
     </div>
-    <StatusPill status={gameserver.status} />
+    <StatusPill {gameserver} />
   </div>
 
   <!-- Connection -->
   <div class="connect-row" onclick={(e) => e.stopPropagation()}>
     <CopyBlock label="Connect" value={connectionAddress} primary={true} />
-    {#if isRunning && query}
+    {#if isRunning(gameserver) && query}
       <div class="player-count">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1h8zm-7.978-1A.261.261 0 0 1 7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002a.274.274 0 0 1-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM6.936 9.28a5.88 5.88 0 0 0-1.23-.247A7.35 7.35 0 0 0 5 9c-4 0-5 3-5 4 0 .667.333 1 1 1h4.216A2.238 2.238 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816zM4.92 10A5.493 5.493 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
         <span class="player-text">{query.players_online}<span class="player-max">/{query.max_players}</span></span>
@@ -67,7 +63,7 @@
     {/if}
   </div>
 
-  {#if !isStopped && !isArchived}
+  {#if !isStopped(gameserver) && !isArchived(gameserver)}
     <!-- Telemetry -->
     <div class="telemetry">
       <TelemetryCell
@@ -99,28 +95,28 @@
   <!-- Actions -->
   <div class="actions" onclick={(e) => e.preventDefault()}>
     <div class="actions-left">
-      {#if isArchived}
+      {#if isArchived(gameserver)}
         <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('unarchive'); }}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
           Unarchive
         </button>
-      {:else if isStopped}
-        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }} disabled={isUnreachable}>
+      {:else if isStopped(gameserver)}
+        <button class="btn-action start" onclick={(e) => { e.stopPropagation(); onaction?.('start'); }} disabled={isUnreachable(gameserver)}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
           Start
         </button>
       {:else}
-        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); onaction?.('stop'); }} disabled={isUnreachable}>
+        <button class="btn-action stop" onclick={(e) => { e.stopPropagation(); onaction?.('stop'); }} disabled={isUnreachable(gameserver)}>
           <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
           Stop
         </button>
-        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); onaction?.('restart'); }} disabled={isUnreachable}>
+        <button class="btn-action restart" onclick={(e) => { e.stopPropagation(); onaction?.('restart'); }} disabled={isUnreachable(gameserver)}>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
           Restart
         </button>
       {/if}
     </div>
-    {#if !isArchived}
+    {#if !isArchived(gameserver)}
       <div class="shortcuts">
         {#if canConsole}
           <a href="/gameservers/{gameserver.id}/console" class="sc" onclick={(e) => e.stopPropagation()}>Console</a>

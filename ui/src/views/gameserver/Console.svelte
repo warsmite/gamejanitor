@@ -30,10 +30,16 @@
   let flushScheduled = false;
 
   const gsState = $derived(gameserverStore.getState(id));
-  const status = $derived(gsState?.gameserver?.status ?? 'stopped');
-  const isStreamable = $derived(
-    ['installing', 'starting', 'running', 'stopping'].includes(status)
-  );
+  // The console should stream whenever an instance exists on the worker —
+  // creating, starting, running, or even while a stop/update operation is in
+  // progress (the user wants to see the shutdown output).
+  const isStreamable = $derived.by(() => {
+    const gs = gsState?.gameserver;
+    if (!gs) return false;
+    if (gs.process_state === 'running' || gs.process_state === 'starting' || gs.process_state === 'creating') return true;
+    if (gs.operation) return true;
+    return false;
+  });
 
   // React to status changes: connect when streamable, disconnect when not
   $effect(() => {

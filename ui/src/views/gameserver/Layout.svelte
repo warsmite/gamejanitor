@@ -90,10 +90,12 @@
   const isRunning = $derived(gameserverStore.isRunning(id));
   const isStopped = $derived(gameserverStore.isStopped(id));
   const isArchived = $derived(gameserver?.desired_state === 'archived');
-  const isUnreachable = $derived(gameserver?.status === 'unreachable');
-  const isTransitioning = $derived(() => {
-    const s = gameserver?.status;
-    return s === 'starting' || s === 'installing' || s === 'stopping';
+  const isUnreachable = $derived(!!gameserver && !gameserver.worker_online && gameserver.desired_state !== 'archived');
+  const isTransitioning = $derived.by(() => {
+    const op = gameserver?.operation;
+    if (!op) return false;
+    return op.phase === 'starting' || op.phase === 'stopping' || op.phase === 'installing' ||
+      op.phase === 'pulling_image' || op.phase === 'downloading_game' || op.phase === 'migrating';
   });
 
   const storeLoading = $derived(gameserverStore.loading);
@@ -216,7 +218,7 @@
               {/if}
             </span>
           {/if}
-          <StatusPill status={gameserver.status} />
+          <StatusPill {gameserver} />
         </div>
       </div>
 
@@ -244,13 +246,13 @@
             {/if}
           {:else}
             {#if can('gameserver.stop')}
-              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={gameserver?.status === 'stopping' || isUnreachable}>
+              <button class="btn-action stop" onclick={() => handleAction('stop')} disabled={gameserver?.operation?.phase === 'stopping' || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>
                 Stop
               </button>
             {/if}
             {#if can('gameserver.restart')}
-              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={gameserver?.status === 'stopping' || isUnreachable}>
+              <button class="btn-action restart" onclick={() => handleAction('restart')} disabled={gameserver?.operation?.phase === 'stopping' || isUnreachable}>
                 <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36A.25.25 0 0 1 11.534 7zm-7.068 2H.534a.25.25 0 0 1-.192-.41L2.308 6.23a.25.25 0 0 1 .384 0l1.966 2.36A.25.25 0 0 1 4.466 9z"/><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2v1z"/></svg>
                 Restart
               </button>

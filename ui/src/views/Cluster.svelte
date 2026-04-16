@@ -3,6 +3,7 @@
   import { api, type WorkerView } from '$lib/api';
   import { gameserverStore, toast, confirm } from '$lib/stores';
   import { StatusPill } from '$lib/components';
+  import { isRunning, isStopped } from '$lib/gameserver';
 
   let workers = $state<WorkerView[]>([]);
   let loading = $state(true);
@@ -63,7 +64,7 @@
 
   async function bulkAction(action: 'stop' | 'restart') {
     const label = action === 'stop' ? 'Stop' : 'Restart';
-    const running = gameservers.filter(gs => gs.status === 'running');
+    const running = gameservers.filter(gs => isRunning(gs));
     if (running.length === 0) {
       toast('No running gameservers', 'info');
       return;
@@ -203,12 +204,12 @@
                 <tr>
                   <td class="cell-name">{gs.name}</td>
                   <td class="cell-game">{game?.name || gs.game_id}</td>
-                  <td><StatusPill status={gs.status} /></td>
+                  <td><StatusPill gameserver={gs} /></td>
                   <td class="cell-node">{gs.node_id || '—'}</td>
                   <td class="cell-mono">{gs.memory_limit_mb ? formatMB(gs.memory_limit_mb) : '—'}</td>
                   <td class="cell-mono">{gs.cpu_limit ? `${gs.cpu_limit} cores` : '—'}</td>
                   <td class="col-actions">
-                    {#if onlineWorkers.length > 1 && gs.status !== 'stopped'}
+                    {#if onlineWorkers.length > 1 && !isStopped(gs)}
                       <button class="btn-migrate" onclick={() => openMigrate(gs.id, gs.name)} disabled={migrating}>
                         Migrate
                       </button>

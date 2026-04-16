@@ -63,12 +63,13 @@ class GameserverStore {
   }
 
   isRunning(id: string): boolean {
-    const s = this.gameservers[id]?.gameserver.status;
-    return s === 'running';
+    const gs = this.gameservers[id]?.gameserver;
+    return !!gs && gs.process_state === 'running' && gs.ready;
   }
 
   isStopped(id: string): boolean {
-    return this.gameservers[id]?.gameserver.status === 'stopped';
+    const gs = this.gameservers[id]?.gameserver;
+    return !!gs && gs.process_state === 'none' && !gs.operation;
   }
 
   connectionAddress(id: string): string {
@@ -155,7 +156,7 @@ class GameserverStore {
       }
 
       for (const gs of gameservers) {
-        if (gs.status === 'running') {
+        if (gs.process_state === 'running' && gs.ready) {
           api.gameservers.stats(gs.id).then(s => { if (s) this.updateStats(gs.id, s); }).catch((e) => { console.warn('gameserverStore:', e); });
           api.gameservers.query(gs.id).then(q => { if (q) this.updateQuery(gs.id, q); }).catch((e) => { console.warn('gameserverStore:', e); });
         }
@@ -220,33 +221,70 @@ class GameserverStore {
       });
     }));
 
-    // Status changes — server sends the derived display status directly
-    this.unsubs.push(onEvent('gameserver.status_changed', (data: any) => {
+    // Primary fact: process is ready (ready pattern matched, or no pattern).
+    this.unsubs.push(onEvent('gameserver.ready', (data: any) => {
       const state = this.gameservers[data.gameserver_id];
       if (!state) return;
-
-      const prevStatus = state.gameserver.status;
+      const now = new Date().toISOString();
       state.gameserver = {
         ...state.gameserver,
-        status: data.status,
-        error_reason: data.error_reason || '',
+        process_state: 'running',
+        ready: true,
+        ready_at: state.gameserver.ready_at || now,
+        started_at: state.gameserver.started_at || now,
+        error_reason: '',
       };
+      if (!state.instanceStartedAt) state.instanceStartedAt = now;
+    }));
 
-      // Uptime tracking
-      if (data.status === 'running' || data.status === 'starting') {
-        if (!state.instanceStartedAt) {
-          state.instanceStartedAt = new Date().toISOString();
-        }
-      }
-      if (data.status === 'stopped' || data.status === 'error') {
-        state.instanceStartedAt = '';
-      }
+    // Primary fact: instance exited (clean or crash — distinguished by error_reason).
+    this.unsubs.push(onEvent('gameserver.instance_exited', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (!state) return;
+      state.gameserver = {
+        ...state.gameserver,
+        process_state: 'exited',
+        ready: false,
+        instance_id: undefined,
+      };
+      state.instanceStartedAt = '';
+      state.stats = null;
+      state.query = null;
+    }));
 
-      // Clear polling data when stopped
-      if (data.status === 'stopped' || data.status === 'error') {
-        state.stats = null;
-        state.query = null;
-      }
+    // Primary fact: instance stopped (graceful, user-initiated).
+    this.unsubs.push(onEvent('gameserver.instance_stopped', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (!state) return;
+      state.gameserver = {
+        ...state.gameserver,
+        process_state: 'none',
+        ready: false,
+        error_reason: '',
+        instance_id: undefined,
+      };
+      state.instanceStartedAt = '';
+      state.stats = null;
+      state.query = null;
+    }));
+
+    // Primary fact: error recorded (crash, operation failed, etc.).
+    this.unsubs.push(onEvent('gameserver.error', (data: any) => {
+      const state = this.gameservers[data.gameserver_id];
+      if (!state) return;
+      state.gameserver = {
+        ...state.gameserver,
+        error_reason: data.reason || '',
+      };
+    }));
+
+    // Primary fact: worker connection state changed — patch worker_online on
+    // every gameserver assigned to that node.
+    this.unsubs.push(onEvent('worker.connected', (data: any) => {
+      this.setWorkerOnline(data.worker_id, true);
+    }));
+    this.unsubs.push(onEvent('worker.disconnected', (data: any) => {
+      this.setWorkerOnline(data.worker_id, false);
     }));
 
     // Operation state — update from event payload on phase changes
@@ -322,6 +360,28 @@ class GameserverStore {
   private updateQuery(id: string, query: QueryData) {
     const state = this.gameservers[id];
     if (state) state.query = query;
+  }
+
+  // Patch worker_online across all gameservers assigned to a given node.
+  // When a worker goes offline the process facts become stale — clear them to
+  // "unknown" rather than lying about last-seen values.
+  private setWorkerOnline(nodeId: string, online: boolean) {
+    for (const state of Object.values(this.gameservers)) {
+      if (state.gameserver.node_id !== nodeId) continue;
+      state.gameserver = {
+        ...state.gameserver,
+        worker_online: online,
+      };
+      if (!online) {
+        state.gameserver = {
+          ...state.gameserver,
+          process_state: 'none',
+          ready: false,
+        };
+        state.stats = null;
+        state.query = null;
+      }
+    }
   }
 }
 

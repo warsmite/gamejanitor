@@ -2,6 +2,7 @@
   import { gameserverStore, toast } from '$lib/stores';
   import { api } from '$lib/api';
   import { HeroPanel } from '$lib/components';
+  import { phaseOf } from '$lib/gameserver';
 
   const canCreate = $derived(gameserverStore.canCreate);
   let search = $state('');
@@ -19,7 +20,8 @@
   const statusSummary = $derived(() => {
     const counts: Record<string, number> = {};
     for (const gs of gameservers) {
-      counts[gs.status] = (counts[gs.status] || 0) + 1;
+      const phase = phaseOf(gs) || 'stopped';
+      counts[phase] = (counts[phase] || 0) + 1;
     }
     return counts;
   });
