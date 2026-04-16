@@ -70,12 +70,6 @@ type ModReconciler interface {
 	Reconcile(ctx context.Context, gameserverID string) error
 }
 
-// processState tracks the last known state of the worker process.
-type processState struct {
-	State    worker.InstanceState
-	ExitCode int
-}
-
 // Poller abstracts start/stop polling for stats and query services.
 // Implemented by cluster.StatsPoller and cluster.QueryService.
 type Poller interface {
@@ -117,13 +111,21 @@ type LiveGameserver struct {
 	updatedAt          time.Time
 
 	// Runtime state — in-memory only.
-	mu        sync.Mutex
-	operation *model.Operation
-	process   *processState
-	startedAt *time.Time
+	mu         sync.Mutex
+	operation  *model.Operation
+	cancelOp   context.CancelFunc
+	opDone     chan struct{}
 	crashCount int
-	cancelOp  context.CancelFunc
-	opDone    chan struct{}
+
+	// Observed process facts — populated by HandleProcessEvent from worker
+	// events. ProcessState and Ready are orthogonal: a Running process is
+	// alive on the worker; Ready is true when the readiness signal fired.
+	processState controller.ProcessState
+	ready        bool
+	startedAt    *time.Time // when processState became Running
+	readyAt      *time.Time // when ready became true
+	exitedAt     *time.Time // when processState became Exited
+	exitCode     int        // meaningful only when processState == Exited
 
 	// Dependencies — set at construction, not changed (except worker).
 	worker        worker.Worker
@@ -145,6 +147,7 @@ type LiveGameserver struct {
 
 func newLiveGameserver(gs *model.Gameserver, store Store, bus *event.EventBus, gameStore *games.GameStore, settingsSvc SettingsReader, backupStore BackupStore, dispatcher *cluster.Dispatcher, placement *cluster.PlacementService, log *slog.Logger) *LiveGameserver {
 	return &LiveGameserver{
+		processState:       controller.ProcessNone,
 		id:                 gs.ID,
 		name:               gs.Name,
 		gameID:             gs.GameID,
@@ -226,7 +229,7 @@ func (g *LiveGameserver) Status() string {
 		return controller.StatusError
 	}
 
-	if g.process != nil && g.process.State == worker.StateRunning {
+	if g.processState == controller.ProcessRunning {
 		return controller.StatusRunning
 	}
 
@@ -289,7 +292,8 @@ func (g *LiveGameserver) Snapshot() model.Gameserver {
 }
 
 // HandleProcessEvent processes an instance state update from the worker.
-// Stale events (wrong instance ID) are silently ignored.
+// Stale events (wrong instance ID) are silently ignored. The worker's
+// state and ready flags are orthogonal: we map both onto our observed fields.
 func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -301,8 +305,8 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 
 	switch update.State {
 	case worker.StateRunning:
-		g.process = &processState{State: worker.StateRunning}
-		g.startedAt = &update.StartedAt
+		wasReady := g.ready
+		g.setProcessRunningLocked(update)
 		g.errorReason = ""
 		g.store.ClearErrorReason(g.id)
 
@@ -315,17 +319,20 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 			}
 		}
 
-		// Start operation is complete — the worker confirmed the process is ready.
-		if g.operation != nil {
-			g.operation = nil
-			g.notifyWatchersLocked(nil)
-			g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{Operation: nil}))
+		// A ready transition completes the start operation — the process is up
+		// AND the readiness signal has fired. Process-alive without ready keeps
+		// the operation active.
+		if g.ready && !wasReady {
+			if g.operation != nil {
+				g.operation = nil
+				g.notifyWatchersLocked(nil)
+				g.bus.Publish(event.NewSystemEvent(event.EventGameserverOperation, g.id, &event.OperationData{Operation: nil}))
+			}
+			g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.id, nil))
+			g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
+				Status: controller.StatusRunning,
+			}))
 		}
-
-		g.bus.Publish(event.NewSystemEvent(event.EventGameserverReady, g.id, nil))
-		g.bus.Publish(event.NewSystemEvent(event.EventGameserverStatusChanged, g.id, &event.StatusChangedData{
-			Status: controller.StatusRunning,
-		}))
 
 	case worker.StateExited:
 		// Classify the exit. It is expected (not a crash) when:
@@ -335,10 +342,12 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		// intentional action.
 		intentional := g.desiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
-		wasRunning := g.process != nil && g.process.State == worker.StateRunning
+		wasRunning := g.processState == controller.ProcessRunning
 		operationWasActive := g.operation != nil
 		if !intentional && (wasRunning || operationWasActive) {
 			g.handleUnexpectedDeath(update.ExitCode, update.StartedAt)
+		} else {
+			g.setProcessExitedLocked(update.ExitCode, update.ExitedAt)
 		}
 		// Clear any active operation — the process died
 		if g.operation != nil {
@@ -355,6 +364,48 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 	}
 }
 
+// setProcessRunningLocked records that the worker reports the process as alive.
+// Caller must hold g.mu.
+func (g *LiveGameserver) setProcessRunningLocked(update worker.InstanceStateUpdate) {
+	g.processState = controller.ProcessRunning
+	g.ready = update.Ready
+	startedAt := update.StartedAt
+	g.startedAt = &startedAt
+	if update.Ready && !update.ReadyAt.IsZero() {
+		readyAt := update.ReadyAt
+		g.readyAt = &readyAt
+	}
+	g.exitedAt = nil
+	g.exitCode = 0
+}
+
+// setProcessExitedLocked records that the worker reports the process as terminated.
+// Caller must hold g.mu.
+func (g *LiveGameserver) setProcessExitedLocked(exitCode int, exitedAt time.Time) {
+	g.processState = controller.ProcessExited
+	g.ready = false
+	g.exitCode = exitCode
+	if !exitedAt.IsZero() {
+		g.exitedAt = &exitedAt
+	} else {
+		now := time.Now()
+		g.exitedAt = &now
+	}
+	g.readyAt = nil
+}
+
+// clearProcessLocked resets observed process state. Called when the worker
+// disconnects, the instance is removed, or we're archiving/stopping.
+// Caller must hold g.mu.
+func (g *LiveGameserver) clearProcessLocked() {
+	g.processState = controller.ProcessNone
+	g.ready = false
+	g.startedAt = nil
+	g.readyAt = nil
+	g.exitedAt = nil
+	g.exitCode = 0
+}
+
 // SetWorker sets the worker implementation for this gameserver.
 func (g *LiveGameserver) SetWorker(w worker.Worker) {
 	g.mu.Lock()
@@ -363,11 +414,14 @@ func (g *LiveGameserver) SetWorker(w worker.Worker) {
 }
 
 // ClearWorker removes the worker and clears process state (worker went offline).
+// Observed process facts are reset to ProcessNone because we can no longer
+// see the worker — "we don't know what's happening" rather than lying about
+// the last value we saw.
 func (g *LiveGameserver) ClearWorker() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.worker = nil
-	g.process = nil
+	g.clearProcessLocked()
 }
 
 // handleUnexpectedDeath handles an instance that exited without a stop operation.
@@ -375,7 +429,7 @@ func (g *LiveGameserver) ClearWorker() {
 func (g *LiveGameserver) handleUnexpectedDeath(exitCode int, startedAt time.Time) {
 	reason := describeExit(exitCode, time.Since(startedAt), nil)
 	g.errorReason = reason
-	g.process = &processState{State: worker.StateExited, ExitCode: exitCode}
+	g.setProcessExitedLocked(exitCode, time.Time{})
 	g.store.SetErrorReason(g.id, reason)
 
 	g.bus.Publish(event.NewSystemEvent(event.EventInstanceExited, g.id, nil))
@@ -400,7 +454,7 @@ func (g *LiveGameserver) handleUnexpectedDeath(exitCode int, startedAt time.Time
 
 	// Clear error state so the restart can proceed
 	g.errorReason = ""
-	g.process = nil
+	g.clearProcessLocked()
 
 	// Start in a new goroutine — we're inside HandleProcessEvent which holds the lock
 	go func() {

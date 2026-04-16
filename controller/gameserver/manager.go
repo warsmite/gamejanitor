@@ -628,7 +628,7 @@ func (m *Manager) OnWorkerOffline(nodeID string) {
 		gs.mu.Lock()
 		if gs.nodeID != nil && *gs.nodeID == nodeID {
 			gs.worker = nil
-			gs.process = nil
+			gs.clearProcessLocked()
 			affectedIDs = append(affectedIDs, id)
 		}
 		gs.mu.Unlock()
@@ -799,7 +799,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 	if instanceID == nil {
 		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.id)
 		gs.mu.Lock()
-		gs.process = nil
+		gs.clearProcessLocked()
 		gs.mu.Unlock()
 		return false
 	}
@@ -811,7 +811,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 		gs.mu.Lock()
 		gs.instanceID = nil
 		gs.desiredState = model.DesiredStopped
-		gs.process = nil
+		gs.clearProcessLocked()
 		gs.mu.Unlock()
 
 		// Persist to DB
@@ -828,8 +828,13 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 	case "running":
 		m.log.Info("instance running, populating process state", "gameserver", gs.id)
 		gs.mu.Lock()
-		gs.process = &processState{State: worker.StateRunning}
-		gs.startedAt = &info.StartedAt
+		gs.processState = controller.ProcessRunning
+		// Recovered instances are treated as ready — the worker was accepting
+		// work before we lost it, and we can't re-observe the ready pattern.
+		gs.ready = true
+		startedAt := info.StartedAt
+		gs.startedAt = &startedAt
+		gs.readyAt = &startedAt
 		gs.mu.Unlock()
 		if m.statsPoller != nil {
 			m.statsPoller.StartPolling(gs.id)
@@ -843,7 +848,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 		gs.mu.Lock()
 		gs.instanceID = nil
 		gs.desiredState = model.DesiredStopped
-		gs.process = nil
+		gs.clearProcessLocked()
 		gs.mu.Unlock()
 
 		dbGS, _ := m.store.GetGameserver(gs.id)
@@ -855,7 +860,7 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 	default:
 		m.log.Warn("instance in unexpected state", "gameserver", gs.id, "state", info.State)
 		gs.mu.Lock()
-		gs.process = nil
+		gs.clearProcessLocked()
 		gs.mu.Unlock()
 	}
 

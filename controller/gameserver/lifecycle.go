@@ -26,7 +26,7 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 		g.mu.Unlock()
 		return controller.ErrBadRequest("cannot start archived gameserver")
 	}
-	if g.process != nil && g.process.State == worker.StateRunning {
+	if g.processState == controller.ProcessRunning && g.ready {
 		g.mu.Unlock()
 		return nil
 	}
@@ -34,7 +34,7 @@ func (g *LiveGameserver) Start(ctx context.Context) error {
 	// (operation already in progress), the desired_state update is reverted
 	// implicitly by the caller retrying later.
 	g.desiredState = model.DesiredRunning
-	g.store.SetDesiredState(g.id, "running")
+	g.store.SetDesiredState(g.id, model.DesiredRunning)
 	g.errorReason = ""
 	g.store.ClearErrorReason(g.id)
 	g.crashCount = 0
@@ -322,7 +322,7 @@ func (g *LiveGameserver) executeStart(ctx context.Context) error {
 // Returns nil immediately — the teardown work happens asynchronously.
 func (g *LiveGameserver) Stop(ctx context.Context) error {
 	g.mu.Lock()
-	if g.instanceID == nil && g.process == nil && g.operation == nil {
+	if g.instanceID == nil && g.processState == controller.ProcessNone && g.operation == nil {
 		g.mu.Unlock()
 		return nil
 	}
@@ -361,7 +361,7 @@ func (g *LiveGameserver) doStop(ctx context.Context) error {
 	g.mu.Lock()
 	g.instanceID = nil
 	g.desiredState = model.DesiredStopped
-	g.process = nil
+	g.clearProcessLocked()
 	g.errorReason = ""
 	gsModel := g.toModelGameserverLocked()
 	g.mu.Unlock()

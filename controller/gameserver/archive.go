@@ -12,7 +12,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/util/naming"
-	"github.com/warsmite/gamejanitor/worker"
 )
 
 // Archive stops the gameserver, backs up its volume to archive storage,
@@ -113,7 +112,7 @@ func (g *LiveGameserver) executeArchive(ctx context.Context) error {
 	g.instanceID = nil
 	g.nodeID = nil
 	g.worker = nil
-	g.process = nil
+	g.clearProcessLocked()
 	g.errorReason = ""
 	g.mu.Unlock()
 
@@ -335,7 +334,7 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 		// On success: if the gameserver is not running, clear the operation
 		// (migrate-stopped path). If it is running, HandleProcessEvent cleared it.
 		g.mu.Lock()
-		if g.operation != nil && g.process == nil {
+		if g.operation != nil && g.processState == controller.ProcessNone {
 			g.operation = nil
 			g.notifyWatchersLocked(nil)
 		}
@@ -347,7 +346,7 @@ func (g *LiveGameserver) Migrate(ctx context.Context, targetNodeID string) error
 func (g *LiveGameserver) executeMigrate(ctx context.Context, targetNodeID string) error {
 	// Record whether the gameserver was running so we can restart after migration
 	g.mu.Lock()
-	wasRunning := g.process != nil && g.process.State == worker.StateRunning
+	wasRunning := g.processState == controller.ProcessRunning
 	volumeName := g.volumeName
 	gameID := g.gameID
 	g.mu.Unlock()
@@ -526,8 +525,7 @@ func (g *LiveGameserver) stopIfRunning(ctx context.Context) error {
 
 	g.mu.Lock()
 	g.instanceID = nil
-	g.process = nil
-	g.startedAt = nil
+	g.clearProcessLocked()
 	g.mu.Unlock()
 
 	g.store.SetInstanceID(g.id, nil)
