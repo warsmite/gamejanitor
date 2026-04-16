@@ -12,14 +12,15 @@ type GameserverService struct {
 	client *Client
 }
 
-// List returns all gameservers, filtered by optional parameters.
-func (s *GameserverService) List(ctx context.Context, opts *GameserverListOptions) (*GameserverListResponse, error) {
+// List returns all gameservers visible to the caller, filtered by optional
+// parameters. Non-admin tokens see only gameservers they own or are granted.
+func (s *GameserverService) List(ctx context.Context, opts *GameserverListOptions) ([]Gameserver, error) {
 	path := "/api/gameservers" + opts.encode()
-	var resp GameserverListResponse
-	if err := s.client.get(ctx, path, &resp); err != nil {
+	var gameservers []Gameserver
+	if err := s.client.get(ctx, path, &gameservers); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return gameservers, nil
 }
 
 // GameserverListOptions configures filters for listing gameservers.

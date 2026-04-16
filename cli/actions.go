@@ -238,14 +238,14 @@ func runStatusOverview() error {
 		return nil
 	}
 
-	if len(resp.Gameservers) == 0 {
+	if len(resp) == 0 {
 		fmt.Println("No gameservers found.")
 		return nil
 	}
 
 	w := newTabWriter()
 	fmt.Fprintln(w, "NAME\tGAME\tSTATUS\tPLAYERS")
-	for _, gs := range resp.Gameservers {
+	for _, gs := range resp {
 		players := ""
 		if gs.Status == "running" || gs.Status == "started" {
 			if q, err := getClient().Gameservers.Query(ctx(), gs.ID); err == nil {

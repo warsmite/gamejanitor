@@ -307,7 +307,7 @@ func TestGameserver_RunningAPI(t *testing.T) {
 		stats, err := env.sdk.Gameservers.Stats(ctx, gs.ID())
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, stats.CPUPercent, 0.0)
-		assert.GreaterOrEqual(t, stats.MemoryUsageMB, 0)
+		assert.GreaterOrEqual(t, stats.MemoryUsageMB, 0.0)
 	})
 
 	t.Run("stats_polling_fires_events", func(t *testing.T) {

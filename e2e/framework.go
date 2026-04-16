@@ -146,14 +146,27 @@ type Token struct {
 	client *sdk.Client
 }
 
-// NewToken creates a new API token via the admin API (localhost bypass lets
-// the initial creation succeed before auth is enabled). The returned Token's
-// SDK() method yields an authed client ready to make calls.
+// NewToken creates a new API token using the env's default client (relies on
+// localhost bypass). Use this to create the initial admin token before auth
+// is enabled. After auth is enabled, use admin.NewToken() to create further
+// tokens via the authed admin client.
 func (e *Env) NewToken(req sdk.CreateTokenRequest) *Token {
+	e.t.Helper()
+	return e.newTokenVia(e.sdk, req)
+}
+
+// NewToken creates a new API token using this token's authenticated client.
+// Admin tokens use this to create user/viewer tokens after auth is enabled.
+func (t *Token) NewToken(req sdk.CreateTokenRequest) *Token {
+	t.env.t.Helper()
+	return t.env.newTokenVia(t.client, req)
+}
+
+func (e *Env) newTokenVia(c *sdk.Client, req sdk.CreateTokenRequest) *Token {
 	e.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	resp, err := e.sdk.Tokens.Create(ctx, &req)
+	resp, err := c.Tokens.Create(ctx, &req)
 	require.NoError(e.t, err, "create token")
 	return &Token{
 		env:    e,
@@ -320,10 +333,12 @@ func (gs *Gameserver) Start() *Action {
 	return &Action{gs: gs, kind: "start"}
 }
 
-// Stop triggers the stop action.
+// Stop triggers the stop action. Stop is currently synchronous on the
+// backend (the HTTP handler blocks until the graceful stop completes or
+// force-kill timeout fires), so the context budget must be generous.
 func (gs *Gameserver) Stop() *Action {
 	gs.env.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_, err := gs.env.sdk.Gameservers.Stop(ctx, gs.id)
 	require.NoError(gs.env.t, err, "stop %s", gs.id)
@@ -448,18 +463,12 @@ func (a *Action) MustReachOneOf(statuses ...string) string {
 			}
 			resetTimer(stall, stallTimeout)
 
-			// Map primary events to statuses
-			var reached string
-			switch ev.Type {
-			case "gameserver.ready":
-				reached = "running"
-			case "gameserver.instance_stopped":
-				reached = "stopped"
-			case "gameserver.error":
-				reached = "error"
-			}
-			if reached != "" && targetSet[reached] {
-				return reached
+			// status_changed carries the new terminal status directly.
+			if ev.Type == "gameserver.status_changed" {
+				reached := jsonString(ev.Data, "status")
+				if targetSet[reached] {
+					return reached
+				}
 			}
 
 		case <-stall.C:
@@ -513,7 +522,9 @@ func (a *Action) waitForGone() {
 	a.waitForEventType(sub, "gameserver.delete", "gone")
 }
 
-// waitForError blocks until gameserver.error fires. Returns the reason.
+// waitForError blocks until the gameserver transitions to error state.
+// The backend signals this via gameserver.status_changed with status=error
+// (fired from handleUnexpectedDeath and setErrorLocked). Returns the reason.
 func (a *Action) waitForError() string {
 	a.gs.env.t.Helper()
 
@@ -536,8 +547,8 @@ func (a *Action) waitForError() string {
 				return ""
 			}
 			resetTimer(stall, stallTimeout)
-			if ev.Type == "gameserver.error" {
-				return jsonString(ev.Data, "reason")
+			if ev.Type == "gameserver.status_changed" && jsonString(ev.Data, "status") == "error" {
+				return jsonString(ev.Data, "error_reason")
 			}
 		case <-stall.C:
 			a.gs.env.t.Fatalf("stall: no events for %s while waiting for error on %s\n%s",
@@ -740,10 +751,10 @@ func (b *Backup) MustComplete() {
 				return
 			}
 			resetTimer(stall, stallTimeout)
-			if ev.Type == "backup.completed" && jsonString(ev.Data, "backup_id") == b.id {
+			if ev.Type == "backup.completed" && jsonString(ev.Data, "backup.id") == b.id {
 				return
 			}
-			if ev.Type == "backup.failed" && jsonString(ev.Data, "backup_id") == b.id {
+			if ev.Type == "backup.failed" && jsonString(ev.Data, "backup.id") == b.id {
 				b.gs.env.t.Fatalf("backup %s failed: %s", b.id, jsonString(ev.Data, "error"))
 				return
 			}
@@ -795,10 +806,10 @@ func (r *Restore) MustComplete() {
 				return
 			}
 			resetTimer(stall, stallTimeout)
-			if ev.Type == "backup.restore.completed" && jsonString(ev.Data, "backup_id") == r.backupID {
+			if ev.Type == "backup.restore.completed" && jsonString(ev.Data, "backup.id") == r.backupID {
 				return
 			}
-			if ev.Type == "backup.restore.failed" && jsonString(ev.Data, "backup_id") == r.backupID {
+			if ev.Type == "backup.restore.failed" && jsonString(ev.Data, "backup.id") == r.backupID {
 				r.gs.env.t.Fatalf("restore %s failed: %s", r.backupID, jsonString(ev.Data, "error"))
 				return
 			}

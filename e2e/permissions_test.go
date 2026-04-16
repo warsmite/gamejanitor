@@ -4,7 +4,9 @@ package e2e
 
 // permissions_test.go — auth, tokens, grants, quotas, scoping. These tests
 // mutate global settings (auth_enabled, localhost_bypass), so they run
-// serially and clean up after themselves.
+// serially and clean up after themselves. All sub-token creation happens via
+// admin.NewToken() because env.sdk is unauthenticated (and bypass is off
+// once auth is fully enabled).
 
 import (
 	"context"
@@ -16,8 +18,9 @@ import (
 	sdk "github.com/warsmite/gamejanitor/sdk"
 )
 
-// enableAuth creates an admin token, enables auth, and returns the admin
-// token. Cleanup is registered to restore settings at test end.
+// enableAuth creates an admin token, enables auth, disables localhost bypass,
+// and registers cleanup. Returns the admin token — use admin.NewToken() to
+// create further tokens after this call.
 func enableAuth(t *testing.T, env *Env) *Token {
 	t.Helper()
 
@@ -43,9 +46,9 @@ func TestPermissions_Scoping(t *testing.T) {
 	env := NewEnvSerial(t)
 	admin := enableAuth(t, env)
 
-	// Admin creates a gameserver.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	adminGs, err := admin.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
 		Name:   "admin-" + t.Name(),
 		GameID: env.GameID(),
@@ -54,12 +57,12 @@ func TestPermissions_Scoping(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = admin.SDK().Gameservers.Delete(context.Background(), adminGs.ID) })
 
-	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "viewer-" + t.Name(), Role: "user"})
+	viewer := admin.NewToken(sdk.CreateTokenRequest{Name: "viewer-" + t.Name(), Role: "user"})
 
 	// Viewer without grants sees zero gameservers.
-	resp, err := viewer.SDK().Gameservers.List(ctx, nil)
+	list, err := viewer.SDK().Gameservers.List(ctx, nil)
 	require.NoError(t, err)
-	assert.Empty(t, resp.Gameservers, "viewer with no grants should see nothing")
+	assert.Empty(t, list, "viewer with no grants should see nothing")
 }
 
 // TestPermissions_Grants verifies that granting access lets a scoped token
@@ -70,6 +73,7 @@ func TestPermissions_Grants(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	adminGs, err := admin.SDK().Gameservers.Create(ctx, &sdk.CreateGameserverRequest{
 		Name:   "granted-" + t.Name(),
 		GameID: env.GameID(),
@@ -78,7 +82,7 @@ func TestPermissions_Grants(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = admin.SDK().Gameservers.Delete(context.Background(), adminGs.ID) })
 
-	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "grantee-" + t.Name(), Role: "user"})
+	viewer := admin.NewToken(sdk.CreateTokenRequest{Name: "grantee-" + t.Name(), Role: "user"})
 
 	// Grant viewer start/stop permission on this specific gameserver.
 	_, err = admin.SDK().Gameservers.Update(ctx, adminGs.ID, &sdk.UpdateGameserverRequest{
@@ -87,10 +91,10 @@ func TestPermissions_Grants(t *testing.T) {
 	require.NoError(t, err)
 
 	// Viewer sees the granted gameserver.
-	resp, err := viewer.SDK().Gameservers.List(ctx, nil)
+	list, err := viewer.SDK().Gameservers.List(ctx, nil)
 	require.NoError(t, err)
-	require.Len(t, resp.Gameservers, 1, "viewer should see the granted gameserver")
-	assert.Equal(t, adminGs.ID, resp.Gameservers[0].ID)
+	require.Len(t, list, 1, "viewer should see the granted gameserver")
+	assert.Equal(t, adminGs.ID, list[0].ID)
 }
 
 // TestPermissions_CanCreate verifies that tokens without can_create can't
@@ -98,10 +102,9 @@ func TestPermissions_Grants(t *testing.T) {
 func TestPermissions_CanCreate(t *testing.T) {
 	env := NewEnvSerial(t)
 	admin := enableAuth(t, env)
-	_ = admin
 
-	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "noviewer-" + t.Name(), Role: "user"})
-	creator := env.NewToken(sdk.CreateTokenRequest{Name: "creator-" + t.Name(), Role: "user", CanCreate: true})
+	viewer := admin.NewToken(sdk.CreateTokenRequest{Name: "noviewer-" + t.Name(), Role: "user"})
+	creator := admin.NewToken(sdk.CreateTokenRequest{Name: "creator-" + t.Name(), Role: "user", CanCreate: true})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -121,19 +124,19 @@ func TestPermissions_CanCreate(t *testing.T) {
 	t.Cleanup(func() { _ = creator.SDK().Gameservers.Delete(context.Background(), created.ID) })
 
 	// Creator sees only their own gameserver (no grants on admin's).
-	resp, err := creator.SDK().Gameservers.List(ctx, nil)
+	list, err := creator.SDK().Gameservers.List(ctx, nil)
 	require.NoError(t, err)
-	assert.Len(t, resp.Gameservers, 1, "creator should see only owned gameserver")
+	assert.Len(t, list, 1, "creator should see only owned gameserver")
 }
 
 // TestPermissions_Quota_MaxGameservers verifies that max_gameservers caps
 // creation at the configured limit.
 func TestPermissions_Quota_MaxGameservers(t *testing.T) {
 	env := NewEnvSerial(t)
-	_ = enableAuth(t, env)
+	admin := enableAuth(t, env)
 
 	limit := 2
-	creator := env.NewToken(sdk.CreateTokenRequest{
+	creator := admin.NewToken(sdk.CreateTokenRequest{
 		Name:           "quota-" + t.Name(),
 		Role:           "user",
 		CanCreate:      true,
@@ -170,9 +173,9 @@ func TestPermissions_Quota_MaxGameservers(t *testing.T) {
 // tokens can't access cluster-level routes (settings, tokens).
 func TestPermissions_ViewerForbiddenOnClusterRoutes(t *testing.T) {
 	env := NewEnvSerial(t)
-	_ = enableAuth(t, env)
+	admin := enableAuth(t, env)
 
-	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "cluster-" + t.Name(), Role: "user"})
+	viewer := admin.NewToken(sdk.CreateTokenRequest{Name: "cluster-" + t.Name(), Role: "user"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -190,7 +193,7 @@ func TestPermissions_MeEndpoint(t *testing.T) {
 	env := NewEnvSerial(t)
 	admin := enableAuth(t, env)
 
-	viewer := env.NewToken(sdk.CreateTokenRequest{Name: "me-" + t.Name(), Role: "user"})
+	viewer := admin.NewToken(sdk.CreateTokenRequest{Name: "me-" + t.Name(), Role: "user"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

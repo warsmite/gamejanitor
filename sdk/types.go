@@ -120,12 +120,6 @@ type UpdateGameserverResponse struct {
 	MigrationTriggered bool `json:"migration_triggered,omitempty"`
 }
 
-// GameserverListResponse is the response from listing gameservers.
-type GameserverListResponse struct {
-	Gameservers []Gameserver `json:"gameservers"`
-	Permissions []string     `json:"permissions"`
-}
-
 // BulkActionRequest triggers a lifecycle action on multiple gameservers.
 type BulkActionRequest struct {
 	Action string `json:"action"` // "start", "stop", or "restart"

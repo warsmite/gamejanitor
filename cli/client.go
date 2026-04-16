@@ -177,8 +177,8 @@ func fetchGameserverList() ([]namedEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	cachedGameservers = make([]namedEntry, len(resp.Gameservers))
-	for i, gs := range resp.Gameservers {
+	cachedGameservers = make([]namedEntry, len(resp))
+	for i, gs := range resp {
 		cachedGameservers[i] = namedEntry{ID: gs.ID, Name: gs.Name}
 	}
 	return cachedGameservers, nil

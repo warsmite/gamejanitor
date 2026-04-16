@@ -29,7 +29,7 @@
             pname = "gamejanitor";
             version = "0.1.0";
             src = ./.;
-            vendorHash = "sha256-aeWeLQI0A+K3avUMXPKowcSD5xFpdFyHNl7m+jBco9w=";
+            vendorHash = "sha256-PxIqTrRYS7Vf6UfSfSNCj19sy162u49CBwZQjO4+ZSQ=";
             env.CGO_ENABLED = "0";
 
             # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
@@ -367,7 +367,7 @@
           update-vendor-hash = pkgs.writeShellScriptBin "update-vendor-hash" ''
             go mod vendor
             HASH=$(nix hash path --type sha256 vendor/)
-            CURRENT=$(grep -oP '(?<=vendorHash = ")[^"]+' flake.nix | head -1)
+            CURRENT=$(grep -oP '(?<=vendorHash = "sha256-PxIqTrRYS7Vf6UfSfSNCj19sy162u49CBwZQjO4+ZSQ="]+' flake.nix | head -1)
             if [ "$HASH" != "$CURRENT" ]; then
               sed -i "s|vendorHash = \".*\"|vendorHash = \"$HASH\"|" flake.nix
               echo "Updated vendorHash: $CURRENT -> $HASH"
@@ -380,7 +380,7 @@
             set -e
             go mod vendor
             HASH=$(nix hash path --type sha256 vendor/)
-            CURRENT=$(grep -oP '(?<=vendorHash = ")[^"]+' flake.nix | head -1)
+            CURRENT=$(grep -oP '(?<=vendorHash = "sha256-PxIqTrRYS7Vf6UfSfSNCj19sy162u49CBwZQjO4+ZSQ="]+' flake.nix | head -1)
             if [ "$HASH" != "$CURRENT" ]; then
               echo "vendor-check: vendorHash out of sync."
               echo "  flake.nix: $CURRENT"

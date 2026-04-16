@@ -43,14 +43,14 @@ func runGameserversList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if len(resp.Gameservers) == 0 {
+	if len(resp) == 0 {
 		fmt.Println("No gameservers found.")
 		return nil
 	}
 
 	w := newTabWriter()
 	fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
-	for _, gs := range resp.Gameservers {
+	for _, gs := range resp {
 		id := gs.ID
 		if len(id) > 8 {
 			id = id[:8]
