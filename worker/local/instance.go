@@ -198,6 +198,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 			handle.Wait()
 			logWriter.Close()
 			w.rt.Delete(id, true)
+			runtime.CleanupBundle(bundleDir)
 			return fmt.Errorf("starting pasta network: %w", err)
 		}
 		pastaInst = pi
@@ -246,6 +247,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 			pastaInst.Stop()
 		}
 		w.rt.Delete(id, true)
+		runtime.CleanupBundle(bundleDir)
 
 		uptime := time.Since(inst.startedAt)
 
@@ -316,7 +318,9 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 		w.tracker.Remove(id)
 	}
 
-	os.RemoveAll(w.instanceDir(id))
+	dir := w.instanceDir(id)
+	runtime.CleanupBundle(filepath.Join(dir, "bundle"))
+	os.RemoveAll(dir)
 	return nil
 }
 

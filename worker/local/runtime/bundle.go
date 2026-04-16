@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // BundleConfig describes an OCI container to run.
@@ -41,13 +42,22 @@ func PrepareBundle(bundleDir string, cfg BundleConfig) error {
 		return fmt.Errorf("writing config.json: %w", err)
 	}
 
-	rootfsLink := filepath.Join(bundleDir, "rootfs")
-	os.Remove(rootfsLink)
-	if err := os.Symlink(cfg.RootFS, rootfsLink); err != nil {
-		return fmt.Errorf("symlinking rootfs: %w", err)
+	// crun needs rootfs to be a mount point for pivot_root — symlinks don't work.
+	rootfsDir := filepath.Join(bundleDir, "rootfs")
+	if err := os.MkdirAll(rootfsDir, 0755); err != nil {
+		return fmt.Errorf("creating rootfs dir: %w", err)
+	}
+	if err := syscall.Mount(cfg.RootFS, rootfsDir, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
+		return fmt.Errorf("bind-mounting rootfs: %w", err)
 	}
 
 	return nil
+}
+
+// CleanupBundle unmounts the rootfs bind mount in the bundle directory.
+func CleanupBundle(bundleDir string) {
+	rootfsDir := filepath.Join(bundleDir, "rootfs")
+	syscall.Unmount(rootfsDir, 0)
 }
 
 func buildSpec(cfg BundleConfig) map[string]any {

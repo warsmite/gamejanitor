@@ -92,6 +92,13 @@ func buildBinary(t *testing.T) string {
 		return cachedBinary
 	}
 	root := projectDir()
+	// Ensure ui/dist exists so the embed directive doesn't fail.
+	// E2E tests don't exercise the UI — a stub index.html is sufficient.
+	distDir := filepath.Join(root, "ui", "dist")
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		os.MkdirAll(distDir, 0755)
+		os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<!-- e2e stub -->"), 0644)
+	}
 	binary := filepath.Join(os.TempDir(), "gamejanitor-e2e")
 	cmd := exec.Command("go", "build", "-o", binary, ".")
 	cmd.Dir = root

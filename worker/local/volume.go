@@ -44,7 +44,10 @@ func (w *LocalWorker) removeWithContainer(path string) error {
 	if err := os.MkdirAll(bundleDir, 0755); err != nil {
 		return fmt.Errorf("creating cleanup bundle dir: %w", err)
 	}
-	defer os.RemoveAll(bundleDir)
+	defer func() {
+		runtime.CleanupBundle(bundleDir)
+		os.RemoveAll(bundleDir)
+	}()
 
 	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
 		RootFS:  "/",
@@ -59,11 +62,10 @@ func (w *LocalWorker) removeWithContainer(path string) error {
 
 	cmd := w.rt.RunSync(id, bundleDir)
 	out, err := cmd.CombinedOutput()
+	w.rt.Delete(id, true)
 	if err != nil {
-		w.rt.Delete(id, true)
 		return fmt.Errorf("cleanup container failed: %w\n%s", err, out)
 	}
-	w.rt.Delete(id, true)
 
 	// Container removed the contents; now remove the empty directory from the host
 	return os.Remove(path)
