@@ -291,7 +291,9 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 
 	if w.tracker != nil {
 		w.tracker.Track(id, manifest.Name)
-		w.tracker.SetState(id, worker.StateStarting)
+		// Process is alive once the systemd scope is up — mark Running now. Ready
+		// is a separate signal set by WatchLogs (or immediately below if no pattern).
+		w.tracker.SetState(id, worker.StateRunning)
 
 		logReader, err := w.InstanceLogs(context.Background(), id, 0, true)
 		if err == nil {

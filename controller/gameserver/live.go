@@ -335,9 +335,9 @@ func (g *LiveGameserver) HandleProcessEvent(update worker.InstanceStateUpdate) {
 		// intentional action.
 		intentional := g.desiredState != model.DesiredRunning ||
 			(g.operation != nil && g.operation.Type == model.OpDelete)
-		wasRunningOrStarting := g.process != nil && (g.process.State == worker.StateRunning || g.process.State == worker.StateStarting)
+		wasRunning := g.process != nil && g.process.State == worker.StateRunning
 		operationWasActive := g.operation != nil
-		if !intentional && (wasRunningOrStarting || operationWasActive) {
+		if !intentional && (wasRunning || operationWasActive) {
 			g.handleUnexpectedDeath(update.ExitCode, update.StartedAt)
 		}
 		// Clear any active operation — the process died

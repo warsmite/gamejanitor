@@ -409,10 +409,16 @@ func (w *RemoteWorker) GetAllInstanceStates(ctx context.Context) ([]worker.Insta
 }
 
 func protoToWorkerState(msg *pb.InstanceStateUpdate) worker.InstanceStateUpdate {
+	var readyAt time.Time
+	if msg.ReadyAtUnix != 0 {
+		readyAt = time.Unix(msg.ReadyAtUnix, 0)
+	}
 	return worker.InstanceStateUpdate{
 		InstanceID:   msg.InstanceId,
 		InstanceName: msg.InstanceName,
 		State:        protoToInstanceState(msg.State),
+		Ready:        msg.Ready,
+		ReadyAt:      readyAt,
 		ExitCode:     int(msg.ExitCode),
 		StartedAt:    time.Unix(msg.StartedAtUnix, 0),
 		ExitedAt:     time.Unix(msg.ExitedAtUnix, 0),
@@ -424,8 +430,6 @@ func protoToInstanceState(s pb.InstanceState) worker.InstanceState {
 	switch s {
 	case pb.InstanceState_INSTANCE_CREATED:
 		return worker.StateCreated
-	case pb.InstanceState_INSTANCE_STARTING:
-		return worker.StateStarting
 	case pb.InstanceState_INSTANCE_RUNNING:
 		return worker.StateRunning
 	case pb.InstanceState_INSTANCE_EXITED:

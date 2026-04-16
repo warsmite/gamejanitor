@@ -493,17 +493,22 @@ func (a *Agent) GetAllInstanceStates(ctx context.Context, req *pb.GetAllInstance
 }
 
 func workerStateToProto(u worker.InstanceStateUpdate) *pb.InstanceStateUpdate {
-	var startedAt, exitedAt int64
+	var startedAt, exitedAt, readyAt int64
 	if !u.StartedAt.IsZero() {
 		startedAt = u.StartedAt.Unix()
 	}
 	if !u.ExitedAt.IsZero() {
 		exitedAt = u.ExitedAt.Unix()
 	}
+	if !u.ReadyAt.IsZero() {
+		readyAt = u.ReadyAt.Unix()
+	}
 	return &pb.InstanceStateUpdate{
 		InstanceId:    u.InstanceID,
 		InstanceName:  u.InstanceName,
 		State:         mapInstanceState(u.State),
+		Ready:         u.Ready,
+		ReadyAtUnix:   readyAt,
 		ExitCode:      int32(u.ExitCode),
 		StartedAtUnix: startedAt,
 		ExitedAtUnix:  exitedAt,
@@ -515,8 +520,6 @@ func mapInstanceState(s worker.InstanceState) pb.InstanceState {
 	switch s {
 	case worker.StateCreated:
 		return pb.InstanceState_INSTANCE_CREATED
-	case worker.StateStarting:
-		return pb.InstanceState_INSTANCE_STARTING
 	case worker.StateRunning:
 		return pb.InstanceState_INSTANCE_RUNNING
 	case worker.StateExited:

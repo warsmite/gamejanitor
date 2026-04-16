@@ -24,6 +24,8 @@ type TrackedInstance struct {
 	ID           string
 	Name         string
 	State        InstanceState
+	Ready        bool
+	ReadyAt      time.Time
 	ExitCode     int
 	StartedAt    time.Time
 	ExitedAt     time.Time
@@ -51,6 +53,7 @@ func (t *InstanceTracker) Track(id, name string) {
 }
 
 // SetState transitions an instance to the given state and emits an update.
+// Does not touch Ready — that is managed separately via SetReady.
 func (t *InstanceTracker) SetState(id string, state InstanceState) {
 	t.mu.Lock()
 	inst, ok := t.instances[id]
@@ -63,8 +66,10 @@ func (t *InstanceTracker) SetState(id string, state InstanceState) {
 	inst.State = state
 
 	switch state {
-	case StateStarting:
-		inst.StartedAt = time.Now()
+	case StateRunning:
+		if inst.StartedAt.IsZero() {
+			inst.StartedAt = time.Now()
+		}
 	case StateExited:
 		inst.ExitedAt = time.Now()
 		if inst.cancel != nil {
@@ -77,6 +82,28 @@ func (t *InstanceTracker) SetState(id string, state InstanceState) {
 	t.mu.Unlock()
 
 	t.log.Info("instance state transition", "id", id, "from", old, "to", state)
+	t.emit(update)
+}
+
+// SetReady marks the instance as ready (ready pattern matched or immediately
+// on launch when no pattern is configured). Orthogonal to SetState.
+func (t *InstanceTracker) SetReady(id string) {
+	t.mu.Lock()
+	inst, ok := t.instances[id]
+	if !ok {
+		t.mu.Unlock()
+		return
+	}
+	if inst.Ready {
+		t.mu.Unlock()
+		return
+	}
+	inst.Ready = true
+	inst.ReadyAt = time.Now()
+	update := t.snapshotLocked(inst)
+	t.mu.Unlock()
+
+	t.log.Info("instance ready", "id", id)
 	t.emit(update)
 }
 
@@ -162,8 +189,12 @@ func (t *InstanceTracker) Events() <-chan InstanceStateUpdate {
 }
 
 // WatchLogs starts a goroutine that scans instance logs for the ready pattern.
-// When matched, the instance is promoted from Starting to Running.
-// If readyPattern is empty, promotes immediately.
+// When matched, the instance's Ready flag is set. If readyPattern is empty,
+// Ready is set immediately (we have no way to detect readiness — treat process
+// alive as ready).
+//
+// The instance's State must already be StateRunning by this point; Ready is
+// a separate orthogonal signal.
 func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern string, logReader io.ReadCloser) {
 	t.mu.Lock()
 	inst, ok := t.instances[id]
@@ -174,12 +205,10 @@ func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern
 	}
 
 	if readyPattern == "" {
-		inst.State = StateRunning
-		update := t.snapshotLocked(inst)
 		t.mu.Unlock()
 		logReader.Close()
-		t.log.Info("no ready pattern, promoting immediately", "id", id)
-		t.emit(update)
+		t.log.Info("no ready pattern, marking ready immediately", "id", id)
+		t.SetReady(id)
 		return
 	}
 
@@ -187,8 +216,8 @@ func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern
 	if err != nil {
 		t.mu.Unlock()
 		logReader.Close()
-		t.log.Error("invalid ready pattern, promoting immediately", "id", id, "pattern", readyPattern, "error", err)
-		t.SetState(id, StateRunning)
+		t.log.Error("invalid ready pattern, marking ready immediately", "id", id, "pattern", readyPattern, "error", err)
+		t.SetReady(id)
 		return
 	}
 
@@ -203,16 +232,24 @@ func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern
 // Recover re-registers an instance that survived a worker restart.
 // Used by sandbox recovery to re-add instances to the tracker without
 // emitting state transitions (the controller will get these via GetAllInstanceStates).
+// Recovered running instances are treated as ready — we can't re-observe the
+// ready pattern from mid-run logs, and the process was accepting work before
+// the worker restarted.
 func (t *InstanceTracker) Recover(id, name string, state InstanceState, startedAt time.Time, installed bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.instances[id] = &TrackedInstance{
+	inst := &TrackedInstance{
 		ID:        id,
 		Name:      name,
 		State:     state,
 		StartedAt: startedAt,
 		Installed: installed,
 	}
+	if state == StateRunning {
+		inst.Ready = true
+		inst.ReadyAt = startedAt
+	}
+	t.instances[id] = inst
 }
 
 func (t *InstanceTracker) watchLogsLoop(ctx context.Context, id string, re *regexp.Regexp, logReader io.ReadCloser) {
@@ -231,7 +268,7 @@ func (t *InstanceTracker) watchLogsLoop(ctx context.Context, id string, re *rege
 		line := scanner.Text()
 		if re.MatchString(line) {
 			t.log.Info("ready pattern matched", "id", id)
-			t.SetState(id, StateRunning)
+			t.SetReady(id)
 			return
 		}
 	}
@@ -251,6 +288,8 @@ func (t *InstanceTracker) snapshotLocked(inst *TrackedInstance) InstanceStateUpd
 		InstanceID:   inst.ID,
 		InstanceName: inst.Name,
 		State:        inst.State,
+		Ready:        inst.Ready,
+		ReadyAt:      inst.ReadyAt,
 		ExitCode:     inst.ExitCode,
 		StartedAt:    inst.StartedAt,
 		ExitedAt:     inst.ExitedAt,

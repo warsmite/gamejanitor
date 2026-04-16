@@ -69,22 +69,21 @@ type GameserverStats struct {
 	StorageLimitMB  *int
 }
 
-// InstanceState represents the authoritative state of an instance on the worker.
+// InstanceState is the process lifecycle on the worker. It is orthogonal to
+// readiness: a Running process may not yet be ready, and becomes ready
+// separately when the ready pattern matches (or immediately if no pattern).
 type InstanceState int
 
 const (
-	StateCreated  InstanceState = 0
-	StateStarting InstanceState = 1 // started but ready pattern not yet matched
-	StateRunning  InstanceState = 2 // ready pattern matched or no pattern
-	StateExited   InstanceState = 3
+	StateCreated InstanceState = 0 // container created, process not launched
+	StateRunning InstanceState = 1 // process is alive
+	StateExited  InstanceState = 2 // process terminated
 )
 
 func (s InstanceState) String() string {
 	switch s {
 	case StateCreated:
 		return "created"
-	case StateStarting:
-		return "starting"
 	case StateRunning:
 		return "running"
 	case StateExited:
@@ -98,6 +97,8 @@ type InstanceStateUpdate struct {
 	InstanceID   string
 	InstanceName string
 	State        InstanceState
+	Ready        bool      // true when ready pattern matched (or on launch with no pattern)
+	ReadyAt      time.Time // time Ready transitioned to true; zero if not ready
 	ExitCode     int
 	StartedAt    time.Time
 	ExitedAt     time.Time

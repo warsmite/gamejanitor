@@ -300,11 +300,14 @@ message CopyTarToInstanceResponse {}
 
 // Instance state
 
+// InstanceState is the process lifecycle as observed by the worker. It is
+// orthogonal to readiness — a RUNNING process may not yet be ready, and
+// becomes ready (separately) when the ready pattern matches or it's launched
+// without one.
 enum InstanceState {
-    INSTANCE_CREATED = 0;
-    INSTANCE_STARTING = 1; // started but ready pattern not yet matched
-    INSTANCE_RUNNING = 2;  // ready pattern matched or no pattern configured
-    INSTANCE_EXITED = 3;
+    INSTANCE_CREATED = 0; // container created, process not launched
+    INSTANCE_RUNNING = 1; // process is alive on the worker
+    INSTANCE_EXITED = 2;  // process terminated
 }
 
 message WatchInstanceStatesRequest {}
@@ -320,6 +323,11 @@ message InstanceStateUpdate {
     int64 started_at_unix = 5;
     int64 exited_at_unix = 6;
     bool installed = 7;
+    // ready is orthogonal to state. True when the ready pattern matched (or
+    // immediately on launch when no pattern is configured). False during the
+    // window between process launch and ready-pattern match.
+    bool ready = 8;
+    int64 ready_at_unix = 9;
 }
 
 // Health
