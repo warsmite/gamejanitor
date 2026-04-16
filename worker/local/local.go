@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"context"
@@ -21,13 +21,13 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 )
 
-// SandboxWorker implements Worker using bwrap for isolation, systemd for lifecycle,
+// LocalWorker implements Worker using bwrap for isolation, systemd for lifecycle,
 // and slirp4netns for network isolation. No external daemon required.
-type SandboxWorker struct {
+type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
-	resolve   worker.VolumeResolver
+	resolve   VolumeResolver
 	paths     *systemPaths
 
 	mu        sync.Mutex
@@ -35,7 +35,7 @@ type SandboxWorker struct {
 
 	pullMu sync.Mutex // serializes image pulls to prevent index corruption
 
-	tracker *worker.InstanceTracker
+	tracker *InstanceTracker
 }
 
 type managedInstance struct {
@@ -96,7 +96,7 @@ type instanceManifest struct {
 	Entrypoint    []string             `json:"entrypoint,omitempty"`
 }
 
-func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxWorker {
+func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
 	cleanupOrphanHolders(log)
 	cleanupOverlayMounts(dataDir, log)
 
@@ -110,14 +110,14 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 	// user inside the namespace. Files must stay owned by the caller on the
 	// host — chowning to UID 1001 would make them inaccessible inside.
 
-	w := &SandboxWorker{
+	w := &LocalWorker{
 		log:       log,
 		gameStore: gameStore,
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
 	}
-	w.tracker = worker.NewInstanceTracker(log)
+	w.tracker = NewInstanceTracker(log)
 	w.resolve = w.volumeResolver()
 	w.recoverInstances()
 
@@ -130,7 +130,7 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *SandboxW
 	return w
 }
 
-func (w *SandboxWorker) volumeResolver() worker.VolumeResolver {
+func (w *LocalWorker) volumeResolver() VolumeResolver {
 	return func(ctx context.Context, volumeName string) (string, error) {
 		path := filepath.Join(w.dataDir, "volumes", volumeName)
 		if _, err := os.Stat(path); err != nil {
@@ -140,21 +140,21 @@ func (w *SandboxWorker) volumeResolver() worker.VolumeResolver {
 	}
 }
 
-func (w *SandboxWorker) imagesDir() string  { return filepath.Join(w.dataDir, "images") }
-func (w *SandboxWorker) instanceDir(id string) string {
+func (w *LocalWorker) imagesDir() string  { return filepath.Join(w.dataDir, "images") }
+func (w *LocalWorker) instanceDir(id string) string {
 	return filepath.Join(w.dataDir, "instances", id)
 }
 
 // --- Worker interface: Instance lifecycle ---
 
-func (w *SandboxWorker) PullImage(ctx context.Context, image string, onProgress func(worker.PullProgress)) error {
+func (w *LocalWorker) PullImage(ctx context.Context, image string, onProgress func(worker.PullProgress)) error {
 	w.pullMu.Lock()
 	defer w.pullMu.Unlock()
 	_, err := pullAndExtractOCIImage(ctx, image, w.imagesDir(), onProgress, w.log)
 	return err
 }
 
-func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
+func (w *LocalWorker) CreateInstance(ctx context.Context, opts worker.InstanceOptions) (string, error) {
 	if opts.Name == "" {
 		return "", fmt.Errorf("instance name is required")
 	}
@@ -192,7 +192,7 @@ func (w *SandboxWorker) CreateInstance(ctx context.Context, opts worker.Instance
 	return id, nil
 }
 
-func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
+func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern string) error {
 	dir := w.instanceDir(id)
 	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -340,7 +340,7 @@ func (w *SandboxWorker) StartInstance(ctx context.Context, id string, readyPatte
 	return nil
 }
 
-func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
+func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSeconds int) error {
 	w.mu.Lock()
 	inst, ok := w.instances[id]
 	w.mu.Unlock()
@@ -386,7 +386,7 @@ func (w *SandboxWorker) StopInstance(ctx context.Context, id string, timeoutSeco
 	}
 }
 
-func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
+func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 	w.mu.Lock()
 	inst, ok := w.instances[id]
 	if ok {
@@ -410,7 +410,7 @@ func (w *SandboxWorker) RemoveInstance(ctx context.Context, id string) error {
 	return nil
 }
 
-func (w *SandboxWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
+func (w *LocalWorker) InspectInstance(ctx context.Context, id string) (*worker.InstanceInfo, error) {
 	w.mu.Lock()
 	inst, ok := w.instances[id]
 	w.mu.Unlock()
@@ -450,7 +450,7 @@ func (w *SandboxWorker) InspectInstance(ctx context.Context, id string) (*worker
 	}, nil
 }
 
-func (w *SandboxWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
+func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string) (int, string, string, error) {
 	w.mu.Lock()
 	inst, ok := w.instances[instanceID]
 	w.mu.Unlock()
@@ -641,7 +641,7 @@ func childPIDs(parentPID int) []int {
 
 // --- Worker interface: Logs & Stats ---
 
-func (w *SandboxWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
+func (w *LocalWorker) InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error) {
 	dir := w.instanceDir(instanceID)
 	logPath := filepath.Join(dir, "output.log")
 
@@ -671,7 +671,7 @@ func (w *SandboxWorker) InstanceLogs(ctx context.Context, instanceID string, tai
 	return newFollowReader(ctx, f, instanceID, w), nil
 }
 
-func (w *SandboxWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
+func (w *LocalWorker) InstanceStats(ctx context.Context, instanceID string) (*worker.InstanceStats, error) {
 	w.mu.Lock()
 	inst, ok := w.instances[instanceID]
 	w.mu.Unlock()
@@ -707,7 +707,7 @@ func (w *SandboxWorker) InstanceStats(ctx context.Context, instanceID string) (*
 
 // --- Worker interface: Volumes ---
 
-func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
+func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 	path := filepath.Join(w.dataDir, "volumes", name)
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("creating volume: %w", err)
@@ -718,7 +718,7 @@ func (w *SandboxWorker) CreateVolume(ctx context.Context, name string) error {
 	return nil
 }
 
-func (w *SandboxWorker) RemoveVolume(ctx context.Context, name string) error {
+func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {
 	path := filepath.Join(w.dataDir, "volumes", name)
 	err := os.RemoveAll(path)
 	if err != nil {
@@ -764,43 +764,43 @@ func removeWithUserNS(path string, paths *systemPaths, log *slog.Logger) error {
 		"--", paths.Rm, "-rf", path).Run()
 }
 
-func (w *SandboxWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
-	return worker.VolumeSizeDirect(w.resolve, ctx, volumeName)
+func (w *LocalWorker) VolumeSize(ctx context.Context, volumeName string) (int64, error) {
+	return VolumeSizeDirect(w.resolve, ctx, volumeName)
 }
 
 // --- Worker interface: File operations (delegate to shared helpers) ---
 
-func (w *SandboxWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
-	return worker.ListFilesDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) ListFiles(ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
+	return ListFilesDirect(w.resolve, ctx, volumeName, path)
 }
-func (w *SandboxWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
-	return worker.ReadFileDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error) {
+	return ReadFileDirect(w.resolve, ctx, volumeName, path)
 }
-func (w *SandboxWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
-	return worker.OpenFileDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error) {
+	return OpenFileDirect(w.resolve, ctx, volumeName, path)
 }
-func (w *SandboxWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
-	return worker.WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
+func (w *LocalWorker) WriteFile(ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
+	return WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 }
-func (w *SandboxWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
-	return worker.WriteFileStreamDirect(w.resolve, ctx, volumeName, path, reader, perm)
+func (w *LocalWorker) WriteFileStream(ctx context.Context, volumeName string, path string, reader io.Reader, perm os.FileMode) error {
+	return WriteFileStreamDirect(w.resolve, ctx, volumeName, path, reader, perm)
 }
-func (w *SandboxWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
-	return worker.DeletePathDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
+	return DeletePathDirect(w.resolve, ctx, volumeName, path)
 }
-func (w *SandboxWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
-	return worker.CreateDirectoryDirect(w.resolve, ctx, volumeName, path)
+func (w *LocalWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
+	return CreateDirectoryDirect(w.resolve, ctx, volumeName, path)
 }
-func (w *SandboxWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
-	return worker.RenamePathDirect(w.resolve, ctx, volumeName, from, to)
+func (w *LocalWorker) RenamePath(ctx context.Context, volumeName string, from string, to string) error {
+	return RenamePathDirect(w.resolve, ctx, volumeName, from, to)
 }
-func (w *SandboxWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
-	return worker.DownloadFileDirect(w.resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
+func (w *LocalWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	return DownloadFileDirect(w.resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
 }
 
 // --- Worker interface: Copy operations ---
 
-func (w *SandboxWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
+func (w *LocalWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
 	// In sandbox mode, instance filesystem is the volume — read directly
 	dir := w.instanceDir(instanceID)
 	manifestData, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
@@ -816,7 +816,7 @@ func (w *SandboxWorker) CopyFromInstance(ctx context.Context, instanceID string,
 	return os.ReadFile(filepath.Join(mountpoint, path))
 }
 
-func (w *SandboxWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
+func (w *LocalWorker) CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error {
 	dir := w.instanceDir(instanceID)
 	manifestData, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	var manifest instanceManifest
@@ -833,38 +833,38 @@ func (w *SandboxWorker) CopyToInstance(ctx context.Context, instanceID string, p
 	return os.WriteFile(fullPath, content, 0644)
 }
 
-func (w *SandboxWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
+func (w *LocalWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("CopyDirFromInstance not supported in sandbox mode")
 }
 
-func (w *SandboxWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
+func (w *LocalWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
 	return fmt.Errorf("CopyTarToInstance not supported in sandbox mode")
 }
 
 // --- Worker interface: Backup/Restore ---
 
-func (w *SandboxWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
-	return worker.BackupVolumeDirect(w.resolve, ctx, volumeName)
+func (w *LocalWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
+	return BackupVolumeDirect(w.resolve, ctx, volumeName)
 }
 
-func (w *SandboxWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
-	return worker.RestoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
+func (w *LocalWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
+	return RestoreVolumeDirect(w.resolve, ctx, volumeName, tarStream)
 }
 
 // --- Worker interface: Events ---
 
-func (w *SandboxWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
+func (w *LocalWorker) WatchInstanceStates(ctx context.Context) (<-chan worker.InstanceStateUpdate, <-chan error) {
 	errCh := make(chan error, 1)
 	return w.tracker.Events(), errCh
 }
 
-func (w *SandboxWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
+func (w *LocalWorker) GetAllInstanceStates(ctx context.Context) ([]worker.InstanceStateUpdate, error) {
 	return w.tracker.Snapshot(), nil
 }
 
 // --- Worker interface: Discovery ---
 
-func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
+func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.GameserverInstance, error) {
 	// Scan instance directories for running processes
 	instancesDir := filepath.Join(w.dataDir, "instances")
 	entries, err := os.ReadDir(instancesDir)
@@ -927,7 +927,7 @@ func (w *SandboxWorker) ListGameserverInstances(ctx context.Context) ([]worker.G
 
 // recoverInstances scans for active gj-*.scope systemd units and re-adopts
 // instances that survived a gamejanitor restart.
-func (w *SandboxWorker) recoverInstances() {
+func (w *LocalWorker) recoverInstances() {
 	if !w.paths.hasSystemd() {
 		return
 	}
@@ -1071,26 +1071,26 @@ func isPIDAlive(pid int, expectedNames ...string) bool {
 
 // --- Worker interface: Game scripts & Steam ---
 
-func (w *SandboxWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
-	return worker.PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
+func (w *LocalWorker) PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (string, string, error) {
+	return PrepareGameScripts(w.gameStore, w.dataDir, gameID, gameserverID)
 }
 
-func (w *SandboxWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
-	return worker.EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken, onProgress)
+func (w *LocalWorker) EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
+	return EnsureDepot(ctx, w.dataDir, w.log, appID, branch, accountName, refreshToken, onProgress)
 }
 
-func (w *SandboxWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
+func (w *LocalWorker) CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error {
 	mountpoint, err := w.resolve(ctx, volumeName)
 	if err != nil {
 		return err
 	}
-	return worker.CopyDepotToVolume(depotDir, mountpoint)
+	return CopyDepotToVolume(depotDir, mountpoint)
 }
 
-func (w *SandboxWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
+func (w *LocalWorker) DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error {
 	mountpoint, err := w.resolve(ctx, volumeName)
 	if err != nil {
 		return err
 	}
-	return worker.DownloadWorkshopItem(ctx, w.dataDir, w.log, appID, hcontentFile, filepath.Join(mountpoint, installPath))
+	return DownloadWorkshopItem(ctx, w.dataDir, w.log, appID, hcontentFile, filepath.Join(mountpoint, installPath))
 }

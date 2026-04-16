@@ -1,4 +1,4 @@
-package worker
+package local
 
 import (
 	"archive/tar"
@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // VolumeResolver maps a volume name to its host filesystem path.
@@ -34,7 +35,7 @@ func ResolveVolumePath(resolve VolumeResolver, ctx context.Context, volumeName s
 	return resolved, nil
 }
 
-func ListFilesDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
+func ListFilesDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string) ([]worker.FileEntry, error) {
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return nil, err
@@ -45,13 +46,13 @@ func ListFilesDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 		return nil, fmt.Errorf("reading directory %s: %w", path, err)
 	}
 
-	entries := make([]FileEntry, 0, len(dirEntries))
+	entries := make([]worker.FileEntry, 0, len(dirEntries))
 	for _, de := range dirEntries {
 		info, err := de.Info()
 		if err != nil {
 			continue
 		}
-		entries = append(entries, FileEntry{
+		entries = append(entries, worker.FileEntry{
 			Name:        de.Name(),
 			IsDir:       de.IsDir(),
 			Size:        info.Size(),
@@ -60,7 +61,7 @@ func ListFilesDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 		})
 	}
 
-	SortFileEntries(entries)
+	sortFileEntries(entries)
 	return entries, nil
 }
 
@@ -404,7 +405,7 @@ func downloadToFile(ctx context.Context, url string, hostPath string, expectedHa
 
 
 
-func SortFileEntries(entries []FileEntry) {
+func sortFileEntries(entries []worker.FileEntry) {
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir != entries[j].IsDir {
 			return entries[i].IsDir

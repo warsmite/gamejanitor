@@ -6,10 +6,21 @@ import (
 	"os"
 )
 
-// Worker abstracts all instance and host operations.
-// SandboxWorker implements this locally, RemoteWorker via gRPC to a worker agent.
+// Worker is the transport-agnostic abstraction over a node that runs gameserver
+// instances. LocalWorker satisfies it directly; RemoteWorker satisfies it over
+// gRPC. The interface is composed of focused sub-interfaces so consumers can
+// depend on the narrowest surface they need (least-privilege).
 type Worker interface {
-	// Instance lifecycle
+	InstanceManager
+	VolumeManager
+	FileManager
+	ScriptManager
+	DepotManager
+	StateWatcher
+}
+
+// InstanceManager owns the lifecycle of a single instance and its image.
+type InstanceManager interface {
 	PullImage(ctx context.Context, image string, onProgress func(PullProgress)) error
 	CreateInstance(ctx context.Context, opts InstanceOptions) (string, error)
 	StartInstance(ctx context.Context, id string, readyPattern string) error
@@ -19,13 +30,21 @@ type Worker interface {
 	Exec(ctx context.Context, instanceID string, cmd []string) (exitCode int, stdout string, stderr string, err error)
 	InstanceLogs(ctx context.Context, instanceID string, tail int, follow bool) (io.ReadCloser, error)
 	InstanceStats(ctx context.Context, instanceID string) (*InstanceStats, error)
+	ListGameserverInstances(ctx context.Context) ([]GameserverInstance, error)
+}
 
-	// Volumes
+// VolumeManager owns persistent storage attached to instances.
+type VolumeManager interface {
 	CreateVolume(ctx context.Context, name string) error
 	RemoveVolume(ctx context.Context, name string) error
 	VolumeSize(ctx context.Context, volumeName string) (int64, error)
+	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
+	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
+}
 
-	// Volume file operations (direct filesystem access)
+// FileManager covers direct filesystem access to volumes plus copy in/out of
+// running instances (used by config file editing and similar flows).
+type FileManager interface {
 	ListFiles(ctx context.Context, volumeName string, path string) ([]FileEntry, error)
 	ReadFile(ctx context.Context, volumeName string, path string) ([]byte, error)
 	OpenFile(ctx context.Context, volumeName string, path string) (io.ReadCloser, int64, error)
@@ -36,34 +55,31 @@ type Worker interface {
 	RenamePath(ctx context.Context, volumeName string, from string, to string) error
 	DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error
 
-	// Copy operations (used by config file read/write)
 	CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error)
 	CopyToInstance(ctx context.Context, instanceID string, path string, content []byte) error
 	CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error)
 	CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error
+}
 
-	// Volume-level backup operations (instance-independent)
-	BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error)
-	RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error
+// ScriptManager extracts game scripts to the worker filesystem so they can be
+// bind-mounted into instances.
+type ScriptManager interface {
+	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
+}
 
-	// Discovery
-	ListGameserverInstances(ctx context.Context) ([]GameserverInstance, error)
+// DepotManager handles Steam-specific game file delivery (depots and Workshop
+// items). Depots are downloaded host-side and copied into volumes outside the
+// container to avoid cgroup OOM on large depots.
+type DepotManager interface {
+	CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error
+	EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error)
+	DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error
+}
 
-	// Instance state — authoritative state from worker
+// StateWatcher exposes authoritative process state from the worker. The
+// controller subscribes to WatchInstanceStates for live updates and uses
+// GetAllInstanceStates for full reconciliation on startup.
+type StateWatcher interface {
 	WatchInstanceStates(ctx context.Context) (<-chan InstanceStateUpdate, <-chan error)
 	GetAllInstanceStates(ctx context.Context) ([]InstanceStateUpdate, error)
-
-	// Game scripts — extract to local filesystem, return host paths for bind-mounts
-	PrepareGameScripts(ctx context.Context, gameID, gameserverID string) (scriptDir string, defaultsDir string, err error)
-
-	// Copy depot files into a volume's /server directory on the host.
-	// Done outside the instance to avoid cgroup OOM on large depots.
-	CopyDepotToVolume(ctx context.Context, depotDir string, volumeName string) error
-
-	// Steam depot — download game files to local cache, return host path and download info.
-	// onProgress is called during download with progress updates. May be nil.
-	EnsureDepot(ctx context.Context, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error)
-
-	// Steam Workshop — download a UGC item to a volume path.
-	DownloadWorkshopItem(ctx context.Context, volumeName string, appID uint32, hcontentFile uint64, installPath string) error
 }

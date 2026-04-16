@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"context"
@@ -151,7 +151,7 @@ func TestRotatingWriter_NoRotationUnderLimit(t *testing.T) {
 }
 
 func TestCreateInstance_RejectsEmptyFields(t *testing.T) {
-	w := &SandboxWorker{
+	w := &LocalWorker{
 		instances: make(map[string]*managedInstance),
 		dataDir:   t.TempDir(),
 	}

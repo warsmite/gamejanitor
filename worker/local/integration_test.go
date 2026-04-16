@@ -1,6 +1,6 @@
 //go:build integration
 
-package sandbox
+package local
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 
 // Integration tests verify real sandbox behavior — process isolation, file
 // ownership, signal delivery, volume writes. Requires bwrap on the host.
-// Run with: go test -tags integration ./worker/sandbox/
+// Run with: go test -tags integration ./worker/local/
 
 func skipIfNoBwrap(t *testing.T) {
 	t.Helper()
@@ -36,8 +36,8 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-// newTestWorker creates a SandboxWorker with a temp data dir for testing.
-func newTestWorker(t *testing.T) *SandboxWorker {
+// newTestWorker creates a LocalWorker with a temp data dir for testing.
+func newTestWorker(t *testing.T) *LocalWorker {
 	t.Helper()
 	dataDir := t.TempDir()
 	log := testLogger()
@@ -45,12 +45,12 @@ func newTestWorker(t *testing.T) *SandboxWorker {
 	paths, err := resolvePaths(dataDir, log)
 	require.NoError(t, err)
 
-	w := &SandboxWorker{
+	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		tracker:   worker.NewInstanceTracker(log),
+		tracker:   NewInstanceTracker(log),
 	}
 	w.resolve = w.volumeResolver()
 	return w
@@ -487,28 +487,28 @@ while true; do sleep 1; done
 	assert.NoFileExists(t, filepath.Join(dir, "state.json"))
 }
 
-// newTestWorkerWithDir creates a SandboxWorker with a specific data dir (no recovery).
-func newTestWorkerWithDir(t *testing.T, dataDir string) *SandboxWorker {
+// newTestWorkerWithDir creates a LocalWorker with a specific data dir (no recovery).
+func newTestWorkerWithDir(t *testing.T, dataDir string) *LocalWorker {
 	t.Helper()
 	log := testLogger()
 
 	paths, err := resolvePaths(dataDir, log)
 	require.NoError(t, err)
 
-	w := &SandboxWorker{
+	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
 		paths:     paths,
 		instances: make(map[string]*managedInstance),
-		tracker:   worker.NewInstanceTracker(log),
+		tracker:   NewInstanceTracker(log),
 	}
 	w.resolve = w.volumeResolver()
 	return w
 }
 
-// newTestWorkerWithRecovery creates a SandboxWorker that runs recoverInstances,
+// newTestWorkerWithRecovery creates a LocalWorker that runs recoverInstances,
 // simulating a gamejanitor restart against the same dataDir.
-func newTestWorkerWithRecovery(t *testing.T, dataDir string) *SandboxWorker {
+func newTestWorkerWithRecovery(t *testing.T, dataDir string) *LocalWorker {
 	t.Helper()
 	w := newTestWorkerWithDir(t, dataDir)
 	w.recoverInstances()

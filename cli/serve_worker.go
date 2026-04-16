@@ -22,7 +22,7 @@ import (
 	"github.com/warsmite/gamejanitor/worker"
 	"github.com/warsmite/gamejanitor/worker/agent"
 	pb "github.com/warsmite/gamejanitor/worker/proto"
-	"github.com/warsmite/gamejanitor/worker/sandbox"
+	"github.com/warsmite/gamejanitor/worker/local"
 	"google.golang.org/grpc"
 	grpcCredentials "google.golang.org/grpc/credentials"
 )
@@ -40,7 +40,7 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	localWorker := sandbox.New(gameStore, cfg.DataDir, logger)
+	localWorker := local.New(gameStore, cfg.DataDir, logger)
 
 	// Load worker TLS config from config file or auto-discovery
 	workerTLSConfig := loadWorkerTLS(cfg, logger)

@@ -564,7 +564,7 @@ func (a *Agent) EnsureDepot(req *pb.EnsureDepotRequest, stream pb.WorkerService_
 		})
 	}
 
-	result, err := worker.EnsureDepot(stream.Context(), a.dataDir, a.log, req.AppId, req.Branch, req.AccountName, req.RefreshToken, onProgress)
+	result, err := a.worker.EnsureDepot(stream.Context(), req.AppId, req.Branch, req.AccountName, req.RefreshToken, onProgress)
 	if err != nil {
 		return err
 	}

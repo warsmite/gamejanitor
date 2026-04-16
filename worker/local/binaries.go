@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/warsmite/gamejanitor/worker/sandbox/embedded"
+	"github.com/warsmite/gamejanitor/worker/local/embedded"
 )
 
 // ensureBwrap returns the path to the bwrap binary.

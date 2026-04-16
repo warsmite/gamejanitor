@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"archive/tar"
@@ -281,7 +281,7 @@ func ociTransport() http.RoundTripper {
 	}
 }
 
-func copyFile(src, dst string) error {
+func copyOCIFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -373,7 +373,7 @@ func extractTarLayer(r io.Reader, extractDir string) error {
 			}
 			if err := os.Link(linkTarget, targetPath); err != nil {
 				// Hard links can fail on some filesystems or due to permissions — fall back to copy
-				if copyErr := copyFile(linkTarget, targetPath); copyErr != nil {
+				if copyErr := copyOCIFile(linkTarget, targetPath); copyErr != nil {
 					return fmt.Errorf("creating hard link %s -> %s: %w (copy fallback also failed: %v)", header.Name, header.Linkname, err, copyErr)
 				}
 			}

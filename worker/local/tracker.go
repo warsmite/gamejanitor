@@ -1,4 +1,4 @@
-package worker
+package local
 
 import (
 	"bufio"
@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // InstanceTracker maintains authoritative instance state on the worker side.
@@ -16,14 +18,14 @@ import (
 type InstanceTracker struct {
 	mu        sync.Mutex
 	instances map[string]*TrackedInstance
-	ch        chan InstanceStateUpdate
+	ch        chan worker.InstanceStateUpdate
 	log       *slog.Logger
 }
 
 type TrackedInstance struct {
 	ID           string
 	Name         string
-	State        InstanceState
+	State        worker.InstanceState
 	Ready        bool
 	ReadyAt      time.Time
 	ExitCode     int
@@ -37,7 +39,7 @@ type TrackedInstance struct {
 func NewInstanceTracker(log *slog.Logger) *InstanceTracker {
 	return &InstanceTracker{
 		instances: make(map[string]*TrackedInstance),
-		ch:        make(chan InstanceStateUpdate, 64),
+		ch:        make(chan worker.InstanceStateUpdate, 64),
 		log:       log,
 	}
 }
@@ -54,7 +56,7 @@ func (t *InstanceTracker) Track(id, name string) {
 
 // SetState transitions an instance to the given state and emits an update.
 // Does not touch Ready — that is managed separately via SetReady.
-func (t *InstanceTracker) SetState(id string, state InstanceState) {
+func (t *InstanceTracker) SetState(id string, state worker.InstanceState) {
 	t.mu.Lock()
 	inst, ok := t.instances[id]
 	if !ok {
@@ -66,11 +68,11 @@ func (t *InstanceTracker) SetState(id string, state InstanceState) {
 	inst.State = state
 
 	switch state {
-	case StateRunning:
+	case worker.StateRunning:
 		if inst.StartedAt.IsZero() {
 			inst.StartedAt = time.Now()
 		}
-	case StateExited:
+	case worker.StateExited:
 		inst.ExitedAt = time.Now()
 		if inst.cancel != nil {
 			inst.cancel()
@@ -116,7 +118,7 @@ func (t *InstanceTracker) SetExited(id string, exitCode int) {
 		return
 	}
 
-	inst.State = StateExited
+	inst.State = worker.StateExited
 	inst.ExitCode = exitCode
 	inst.ExitedAt = time.Now()
 	if inst.cancel != nil {
@@ -160,7 +162,7 @@ func (t *InstanceTracker) Remove(id string) {
 }
 
 // Get returns the current state of a tracked instance, or nil if not found.
-func (t *InstanceTracker) Get(id string) *InstanceStateUpdate {
+func (t *InstanceTracker) Get(id string) *worker.InstanceStateUpdate {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	inst, ok := t.instances[id]
@@ -172,10 +174,10 @@ func (t *InstanceTracker) Get(id string) *InstanceStateUpdate {
 }
 
 // Snapshot returns the current state of all tracked instances.
-func (t *InstanceTracker) Snapshot() []InstanceStateUpdate {
+func (t *InstanceTracker) Snapshot() []worker.InstanceStateUpdate {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	updates := make([]InstanceStateUpdate, 0, len(t.instances))
+	updates := make([]worker.InstanceStateUpdate, 0, len(t.instances))
 	for _, inst := range t.instances {
 		updates = append(updates, t.snapshotLocked(inst))
 	}
@@ -184,7 +186,7 @@ func (t *InstanceTracker) Snapshot() []InstanceStateUpdate {
 
 // Events returns the channel that receives state updates.
 // Consumed by the gRPC agent to stream to the controller.
-func (t *InstanceTracker) Events() <-chan InstanceStateUpdate {
+func (t *InstanceTracker) Events() <-chan worker.InstanceStateUpdate {
 	return t.ch
 }
 
@@ -193,7 +195,7 @@ func (t *InstanceTracker) Events() <-chan InstanceStateUpdate {
 // Ready is set immediately (we have no way to detect readiness — treat process
 // alive as ready).
 //
-// The instance's State must already be StateRunning by this point; Ready is
+// The instance's State must already be worker.StateRunning by this point; Ready is
 // a separate orthogonal signal.
 func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern string, logReader io.ReadCloser) {
 	t.mu.Lock()
@@ -231,11 +233,11 @@ func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern
 
 // Recover re-registers an instance that survived a worker restart.
 // Used by sandbox recovery to re-add instances to the tracker without
-// emitting state transitions (the controller will get these via GetAllInstanceStates).
+// emitting state transitions (the controller will get these via GetAllworker.InstanceStates).
 // Recovered running instances are treated as ready — we can't re-observe the
 // ready pattern from mid-run logs, and the process was accepting work before
 // the worker restarted.
-func (t *InstanceTracker) Recover(id, name string, state InstanceState, startedAt time.Time, installed bool) {
+func (t *InstanceTracker) Recover(id, name string, state worker.InstanceState, startedAt time.Time, installed bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	inst := &TrackedInstance{
@@ -245,7 +247,7 @@ func (t *InstanceTracker) Recover(id, name string, state InstanceState, startedA
 		StartedAt: startedAt,
 		Installed: installed,
 	}
-	if state == StateRunning {
+	if state == worker.StateRunning {
 		inst.Ready = true
 		inst.ReadyAt = startedAt
 	}
@@ -283,8 +285,8 @@ func (t *InstanceTracker) watchLogsLoop(ctx context.Context, id string, re *rege
 	}
 }
 
-func (t *InstanceTracker) snapshotLocked(inst *TrackedInstance) InstanceStateUpdate {
-	return InstanceStateUpdate{
+func (t *InstanceTracker) snapshotLocked(inst *TrackedInstance) worker.InstanceStateUpdate {
+	return worker.InstanceStateUpdate{
 		InstanceID:   inst.ID,
 		InstanceName: inst.Name,
 		State:        inst.State,
@@ -297,7 +299,7 @@ func (t *InstanceTracker) snapshotLocked(inst *TrackedInstance) InstanceStateUpd
 	}
 }
 
-func (t *InstanceTracker) emit(update InstanceStateUpdate) {
+func (t *InstanceTracker) emit(update worker.InstanceStateUpdate) {
 	select {
 	case t.ch <- update:
 	default:

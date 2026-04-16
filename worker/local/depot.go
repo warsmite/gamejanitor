@@ -1,15 +1,16 @@
-package worker
+package local
 
 import (
 	"context"
 	"log/slog"
 
 	"github.com/warsmite/gamejanitor/steam"
+	"github.com/warsmite/gamejanitor/worker"
 )
 
 // EnsureDepot downloads game files for Steam games to the worker's local cache.
 // Shared implementation used by LocalWorker, ProcessWorker, and the worker Agent.
-func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID uint32, branch, accountName, refreshToken string, onProgress func(DepotProgress)) (*DepotResult, error) {
+func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID uint32, branch, accountName, refreshToken string, onProgress func(worker.DepotProgress)) (*worker.DepotResult, error) {
 	creds := &staticCredentials{account: accountName, token: refreshToken}
 	svc := steam.NewService(log, dataDir, creds)
 	defer svc.Close()
@@ -17,7 +18,7 @@ func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID ui
 	var progressFn steam.OnProgressFunc
 	if onProgress != nil {
 		progressFn = func(completedBytes, totalBytes uint64, completedChunks, totalChunks int) {
-			onProgress(DepotProgress{
+			onProgress(worker.DepotProgress{
 				CompletedBytes:  completedBytes,
 				TotalBytes:      totalBytes,
 				CompletedChunks: completedChunks,
@@ -31,7 +32,7 @@ func EnsureDepot(ctx context.Context, dataDir string, log *slog.Logger, appID ui
 		return nil, err
 	}
 
-	return &DepotResult{
+	return &worker.DepotResult{
 		DepotDir:        result.DepotDir,
 		Cached:          result.Cached,
 		BytesDownloaded: result.BytesDownloaded,

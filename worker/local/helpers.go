@@ -1,4 +1,4 @@
-package sandbox
+package local
 
 import (
 	"bufio"
@@ -251,10 +251,10 @@ type followReader struct {
 	f          *os.File
 	ctx        context.Context
 	instanceID string
-	worker     *SandboxWorker
+	worker     *LocalWorker
 }
 
-func newFollowReader(ctx context.Context, f *os.File, instanceID string, w *SandboxWorker) *followReader {
+func newFollowReader(ctx context.Context, f *os.File, instanceID string, w *LocalWorker) *followReader {
 	return &followReader{f: f, ctx: ctx, instanceID: instanceID, worker: w}
 }
 
