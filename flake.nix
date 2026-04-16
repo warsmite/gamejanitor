@@ -506,6 +506,29 @@
             exit $EXIT
           '';
 
+          fetch-crun = pkgs.writeShellScriptBin "fetch-crun" ''
+            set -e
+            CRUN_VERSION="1.24"
+            DEST="worker/local/runtime/embedded"
+            mkdir -p "$DEST"
+            for arch in x86_64 aarch64; do
+              OUT="$DEST/crun-$arch"
+              if [ -f "$OUT" ]; then
+                echo "crun-$arch already present, skipping"
+                continue
+              fi
+              case "$arch" in
+                x86_64)  GHARCH="amd64" ;;
+                aarch64) GHARCH="arm64" ;;
+              esac
+              URL="https://github.com/containers/crun/releases/download/$CRUN_VERSION/crun-$CRUN_VERSION-linux-$GHARCH"
+              echo "Downloading crun $CRUN_VERSION for $arch..."
+              ${pkgs.curl}/bin/curl -sL "$URL" -o "$OUT"
+              chmod +x "$OUT"
+            done
+            echo "crun binaries ready in $DEST"
+          '';
+
           loc = pkgs.writeShellScriptBin "loc" ''
             ${pkgs.tokei}/bin/tokei . \
               --exclude vendor --exclude node_modules --exclude 'worker/proto/*.pb.go' \
@@ -539,6 +562,7 @@
             gen-proto
             update-vendor-hash
             vendor-check
+            fetch-crun
             loc
             cleanup
             test-all
