@@ -3,6 +3,8 @@ package testutil
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/warsmite/gamejanitor/store"
@@ -32,4 +34,17 @@ func NewTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { database.Close() })
 
 	return database
+}
+
+// StrPtr returns a pointer to s. Helper for building model values in tests
+// where optional string fields are *string.
+func StrPtr(s string) *string { return &s }
+
+// TestLogger returns a quiet logger for tests. Set DEBUG_TESTS=1 to see output.
+func TestLogger() *slog.Logger {
+	level := slog.LevelError
+	if os.Getenv("DEBUG_TESTS") != "" {
+		level = slog.LevelDebug
+	}
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 }
