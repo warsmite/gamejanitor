@@ -19,16 +19,18 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/util/naming"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/local/runtime"
 )
 
-// LocalWorker implements Worker using bwrap for isolation and systemd for
-// lifecycle. Uses host networking. No external daemon required.
+// LocalWorker implements Worker using crun for OCI container execution and
+// systemd for lifecycle management. Uses host networking. No external daemon required.
 type LocalWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
 	resolve   VolumeResolver
 	paths     *systemPaths
+	rt        *runtime.Runtime
 
 	mu        sync.Mutex
 	instances map[string]*managedInstance
@@ -98,27 +100,29 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 
 	paths, err := resolvePaths(dataDir, log)
 	if err != nil {
-		log.Error("sandbox runtime initialization failed", "error", err)
+		log.Error("runtime initialization failed", "error", err)
 		paths = &systemPaths{IsRoot: os.Getuid() == 0}
 	}
 
-	// Sandbox uses --unshare-user which maps the caller's UID to the game
-	// user inside the namespace. Files must stay owned by the caller on the
-	// host — chowning to UID 1001 would make them inaccessible inside.
+	rt, err := runtime.New(dataDir, log)
+	if err != nil {
+		log.Error("crun runtime initialization failed", "error", err)
+	}
 
 	w := &LocalWorker{
 		log:       log,
 		gameStore: gameStore,
 		dataDir:   dataDir,
 		paths:     paths,
+		rt:        rt,
 		instances: make(map[string]*managedInstance),
 	}
 	w.tracker = NewInstanceTracker(log)
 	w.resolve = w.volumeResolver()
 	w.recoverInstances()
 
-	log.Info("sandbox runtime ready",
-		"bwrap", paths.Bwrap,
+	log.Info("runtime ready",
+		"crun", rt != nil,
 		"systemd", paths.hasSystemd(),
 		"root", paths.IsRoot)
 	return w
@@ -215,13 +219,83 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("image %s has no entrypoint or cmd", manifest.Image)
 	}
 
-	// Build bwrap command with full isolation
-	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.dataDir)
-	bwrapArgs = append(bwrapArgs, "--")
-	bwrapArgs = append(bwrapArgs, cmdArgs...)
+	uid, gid := parseImageUser(imgCfg.User, rootFS)
 
-	// Wrap in systemd-run for lifecycle + cgroups.
-	cmd := buildSystemdCommand(id, manifest, bwrapArgs, w.paths)
+	// Build environment: image config env + manifest env (user overrides)
+	// HOME must always be set — many programs (Steam SDK, .NET, etc.) expect it
+	env := []string{"HOME=/home/gameserver"}
+	env = append(env, imgCfg.Env...)
+	env = append(env, manifest.Env...)
+
+	// Build bind mounts
+	var mounts []runtime.Mount
+
+	// DNS config
+	resolvConf := filepath.Join(w.dataDir, "resolv.conf")
+	if _, err := os.Stat(resolvConf); err == nil {
+		mounts = append(mounts, runtime.Mount{Source: resolvConf, Destination: "/etc/resolv.conf", Options: []string{"rbind", "ro"}})
+	} else if _, err := os.Stat("/etc/resolv.conf"); err == nil {
+		mounts = append(mounts, runtime.Mount{Source: "/etc/resolv.conf", Destination: "/etc/resolv.conf", Options: []string{"rbind", "ro"}})
+	}
+
+	// Host SSL certs if the rootfs doesn't have its own
+	rootFSCerts := filepath.Join(rootFS, "etc/ssl/certs/ca-certificates.crt")
+	if _, err := os.Stat(rootFSCerts); err != nil {
+		for _, certPath := range []struct{ src, dst string }{
+			{"/etc/ssl/certs", "/etc/ssl/certs"},
+			{"/etc/pki/tls/certs", "/etc/pki/tls/certs"},
+		} {
+			if _, err := os.Stat(certPath.src); err == nil {
+				mounts = append(mounts, runtime.Mount{Source: certPath.src, Destination: certPath.dst, Options: []string{"rbind", "ro"}})
+			}
+		}
+	}
+
+	// Volume mount
+	if manifest.VolumeName != "" {
+		volumeDir := filepath.Join(w.dataDir, "volumes", manifest.VolumeName)
+		mounts = append(mounts, runtime.Mount{Source: volumeDir, Destination: "/data", Options: []string{"rbind", "rw"}})
+	}
+
+	// Bind-mount host paths (scripts, defaults, depot)
+	for _, bind := range manifest.Binds {
+		parts := strings.SplitN(bind, ":", 3)
+		if len(parts) >= 2 {
+			opts := []string{"rbind", "rw"}
+			if len(parts) == 3 && strings.Contains(parts[2], "ro") {
+				opts = []string{"rbind", "ro"}
+			}
+			mounts = append(mounts, runtime.Mount{Source: parts[0], Destination: parts[1], Options: opts})
+		}
+	}
+
+	workDir := imgCfg.WorkingDir
+	if workDir == "" {
+		workDir = "/data"
+	}
+
+	bundleDir := filepath.Join(dir, "bundle")
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		return fmt.Errorf("creating bundle dir: %w", err)
+	}
+
+	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
+		RootFS:   rootFS,
+		Env:      env,
+		Cmd:      cmdArgs,
+		WorkDir:  workDir,
+		Hostname: manifest.Name,
+		Binds:    mounts,
+		UID:      uid,
+		GID:      gid,
+		MemoryMB: manifest.MemoryLimitMB,
+		CPUQuota: manifest.CPULimit,
+	}); err != nil {
+		return fmt.Errorf("preparing OCI bundle: %w", err)
+	}
+
+	// Wrap in systemd-run for lifecycle management
+	cmd := buildSystemdCrunCommand(id, bundleDir, w.rt, w.paths)
 
 	// Log file with size-based rotation (50MB cap, 1 backup)
 	logPath := filepath.Join(dir, "output.log")
@@ -287,6 +361,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		if inst.logWriter != nil {
 			inst.logWriter.Close()
 		}
+		w.rt.Delete(id, true)
 		stopSystemdUnit(inst.unitName, w.paths, w.log)
 
 		uptime := time.Since(inst.startedAt)
@@ -328,16 +403,14 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 
 	w.log.Info("StopInstance called", "id", id, "pid", inst.pid, "uptime", time.Since(inst.startedAt).Round(time.Second))
 
-	// Send SIGTERM via systemctl kill — most reliable, reaches all processes in the scope
-	if w.paths.hasSystemd() {
-		prefix := systemctlPrefix(w.paths)
-		exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=TERM", inst.unitName+".scope")...).Run()
-	}
-	// Also send via process group and cgroup as fallback
-	killCgroupProcesses(inst.unitName, syscall.SIGTERM, w.paths, w.log)
-	if inst.pid > 0 {
-		syscall.Kill(-inst.pid, syscall.SIGTERM)
-		syscall.Kill(inst.pid, syscall.SIGTERM)
+	// Send SIGTERM via crun kill
+	if err := w.rt.Kill(id, "SIGTERM"); err != nil {
+		w.log.Debug("crun kill SIGTERM failed, trying systemd fallback", "id", id, "error", err)
+		// Fallback to systemctl kill
+		if w.paths.hasSystemd() {
+			prefix := systemctlPrefix(w.paths)
+			exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=TERM", inst.unitName+".scope")...).Run()
+		}
 	}
 
 	select {
@@ -345,15 +418,10 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		// Force kill everything in the scope
-		if w.paths.hasSystemd() {
-			prefix := systemctlPrefix(w.paths)
-			exec.Command(w.paths.Systemctl, append(prefix, "kill", "--signal=KILL", inst.unitName+".scope")...).Run()
-		}
-		killCgroupProcesses(inst.unitName, syscall.SIGKILL, w.paths, w.log)
-		if inst.pid > 0 {
-			syscall.Kill(-inst.pid, syscall.SIGKILL)
-		}
+		// Force kill via crun
+		w.rt.Kill(id, "SIGKILL")
+		w.rt.Delete(id, true)
+		// Fallback: kill systemd scope
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 		return nil
@@ -372,6 +440,8 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 
 	if ok && !inst.exited.Load() {
 		w.log.Warn("RemoveInstance: killing running instance", "id", id, "pid", inst.pid)
+		w.rt.Kill(id, "SIGKILL")
+		w.rt.Delete(id, true)
 		killSystemdUnit(inst.unitName, w.paths, w.log)
 		<-inst.done
 	}
@@ -433,121 +503,27 @@ func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string)
 		return 1, "", "", fmt.Errorf("instance %s not found or not running", instanceID)
 	}
 
-	// Find the init PID inside the sandbox (bwrap's child) by reading the cgroup
-	targetPID := findSandboxInitPID(inst.unitName, inst.pid, w.paths)
-	if targetPID <= 0 {
-		return 1, "", "", fmt.Errorf("could not find sandbox process for instance %s", instanceID)
-	}
-
-	// Enter the running instance's namespaces and execute the command
-	nsArgs := []string{
-		fmt.Sprintf("--target=%d", targetPID),
-		"--mount", "--pid",
-	}
-	if w.paths.IsRoot {
-		// Root can enter all namespaces directly
-	} else {
-		nsArgs = append(nsArgs, "--user", "--preserve-credentials")
-	}
-
-	// Inherit the sandbox's environment (PATH, RCON_PORT, etc.) so scripts
-	// can find binaries and config inside the sandbox. The nsenter target is
-	// the inner bwrap which doesn't have the bwrap-configured env vars — those
-	// are set on its children (the actual entrypoint). Find a child to read from.
-	envPID := findChildPID(targetPID)
-	if envPID == 0 {
-		envPID = targetPID
-	}
-	nsArgs = append(nsArgs, "--")
-	nsArgs = append(nsArgs, "/usr/bin/env", "-i")
-	nsArgs = append(nsArgs, sandboxEnv(envPID)...)
-	nsArgs = append(nsArgs, cmd...)
-
-	execCmd := exec.CommandContext(ctx, w.paths.Nsenter, nsArgs...)
-	var stdoutBuf, stderrBuf safeBuffer
-	execCmd.Stdout = &stdoutBuf
-	execCmd.Stderr = &stderrBuf
-
-	err := execCmd.Run()
-	exitCode := 0
+	// Build environment from manifest: image config env + manifest env
+	dir := w.instanceDir(instanceID)
+	manifestData, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		} else {
-			return 1, "", "", fmt.Errorf("exec in instance %s: %w", instanceID, err)
-		}
+		return 1, "", "", fmt.Errorf("reading manifest for exec: %w", err)
+	}
+	var manifest instanceManifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		return 1, "", "", fmt.Errorf("parsing manifest for exec: %w", err)
 	}
 
-	return exitCode, string(stdoutBuf.Bytes()), string(stderrBuf.Bytes()), nil
-}
-
-// findChildPID returns the first child PID of the given process, or 0 if none found.
-func findChildPID(parentPID int) int {
-	pids := childPIDs(parentPID)
-	if len(pids) > 0 {
-		return pids[0]
-	}
-	return 0
-}
-
-// sandboxEnv reads the environment of a running process from /proc/<pid>/environ
-// and returns it as a slice of "KEY=VALUE" strings suitable for passing to `env`.
-func sandboxEnv(pid int) []string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	_, imgCfg, err := imageRootFS(w.imagesDir(), manifest.Image)
 	if err != nil {
-		return nil
-	}
-	var env []string
-	for _, entry := range strings.Split(string(data), "\x00") {
-		if entry != "" {
-			env = append(env, entry)
-		}
-	}
-	return env
-}
-
-// findSandboxInitPID finds the PID of the init process inside the bwrap sandbox.
-// bwrap forks: the outer process stays in the host namespaces while the inner
-// process (and its children) live inside the sandbox's mount/PID namespaces.
-// We need a PID that's actually inside the sandbox so nsenter can access the
-// bind-mounted /scripts directory. We detect this via /proc/<pid>/status NSpid:
-// processes inside a nested PID namespace have multiple NSpid entries.
-func findSandboxInitPID(unitName string, parentPID int, paths *systemPaths) int {
-	pids := cgroupPIDs(unitName, paths)
-	if len(pids) == 0 {
-		pids = childPIDs(parentPID)
+		return 1, "", "", fmt.Errorf("resolving image config for exec: %w", err)
 	}
 
-	// Find the lowest PID that's inside a nested PID namespace (NSpid has 2+ entries).
-	// This is the sandbox init process (PID 1 inside the namespace).
-	lowestNamespacedPID := 0
-	for _, pid := range pids {
-		if !isInNestedPIDNamespace(pid) {
-			continue
-		}
-		if lowestNamespacedPID == 0 || pid < lowestNamespacedPID {
-			lowestNamespacedPID = pid
-		}
-	}
-	return lowestNamespacedPID
-}
+	env := []string{"HOME=/home/gameserver"}
+	env = append(env, imgCfg.Env...)
+	env = append(env, manifest.Env...)
 
-// isInNestedPIDNamespace checks if a process lives inside a nested PID namespace
-// by reading its NSpid line from /proc/<pid>/status. Processes in a child PID
-// namespace have multiple NSpid values (e.g. "NSpid: 12345  1").
-func isInNestedPIDNamespace(pid int) bool {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "NSpid:") {
-			fields := strings.Fields(line)
-			// "NSpid: <host_pid> <ns_pid>" = 3+ fields means nested namespace
-			return len(fields) >= 3
-		}
-	}
-	return false
+	return w.rt.Exec(instanceID, cmd, env)
 }
 
 // cgroupPIDs returns all PIDs in the systemd scope for the given unit.
@@ -576,34 +552,6 @@ func cgroupPIDs(unitName string, paths *systemPaths) []int {
 		pid, err := strconv.Atoi(strings.TrimSpace(line))
 		if err == nil && pid > 0 {
 			pids = append(pids, pid)
-		}
-	}
-	return pids
-}
-
-// childPIDs returns PIDs whose parent is the given PID (fallback when cgroup lookup fails).
-func childPIDs(parentPID int) []int {
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return nil
-	}
-	var pids []int
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil || pid <= 0 {
-			continue
-		}
-		stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-		if err != nil {
-			continue
-		}
-		// stat format: pid (comm) state ppid ...
-		fields := strings.Fields(string(stat))
-		if len(fields) > 3 {
-			ppid, _ := strconv.Atoi(fields[3])
-			if ppid == parentPID {
-				pids = append(pids, pid)
-			}
 		}
 	}
 	return pids
@@ -675,9 +623,7 @@ func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("creating volume: %w", err)
 	}
-	// No chown. bwrap --unshare-user maps the caller's UID to appear as the
-	// image's UID inside the namespace. Root-owned files on the host are
-	// accessible as the game user inside the sandbox.
+	// No chown. crun handles UID mapping via the OCI spec.
 	return nil
 }
 
@@ -973,6 +919,7 @@ func (w *LocalWorker) recoverInstances() {
 				if !isSystemdScopeActive(inst.unitName, w.paths) {
 					inst.exited.Store(true)
 					inst.exitCode.Store(-1)
+					w.rt.Delete(inst.id, true)
 					os.Remove(filepath.Join(dir, "state.json"))
 
 					w.log.Info("recovered instance exited", "id", inst.id,

@@ -1,18 +1,22 @@
 package local
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/warsmite/gamejanitor/worker/local/runtime"
 )
 
-// buildSystemdCommand wraps bwrap in systemd-run for lifecycle + cgroups.
-func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []string, paths *systemPaths) *exec.Cmd {
-	innerArgs := append([]string{paths.Bwrap}, bwrapArgs...)
+// buildSystemdCrunCommand wraps crun run in systemd-run for lifecycle management.
+// Resource limits (memory, CPU) are handled by crun via the OCI config.json,
+// so the systemd scope is only used for lifecycle (stop/kill/recover).
+func buildSystemdCrunCommand(id string, bundleDir string, rt *runtime.Runtime, paths *systemPaths) *exec.Cmd {
+	crunArgs := []string{"--root", rt.StateDir(), "run", "--bundle", bundleDir, id}
+	innerArgs := append([]string{rt.CrunPath()}, crunArgs...)
 
 	if !paths.hasSystemd() {
 		return exec.Command(innerArgs[0], innerArgs[1:]...)
@@ -25,17 +29,6 @@ func buildSystemdCommand(id string, manifest instanceManifest, bwrapArgs []strin
 	} else {
 		sdArgs = []string{"--user", "--scope", "--unit=" + unitName}
 	}
-
-	if manifest.MemoryLimitMB > 0 {
-		sdArgs = append(sdArgs, fmt.Sprintf("--property=MemoryMax=%dM", manifest.MemoryLimitMB))
-	}
-	if manifest.CPULimit > 0 {
-		sdArgs = append(sdArgs, fmt.Sprintf("--property=CPUQuota=%d%%", int(manifest.CPULimit*100)))
-	}
-
-	// Don't restrict socket binding — games may bind internal ports not
-	// declared in the game definition (e.g. Bedrock's LAN discovery on 19132).
-	// Restricting causes EPERM which some games don't handle gracefully.
 
 	sdArgs = append(sdArgs, "--")
 	sdArgs = append(sdArgs, innerArgs...)

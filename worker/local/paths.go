@@ -10,11 +10,10 @@ import (
 	"strings"
 )
 
-// systemPaths holds resolved paths to system binaries used by the sandbox.
+// systemPaths holds resolved paths to system binaries used by the worker.
 // All paths are resolved once at startup to avoid repeated lookups and
 // PATH issues inside systemd units.
 type systemPaths struct {
-	Bwrap     string
 	Unshare   string
 	Nsenter   string
 	Sh        string
@@ -26,18 +25,10 @@ type systemPaths struct {
 	IsRoot    bool
 }
 
-// resolvePaths finds all required system binaries. Returns an error if
-// critical binaries (bwrap) are missing.
+// resolvePaths finds all required system binaries.
 func resolvePaths(dataDir string, log *slog.Logger) (*systemPaths, error) {
 	p := &systemPaths{
 		IsRoot: os.Getuid() == 0,
-	}
-
-	var err error
-
-	p.Bwrap, err = ensureBwrap(dataDir, log)
-	if err != nil {
-		return nil, fmt.Errorf("bwrap not available: %w", err)
 	}
 
 	// System utilities

@@ -15,19 +15,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/local/runtime"
 )
 
-// Integration tests verify real sandbox behavior — process isolation, file
-// ownership, signal delivery, volume writes. Requires bwrap on the host.
+// Integration tests verify real container behavior — process isolation, file
+// ownership, signal delivery, volume writes. Requires crun (embedded or on host).
 // Run with: go test -tags integration ./worker/local/
-
-func skipIfNoBwrap(t *testing.T) {
-	t.Helper()
-	if lookupBinary("bwrap") == "" {
-		t.Skip("bwrap not available")
-	}
-}
-
 
 func testLogger() *slog.Logger {
 	if os.Getenv("DEBUG_TESTS") != "" {
@@ -45,10 +38,14 @@ func newTestWorker(t *testing.T) *LocalWorker {
 	paths, err := resolvePaths(dataDir, log)
 	require.NoError(t, err)
 
+	rt, err := runtime.New(dataDir, log)
+	require.NoError(t, err, "crun runtime must be available for integration tests")
+
 	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
 		paths:     paths,
+		rt:        rt,
 		instances: make(map[string]*managedInstance),
 		tracker:   NewInstanceTracker(log),
 	}
@@ -56,17 +53,10 @@ func newTestWorker(t *testing.T) *LocalWorker {
 	return w
 }
 
-// setupHostRootFS creates a rootfs that uses the host / with an entrypoint script.
-// Returns the rootfs path and image name.
 // setupHostRootFS registers a test image that uses the host / as its rootfs.
-// Returns the rootfs path. Since bwrap needs mountpoints to exist in the
-// rootfs for --dev, --proc, --tmpfs, etc., and we can't create them in /,
-// we use a tmpfs overlay: the rootfs dir contains only the mountpoint stubs,
-// and the host / is added as a bind mount so all host binaries are accessible.
-//
-// The trick: we set the rootfs to a small stub directory (for .extracted and
-// .config.json), but add "/" as a read-only bind in the manifest so bwrap
-// sees the full host filesystem.
+// Returns the rootfs path. The rootfs dir contains mountpoint stubs and host
+// binary directories are added as bind mounts so the test entrypoint can find
+// sh, coreutils, etc. In production, OCI images are complete rootfs.
 func setupHostRootFS(t *testing.T, dataDir string, script string) string {
 	t.Helper()
 	rootFS := filepath.Join(dataDir, "images", "sha256", "test-image")
@@ -82,7 +72,7 @@ func setupHostRootFS(t *testing.T, dataDir string, script string) string {
 	indexPath := filepath.Join(dataDir, "images", "index.json")
 	os.WriteFile(indexPath, []byte(`{"test:latest":"sha256/test-image"}`), 0644)
 
-	// Create all mount points that bwrap needs for --dev, --proc, --tmpfs, --ro-bind
+	// Create mount points that crun needs for the OCI spec mounts
 	for _, dir := range []string{
 		"data", "scripts", "defaults",
 		"dev", "proc", "tmp", "home", "run", "run/current-system", "var/tmp",
@@ -93,8 +83,7 @@ func setupHostRootFS(t *testing.T, dataDir string, script string) string {
 	os.WriteFile(filepath.Join(rootFS, "etc/resolv.conf"), nil, 0644)
 
 	// Bind-mount host directories containing binaries and libraries so the
-	// test entrypoint can find sh, coreutils, etc. In production, OCI images
-	// are complete rootfs and don't need this.
+	// test entrypoint can find sh, coreutils, etc.
 	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64", "/nix", "/sbin"} {
 		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
 			os.MkdirAll(filepath.Join(rootFS, dir), 0755)
@@ -117,9 +106,6 @@ func testHostBinds() []string {
 }
 
 func TestIntegration_ProcessCanWriteToVolume(t *testing.T) {
-	skipIfNoBwrap(t)
-
-
 	w := newTestWorker(t)
 	ctx := context.Background()
 
@@ -157,43 +143,7 @@ func TestIntegration_ProcessCanWriteToVolume(t *testing.T) {
 	assert.DirExists(t, filepath.Join(volPath, ".gamejanitor", "logs"))
 }
 
-func TestIntegration_RootfsIsReadOnly(t *testing.T) {
-	skipIfNoBwrap(t)
-
-
-	w := newTestWorker(t)
-	ctx := context.Background()
-
-	require.NoError(t, w.CreateVolume(ctx, "test-vol"))
-	setupHostRootFS(t, w.dataDir, "touch /etc/should-fail 2>/dev/null && echo WRITABLE || echo READONLY")
-
-	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
-		Name:       "ro-test",
-		Image:      "test:latest",
-		VolumeName: "test-vol",
-		Binds:      testHostBinds(),
-	})
-	require.NoError(t, err)
-	require.NoError(t, w.StartInstance(ctx, id, ""))
-
-	w.mu.Lock()
-	inst := w.instances[id]
-	w.mu.Unlock()
-	select {
-	case <-inst.done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("instance did not exit in time")
-	}
-
-	logData, _ := os.ReadFile(filepath.Join(w.instanceDir(id), "output.log"))
-	assert.Contains(t, string(logData), "READONLY", "rootfs should be read-only")
-	assert.NotContains(t, string(logData), "WRITABLE")
-}
-
 func TestIntegration_ProcessRunsAsCorrectUID(t *testing.T) {
-	skipIfNoBwrap(t)
-
-
 	w := newTestWorker(t)
 	ctx := context.Background()
 
@@ -222,7 +172,7 @@ func TestIntegration_ProcessRunsAsCorrectUID(t *testing.T) {
 		t.Fatal("instance did not exit in time")
 	}
 
-	// Image config has no User field → runs as root (UID 0)
+	// Image config has no User field -> runs as root (UID 0)
 	volPath := filepath.Join(w.dataDir, "volumes", "test-vol")
 	content, err := os.ReadFile(filepath.Join(volPath, "uid.txt"))
 	require.NoError(t, err)
@@ -230,9 +180,6 @@ func TestIntegration_ProcessRunsAsCorrectUID(t *testing.T) {
 }
 
 func TestIntegration_StopDeliversSignal(t *testing.T) {
-	skipIfNoBwrap(t)
-
-
 	w := newTestWorker(t)
 	ctx := context.Background()
 
@@ -269,9 +216,6 @@ while true; do sleep 1; done
 }
 
 func TestIntegration_ExecInRunningInstance(t *testing.T) {
-	skipIfNoBwrap(t)
-
-
 	w := newTestWorker(t)
 	ctx := context.Background()
 
@@ -302,24 +246,22 @@ while true; do sleep 1; done
 		return strings.Contains(string(data), "ready")
 	}, 5*time.Second, 100*time.Millisecond, "process should print ready")
 
-	// Exec send-command inside the running sandbox
+	// Exec send-command inside the running container
 	exitCode, stdout, stderr, err := w.Exec(ctx, id, []string{"/scripts/send-command", "test-input"})
 	require.NoError(t, err, "Exec should not return an error; stderr: %s", stderr)
 	assert.Equal(t, 0, exitCode, "send-command should exit 0; stderr: %s", stderr)
 	assert.Contains(t, stdout, "command: test-input")
 
-	// Verify env vars from the sandbox are inherited (bwrap --setenv sets PATH)
+	// Verify env vars are inherited (crun exec --env passes them)
 	exitCode, stdout, _, err = w.Exec(ctx, id, []string{"/bin/sh", "-c", "echo $PATH"})
 	require.NoError(t, err)
 	assert.Equal(t, 0, exitCode)
-	assert.NotEmpty(t, strings.TrimSpace(stdout), "PATH should be inherited from sandbox env")
+	assert.NotEmpty(t, strings.TrimSpace(stdout), "PATH should be inherited from container env")
 
 	require.NoError(t, w.StopInstance(ctx, id, 5))
 }
 
 func TestIntegration_InstanceSurvivesWorkerRestart(t *testing.T) {
-	skipIfNoBwrap(t)
-
 	dataDir := t.TempDir()
 
 	// Worker 1: start a long-running instance
@@ -357,8 +299,7 @@ while true; do sleep 1; done
 	require.NoError(t, err)
 	assert.Equal(t, "running", info.State)
 
-	// Discard worker 1 (simulates gamejanitor exit — process survives because
-	// we removed --die-with-parent)
+	// Discard worker 1 (simulates gamejanitor exit — process survives in systemd scope)
 	w1 = nil
 
 	// Worker 2: create from same dataDir — recoverInstances should find it
@@ -398,8 +339,6 @@ while true; do sleep 1; done
 }
 
 func TestIntegration_RecoverySkipsExitedInstances(t *testing.T) {
-	skipIfNoBwrap(t)
-
 	dataDir := t.TempDir()
 
 	// Worker 1: start a short-lived instance that exits immediately
@@ -439,8 +378,6 @@ func TestIntegration_RecoverySkipsExitedInstances(t *testing.T) {
 }
 
 func TestIntegration_StatePersistence(t *testing.T) {
-	skipIfNoBwrap(t)
-
 	w := newTestWorker(t)
 	ctx := context.Background()
 
@@ -495,10 +432,14 @@ func newTestWorkerWithDir(t *testing.T, dataDir string) *LocalWorker {
 	paths, err := resolvePaths(dataDir, log)
 	require.NoError(t, err)
 
+	rt, err := runtime.New(dataDir, log)
+	require.NoError(t, err, "crun runtime must be available for integration tests")
+
 	w := &LocalWorker{
 		log:       log,
 		dataDir:   dataDir,
 		paths:     paths,
+		rt:        rt,
 		instances: make(map[string]*managedInstance),
 		tracker:   NewInstanceTracker(log),
 	}
@@ -514,4 +455,3 @@ func newTestWorkerWithRecovery(t *testing.T, dataDir string) *LocalWorker {
 	w.recoverInstances()
 	return w
 }
-

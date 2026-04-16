@@ -179,6 +179,12 @@ func (r *Runtime) List() ([]ContainerState, error) {
 	return containers, nil
 }
 
+// CrunPath returns the path to the crun binary.
+func (r *Runtime) CrunPath() string { return r.crunPath }
+
+// StateDir returns the crun state directory (--root flag).
+func (r *Runtime) StateDir() string { return r.stateDir }
+
 func (r *Runtime) cmd(args ...string) *exec.Cmd {
 	fullArgs := append([]string{"--root", r.stateDir}, args...)
 	return exec.Command(r.crunPath, fullArgs...)
