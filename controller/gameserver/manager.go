@@ -347,8 +347,19 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	m.log.Info("deleting gameserver", "id", id)
 
 	return live.Delete(ctx, func(ctx context.Context) error {
-		// Remove the live object from the map first so subsequent lookups
-		// return 404 even while the scripts-dir cleanup is running.
+		// Stop pollers BEFORE removing from the map. The stats/query pollers
+		// run in their own goroutines and the next poll cycle would otherwise
+		// race with the DB delete, producing FK constraint errors when it
+		// tries to insert a stats sample for a row that no longer exists.
+		if m.statsPoller != nil {
+			m.statsPoller.StopPolling(id)
+		}
+		if m.querySvc != nil {
+			m.querySvc.StopPolling(id)
+		}
+
+		// Remove the live object from the map. Subsequent lookups return 404
+		// even while the scripts-dir cleanup below is still running.
 		m.mu.Lock()
 		delete(m.gameservers, id)
 		m.mu.Unlock()
@@ -779,39 +790,46 @@ func (m *Manager) RecoverAll(ctx context.Context) error {
 func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w worker.Worker) bool {
 	gs.mu.Lock()
 	instanceID := gs.spec.InstanceID
+	wantedRunning := gs.spec.DesiredState == model.DesiredRunning
 	gs.mu.Unlock()
 
 	if instanceID == nil {
-		m.log.Info("gameserver has no instance, state is stopped", "gameserver", gs.spec.ID)
-		gs.mu.Lock()
-		gs.clearProcessLocked()
-		gs.mu.Unlock()
+		// No instance to recover. If the user wanted it running, they need to
+		// know we're not — record that honestly rather than silently saying stopped.
+		if wantedRunning {
+			m.log.Warn("recovery: gameserver wanted running but has no instance", "gameserver", gs.spec.ID)
+			gs.setError("No instance on recovery — Start to relaunch.")
+		} else {
+			m.log.Info("recovery: gameserver has no instance, state is stopped", "gameserver", gs.spec.ID)
+			gs.mu.Lock()
+			gs.clearProcessLocked()
+			gs.mu.Unlock()
+		}
 		return false
 	}
 
 	info, err := w.InspectInstance(ctx, *instanceID)
 	if err != nil {
-		m.log.Warn("instance not found, clearing", "gameserver", gs.spec.ID, "instance_id", truncID(*instanceID), "error", err)
+		// Instance disappeared on the worker side. Clear our reference but keep
+		// desiredState as-is — flipping it to stopped would silently lie about
+		// user intent. Surface the dropped-operation state via errorReason.
+		m.log.Warn("recovery: instance not found on worker", "gameserver", gs.spec.ID, "instance_id", truncID(*instanceID), "error", err)
 
 		gs.mu.Lock()
 		gs.spec.InstanceID = nil
-		gs.spec.DesiredState = model.DesiredStopped
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
+		m.store.SetInstanceID(gs.spec.ID, nil)
 
-		// Persist to DB
-		dbGS, _ := m.store.GetGameserver(gs.spec.ID)
-		if dbGS != nil {
-			dbGS.InstanceID = nil
-			dbGS.DesiredState = model.DesiredStopped
-			m.store.UpdateGameserver(dbGS)
+		if wantedRunning {
+			gs.setError("Instance missing on recovery — Start to relaunch.")
 		}
-		return true
+		return wantedRunning
 	}
 
 	switch info.State {
 	case "running":
-		m.log.Info("instance running, populating process state", "gameserver", gs.spec.ID)
+		m.log.Info("recovery: instance running, populating process state", "gameserver", gs.spec.ID)
 		gs.mu.Lock()
 		gs.processState = model.ProcessRunning
 		// Recovered instances are treated as ready — the worker was accepting
@@ -828,22 +846,24 @@ func (m *Manager) recoverGameserver(ctx context.Context, gs *LiveGameserver, w w
 			m.querySvc.StartPolling(gs.spec.ID)
 		}
 	case "exited", "dead", "created":
-		m.log.Info("instance is not running, clearing", "gameserver", gs.spec.ID, "state", info.State)
+		m.log.Warn("recovery: instance no longer running", "gameserver", gs.spec.ID, "state", info.State, "exit_code", info.ExitCode)
 
 		gs.mu.Lock()
 		gs.spec.InstanceID = nil
-		gs.spec.DesiredState = model.DesiredStopped
 		gs.clearProcessLocked()
+		if info.State == "exited" {
+			gs.processState = model.ProcessExited
+			gs.exitCode = info.ExitCode
+		}
 		gs.mu.Unlock()
+		m.store.SetInstanceID(gs.spec.ID, nil)
 
-		dbGS, _ := m.store.GetGameserver(gs.spec.ID)
-		if dbGS != nil {
-			dbGS.InstanceID = nil
-			dbGS.DesiredState = model.DesiredStopped
-			m.store.UpdateGameserver(dbGS)
+		if wantedRunning {
+			reason := fmt.Sprintf("Instance %s on recovery (exit %d) — Start to relaunch.", info.State, info.ExitCode)
+			gs.setError(reason)
 		}
 	default:
-		m.log.Warn("instance in unexpected state", "gameserver", gs.spec.ID, "state", info.State)
+		m.log.Warn("recovery: instance in unexpected state", "gameserver", gs.spec.ID, "state", info.State)
 		gs.mu.Lock()
 		gs.clearProcessLocked()
 		gs.mu.Unlock()
