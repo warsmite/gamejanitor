@@ -128,16 +128,16 @@ func (r *Runtime) CreateContainer(id, bundleDir string, stdout, stderr io.Writer
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
 
-	out, err := cmd.CombinedOutput()
+	if err := cmd.Run(); err != nil {
+		stdoutW.Close()
+		stderrW.Close()
+		stdoutR.Close()
+		stderrR.Close()
+		return nil, fmt.Errorf("crun create %s: %w", id, err)
+	}
 	// Close our write ends — the container process has its own copies
 	stdoutW.Close()
 	stderrW.Close()
-
-	if err != nil {
-		stdoutR.Close()
-		stderrR.Close()
-		return nil, fmt.Errorf("crun create %s: %w\n%s", id, err, out)
-	}
 
 	// Container exists, PID available immediately — no polling
 	cs, err := r.State(id)
