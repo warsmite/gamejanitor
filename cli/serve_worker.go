@@ -40,7 +40,10 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	localWorker := local.New(gameStore, cfg.DataDir, logger)
+	localWorker, err := local.New(gameStore, cfg.DataDir, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local worker: %w", err)
+	}
 
 	// Load worker TLS config from config file or auto-discovery
 	workerTLSConfig := loadWorkerTLS(cfg, logger)

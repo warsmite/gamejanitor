@@ -93,11 +93,14 @@
                         CGO_ENABLED=0 go build -o /tmp/gamejanitor-deploy .
                         echo "Binary: $(du -h /tmp/gamejanitor-deploy | cut -f1)"
 
-                        # Ship binary to all targets in parallel
+                        # Ship binary and ensure gamejanitor user exists on all targets
                         for node in "''${TARGETS[@]}"; do
                           echo "Shipping binary to $node..."
                           ( scp /tmp/gamejanitor-deploy "$node:/tmp/gamejanitor-deploy" && \
-                            ssh "$node" "sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev" && \
+                            ssh "$node" "
+                              sudo mv /tmp/gamejanitor-deploy /run/gamejanitor-dev && sudo chmod +x /run/gamejanitor-dev
+                              id gamejanitor &>/dev/null || sudo useradd --system --user-group --create-home --home-dir /var/lib/gamejanitor gamejanitor
+                            " && \
                             echo "  $node: deployed" ) &
                         done
                         wait
@@ -125,8 +128,9 @@
                           sudo systemctl kill --signal=SIGKILL gamejanitor-dev 2>/dev/null || true
                           sudo systemctl stop gamejanitor-dev 2>/dev/null || true
                           sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                          sudo chown -R gamejanitor:gamejanitor /var/lib/gamejanitor
                           sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                            /run/gamejanitor-dev serve \
+                            sudo -u gamejanitor /run/gamejanitor-dev serve \
                               --config /var/lib/gamejanitor/dev-config.yaml \
                               --bind 0.0.0.0 --port 8080 --grpc-port 9090 --sftp-port 2222 \
                               --proxy \
@@ -141,8 +145,8 @@
                         echo "Creating worker tokens..."
                         TOKENDATA=$(ssh "$CONTROLLER" "
                           for w in ''${WORKERS[*]}; do
-                            T=\$(sudo /run/gamejanitor-dev tokens offline create --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null || true)
-                            [ -z \"\$T\" ] && T=\$(sudo /run/gamejanitor-dev tokens offline rotate --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null)
+                            T=\$(sudo -u gamejanitor /run/gamejanitor-dev tokens offline create --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null || true)
+                            [ -z \"\$T\" ] && T=\$(sudo -u gamejanitor /run/gamejanitor-dev tokens offline rotate --name \"\$w\" --type worker -d /var/lib/gamejanitor 2>/dev/null)
                             echo \"\$w=\$T\"
                           done
                         ")
@@ -160,8 +164,9 @@
                             sudo systemctl kill --signal=SIGKILL gamejanitor-dev 2>/dev/null || true
                             sudo systemctl stop gamejanitor-dev 2>/dev/null || true
                             sudo systemctl reset-failed gamejanitor-dev 2>/dev/null || true
+                            sudo chown -R gamejanitor:gamejanitor /var/lib/gamejanitor
                             sudo systemd-run --unit=gamejanitor-dev --property=Restart=always \
-                              /run/gamejanitor-dev serve \
+                              sudo -u gamejanitor /run/gamejanitor-dev serve \
                                 --worker --controller=false \
                                 --bind 0.0.0.0 --sftp-port 2222 \
                                 --controller-address $CONTROLLER:9090 \

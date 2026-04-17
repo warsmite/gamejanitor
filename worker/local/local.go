@@ -48,7 +48,8 @@ type managedInstance struct {
 // instanceState is persisted alongside the manifest so running instances
 // can be re-adopted after a gamejanitor restart.
 type instanceState struct {
-	StartedAt time.Time `json:"started_at"`
+	StartedAt    time.Time `json:"started_at"`
+	ContainerPID int       `json:"container_pid,omitempty"`
 }
 
 func saveInstanceState(dir string, state instanceState) error {
@@ -84,12 +85,12 @@ type instanceManifest struct {
 	Entrypoint    []string             `json:"entrypoint,omitempty"`
 }
 
-func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWorker {
+func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) (*LocalWorker, error) {
 	cleanupOverlayMounts(dataDir, log)
 
 	rt, err := runtime.New(dataDir, log)
 	if err != nil {
-		log.Error("crun runtime initialization failed", "error", err)
+		return nil, fmt.Errorf("runtime initialization failed: %w", err)
 	}
 
 	w := &LocalWorker{
@@ -103,10 +104,8 @@ func New(gameStore *games.GameStore, dataDir string, log *slog.Logger) *LocalWor
 	w.resolve = w.volumeResolver()
 	w.recoverInstances()
 
-	log.Info("runtime ready",
-		"crun", rt != nil,
-		"root", os.Getuid() == 0)
-	return w
+	log.Info("runtime ready")
+	return w, nil
 }
 
 func (w *LocalWorker) volumeResolver() VolumeResolver {

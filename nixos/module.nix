@@ -289,6 +289,12 @@ in {
       }
     ];
 
+    users.users.gamejanitor = {
+      isSystemUser = true;
+      group = "gamejanitor";
+      home = "/var/lib/gamejanitor";
+    };
+    users.groups.gamejanitor = {};
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";
@@ -316,9 +322,8 @@ in {
         Restart = "always";
         RestartSec = 5;
 
-        # DynamicUser works for controller-only nodes but conflicts with
-        # volume ownership on worker nodes — disable it when a local worker is active.
-        DynamicUser = lib.mkDefault (!hasLocalWorker);
+        User = "gamejanitor";
+        Group = "gamejanitor";
         StateDirectory = "gamejanitor";
       };
     };

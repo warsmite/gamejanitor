@@ -185,8 +185,8 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 
 	// Start container inside a pasta-managed network namespace.
-	// pasta creates the namespace and runs crun inside it — no setns needed.
-	handle, err := w.rt.StartContainerWithPasta(id, bundleDir, forwards, logWriter, logWriter)
+	// pasta creates user+net ns and execs crun inside — works root and rootless.
+	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter, logWriter)
 	if err != nil {
 		logWriter.Close()
 		return fmt.Errorf("starting instance: %w", err)
@@ -207,7 +207,8 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	w.mu.Unlock()
 
 	state := instanceState{
-		StartedAt: inst.startedAt,
+		StartedAt:    inst.startedAt,
+		ContainerPID: handle.PID,
 	}
 	if err := saveInstanceState(dir, state); err != nil {
 		w.log.Warn("failed to persist instance state", "id", id, "error", err)
@@ -223,7 +224,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		}
 	}
 
-	// Exit watcher — the worker (inside pasta) handles crun delete
+	// Exit watcher — crun run auto-deletes state on exit, pasta exits when crun exits
 	go func() {
 		exitCode := handle.Wait()
 		inst.exitCode.Store(int32(exitCode))
@@ -265,8 +266,10 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 
 	w.log.Info("StopInstance called", "id", id)
 
+	// Signal the container init directly — works across user namespace boundaries
+	// because the host user owns the process.
 	if err := inst.handle.Signal(syscall.SIGTERM); err != nil {
-		w.log.Debug("signal SIGTERM failed", "id", id, "error", err)
+		w.log.Warn("SIGTERM to container failed", "id", id, "error", err)
 	}
 
 	select {
@@ -274,7 +277,9 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		inst.handle.Signal(syscall.SIGKILL)
+		if err := inst.handle.Signal(syscall.SIGKILL); err != nil {
+			w.log.Warn("SIGKILL to container failed", "id", id, "error", err)
+		}
 		<-inst.done
 		return nil
 	case <-ctx.Done():
@@ -378,7 +383,7 @@ func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string)
 	env = append(env, imgCfg.Env...)
 	env = append(env, manifest.Env...)
 
-	return w.rt.Exec(instanceID, cmd, env)
+	return w.rt.Exec(instanceID, cmd, env, inst.handle.PID)
 }
 
 // --- Worker interface: Logs & Stats ---

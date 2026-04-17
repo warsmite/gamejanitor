@@ -57,12 +57,16 @@ func installSystemd(dataDir string) error {
 		return err
 	}
 
+	// Create the gamejanitor system user if it doesn't exist
+	if err := ensureSystemUser("gamejanitor"); err != nil {
+		return err
+	}
+
 	execStart := fmt.Sprintf("%s serve -d %s", binPath, dataDir)
-	afterUnits := "network-online.target"
 
 	unitContent := fmt.Sprintf(`[Unit]
 Description=Gamejanitor - Game Server Manager
-After=%s
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -70,16 +74,24 @@ Type=simple
 ExecStart=%s
 Restart=on-failure
 RestartSec=5
+User=gamejanitor
+Group=gamejanitor
 
 NoNewPrivileges=true
 ReadWritePaths=%s
 
 [Install]
 WantedBy=multi-user.target
-`, afterUnits, execStart, dataDir)
+`, execStart, dataDir)
 
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("creating data directory: %w", err)
+	}
+
+	// Ensure the data directory is owned by the gamejanitor user
+	chown := exec.Command("chown", "-R", "gamejanitor:gamejanitor", dataDir)
+	if out, err := chown.CombinedOutput(); err != nil {
+		return fmt.Errorf("chowning data directory: %w\n%s", err, out)
 	}
 
 	unitPath := "/etc/systemd/system/gamejanitor.service"
@@ -107,6 +119,19 @@ WantedBy=multi-user.target
 	fmt.Println("  Logs:     journalctl -u gamejanitor -f")
 	fmt.Println("  Stop:     sudo systemctl stop gamejanitor")
 	fmt.Println("  Remove:   sudo systemctl disable gamejanitor && sudo rm " + unitPath)
+	return nil
+}
+
+func ensureSystemUser(name string) error {
+	// Check if user already exists
+	if _, err := exec.Command("id", name).Output(); err == nil {
+		return nil
+	}
+	fmt.Printf("Creating system user %s...\n", name)
+	cmd := exec.Command("useradd", "--system", "--user-group", "--create-home", "--home-dir", "/var/lib/"+name, name)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("creating system user %s: %w\n%s", name, err, out)
+	}
 	return nil
 }
 

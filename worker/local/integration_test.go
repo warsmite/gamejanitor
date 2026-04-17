@@ -24,9 +24,6 @@ import (
 // Run with: go test -tags integration ./worker/local/
 
 func TestMain(m *testing.M) {
-	if runtime.MaybeHandleCrunWorker() {
-		return
-	}
 	os.Exit(m.Run())
 }
 
