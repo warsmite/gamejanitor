@@ -457,7 +457,6 @@ func (a *Agent) RestoreVolume(stream pb.WorkerService_RestoreVolumeServer) error
 
 func (a *Agent) WatchInstanceStates(req *pb.WatchInstanceStatesRequest, stream pb.WorkerService_WatchInstanceStatesServer) error {
 	updates, errs := a.worker.WatchInstanceStates(stream.Context())
-
 	for {
 		select {
 		case <-stream.Context().Done():

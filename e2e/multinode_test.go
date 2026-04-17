@@ -271,10 +271,21 @@ func waitForStatus(t *testing.T, baseURL string, gsID string, targetStatus strin
 			continue
 		}
 		var gs struct {
-			Status string `json:"status"`
+			ProcessState string `json:"process_state"`
+			Ready        bool   `json:"ready"`
+			DesiredState string `json:"desired_state"`
 		}
-		if err := decodeData(resp, &gs); err == nil && gs.Status == targetStatus {
-			return nil
+		if err := decodeData(resp, &gs); err == nil {
+			switch targetStatus {
+			case "running":
+				if gs.ProcessState == "running" && gs.Ready {
+					return nil
+				}
+			case "stopped":
+				if gs.DesiredState == "stopped" && gs.ProcessState != "running" {
+					return nil
+				}
+			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
