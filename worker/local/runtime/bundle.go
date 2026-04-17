@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"syscall"
 )
 
 // BundleConfig describes an OCI container to run.
@@ -21,7 +19,8 @@ type BundleConfig struct {
 	GID       int     // group ID inside the container
 	MemoryMB  int     // memory limit in MB (0 = unlimited)
 	CPUQuota  float64 // CPU limit as fraction of cores (0 = unlimited)
-	NetNSPath string  // path to pre-created network namespace (bind-mounted)
+	NetNSPath  string // path to pre-created network namespace
+	UserNSPath string // path to holder's user namespace (container joins same userns)
 }
 
 // Mount describes a bind mount into the container.
@@ -44,44 +43,7 @@ func PrepareBundle(bundleDir string, cfg BundleConfig) error {
 		return fmt.Errorf("writing config.json: %w", err)
 	}
 
-	// pivot_root requires the rootfs to be on its own mount. Self-bind-mount
-	// the image directory so it appears as a separate mount entry. Without
-	// this, pivot_root fails with EINVAL on hosts where / is a shared mount.
-	if err := selfBindMount(cfg.RootFS); err != nil {
-		return fmt.Errorf("self-bind-mounting rootfs: %w", err)
-	}
-
 	return nil
-}
-
-// CleanupBundle is a no-op placeholder. The rootfs self-bind-mount is shared
-// across containers using the same image and is cleaned up on shutdown, not
-// per-container.
-func CleanupBundle(_ string) {}
-
-// selfBindMount bind-mounts a directory onto itself and marks it private.
-// pivot_root requires the new root to be on a separate, non-shared mount.
-func selfBindMount(path string) error {
-	if !isMountPoint(path) {
-		if err := syscall.Mount(path, path, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-			return err
-		}
-	}
-	return syscall.Mount("", path, "", syscall.MS_PRIVATE, "")
-}
-
-func isMountPoint(path string) bool {
-	data, err := os.ReadFile("/proc/self/mountinfo")
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 5 && fields[4] == path {
-			return true
-		}
-	}
-	return false
 }
 
 func buildSpec(cfg BundleConfig) map[string]any {
@@ -127,14 +89,19 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		netNS["path"] = cfg.NetNSPath
 	}
 
+	namespaces := []map[string]any{
+		{"type": "pid"},
+		netNS,
+		{"type": "ipc"},
+		{"type": "uts"},
+		{"type": "mount"},
+	}
+	if cfg.UserNSPath != "" {
+		namespaces = append(namespaces, map[string]any{"type": "user", "path": cfg.UserNSPath})
+	}
+
 	linux := map[string]any{
-		"namespaces": []map[string]any{
-			{"type": "pid"},
-			netNS,
-			{"type": "ipc"},
-			{"type": "uts"},
-			{"type": "mount"},
-		},
+		"namespaces": namespaces,
 		"rootfsPropagation": "private",
 		"maskedPaths":       defaultMaskedPaths(),
 		"readonlyPaths":     defaultReadonlyPaths(),

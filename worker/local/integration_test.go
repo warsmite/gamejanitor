@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,6 +22,13 @@ import (
 // Integration tests verify real container behavior — process isolation, file
 // ownership, signal delivery, volume writes. Requires crun (embedded or on host).
 // Run with: go test -tags integration ./worker/local/
+
+func TestMain(m *testing.M) {
+	if runtime.MaybeHandleNetNSChild() {
+		return
+	}
+	os.Exit(m.Run())
+}
 
 func testLogger() *slog.Logger {
 	if os.Getenv("DEBUG_TESTS") != "" {
@@ -59,8 +67,8 @@ func setupHostRootFS(t *testing.T, dataDir string, script string) string {
 	os.MkdirAll(rootFS, 0755)
 	os.WriteFile(filepath.Join(rootFS, ".extracted"), []byte("test"), 0644)
 
-	shPath := lookupBinary("sh")
-	require.NotEmpty(t, shPath)
+	shPath, err := exec.LookPath("sh")
+	require.NoError(t, err, "sh must be on PATH for integration tests")
 
 	cfg := fmt.Sprintf(`{"Entrypoint":["%s","-c"],"Cmd":[%q],"Env":["PATH=/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin"],"WorkingDir":"/data"}`, shPath, script)
 	os.WriteFile(filepath.Join(rootFS, ".config.json"), []byte(cfg), 0644)

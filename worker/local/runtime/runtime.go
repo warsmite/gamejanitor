@@ -137,11 +137,14 @@ func (r *Runtime) CreateContainer(id, bundleDir string, stdout, stderr io.Writer
 	cmd.Stderr = stderrW
 
 	if err := cmd.Run(); err != nil {
-		stdoutW.Close()
+		// Read any error output from stderr pipe before closing
 		stderrW.Close()
+		errMsg := make([]byte, 4096)
+		n, _ := stderrR.Read(errMsg)
+		stdoutW.Close()
 		stdoutR.Close()
 		stderrR.Close()
-		return nil, fmt.Errorf("crun create %s: %w", id, err)
+		return nil, fmt.Errorf("crun create %s: %w\n%s", id, err, strings.TrimSpace(string(errMsg[:n])))
 	}
 	// Close our write ends — the container process has its own copies
 	stdoutW.Close()

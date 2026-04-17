@@ -45,7 +45,7 @@ func (w *LocalWorker) removeWithContainer(path string) error {
 		return fmt.Errorf("creating cleanup bundle dir: %w", err)
 	}
 	defer func() {
-		runtime.CleanupBundle(bundleDir)
+
 		os.RemoveAll(bundleDir)
 	}()
 

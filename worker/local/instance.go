@@ -151,13 +151,13 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating bundle dir: %w", err)
 	}
 
-	// Step 1: Create a network namespace and configure it with pasta BEFORE
-	// the container exists. The container will join this pre-configured namespace.
-	nsPath := filepath.Join(dir, "netns")
-	if err := runtime.CreateNetNS(nsPath); err != nil {
+	// Step 1: Create a network namespace via a holder process.
+	netns, err := runtime.CreateNetNS()
+	if err != nil {
 		return fmt.Errorf("creating network namespace: %w", err)
 	}
 
+	// Step 2: Configure the namespace with pasta for port forwarding.
 	var forwards []runtime.PortForward
 	for _, p := range manifest.Ports {
 		forwards = append(forwards, runtime.PortForward{
@@ -168,15 +168,15 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 	var pastaInst *runtime.PastaInstance
 	if len(forwards) > 0 {
-		pi, err := w.rt.StartPasta(id, nsPath, forwards)
+		pi, err := w.rt.StartPasta(id, netns.Path, forwards)
 		if err != nil {
-			runtime.DeleteNetNS(nsPath)
+			netns.Close()
 			return fmt.Errorf("starting pasta network: %w", err)
 		}
 		pastaInst = pi
 	}
 
-	// Step 2: Prepare OCI bundle pointing to the pre-configured network namespace.
+	// Step 3: Prepare OCI bundle pointing to the pre-configured network namespace.
 	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
 		RootFS:    rootFS,
 		Env:       env,
@@ -188,12 +188,13 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		GID:       gid,
 		MemoryMB:  manifest.MemoryLimitMB,
 		CPUQuota:  manifest.CPULimit,
-		NetNSPath: nsPath,
+		NetNSPath:  netns.Path,
+		UserNSPath: netns.UserPath,
 	}); err != nil {
 		if pastaInst != nil {
 			pastaInst.Stop()
 		}
-		runtime.DeleteNetNS(nsPath)
+		netns.Close()
 		return fmt.Errorf("preparing OCI bundle: %w", err)
 	}
 
@@ -203,29 +204,29 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		if pastaInst != nil {
 			pastaInst.Stop()
 		}
-		runtime.DeleteNetNS(nsPath)
+		netns.Close()
 		return fmt.Errorf("creating log file: %w", err)
 	}
 
-	// Step 3: Create container (synchronous). Joins the pre-configured netns.
+	// Step 4: Create container (synchronous). Joins the pre-configured netns.
 	handle, err := w.rt.CreateContainer(id, bundleDir, logWriter, logWriter)
 	if err != nil {
 		logWriter.Close()
 		if pastaInst != nil {
 			pastaInst.Stop()
 		}
-		runtime.DeleteNetNS(nsPath)
+		netns.Close()
 		return fmt.Errorf("creating instance: %w", err)
 	}
 
-	// Step 4: Start the container (unpause). Network is already working.
+	// Step 5: Start the container (unpause). Network is already working.
 	if err := w.rt.StartContainer(id); err != nil {
 		if pastaInst != nil {
 			pastaInst.Stop()
 		}
 		w.rt.Delete(id, true)
 		logWriter.Close()
-		runtime.CleanupBundle(bundleDir)
+
 		return fmt.Errorf("starting instance: %w", err)
 	}
 
@@ -237,6 +238,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		logWriter: logWriter,
 		done:      make(chan struct{}),
 		handle:    handle,
+		netns:     netns,
 	}
 
 	w.mu.Lock()
@@ -272,8 +274,8 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 			pastaInst.Stop()
 		}
 		w.rt.Delete(id, true)
-		runtime.CleanupBundle(bundleDir)
-		runtime.DeleteNetNS(nsPath)
+
+		netns.Close()
 
 		uptime := time.Since(inst.startedAt)
 
@@ -344,9 +346,11 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 		w.tracker.Remove(id)
 	}
 
+	if ok && inst.netns != nil {
+		inst.netns.Close()
+	}
+
 	dir := w.instanceDir(id)
-	runtime.CleanupBundle(filepath.Join(dir, "bundle"))
-	runtime.DeleteNetNS(filepath.Join(dir, "netns"))
 	os.RemoveAll(dir)
 	return nil
 }
