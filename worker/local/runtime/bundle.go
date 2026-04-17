@@ -11,16 +11,17 @@ import (
 
 // BundleConfig describes an OCI container to run.
 type BundleConfig struct {
-	RootFS    string            // path to rootfs directory (overlay mountpoint)
-	Env       []string          // "KEY=VALUE" format
-	Cmd       []string          // entrypoint + args
-	WorkDir   string            // working directory inside the container
-	Hostname  string            // container hostname
-	Binds     []Mount           // bind mounts from host into container
-	UID       int               // user ID inside the container
-	GID       int               // group ID inside the container
-	MemoryMB  int               // memory limit in MB (0 = unlimited)
-	CPUQuota  float64           // CPU limit as fraction of cores (0 = unlimited)
+	RootFS    string  // path to rootfs directory (overlay mountpoint)
+	Env       []string // "KEY=VALUE" format
+	Cmd       []string // entrypoint + args
+	WorkDir   string  // working directory inside the container
+	Hostname  string  // container hostname
+	Binds     []Mount // bind mounts from host into container
+	UID       int     // user ID inside the container
+	GID       int     // group ID inside the container
+	MemoryMB  int     // memory limit in MB (0 = unlimited)
+	CPUQuota  float64 // CPU limit as fraction of cores (0 = unlimited)
+	NetNSPath string  // path to pre-created network namespace (bind-mounted)
 }
 
 // Mount describes a bind mount into the container.
@@ -121,10 +122,15 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		"noNewPrivileges": true,
 	}
 
+	netNS := map[string]any{"type": "network"}
+	if cfg.NetNSPath != "" {
+		netNS["path"] = cfg.NetNSPath
+	}
+
 	linux := map[string]any{
 		"namespaces": []map[string]any{
 			{"type": "pid"},
-			{"type": "network"},
+			netNS,
 			{"type": "ipc"},
 			{"type": "uts"},
 			{"type": "mount"},

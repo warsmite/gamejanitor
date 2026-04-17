@@ -316,13 +316,16 @@ type PastaInstance struct {
 	pid int
 }
 
-// StartPasta starts a pasta process for a container with a known PID.
-func (r *Runtime) StartPasta(containerID string, pid int, forwards []PortForward) (*PastaInstance, error) {
-	uid := os.Getuid()
-	gid := os.Getgid()
+// StartPasta starts a pasta process that provides network connectivity to a
+// pre-created network namespace. The nsPath is a bind-mounted netns file
+// created by CreateNetNS.
+func (r *Runtime) StartPasta(containerID string, nsPath string, forwards []PortForward) (*PastaInstance, error) {
 	args := []string{
+		"--netns", nsPath,
+		"--config-net",
+		"--netns-only",
 		"--ns-ifname", "eth0",
-		"--runas", fmt.Sprintf("%d:%d", uid, gid),
+		"--quiet",
 	}
 
 	for _, fwd := range forwards {
@@ -336,8 +339,6 @@ func (r *Runtime) StartPasta(containerID string, pid int, forwards []PortForward
 			args = append(args, flag, fmt.Sprintf("%d:%d", fwd.HostPort, fwd.ContainerPort))
 		}
 	}
-
-	args = append(args, fmt.Sprintf("%d", pid))
 
 	cmd := exec.Command(r.pastaPath, args...)
 	if err := cmd.Start(); err != nil {

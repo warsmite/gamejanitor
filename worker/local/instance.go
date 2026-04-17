@@ -151,37 +151,13 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating bundle dir: %w", err)
 	}
 
-	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
-		RootFS:   rootFS,
-		Env:      env,
-		Cmd:      cmdArgs,
-		WorkDir:  workDir,
-		Hostname: manifest.Name,
-		Binds:    mounts,
-		UID:      uid,
-		GID:      gid,
-		MemoryMB: manifest.MemoryLimitMB,
-		CPUQuota: manifest.CPULimit,
-	}); err != nil {
-		return fmt.Errorf("preparing OCI bundle: %w", err)
+	// Step 1: Create a network namespace and configure it with pasta BEFORE
+	// the container exists. The container will join this pre-configured namespace.
+	nsPath := filepath.Join(dir, "netns")
+	if err := runtime.CreateNetNS(nsPath); err != nil {
+		return fmt.Errorf("creating network namespace: %w", err)
 	}
 
-	// Log file with size-based rotation (50MB cap, 1 backup)
-	logPath := filepath.Join(dir, "output.log")
-	logWriter, err := newRotatingWriter(logPath)
-	if err != nil {
-		return fmt.Errorf("creating log file: %w", err)
-	}
-
-	// Step 1: Create container (synchronous). Process is paused, namespaces ready.
-	handle, err := w.rt.CreateContainer(id, bundleDir, logWriter, logWriter)
-	if err != nil {
-		logWriter.Close()
-		return fmt.Errorf("creating instance: %w", err)
-	}
-
-	// Step 2: Attach pasta to the network namespace BEFORE the process starts.
-	// The container PID is available immediately — no polling.
 	var forwards []runtime.PortForward
 	for _, p := range manifest.Ports {
 		forwards = append(forwards, runtime.PortForward{
@@ -192,19 +168,57 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 	var pastaInst *runtime.PastaInstance
 	if len(forwards) > 0 {
-		pi, err := w.rt.StartPasta(id, handle.PID, forwards)
+		pi, err := w.rt.StartPasta(id, nsPath, forwards)
 		if err != nil {
-			w.log.Error("failed to start pasta, killing container", "id", id, "error", err)
-			w.rt.Kill(id, "SIGKILL")
-			w.rt.Delete(id, true)
-			logWriter.Close()
-			runtime.CleanupBundle(bundleDir)
+			runtime.DeleteNetNS(nsPath)
 			return fmt.Errorf("starting pasta network: %w", err)
 		}
 		pastaInst = pi
 	}
 
-	// Step 3: Start the container (unpause). Network is already working.
+	// Step 2: Prepare OCI bundle pointing to the pre-configured network namespace.
+	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
+		RootFS:    rootFS,
+		Env:       env,
+		Cmd:       cmdArgs,
+		WorkDir:   workDir,
+		Hostname:  manifest.Name,
+		Binds:     mounts,
+		UID:       uid,
+		GID:       gid,
+		MemoryMB:  manifest.MemoryLimitMB,
+		CPUQuota:  manifest.CPULimit,
+		NetNSPath: nsPath,
+	}); err != nil {
+		if pastaInst != nil {
+			pastaInst.Stop()
+		}
+		runtime.DeleteNetNS(nsPath)
+		return fmt.Errorf("preparing OCI bundle: %w", err)
+	}
+
+	logPath := filepath.Join(dir, "output.log")
+	logWriter, err := newRotatingWriter(logPath)
+	if err != nil {
+		if pastaInst != nil {
+			pastaInst.Stop()
+		}
+		runtime.DeleteNetNS(nsPath)
+		return fmt.Errorf("creating log file: %w", err)
+	}
+
+	// Step 3: Create container (synchronous). Joins the pre-configured netns.
+	handle, err := w.rt.CreateContainer(id, bundleDir, logWriter, logWriter)
+	if err != nil {
+		logWriter.Close()
+		if pastaInst != nil {
+			pastaInst.Stop()
+		}
+		runtime.DeleteNetNS(nsPath)
+		return fmt.Errorf("creating instance: %w", err)
+	}
+
+	// Step 4: Start the container (unpause). Network is already working.
 	if err := w.rt.StartContainer(id); err != nil {
 		if pastaInst != nil {
 			pastaInst.Stop()
@@ -259,6 +273,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		}
 		w.rt.Delete(id, true)
 		runtime.CleanupBundle(bundleDir)
+		runtime.DeleteNetNS(nsPath)
 
 		uptime := time.Since(inst.startedAt)
 
@@ -331,6 +346,7 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 
 	dir := w.instanceDir(id)
 	runtime.CleanupBundle(filepath.Join(dir, "bundle"))
+	runtime.DeleteNetNS(filepath.Join(dir, "netns"))
 	os.RemoveAll(dir)
 	return nil
 }
