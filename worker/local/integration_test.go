@@ -24,7 +24,7 @@ import (
 // Run with: go test -tags integration ./worker/local/
 
 func TestMain(m *testing.M) {
-	if runtime.MaybeHandleNetNSChild() {
+	if runtime.MaybeHandleCrunWorker() {
 		return
 	}
 	os.Exit(m.Run())
@@ -145,6 +145,42 @@ func TestIntegration_ProcessCanWriteToVolume(t *testing.T) {
 
 	// Verify nested directory was created
 	assert.DirExists(t, filepath.Join(volPath, ".gamejanitor", "logs"))
+}
+
+func TestIntegration_DNSResolution(t *testing.T) {
+	w := newTestWorker(t)
+	ctx := context.Background()
+
+	require.NoError(t, w.CreateVolume(ctx, "test-vol"))
+	setupHostRootFS(t, w.dataDir, "curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://httpbin.org/get > /data/result.txt 2>&1")
+
+	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
+		Name:       "dns-test",
+		Image:      "test:latest",
+		VolumeName: "test-vol",
+		Binds:      testHostBinds(),
+		Ports: []worker.PortBinding{
+			{Port: 30000, ContainerPort: 30000, Protocol: "tcp"},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, w.StartInstance(ctx, id, ""))
+
+	w.mu.Lock()
+	inst := w.instances[id]
+	w.mu.Unlock()
+	select {
+	case <-inst.done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("instance did not exit in time")
+	}
+
+	volPath := filepath.Join(w.dataDir, "volumes", "test-vol")
+	content, err := os.ReadFile(filepath.Join(volPath, "result.txt"))
+	require.NoError(t, err)
+	result := strings.TrimSpace(string(content))
+	t.Logf("curl response: %s", result)
+	assert.Equal(t, "200", result, "DNS resolution and HTTPS should work inside the container")
 }
 
 func TestIntegration_ProcessRunsAsCorrectUID(t *testing.T) {

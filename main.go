@@ -8,7 +8,9 @@ import (
 )
 
 func main() {
-	if runtime.MaybeHandleNetNSChild() {
+	// Re-exec handlers — must be checked before anything else.
+	// The binary re-execs itself as a crun worker (inside pasta's namespace).
+	if runtime.MaybeHandleCrunWorker() {
 		return
 	}
 	if err := cli.Execute(); err != nil {

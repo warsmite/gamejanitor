@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/util/naming"
@@ -151,13 +152,29 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating bundle dir: %w", err)
 	}
 
-	// Step 1: Create a network namespace via a holder process.
-	netns, err := runtime.CreateNetNS()
-	if err != nil {
-		return fmt.Errorf("creating network namespace: %w", err)
+	// Prepare OCI bundle (no network/user namespace — inherited from pasta).
+	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
+		RootFS:   rootFS,
+		Env:      env,
+		Cmd:      cmdArgs,
+		WorkDir:  workDir,
+		Hostname: manifest.Name,
+		Binds:    mounts,
+		UID:      uid,
+		GID:      gid,
+		MemoryMB: manifest.MemoryLimitMB,
+		CPUQuota: manifest.CPULimit,
+	}); err != nil {
+		return fmt.Errorf("preparing OCI bundle: %w", err)
 	}
 
-	// Step 2: Configure the namespace with pasta for port forwarding.
+	logPath := filepath.Join(dir, "output.log")
+	logWriter, err := newRotatingWriter(logPath)
+	if err != nil {
+		return fmt.Errorf("creating log file: %w", err)
+	}
+
+	// Build port forwards
 	var forwards []runtime.PortForward
 	for _, p := range manifest.Ports {
 		forwards = append(forwards, runtime.PortForward{
@@ -166,67 +183,12 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 			Protocol:      p.Protocol,
 		})
 	}
-	var pastaInst *runtime.PastaInstance
-	if len(forwards) > 0 {
-		pi, err := w.rt.StartPasta(id, netns.Path, forwards)
-		if err != nil {
-			netns.Close()
-			return fmt.Errorf("starting pasta network: %w", err)
-		}
-		pastaInst = pi
-	}
 
-	// Step 3: Prepare OCI bundle pointing to the pre-configured network namespace.
-	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
-		RootFS:    rootFS,
-		Env:       env,
-		Cmd:       cmdArgs,
-		WorkDir:   workDir,
-		Hostname:  manifest.Name,
-		Binds:     mounts,
-		UID:       uid,
-		GID:       gid,
-		MemoryMB:  manifest.MemoryLimitMB,
-		CPUQuota:  manifest.CPULimit,
-		NetNSPath:  netns.Path,
-		UserNSPath: netns.UserPath,
-	}); err != nil {
-		if pastaInst != nil {
-			pastaInst.Stop()
-		}
-		netns.Close()
-		return fmt.Errorf("preparing OCI bundle: %w", err)
-	}
-
-	logPath := filepath.Join(dir, "output.log")
-	logWriter, err := newRotatingWriter(logPath)
-	if err != nil {
-		if pastaInst != nil {
-			pastaInst.Stop()
-		}
-		netns.Close()
-		return fmt.Errorf("creating log file: %w", err)
-	}
-
-	// Step 4: Create container (synchronous). Joins the pre-configured netns.
-	handle, err := w.rt.CreateContainer(id, bundleDir, logWriter, logWriter)
+	// Start container inside a pasta-managed network namespace.
+	// pasta creates the namespace and runs crun inside it — no setns needed.
+	handle, err := w.rt.StartContainerWithPasta(id, bundleDir, forwards, logWriter, logWriter)
 	if err != nil {
 		logWriter.Close()
-		if pastaInst != nil {
-			pastaInst.Stop()
-		}
-		netns.Close()
-		return fmt.Errorf("creating instance: %w", err)
-	}
-
-	// Step 5: Start the container (unpause). Network is already working.
-	if err := w.rt.StartContainer(id); err != nil {
-		if pastaInst != nil {
-			pastaInst.Stop()
-		}
-		w.rt.Delete(id, true)
-		logWriter.Close()
-
 		return fmt.Errorf("starting instance: %w", err)
 	}
 
@@ -237,8 +199,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		startedAt: time.Now(),
 		logWriter: logWriter,
 		done:      make(chan struct{}),
-		handle:    handle,
-		netns:     netns,
+		handle: handle,
 	}
 
 	w.mu.Lock()
@@ -262,7 +223,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		}
 	}
 
-	// Exit watcher
+	// Exit watcher — the worker (inside pasta) handles crun delete
 	go func() {
 		exitCode := handle.Wait()
 		inst.exitCode.Store(int32(exitCode))
@@ -270,12 +231,6 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		if inst.logWriter != nil {
 			inst.logWriter.Close()
 		}
-		if pastaInst != nil {
-			pastaInst.Stop()
-		}
-		w.rt.Delete(id, true)
-
-		netns.Close()
 
 		uptime := time.Since(inst.startedAt)
 
@@ -310,8 +265,8 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 
 	w.log.Info("StopInstance called", "id", id)
 
-	if err := w.rt.Kill(id, "SIGTERM"); err != nil {
-		w.log.Debug("crun kill SIGTERM failed", "id", id, "error", err)
+	if err := inst.handle.Signal(syscall.SIGTERM); err != nil {
+		w.log.Debug("signal SIGTERM failed", "id", id, "error", err)
 	}
 
 	select {
@@ -319,7 +274,7 @@ func (w *LocalWorker) StopInstance(ctx context.Context, id string, timeoutSecond
 		return nil
 	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
 		w.log.Warn("instance did not stop, killing", "id", id)
-		w.rt.Kill(id, "SIGKILL")
+		inst.handle.Signal(syscall.SIGKILL)
 		<-inst.done
 		return nil
 	case <-ctx.Done():
@@ -337,17 +292,12 @@ func (w *LocalWorker) RemoveInstance(ctx context.Context, id string) error {
 
 	if ok && !inst.exited.Load() {
 		w.log.Warn("RemoveInstance: killing running instance", "id", id)
-		w.rt.Kill(id, "SIGKILL")
-		w.rt.Delete(id, true)
+		inst.handle.Signal(syscall.SIGKILL)
 		<-inst.done
 	}
 
 	if w.tracker != nil {
 		w.tracker.Remove(id)
-	}
-
-	if ok && inst.netns != nil {
-		inst.netns.Close()
 	}
 
 	dir := w.instanceDir(id)

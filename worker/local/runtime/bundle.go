@@ -17,10 +17,8 @@ type BundleConfig struct {
 	Binds     []Mount // bind mounts from host into container
 	UID       int     // user ID inside the container
 	GID       int     // group ID inside the container
-	MemoryMB  int     // memory limit in MB (0 = unlimited)
-	CPUQuota  float64 // CPU limit as fraction of cores (0 = unlimited)
-	NetNSPath  string // path to pre-created network namespace
-	UserNSPath string // path to holder's user namespace (container joins same userns)
+	MemoryMB int     // memory limit in MB (0 = unlimited)
+	CPUQuota float64 // CPU limit as fraction of cores (0 = unlimited)
 }
 
 // Mount describes a bind mount into the container.
@@ -84,24 +82,15 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		"noNewPrivileges": true,
 	}
 
-	netNS := map[string]any{"type": "network"}
-	if cfg.NetNSPath != "" {
-		netNS["path"] = cfg.NetNSPath
-	}
-
-	namespaces := []map[string]any{
-		{"type": "pid"},
-		netNS,
-		{"type": "ipc"},
-		{"type": "uts"},
-		{"type": "mount"},
-	}
-	if cfg.UserNSPath != "" {
-		namespaces = append(namespaces, map[string]any{"type": "user", "path": cfg.UserNSPath})
-	}
-
+	// No network or user namespace — the container inherits them from the
+	// parent process (which pasta launched inside the right namespaces).
 	linux := map[string]any{
-		"namespaces": namespaces,
+		"namespaces": []map[string]any{
+			{"type": "pid"},
+			{"type": "ipc"},
+			{"type": "uts"},
+			{"type": "mount"},
+		},
 		"rootfsPropagation": "private",
 		"maskedPaths":       defaultMaskedPaths(),
 		"readonlyPaths":     defaultReadonlyPaths(),

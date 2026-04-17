@@ -43,7 +43,6 @@ type managedInstance struct {
 	logWriter *rotatingWriter
 	done   chan struct{}
 	handle *runtime.ContainerHandle
-	netns  *runtime.NetNS
 }
 
 // instanceState is persisted alongside the manifest so running instances
