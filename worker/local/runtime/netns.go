@@ -34,10 +34,15 @@ func CreateNetNS(path string) error {
 		}
 		defer origNS.Close()
 
+		// Try net namespace only (works as root). Fall back to user+net
+		// namespace (required for rootless — unprivileged CLONE_NEWNET
+		// needs a user namespace).
 		if err := syscall.Unshare(syscall.CLONE_NEWNET); err != nil {
-			nsErr = fmt.Errorf("unshare CLONE_NEWNET: %w", err)
-			close(done)
-			return
+			if err := syscall.Unshare(syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET); err != nil {
+				nsErr = fmt.Errorf("unshare CLONE_NEWNET: %w", err)
+				close(done)
+				return
+			}
 		}
 
 		if err := syscall.Mount("/proc/self/ns/net", path, "", syscall.MS_BIND, ""); err != nil {
