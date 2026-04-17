@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/worker/local/runtime/embedded"
@@ -41,6 +42,13 @@ func New(dataDir string, log *slog.Logger) (*Runtime, error) {
 	stateDir := filepath.Join(dataDir, "crun-state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating crun state dir: %w", err)
+	}
+
+	// Become a subreaper so container init processes (orphaned when crun
+	// create exits) are reparented to us. This lets us waitpid for exit codes.
+	const prSetChildSubreaper = 36
+	if _, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prSetChildSubreaper, 1, 0); errno != 0 {
+		log.Warn("failed to set child subreaper, exit codes may be unavailable", "error", errno)
 	}
 
 	log.Info("runtime ready", "crun", crunPath, "pasta", pastaPath, "state_dir", stateDir)
@@ -148,6 +156,10 @@ func (r *Runtime) CreateContainer(id, bundleDir string, stdout, stderr io.Writer
 		return nil, fmt.Errorf("getting state after create: %w", err)
 	}
 
+	// Start waiting for exit code immediately — blocking Wait4 on a dedicated
+	// goroutine. The container process is reparented to us (subreaper).
+	exitCh := waitForExit(cs.PID)
+
 	h := &ContainerHandle{
 		PID:      cs.PID,
 		done:     make(chan struct{}),
@@ -163,18 +175,12 @@ func (r *Runtime) CreateContainer(id, bundleDir string, stdout, stderr io.Writer
 		go func() { io.Copy(stderr, stderrR); stderrR.Close(); wg.Done() }()
 		wg.Wait()
 
-		// Pipes closed = container exited. Poll for exit code.
-		for i := 0; i < 20; i++ {
-			cs, err := r.State(id)
-			if err != nil || cs.Status == "stopped" {
-				break
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		// Read exit code from the process's waitstatus if available
-		if h.PID > 0 {
-			h.exitCode = readExitCode(h.PID)
+		// Wait for the exit code from the reaper goroutine
+		select {
+		case code := <-exitCh:
+			h.exitCode = code
+		case <-time.After(5 * time.Second):
+			h.exitCode = -1
 		}
 
 		close(h.done)
@@ -192,22 +198,34 @@ func (r *Runtime) StartContainer(id string) error {
 	return nil
 }
 
-// readExitCode attempts to read the exit code of a process from /proc.
-// The process may be a zombie briefly before being reaped.
-func readExitCode(pid int) int {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return -1
-	}
-	// /proc/<pid>/stat format: pid (comm) state ... exit_code is field 52
-	// but the reliable way is to check if the process is a zombie (state Z)
-	// and try to waitpid on it
-	fields := strings.Fields(string(data))
-	if len(fields) < 3 {
-		return -1
-	}
-	// If the process is gone, check if crun state has info
-	return -1
+// waitForExit blocks until the container's init process exits and sends the
+// exit code on the returned channel. Works because we set PR_SET_CHILD_SUBREAPER
+// at startup — orphaned container processes are reparented to us, so blocking
+// Wait4 works correctly. Go's runtime only reaps os/exec children, not
+// reparented orphans.
+func waitForExit(pid int) <-chan int {
+	ch := make(chan int, 1)
+	go func() {
+		var ws syscall.WaitStatus
+		for {
+			wpid, err := syscall.Wait4(pid, &ws, 0, nil)
+			if err != nil {
+				ch <- -1
+				return
+			}
+			if wpid == pid {
+				if ws.Exited() {
+					ch <- ws.ExitStatus()
+				} else if ws.Signaled() {
+					ch <- 128 + int(ws.Signal())
+				} else {
+					continue
+				}
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 // RunSync returns a *exec.Cmd for `crun run` that can be executed synchronously.
