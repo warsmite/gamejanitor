@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -172,7 +171,7 @@ func (r *Runtime) StartContainer(
 		select {
 		case <-cmdDone:
 			h := &ContainerHandle{
-				PastaPID: pastaPID,
+	
 				cmd:      cmd,
 				done:     make(chan struct{}),
 				exitCode: cmd.ProcessState.ExitCode(),
@@ -189,9 +188,8 @@ func (r *Runtime) StartContainer(
 	}
 
 	h := &ContainerHandle{
-		PID:      containerPID,
-		PastaPID: pastaPID,
-		cmd:      cmd,
+		PID:  containerPID,
+		cmd:  cmd,
 		done:     make(chan struct{}),
 		exitCode: -1,
 	}
@@ -251,7 +249,6 @@ func readChildPID(parentPID int) (int, error) {
 // ContainerHandle represents a running container managed by pasta + crun.
 type ContainerHandle struct {
 	PID      int       // container init PID in the host PID namespace
-	PastaPID int       // pasta process PID (for nsenter-based exec)
 	cmd      *exec.Cmd // the pasta process (nil for recovered containers)
 	done     chan struct{}
 	exitCode int
@@ -354,42 +351,6 @@ func (r *Runtime) Delete(id string, force bool) error {
 		return fmt.Errorf("crun delete %s: %w\n%s", id, err, out)
 	}
 	return nil
-}
-
-// ContainerState represents the output of `crun state`.
-type ContainerState struct {
-	ID     string `json:"id"`
-	Status string `json:"status"` // "created", "running", "stopped"
-	PID    int    `json:"pid"`
-}
-
-// State returns the current state of a container.
-func (r *Runtime) State(id string) (*ContainerState, error) {
-	out, err := r.cmd("state", id).Output()
-	if err != nil {
-		return nil, fmt.Errorf("crun state %s: %w", id, err)
-	}
-	var state ContainerState
-	if err := json.Unmarshal(out, &state); err != nil {
-		return nil, fmt.Errorf("parsing crun state for %s: %w", id, err)
-	}
-	return &state, nil
-}
-
-// List returns IDs of all containers known to the runtime.
-func (r *Runtime) List() ([]ContainerState, error) {
-	out, err := r.cmd("list", "--format", "json").Output()
-	if err != nil {
-		return nil, fmt.Errorf("crun list: %w", err)
-	}
-	if len(strings.TrimSpace(string(out))) == 0 {
-		return nil, nil
-	}
-	var containers []ContainerState
-	if err := json.Unmarshal(out, &containers); err != nil {
-		return nil, fmt.Errorf("parsing crun list: %w", err)
-	}
-	return containers, nil
 }
 
 // RunSync returns a *exec.Cmd for `crun run` that can be executed synchronously.

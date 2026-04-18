@@ -185,7 +185,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	}
 
 	// Start container inside a pasta-managed network namespace.
-	// pasta creates user+net ns and execs crun inside — works root and rootless.
+	// pasta command mode creates user+net ns and execs crun inside.
 	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter, logWriter)
 	if err != nil {
 		logWriter.Close()
@@ -315,42 +315,19 @@ func (w *LocalWorker) InspectInstance(ctx context.Context, id string) (*worker.I
 	inst, ok := w.instances[id]
 	w.mu.Unlock()
 
-	if ok {
-		state := "running"
-		if inst.exited.Load() {
-			state = "exited"
-		}
-		return &worker.InstanceInfo{
-			ID:        inst.id,
-			State:     state,
-			StartedAt: inst.startedAt,
-			ExitCode:  int(inst.exitCode.Load()),
-		}, nil
-	}
-
-	// Not in memory — check crun state for instances surviving a restart
-	cs, err := w.rt.State(id)
-	if err != nil {
+	if !ok {
 		return nil, fmt.Errorf("instance %s not found", id)
 	}
 
-	if cs.Status == "running" {
-		dir := w.instanceDir(id)
-		state, _ := loadInstanceState(dir)
-		var startedAt time.Time
-		if state != nil {
-			startedAt = state.StartedAt
-		}
-		return &worker.InstanceInfo{
-			ID:        id,
-			State:     "running",
-			StartedAt: startedAt,
-		}, nil
+	state := "running"
+	if inst.exited.Load() {
+		state = "exited"
 	}
-
 	return &worker.InstanceInfo{
-		ID:    id,
-		State: "exited",
+		ID:        inst.id,
+		State:     state,
+		StartedAt: inst.startedAt,
+		ExitCode:  int(inst.exitCode.Load()),
 	}, nil
 }
 
@@ -498,11 +475,6 @@ func (w *LocalWorker) ListGameserverInstances(ctx context.Context) ([]worker.Gam
 		state := "exited"
 		if inMemory && !inst.exited.Load() {
 			state = "running"
-		} else if !inMemory {
-			// Check crun state for instances not yet in memory
-			if cs, err := w.rt.State(id); err == nil && cs.Status == "running" {
-				state = "running"
-			}
 		}
 
 		gsID, ok := naming.GameserverIDFromInstanceName(manifest.Name)
