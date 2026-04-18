@@ -465,7 +465,7 @@
           # Usage: test-homelab | E2E_GAME_ID=test-game test-homelab
           test-homelab = pkgs.writeShellScriptBin "test-homelab" ''
             echo "Cleaning and deploying to homelab..."
-            deploy-clean
+            echo y | deploy-clean
             deploy
             echo "Waiting for workers to connect..."
             sleep 3
@@ -513,7 +513,7 @@
 
           fetch-runtime = pkgs.writeShellScriptBin "fetch-runtime" ''
             set -e
-            CRUN_VERSION="1.24"
+            CRUN_VERSION="1.27"
             DEST="worker/local/runtime/embedded"
             mkdir -p "$DEST"
 
@@ -546,6 +546,29 @@
               cp /tmp/pasta-build/bin/passt "$OUT"
               chmod +x "$OUT"
               rm -f /tmp/pasta-build
+            done
+
+            # userns — build static helper from embedded C source
+            for arch in x86_64; do
+              OUT="$DEST/userns-$arch"
+              if [ -f "$OUT" ]; then
+                echo "userns-$arch already present, skipping"
+                continue
+              fi
+              echo "Building static userns helper for $arch..."
+              nix build --impure --expr "
+                with import <nixpkgs> {};
+                pkgsStatic.stdenv.mkDerivation {
+                  name = \"gamejanitor-userns\";
+                  src = ./$DEST/userns.c;
+                  unpackPhase = \"cp \\\$src userns.c\";
+                  buildPhase = \"\\\$CC -static -O2 -o userns userns.c\";
+                  installPhase = \"mkdir -p \\\$out/bin && cp userns \\\$out/bin/\";
+                }
+              " -o /tmp/userns-build
+              cp /tmp/userns-build/bin/userns "$OUT"
+              chmod +x "$OUT"
+              rm -f /tmp/userns-build
             done
 
             echo "Runtime binaries ready in $DEST"

@@ -43,7 +43,7 @@ func (w *LocalWorker) recoverInstances() {
 		}
 
 		// Check if the container init process is still alive
-		if err := syscall.Kill(state.ContainerPID, 0); err != nil {
+		if err := syscall.Kill(state.ContainerPID, 0); err == syscall.ESRCH {
 			// Process is dead — clean up state file
 			os.Remove(filepath.Join(dir, "state.json"))
 			continue
@@ -62,6 +62,21 @@ func (w *LocalWorker) recoverInstances() {
 			syscall.Kill(state.ContainerPID, syscall.SIGKILL)
 			os.Remove(filepath.Join(dir, "state.json"))
 			continue
+		}
+
+		// Restore port forwarding. If the old pasta survived, "Address in use"
+		// is treated as success. If it died, a new pasta takes over.
+		var forwards []runtime.PortForward
+		for _, p := range manifest.Ports {
+			forwards = append(forwards, runtime.PortForward{
+				HostPort:      p.Port,
+				ContainerPort: p.ContainerPort,
+				Protocol:      p.Protocol,
+			})
+		}
+		if err := w.rt.StartPasta(id, state.ContainerPID, forwards); err != nil {
+			w.log.Warn("failed to restore port forwarding for recovered instance",
+				"id", id, "error", err)
 		}
 
 		inst := &managedInstance{
@@ -86,7 +101,7 @@ func (w *LocalWorker) recoverInstances() {
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if err := syscall.Kill(inst.handle.PID, 0); err != nil {
+				if err := syscall.Kill(inst.handle.PID, 0); err == syscall.ESRCH {
 					inst.exited.Store(true)
 					inst.exitCode.Store(-1)
 					os.Remove(filepath.Join(dir, "state.json"))

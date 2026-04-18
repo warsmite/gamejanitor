@@ -82,14 +82,16 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		"noNewPrivileges": true,
 	}
 
-	// No network or user namespace — the container inherits them from the
-	// parent process (which pasta launched inside the right namespaces).
+	// Container gets its own pid, ipc, uts, mount, and network namespaces.
+	// User namespace is inherited from the parent (the userns re-exec helper).
+	// Network namespace is created by crun; pasta joins it for port forwarding.
 	linux := map[string]any{
 		"namespaces": []map[string]any{
 			{"type": "pid"},
 			{"type": "ipc"},
 			{"type": "uts"},
 			{"type": "mount"},
+			{"type": "network"},
 		},
 		"rootfsPropagation": "private",
 		"maskedPaths":       defaultMaskedPaths(),

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -24,6 +25,34 @@ import (
 // Run with: go test -tags integration ./worker/local/
 
 func TestMain(m *testing.M) {
+	// Integration tests need a user namespace for crun to create network
+	// namespaces. Re-exec through the userns helper if not already in one.
+	if !runtime.InUserNamespace() {
+		dataDir, err := os.MkdirTemp("", "userns-helper-*")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "creating temp dir: %v\n", err)
+			os.Exit(1)
+		}
+		defer os.RemoveAll(dataDir)
+
+		helperPath, err := runtime.ExtractUserns(dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "extracting userns helper: %v\n", err)
+			os.Exit(1)
+		}
+
+		self, err := os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "resolving self: %v\n", err)
+			os.Exit(1)
+		}
+
+		argv := append([]string{helperPath, self}, os.Args[1:]...)
+		if err := syscall.Exec(helperPath, argv, os.Environ()); err != nil {
+			fmt.Fprintf(os.Stderr, "userns re-exec: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	os.Exit(m.Run())
 }
 

@@ -186,7 +186,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	// Start container inside a pasta-managed network namespace.
 	// pasta command mode creates user+net ns and execs crun inside.
-	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter, logWriter)
+	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter.f)
 	if err != nil {
 		logWriter.Close()
 		return fmt.Errorf("starting instance: %w", err)
@@ -360,7 +360,7 @@ func (w *LocalWorker) Exec(ctx context.Context, instanceID string, cmd []string)
 	env = append(env, imgCfg.Env...)
 	env = append(env, manifest.Env...)
 
-	return w.rt.Exec(instanceID, cmd, env, inst.handle.PID)
+	return w.rt.Exec(instanceID, cmd, env)
 }
 
 // --- Worker interface: Logs & Stats ---

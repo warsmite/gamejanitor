@@ -121,6 +121,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one of controller or worker must be enabled")
 	}
 
+	// Worker mode requires a user namespace for rootless container networking.
+	// Re-exec through the userns helper if we're not already in one. This must
+	// happen before any goroutines or listeners — syscall.Exec replaces the process.
+	if cfg.HasWorker() {
+		if err := MaybeReexecInUserNamespace(cfg.DataDir); err != nil {
+			return fmt.Errorf("user namespace setup: %w", err)
+		}
+	}
+
 	// --- 1. Logging ---
 
 	level := slog.LevelInfo
