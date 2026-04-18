@@ -95,6 +95,7 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 	allCached := true
 	needsStaging := false
 	var totalBytesDownloaded uint64
+	var downloadedDepots int
 	for _, depot := range appInfo.Depots {
 		// Skip shared depots (depotfromapp) — these reference content from another app
 		if depot.DepotFromApp != 0 {
@@ -122,15 +123,22 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 				"depot_id", depot.DepotID,
 				"manifest_id", depot.ManifestID,
 			)
+			downloadedDepots++
 			continue
 		}
 
 		needsStaging = true
 
-		// Get depot key for decryption
+		// Get depot key for decryption. Some depots require game ownership
+		// (EResult 15 = AccessDenied) even if the app is free — skip those
+		// and continue with depots we can access.
 		depotKey, err := client.GetDepotDecryptionKey(ctx, depot.DepotID, appID)
 		if err != nil {
-			return nil, fmt.Errorf("get depot key for %d: %w", depot.DepotID, err)
+			s.log.Debug("skipping inaccessible depot",
+				"depot_id", depot.DepotID,
+				"error", err,
+			)
+			continue
 		}
 
 		// Load old manifest for delta update
@@ -177,6 +185,7 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 		}
 
 		allCached = false
+		downloadedDepots++
 		totalBytesDownloaded += result.BytesDownloaded
 
 		s.log.Info("depot download complete",
@@ -185,6 +194,10 @@ func (s *Service) EnsureDepot(ctx context.Context, appID uint32, branch string, 
 			"files_written", result.FilesWritten,
 			"is_delta", result.IsDelta,
 		)
+	}
+
+	if downloadedDepots == 0 {
+		return nil, fmt.Errorf("no accessible depots found for app %d — game may require Steam authentication", appID)
 	}
 
 	// Atomic swap: staging → merged. Only if we actually downloaded something.

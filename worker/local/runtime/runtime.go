@@ -227,10 +227,11 @@ func (r *Runtime) StartContainer(
 	return h, nil
 }
 
-// readPIDFile polls for a pid-file to appear and returns the PID it contains.
+// readPIDFile reads a PID from a file, polling until it appears or timeout expires.
+// A zero timeout checks once without polling.
 func readPIDFile(path string, timeout time.Duration) (int, error) {
 	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	for {
 		data, err := os.ReadFile(path)
 		if err == nil {
 			pidStr := strings.TrimSpace(string(data))
@@ -238,9 +239,11 @@ func readPIDFile(path string, timeout time.Duration) (int, error) {
 				return pid, nil
 			}
 		}
+		if time.Now().After(deadline) {
+			return 0, fmt.Errorf("pid-file %s not available", path)
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return 0, fmt.Errorf("timeout waiting for pid-file %s after %v", path, timeout)
 }
 
 // readContainerPID reads the container init's host PID from crun's status file.
@@ -397,15 +400,26 @@ func (r *Runtime) cmd(args ...string) *exec.Cmd {
 
 // StartPasta starts pasta for port forwarding into the container's network namespace.
 // Pasta daemonizes after binding ports, so this returns once setup is complete.
-// Returns the pasta daemon PID (0 if no forwards or on "Address in use" reuse).
+// Returns the pasta daemon PID (0 if no forwards).
 //
-// If a port fails with "Address in use", it means an existing pasta daemon is
-// already forwarding that port (e.g. survived a gamejanitor restart). This is
-// treated as success — the forwarding is already active. Any other failure is
-// returned as an error.
+// If a previous pasta is still holding a port (e.g. survived a gamejanitor restart),
+// it is killed before starting the new one.
 func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []PortForward, pidPath string) (int, error) {
 	if len(forwards) == 0 {
 		return 0, nil
+	}
+
+	// Kill any leftover pasta from a previous run for this container.
+	if oldPID, err := readPIDFile(pidPath, 0); err == nil && oldPID > 0 {
+		syscall.Kill(oldPID, syscall.SIGTERM)
+		// Brief wait for the old pasta to release ports
+		for i := 0; i < 10; i++ {
+			if err := syscall.Kill(oldPID, 0); err == syscall.ESRCH {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		syscall.Kill(oldPID, syscall.SIGKILL)
 	}
 
 	netNSPath := fmt.Sprintf("/proc/%d/ns/net", containerPID)
@@ -426,34 +440,10 @@ func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []Po
 
 	cmd := exec.Command(r.pastaPath, pastaArgs...)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		// Read pasta PID from its pid file
-		pid, _ := readPIDFile(pidPath, 1*time.Second)
-		return pid, nil
+	if err != nil {
+		return 0, fmt.Errorf("pasta failed for container %s: %w\n%s", containerID, err, string(out))
 	}
 
-	output := string(out)
-
-	// "Address in use" means an existing pasta is already forwarding this port.
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	allAddressInUse := true
-	for _, line := range lines {
-		if line == "" || strings.Contains(line, "AVX2") {
-			continue
-		}
-		if !strings.Contains(line, "Address in use") {
-			allAddressInUse = false
-			break
-		}
-	}
-
-	if allAddressInUse {
-		// Try to read PID from a previous run's pid file
-		existingPID, _ := readPIDFile(pidPath, 100*time.Millisecond)
-		r.log.Info("port forwarding already active (existing pasta)",
-			"container", containerID, "forwards", len(forwards), "pasta_pid", existingPID)
-		return existingPID, nil
-	}
-
-	return 0, fmt.Errorf("pasta failed for container %s: %w\n%s", containerID, err, output)
+	pid, _ := readPIDFile(pidPath, 1*time.Second)
+	return pid, nil
 }

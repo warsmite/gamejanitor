@@ -95,8 +95,14 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	uid, gid := parseImageUser(imgCfg.User, rootFS)
 
 	// Build environment: image config env + manifest env (user overrides)
-	// HOME must always be set — many programs (Steam SDK, .NET, etc.) expect it
-	env := []string{"HOME=/home/gameserver"}
+	// HOME must always be set — many programs (Steam SDK, .NET, etc.) expect it.
+	// TAR_OPTIONS: inside the user namespace, only UID 0 is mapped. tar as root
+	// tries to preserve file ownership from archives, which fails for unmapped
+	// UIDs. --no-same-owner makes tar extract as the current user instead.
+	env := []string{
+		"HOME=/home/gameserver",
+		"TAR_OPTIONS=--no-same-owner",
+	}
 	env = append(env, imgCfg.Env...)
 	env = append(env, manifest.Env...)
 
