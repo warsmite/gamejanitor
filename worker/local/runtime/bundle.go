@@ -71,20 +71,11 @@ func buildSpec(cfg BundleConfig) map[string]any {
 	}
 
 	// Wrap the entrypoint to capture the exit code to a bind-mounted file.
-	// This is the only reliable way to get exit codes with crun create+start,
-	// since the container init isn't our child (can't waitpid).
-	// The wrapper runs the command in the background, forwards signals, and
-	// writes the exit code after the command exits.
+	// With crun create+start, the container init isn't our child so we can't
+	// waitpid for the exit status. The wrapper runs the real command in the
+	// background, forwards SIGTERM/SIGINT, and writes $? to the exit code file.
 	args := cfg.Cmd
 	if cfg.ExitCodePath != "" {
-		// Trap EXIT to write the exit code, then exec the real entrypoint.
-		// exec replaces this shell so the entrypoint becomes PID 1 and receives
-		// signals directly. The EXIT trap fires after the exec'd process exits
-		// (the kernel runs the shell's atexit equivalent for the replaced process).
-		//
-		// NOTE: EXIT trap does NOT fire after exec in most shells — exec replaces
-		// the process entirely. Instead, use a background+wait pattern that
-		// properly forwards signals.
 		script := `EC=/tmp/.gj-exit-code; "$@" & P=$!; trap "kill $P 2>/dev/null; wait $P; echo $? > $EC; exit" TERM INT; wait $P; echo $? > $EC`
 		args = append([]string{"sh", "-c", script, "--"}, cfg.Cmd...)
 		mounts = append(mounts, map[string]any{

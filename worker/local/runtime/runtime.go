@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,8 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"encoding/json"
 
 	"github.com/warsmite/gamejanitor/worker/local/runtime/embedded"
 	"golang.org/x/sys/unix"
@@ -29,14 +28,10 @@ type Runtime struct {
 }
 
 // New creates a Runtime, extracting embedded binaries if needed.
-// Sets PR_SET_CHILD_SUBREAPER so orphaned container processes are reparented
-// to this process, enabling waitid to collect their exit status.
 func New(dataDir string, log *slog.Logger) (*Runtime, error) {
 	if os.Getuid() == 0 && !InUserNamespace() {
 		return nil, fmt.Errorf("gamejanitor must not run as root — create a dedicated user (e.g. useradd -r -m gamejanitor)")
 	}
-
-
 
 
 	crunPath, err := ensureBinary(dataDir, "crun", crunVersion, log)
@@ -144,8 +139,9 @@ type PortForward struct {
 //
 // Uses the OCI two-step lifecycle: crun create (paused, namespaces exist) →
 // pasta attaches for port forwarding → crun start (entrypoint runs with network
-// ready). The container PID is read from crun's status file (host PID).
-// Exit detection uses pidfd poll; exit code from crun's status file.
+// ready). The container PID is read from crun's internal status file (host PID).
+// Exit detection uses pidfd poll; exit code is captured by an entrypoint wrapper
+// that writes $? to a bind-mounted file before the container exits.
 //
 // Requires the process to be inside a user namespace (via the userns helper)
 // so that crun has CAP_NET_ADMIN to create network namespaces.
