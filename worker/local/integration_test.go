@@ -336,7 +336,7 @@ while true; do sleep 1; done
 	require.NoError(t, err)
 	assert.Equal(t, "running", info.State)
 
-	// Discard worker 1 (simulates gamejanitor exit — process survives in systemd scope)
+	// Discard worker 1 (simulates gamejanitor exit — container process survives independently)
 	w1 = nil
 
 	// Worker 2: create from same dataDir — recoverInstances should find it

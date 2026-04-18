@@ -44,7 +44,7 @@ func (w *LocalWorker) DownloadFile(ctx context.Context, volumeName string, url s
 // --- Worker interface: Copy operations ---
 
 func (w *LocalWorker) CopyFromInstance(ctx context.Context, instanceID string, path string) ([]byte, error) {
-	// In sandbox mode, instance filesystem is the volume — read directly
+	// Instance filesystem is the volume — read directly
 	dir := w.instanceDir(instanceID)
 	manifestData, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	var manifest instanceManifest
@@ -77,9 +77,9 @@ func (w *LocalWorker) CopyToInstance(ctx context.Context, instanceID string, pat
 }
 
 func (w *LocalWorker) CopyDirFromInstance(ctx context.Context, instanceID string, path string) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("CopyDirFromInstance not supported in sandbox mode")
+	return nil, fmt.Errorf("CopyDirFromInstance not supported in local worker")
 }
 
 func (w *LocalWorker) CopyTarToInstance(ctx context.Context, instanceID string, destPath string, content io.Reader) error {
-	return fmt.Errorf("CopyTarToInstance not supported in sandbox mode")
+	return fmt.Errorf("CopyTarToInstance not supported in local worker")
 }

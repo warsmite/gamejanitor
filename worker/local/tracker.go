@@ -232,7 +232,7 @@ func (t *InstanceTracker) WatchLogs(ctx context.Context, id string, readyPattern
 }
 
 // Recover re-registers an instance that survived a worker restart.
-// Used by sandbox recovery to re-add instances to the tracker without
+// Used by recovery to re-add instances to the tracker without
 // emitting state transitions (the controller will get these via GetAllworker.InstanceStates).
 // Recovered running instances are treated as ready — we can't re-observe the
 // ready pattern from mid-run logs, and the process was accepting work before
