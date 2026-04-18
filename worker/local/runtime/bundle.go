@@ -17,8 +17,9 @@ type BundleConfig struct {
 	Binds     []Mount // bind mounts from host into container
 	UID       int     // user ID inside the container
 	GID       int     // group ID inside the container
-	MemoryMB int     // memory limit in MB (0 = unlimited)
-	CPUQuota float64 // CPU limit as fraction of cores (0 = unlimited)
+	MemoryMB     int     // memory limit in MB (0 = unlimited)
+	CPUQuota     float64 // CPU limit as fraction of cores (0 = unlimited)
+	ExitCodePath string  // host path to write exit code (bind-mounted into container)
 }
 
 // Mount describes a bind mount into the container.
@@ -69,13 +70,38 @@ func buildSpec(cfg BundleConfig) map[string]any {
 		hostname = "gamejanitor"
 	}
 
+	// Wrap the entrypoint to capture the exit code to a bind-mounted file.
+	// This is the only reliable way to get exit codes with crun create+start,
+	// since the container init isn't our child (can't waitpid).
+	// The wrapper runs the command in the background, forwards signals, and
+	// writes the exit code after the command exits.
+	args := cfg.Cmd
+	if cfg.ExitCodePath != "" {
+		// Trap EXIT to write the exit code, then exec the real entrypoint.
+		// exec replaces this shell so the entrypoint becomes PID 1 and receives
+		// signals directly. The EXIT trap fires after the exec'd process exits
+		// (the kernel runs the shell's atexit equivalent for the replaced process).
+		//
+		// NOTE: EXIT trap does NOT fire after exec in most shells — exec replaces
+		// the process entirely. Instead, use a background+wait pattern that
+		// properly forwards signals.
+		script := `EC=/tmp/.gj-exit-code; "$@" & P=$!; trap "kill $P 2>/dev/null; wait $P; echo $? > $EC; exit" TERM INT; wait $P; echo $? > $EC`
+		args = append([]string{"sh", "-c", script, "--"}, cfg.Cmd...)
+		mounts = append(mounts, map[string]any{
+			"destination": "/tmp/.gj-exit-code",
+			"type":        "bind",
+			"source":      cfg.ExitCodePath,
+			"options":     []string{"rbind", "rw"},
+		})
+	}
+
 	process := map[string]any{
 		"terminal": false,
 		"user": map[string]any{
 			"uid": cfg.UID,
 			"gid": cfg.GID,
 		},
-		"args": cfg.Cmd,
+		"args": args,
 		"env":  cfg.Env,
 		"cwd":  workDir,
 		"capabilities": defaultCapabilities(),

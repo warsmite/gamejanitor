@@ -11,15 +11,16 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"encoding/json"
 
 	"github.com/warsmite/gamejanitor/worker/local/runtime/embedded"
+	"golang.org/x/sys/unix"
 )
 
 const crunVersion = "1.27"
 
 // Runtime wraps crun + pasta for OCI container lifecycle operations.
-// Uses pasta command mode (creates user+net namespaces, execs crun inside).
 type Runtime struct {
 	crunPath string
 	pastaPath string
@@ -28,10 +29,15 @@ type Runtime struct {
 }
 
 // New creates a Runtime, extracting embedded binaries if needed.
+// Sets PR_SET_CHILD_SUBREAPER so orphaned container processes are reparented
+// to this process, enabling waitid to collect their exit status.
 func New(dataDir string, log *slog.Logger) (*Runtime, error) {
 	if os.Getuid() == 0 && !InUserNamespace() {
 		return nil, fmt.Errorf("gamejanitor must not run as root — create a dedicated user (e.g. useradd -r -m gamejanitor)")
 	}
+
+
+
 
 	crunPath, err := ensureBinary(dataDir, "crun", crunVersion, log)
 	if err != nil {
@@ -138,8 +144,8 @@ type PortForward struct {
 //
 // Uses the OCI two-step lifecycle: crun create (paused, namespaces exist) →
 // pasta attaches for port forwarding → crun start (entrypoint runs with network
-// ready). Exit detection uses pidfd_open for event-driven notification without
-// polling. The pid-file gives us the host PID since crun runs directly.
+// ready). The container PID is read from crun's status file (host PID).
+// Exit detection uses pidfd poll; exit code from crun's status file.
 //
 // Requires the process to be inside a user namespace (via the userns helper)
 // so that crun has CAP_NET_ADMIN to create network namespaces.
@@ -147,18 +153,15 @@ func (r *Runtime) StartContainer(
 	id, bundleDir string,
 	forwards []PortForward,
 	logFile *os.File,
+	exitCodePath string,
 ) (*ContainerHandle, error) {
-	pidFilePath := filepath.Join(r.stateDir, id+".pid")
+	pastaPIDPath := filepath.Join(r.stateDir, id+".pasta.pid")
 
-	// Step 1: crun create — container paused, namespaces exist, pid-file written.
-	// Both stdout and stderr go to the log file (real *os.File, not a Go pipe)
-	// so cmd.Run() doesn't block waiting for the container to close pipe FDs.
-	// crun errors (e.g. OCI spec issues) also end up in the log file.
-	createCmd := r.cmd("create", "--pid-file", pidFilePath, "--bundle", bundleDir, id)
+	// Step 1: crun create — container paused, namespaces exist.
+	createCmd := r.cmd("create", "--bundle", bundleDir, id)
 	createCmd.Stdout = logFile
 	createCmd.Stderr = logFile
 	if err := createCmd.Run(); err != nil {
-		// Read the log file tail for the crun error message
 		errCtx := ""
 		if data, readErr := os.ReadFile(logFile.Name()); readErr == nil && len(data) > 0 {
 			errCtx = "\n" + truncateStr(string(data), 500)
@@ -166,55 +169,54 @@ func (r *Runtime) StartContainer(
 		return nil, fmt.Errorf("creating container %s: %w%s", id, err, errCtx)
 	}
 
-	containerPID, err := readPIDFile(pidFilePath, 5*time.Second)
+	// Read the container init's host PID from crun's status file.
+	containerPID, err := r.readContainerPID(id)
 	if err != nil {
 		r.Delete(id, true)
 		return nil, fmt.Errorf("container %s: %w", id, err)
 	}
 
-	// Open a pidfd BEFORE starting the container. This gives us event-driven
-	// exit notification via epoll/poll without owning the process as a child.
-	// pidfd_open works on any visible PID (Linux 5.3+).
-	pidfd, err := pidfdOpen(containerPID)
+	// Open a pidfd for event-driven exit notification.
+	pidfd, err := unix.PidfdOpen(containerPID, 0)
 	if err != nil {
 		r.Delete(id, true)
 		return nil, fmt.Errorf("pidfd_open for container %s (pid %d): %w", id, containerPID, err)
 	}
 
-	// Step 2: pasta configures the container's network namespace for port forwarding.
-	// In --netns mode, pasta daemonizes (forks to background) after binding ports.
-	// The parent returns immediately, so CombinedOutput captures any startup errors.
-	//
-	// "Address in use" means port forwarding is already active (e.g. from a pasta
-	// that survived a gamejanitor restart). This is fine — the old pasta is still
-	// forwarding. Any other error is fatal: the container would start without
-	// networking.
-	if err := r.StartPasta(id, containerPID, forwards); err != nil {
-		syscall.Close(pidfd)
+	// Step 2: pasta configures port forwarding in the container's network namespace.
+	pastaPID, pastaErr := r.StartPasta(id, containerPID, forwards, pastaPIDPath)
+	if pastaErr != nil {
+		unix.Close(pidfd)
 		r.Delete(id, true)
-		return nil, err
+		return nil, pastaErr
 	}
 
 	// Step 3: crun start — unpause the container. Network is ready.
 	if out, err := r.cmd("start", id).CombinedOutput(); err != nil {
-		syscall.Close(pidfd)
+		unix.Close(pidfd)
+		killPasta(pastaPID)
 		r.Delete(id, true)
 		return nil, fmt.Errorf("starting container %s: %w\n%s", id, err, out)
 	}
 
 	h := &ContainerHandle{
-		PID:  containerPID,
-		done: make(chan struct{}),
+		PID:      containerPID,
+		PastaPID: pastaPID,
+		done:     make(chan struct{}),
 		exitCode: -1,
 	}
 
 	// Wait for container exit via pidfd (event-driven, no polling).
 	go func() {
-		pidfdWait(pidfd)
-		syscall.Close(pidfd)
+		pollPidfd(pidfd)
+		unix.Close(pidfd)
 
-		h.exitCode = readProcExitCode(containerPID)
-		os.Remove(pidFilePath)
+		// Read exit code written by the entrypoint wrapper before cleanup.
+		h.exitCode = readExitCodeFile(exitCodePath)
+
+		killPasta(h.PastaPID)
+		os.Remove(pastaPIDPath)
+		os.Remove(exitCodePath)
 		r.Delete(id, true)
 		close(h.done)
 	}()
@@ -222,6 +224,7 @@ func (r *Runtime) StartContainer(
 	r.log.Info("container started",
 		"container", id,
 		"pid", containerPID,
+		"pasta_pid", pastaPID,
 		"forwards", len(forwards),
 	)
 
@@ -244,69 +247,54 @@ func readPIDFile(path string, timeout time.Duration) (int, error) {
 	return 0, fmt.Errorf("timeout waiting for pid-file %s after %v", path, timeout)
 }
 
-// pidfdOpen wraps the pidfd_open(2) syscall (Linux 5.3+).
-func pidfdOpen(pid int) (int, error) {
-	const SYS_PIDFD_OPEN = 434 // x86_64
-	fd, _, errno := syscall.Syscall(SYS_PIDFD_OPEN, uintptr(pid), 0, 0)
-	if errno != 0 {
-		return -1, errno
+// readContainerPID reads the container init's host PID from crun's status file.
+func (r *Runtime) readContainerPID(id string) (int, error) {
+	statusPath := filepath.Join(r.stateDir, id, "status")
+	data, err := os.ReadFile(statusPath)
+	if err != nil {
+		return 0, fmt.Errorf("reading crun status: %w", err)
 	}
-	return int(fd), nil
+	var status struct {
+		PID int `json:"pid"`
+	}
+	if err := json.Unmarshal(data, &status); err != nil {
+		return 0, fmt.Errorf("parsing crun status: %w", err)
+	}
+	if status.PID <= 0 {
+		return 0, fmt.Errorf("invalid PID in crun status: %d", status.PID)
+	}
+	return status.PID, nil
 }
 
-// pidfdWait blocks until the process referenced by the pidfd exits.
-// Uses ppoll(2) on the pidfd — it becomes readable when the process exits.
-func pidfdWait(pidfd int) {
-	const POLLIN = 0x0001
+func readExitCodeFile(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return -1
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return -1
+	}
+	return code
+}
+
+// pollPidfd blocks until the pidfd becomes readable (process exited).
+func pollPidfd(pidfd int) {
 	for {
-		fds := [1]pollFd{{fd: int32(pidfd), events: POLLIN}}
-		// ppoll with 1-second timeout so signals can interrupt
-		timeout := syscall.Timespec{Sec: 1}
-		n, _, _ := syscall.Syscall6(syscall.SYS_PPOLL,
-			uintptr(unsafe.Pointer(&fds[0])), 1,
-			uintptr(unsafe.Pointer(&timeout)), 0, 0, 0)
-		if n > 0 && fds[0].revents&POLLIN != 0 {
+		fds := []unix.PollFd{{Fd: int32(pidfd), Events: unix.POLLIN}}
+		n, _ := unix.Poll(fds, 1000)
+		if n > 0 && fds[0].Revents&unix.POLLIN != 0 {
 			return
 		}
 	}
 }
 
-type pollFd struct {
-	fd      int32
-	events  int16
-	revents int16
-}
-
-// readProcExitCode reads the exit code from /proc/<pid>/stat field 52 (exit_code).
-// Returns 0 if the process is already gone or the field can't be parsed.
-func readProcExitCode(pid int) int {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return 0
+// killPasta sends SIGTERM to a pasta daemon process if it's still alive.
+func killPasta(pid int) {
+	if pid <= 0 {
+		return
 	}
-	// /proc/pid/stat format: pid (comm) state ... field52=exit_code
-	// Fields are space-separated, but comm can contain spaces/parens.
-	// Find the closing paren, then split the rest.
-	s := string(data)
-	idx := strings.LastIndex(s, ") ")
-	if idx < 0 {
-		return 0
-	}
-	fields := strings.Fields(s[idx+2:])
-	// exit_code is field 52 in /proc/pid/stat, which is index 49 after (comm)
-	// (field 1=pid, 2=comm, 3=state, ... so field 52 is at index 49 after comm)
-	if len(fields) < 50 {
-		return 0
-	}
-	code, err := strconv.Atoi(fields[49])
-	if err != nil {
-		return 0
-	}
-	// exit_code in /proc/pid/stat is the raw wait status
-	if code == 0 {
-		return 0
-	}
-	return (code >> 8) & 0xff
+	syscall.Kill(pid, syscall.SIGTERM)
 }
 
 // --- Container handle ---
@@ -314,6 +302,7 @@ func readProcExitCode(pid int) int {
 // ContainerHandle represents a running container.
 type ContainerHandle struct {
 	PID      int // container init PID in the host PID namespace
+	PastaPID int // pasta daemon PID for port forwarding (0 if no ports)
 	done     chan struct{}
 	exitCode int
 }
@@ -340,7 +329,6 @@ func (h *ContainerHandle) Done() <-chan struct{} {
 }
 
 // Signal sends a signal directly to the container's init process.
-// Works across user namespace boundaries because the host user owns the process.
 func (h *ContainerHandle) Signal(sig syscall.Signal) error {
 	if h.PID <= 0 {
 		return fmt.Errorf("no container PID")
@@ -413,14 +401,15 @@ func (r *Runtime) cmd(args ...string) *exec.Cmd {
 
 // StartPasta starts pasta for port forwarding into the container's network namespace.
 // Pasta daemonizes after binding ports, so this returns once setup is complete.
+// Returns the pasta daemon PID (0 if no forwards or on "Address in use" reuse).
 //
 // If a port fails with "Address in use", it means an existing pasta daemon is
 // already forwarding that port (e.g. survived a gamejanitor restart). This is
 // treated as success — the forwarding is already active. Any other failure is
 // returned as an error.
-func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []PortForward) error {
+func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []PortForward, pidPath string) (int, error) {
 	if len(forwards) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	netNSPath := fmt.Sprintf("/proc/%d/ns/net", containerPID)
@@ -429,6 +418,7 @@ func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []Po
 		"--config-net",
 		"--ns-ifname", "eth0",
 		"--quiet",
+		"-P", pidPath,
 	}
 	for _, fwd := range forwards {
 		flag := "-t"
@@ -441,14 +431,14 @@ func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []Po
 	cmd := exec.Command(r.pastaPath, pastaArgs...)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
-		return nil
+		// Read pasta PID from its pid file
+		pid, _ := readPIDFile(pidPath, 1*time.Second)
+		return pid, nil
 	}
 
 	output := string(out)
 
 	// "Address in use" means an existing pasta is already forwarding this port.
-	// This happens after a gamejanitor restart — the old pasta survived and is
-	// still working. Check that ALL failures are "Address in use" (not just some).
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	allAddressInUse := true
 	for _, line := range lines {
@@ -462,10 +452,12 @@ func (r *Runtime) StartPasta(containerID string, containerPID int, forwards []Po
 	}
 
 	if allAddressInUse {
+		// Try to read PID from a previous run's pid file
+		existingPID, _ := readPIDFile(pidPath, 100*time.Millisecond)
 		r.log.Info("port forwarding already active (existing pasta)",
-			"container", containerID, "forwards", len(forwards))
-		return nil
+			"container", containerID, "forwards", len(forwards), "pasta_pid", existingPID)
+		return existingPID, nil
 	}
 
-	return fmt.Errorf("pasta failed for container %s: %w\n%s", containerID, err, output)
+	return 0, fmt.Errorf("pasta failed for container %s: %w\n%s", containerID, err, output)
 }

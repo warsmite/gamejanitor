@@ -50,6 +50,7 @@ type managedInstance struct {
 type instanceState struct {
 	StartedAt    time.Time `json:"started_at"`
 	ContainerPID int       `json:"container_pid,omitempty"`
+	PastaPID     int       `json:"pasta_pid,omitempty"`
 }
 
 func saveInstanceState(dir string, state instanceState) error {

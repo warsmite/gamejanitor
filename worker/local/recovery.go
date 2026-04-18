@@ -74,10 +74,15 @@ func (w *LocalWorker) recoverInstances() {
 				Protocol:      p.Protocol,
 			})
 		}
-		if err := w.rt.StartPasta(id, state.ContainerPID, forwards); err != nil {
+		pastaPIDPath := filepath.Join(w.dataDir, "crun-state", id+".pasta.pid")
+		pastaPID, pastaErr := w.rt.StartPasta(id, state.ContainerPID, forwards, pastaPIDPath)
+		if pastaErr != nil {
 			w.log.Warn("failed to restore port forwarding for recovered instance",
-				"id", id, "error", err)
+				"id", id, "error", pastaErr)
 		}
+
+		handle := runtime.NewRecoveredHandle(state.ContainerPID)
+		handle.PastaPID = pastaPID
 
 		inst := &managedInstance{
 			id:        id,
@@ -85,7 +90,7 @@ func (w *LocalWorker) recoverInstances() {
 			image:     manifest.Image,
 			startedAt: state.StartedAt,
 			done:      make(chan struct{}),
-			handle:    runtime.NewRecoveredHandle(state.ContainerPID),
+			handle:    handle,
 		}
 
 		w.mu.Lock()

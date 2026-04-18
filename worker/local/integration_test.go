@@ -178,7 +178,17 @@ func TestIntegration_DNSResolution(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, w.CreateVolume(ctx, "test-vol"))
-	setupHostRootFS(t, w.dataDir, "curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://httpbin.org/get > /data/result.txt 2>&1")
+	// Pasta daemonizes in <20ms after crun run starts. A brief retry gives it
+	// time to configure the network before curl runs. Real game servers don't
+	// need the network in the first 100ms of startup.
+	setupHostRootFS(t, w.dataDir, `
+for i in 1 2 3 4 5; do
+  code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://httpbin.org/get 2>/dev/null)
+  if [ "$code" = "200" ]; then echo "$code" > /data/result.txt; exit 0; fi
+  sleep 0.2
+done
+echo "000" > /data/result.txt
+`)
 
 	id, err := w.CreateInstance(ctx, worker.InstanceOptions{
 		Name:       "dns-test",

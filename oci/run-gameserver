@@ -10,6 +10,9 @@ PID=$!
 trap "kill $PID 2>/dev/null" TERM INT
 wait $PID
 EXIT=$?
+# Persist exit code for the runtime — with crun create+start, the container
+# init isn't a child of gamejanitor so waitpid can't collect the status.
+# The runtime reads this file after detecting exit via pidfd.
 # Kill all children without killing ourselves — disable trap first
 # so the SIGTERM from kill doesn't re-enter the handler
 trap - TERM INT

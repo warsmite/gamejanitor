@@ -152,18 +152,23 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		return fmt.Errorf("creating bundle dir: %w", err)
 	}
 
-	// Prepare OCI bundle (no network/user namespace — inherited from pasta).
+	// Exit code file — bind-mounted into the container so the entrypoint wrapper
+	// can write the exit code for us to read after the container exits.
+	exitCodePath := filepath.Join(dir, "exit-code")
+	os.WriteFile(exitCodePath, []byte("-1"), 0644)
+
 	if err := runtime.PrepareBundle(bundleDir, runtime.BundleConfig{
-		RootFS:   rootFS,
-		Env:      env,
-		Cmd:      cmdArgs,
-		WorkDir:  workDir,
-		Hostname: manifest.Name,
-		Binds:    mounts,
-		UID:      uid,
-		GID:      gid,
-		MemoryMB: manifest.MemoryLimitMB,
-		CPUQuota: manifest.CPULimit,
+		RootFS:       rootFS,
+		Env:          env,
+		Cmd:          cmdArgs,
+		WorkDir:      workDir,
+		Hostname:     manifest.Name,
+		Binds:        mounts,
+		UID:          uid,
+		GID:          gid,
+		MemoryMB:     manifest.MemoryLimitMB,
+		CPUQuota:     manifest.CPULimit,
+		ExitCodePath: exitCodePath,
 	}); err != nil {
 		return fmt.Errorf("preparing OCI bundle: %w", err)
 	}
@@ -186,7 +191,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 
 	// Start container inside a pasta-managed network namespace.
 	// pasta command mode creates user+net ns and execs crun inside.
-	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter.f)
+	handle, err := w.rt.StartContainer(id, bundleDir, forwards, logWriter.f, exitCodePath)
 	if err != nil {
 		logWriter.Close()
 		return fmt.Errorf("starting instance: %w", err)
@@ -209,6 +214,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 	state := instanceState{
 		StartedAt:    inst.startedAt,
 		ContainerPID: handle.PID,
+		PastaPID:     handle.PastaPID,
 	}
 	if err := saveInstanceState(dir, state); err != nil {
 		w.log.Warn("failed to persist instance state", "id", id, "error", err)
@@ -224,7 +230,7 @@ func (w *LocalWorker) StartInstance(ctx context.Context, id string, readyPattern
 		}
 	}
 
-	// Exit watcher — crun run auto-deletes state on exit, pasta exits when crun exits
+	// Exit watcher
 	go func() {
 		exitCode := handle.Wait()
 		inst.exitCode.Store(int32(exitCode))
