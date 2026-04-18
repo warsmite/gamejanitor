@@ -50,4 +50,5 @@ RUN chmod +x /usr/local/bin/run-gameserver
 RUN useradd -m -s /bin/bash gameserver && \
     mkdir -p /data /scripts /defaults /depot
 
+USER gameserver
 WORKDIR /data
